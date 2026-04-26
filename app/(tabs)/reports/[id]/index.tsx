@@ -63,7 +63,9 @@ export default function ReportDetail() {
   if (!report) {
     return (
       <MapSheetLayout title="보고서 상세" onBack={() => router.back()}>
-        <EmptyState title="보고서를 찾을 수 없습니다" />
+        <EmptyState
+          title={deleting ? '보고서를 삭제 중입니다...' : '보고서를 찾을 수 없습니다'}
+        />
       </MapSheetLayout>
     );
   }

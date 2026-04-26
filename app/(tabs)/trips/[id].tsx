@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Alert, StyleSheet, Text, View, Pressable } from 'react-native';
+import {
+  Alert,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  ToastAndroid,
+  View,
+} from 'react-native';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import { useTripStore } from '@/stores/tripStore';
 import { useVisitStore } from '@/stores/visitStore';
@@ -95,9 +103,20 @@ export default function TripDetail() {
   }
 
   const isActive = trip.endedAt === null && activeTripId === trip.id;
+
+  const finishEnd = (toastMsg: string) => {
+    if (Platform.OS !== 'web') {
+      ToastAndroid.show?.(toastMsg, ToastAndroid.SHORT);
+    }
+  };
+
   const handleEnd = async () => {
     const r = await endTrip();
-    if (r.ok) return;
+    if (r.ok) {
+      Alert.alert('외근 종료', '외근이 정상 종료되었습니다.');
+      finishEnd('외근이 종료되었습니다');
+      return;
+    }
     if ('needsConfirm' in r) {
       Alert.alert('외근 종료 확인', r.message, [
         { text: '취소', style: 'cancel' },
@@ -106,7 +125,11 @@ export default function TripDetail() {
           style: 'destructive',
           onPress: async () => {
             const force = await endTrip(true);
-            if (!force.ok && !('needsConfirm' in force)) {
+            if (force.ok) {
+              Alert.alert('외근 종료', '외근이 정상 종료되었습니다.');
+              return;
+            }
+            if (!('needsConfirm' in force)) {
               Alert.alert('오류', force.error);
             }
           },

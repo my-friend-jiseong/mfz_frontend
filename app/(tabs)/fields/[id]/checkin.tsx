@@ -25,6 +25,7 @@ import {
   VOICE_MAX_SECONDS,
   type VoiceRecorder,
 } from '@/utils/media';
+import * as FileSystem from 'expo-file-system';
 import { PhotoGrid, VoiceMemoList } from '@/components/AttachmentPreview';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
@@ -143,10 +144,10 @@ export default function FieldCheckin() {
         return;
       }
       if (mime.startsWith('text/')) {
-        // 텍스트 파일 → 본문 메모로 변환 (단순 fetch + 텍스트 추가)
+        // 텍스트 파일 → 본문 메모로 변환. RN Android 는 fetch 가 file:// 를 지원 안 하므로
+        // expo-file-system 의 readAsStringAsync 사용.
         try {
-          const fetched = await fetch(file.uri);
-          const text = await fetched.text();
+          const text = await FileSystem.readAsStringAsync(file.uri);
           const trimmed = text.slice(0, 2000);
           if (!trimmed.trim()) {
             Alert.alert('빈 파일', '내용이 없는 파일입니다.');
