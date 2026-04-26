@@ -13,6 +13,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFieldStore } from '@/stores/fieldStore';
 import { useTripStore } from '@/stores/tripStore';
 import { useVisitStore } from '@/stores/visitStore';
+import { useDestinationStore } from '@/stores/destinationStore';
 import { VISIT_STATUS_VALUES, type VisitStatus } from '@/types/entities';
 import { EmptyState } from '@/components/EmptyState';
 import { colors } from '@/theme/colors';
@@ -31,6 +32,8 @@ export default function FieldCheckin() {
   const addPhoto = useVisitStore((s) => s.addPhoto);
   const memosByVisit = useVisitStore((s) => s.memosByVisit);
   const photosByVisit = useVisitStore((s) => s.photosByVisit);
+  const findDestination = useDestinationStore((s) => s.findByTripField);
+  const markDestinationArrived = useDestinationStore((s) => s.markArrived);
 
   const [visitId, setVisitId] = useState<number | null>(null);
   const [memoText, setMemoText] = useState('');
@@ -78,6 +81,12 @@ export default function FieldCheckin() {
       return;
     }
     setResult(visitId, status);
+    if (activeTripId !== null) {
+      const dest = findDestination(activeTripId, fieldId);
+      if (dest && dest.status === 'pending') {
+        markDestinationArrived(dest.id);
+      }
+    }
     router.back();
   };
 

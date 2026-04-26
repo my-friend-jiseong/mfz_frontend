@@ -29,8 +29,6 @@ export default function TripsList() {
   const userId = useAuthStore((s) => s.user?.id);
   const allTrips = useTripStore((s) => s.trips);
   const activeTripId = useTripStore((s) => s.activeTripId);
-  const start = useTripStore((s) => s.start);
-  const end = useTripStore((s) => s.end);
   const allVisits = useVisitStore((s) => s.visits);
 
   const trips = useMemo(
@@ -43,12 +41,11 @@ export default function TripsList() {
     [allTrips, userId],
   );
 
-  const handleToggle = () => {
-    if (!userId) return;
-    if (activeTripId) {
-      end();
+  const handlePrimaryAction = () => {
+    if (activeTripId !== null) {
+      router.push('/(tabs)/trips/active' as never);
     } else {
-      start(userId);
+      router.push('/(tabs)/trips/new/select' as never);
     }
   };
 
@@ -87,14 +84,16 @@ export default function TripsList() {
         }
       />
       <Pressable
-        onPress={handleToggle}
+        onPress={handlePrimaryAction}
         style={({ pressed }) => [
           styles.fab,
           { backgroundColor: activeTripId ? colors.danger : colors.primary },
           pressed && styles.pressed,
         ]}
       >
-        <Text style={styles.fabText}>{activeTripId ? '외근 종료' : '외근 시작'}</Text>
+        <Text style={styles.fabText}>
+          {activeTripId ? '진행 중인 외근 보기' : '외근 시작'}
+        </Text>
       </Pressable>
     </MapSheetLayout>
   );
