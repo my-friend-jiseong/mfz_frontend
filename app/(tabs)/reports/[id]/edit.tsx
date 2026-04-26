@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -22,17 +23,35 @@ export default function EditReport() {
   const router = useRouter();
 
   const allReports = useReportStore((s) => s.reports);
+  const detailCache = useReportStore((s) => s.detailCache);
+  const loadDetail = useReportStore((s) => s.loadDetail);
   const update = useReportStore((s) => s.update);
   const userId = useAuthStore((s) => s.user?.id);
 
+  // 진입 시 detail 페치 (목록은 contentPreview 만 가짐)
+  useEffect(() => {
+    if (reportId && !detailCache[reportId]) void loadDetail(reportId);
+  }, [reportId, detailCache, loadDetail]);
+
   const report = useMemo(
-    () => allReports.find((r) => r.id === reportId && r.deletedAt === null),
-    [allReports, reportId],
+    () =>
+      detailCache[reportId] ??
+      allReports.find((r) => r.id === reportId && r.deletedAt === null),
+    [detailCache, allReports, reportId],
   );
 
   const [title, setTitle] = useState(report?.title ?? '');
   const [content, setContent] = useState(report?.content ?? '');
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  // detail 페치 완료 시 입력 필드를 풀 본문으로 채움 (preview 가 아닌)
+  useEffect(() => {
+    if (report) {
+      setTitle((prev) => (prev ? prev : report.title));
+      setContent((prev) => (prev ? prev : report.content));
+    }
+  }, [report]);
 
   if (!report) {
     return (
@@ -53,7 +72,7 @@ export default function EditReport() {
     );
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setError(null);
     const t = title.trim();
     const c = content.trim();
@@ -65,8 +84,14 @@ export default function EditReport() {
       setError('본문은 10~50,000자로 입력해주세요');
       return;
     }
-    update(report.id, { title: t, content: c });
-    router.back();
+    setSubmitting(true);
+    const r = await update(report.id, { title: t, content: c });
+    setSubmitting(false);
+    if (r.ok) {
+      router.back();
+    } else {
+      Alert.alert('수정 실패', r.error);
+    }
   };
 
   return (
@@ -100,9 +125,10 @@ export default function EditReport() {
 
         <Pressable
           onPress={handleSave}
-          style={({ pressed }) => [styles.btn, pressed && styles.pressed]}
+          disabled={submitting}
+          style={({ pressed }) => [styles.btn, (pressed || submitting) && styles.pressed]}
         >
-          <Text style={styles.btnText}>저장</Text>
+          <Text style={styles.btnText}>{submitting ? '저장 중...' : '저장'}</Text>
         </Pressable>
         <Pressable onPress={() => router.back()} style={styles.cancel}>
           <Text style={styles.cancelText}>취소</Text>

@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import { useRouter } from 'expo-router';
@@ -27,7 +27,12 @@ export default function ReportsIndex() {
   const router = useRouter();
   const userId = useAuthStore((s) => s.user?.id);
   const allReports = useReportStore((s) => s.reports);
+  const refresh = useReportStore((s) => s.refresh);
   const allTrips = useTripStore((s) => s.trips);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
 
   const groups = useMemo<Group[]>(() => {
     if (!userId) return [];
@@ -61,11 +66,6 @@ export default function ReportsIndex() {
 
   return (
     <MapSheetLayout title="보고서">
-      <View style={styles.notice}>
-        <Text style={styles.noticeText}>
-          ℹ️ 보고서 영구 저장은 백엔드 보강 후 활성화됩니다. 지금은 세션 단위로만 보관됩니다.
-        </Text>
-      </View>
       <BottomSheetFlatList
         data={groups}
         keyExtractor={(g) => String(g.trip.id)}

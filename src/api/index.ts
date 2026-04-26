@@ -35,6 +35,16 @@ export type {
 } from './endpoints/fields';
 
 export { reports } from './endpoints/reports';
+export type {
+  ReportListItem,
+  ReportListResponse,
+  ReportDetailResponse,
+  ReportCreateData,
+  CreateReportBody,
+  UpdateReportBody,
+  ListReportsParams,
+  ShareReportData,
+} from './endpoints/reports';
 export { map } from './endpoints/map';
 export { system } from './endpoints/system';
 export type { SessionPolicy } from './endpoints/system';

@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import {
   Alert,
   Platform,
@@ -27,13 +27,22 @@ export default function ReportDetail() {
   const router = useRouter();
 
   const allReports = useReportStore((s) => s.reports);
+  const detailCache = useReportStore((s) => s.detailCache);
+  const loadDetail = useReportStore((s) => s.loadDetail);
   const remove = useReportStore((s) => s.remove);
   const allTrips = useTripStore((s) => s.trips);
   const userId = useAuthStore((s) => s.user?.id);
 
+  // 진입 시 백엔드에서 detail 페치 (목록은 contentPreview 만 갖고 있음)
+  useEffect(() => {
+    if (reportId) void loadDetail(reportId);
+  }, [reportId, loadDetail]);
+
   const report = useMemo(
-    () => allReports.find((r) => r.id === reportId && r.deletedAt === null),
-    [allReports, reportId],
+    () =>
+      detailCache[reportId] ??
+      allReports.find((r) => r.id === reportId && r.deletedAt === null),
+    [detailCache, allReports, reportId],
   );
   const trip = useMemo(
     () => (report ? allTrips.find((t) => t.id === report.tripId) : undefined),
@@ -51,16 +60,20 @@ export default function ReportDetail() {
   const isOwner = userId === report.creatorId;
 
   const handleDelete = () => {
-    const doDelete = () => {
-      remove(report.id);
-      router.replace('/(tabs)/reports' as never);
+    const doDelete = async () => {
+      const r = await remove(report.id);
+      if (r.ok) {
+        router.replace('/(tabs)/reports' as never);
+      } else {
+        Alert.alert('삭제 실패', r.error);
+      }
     };
     if (Platform.OS === 'web') {
-      if (confirm('이 보고서를 삭제할까요? (soft delete)')) doDelete();
+      if (confirm('이 보고서를 삭제할까요? (soft delete)')) void doDelete();
     } else {
       Alert.alert('보고서 삭제', '이 보고서를 삭제할까요?', [
         { text: '취소', style: 'cancel' },
-        { text: '삭제', style: 'destructive', onPress: doDelete },
+        { text: '삭제', style: 'destructive', onPress: () => void doDelete() },
       ]);
     }
   };

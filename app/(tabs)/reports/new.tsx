@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -33,8 +34,10 @@ export default function NewReport() {
   const [tripId, setTripId] = useState<string | null>(initialTripId);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  const [summary, setSummary] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [warn, setWarn] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const myTrips = useMemo(() => {
     if (!userId) return [];
@@ -55,14 +58,10 @@ export default function NewReport() {
     return dup ? '이 외근에 같은 제목의 보고서가 이미 있습니다.' : null;
   }, [allReports, tripId, title]);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     setError(null);
     setWarn(null);
     if (!userId) return;
-    if (!tripId) {
-      setError('외근을 선택해주세요');
-      return;
-    }
     const t = title.trim();
     const c = content.trim();
     if (t.length < 1 || t.length > 100) {
@@ -73,8 +72,19 @@ export default function NewReport() {
       setError('본문은 10~50,000자로 입력해주세요');
       return;
     }
-    const r = create({ creatorId: userId, tripId, title: t, content: c });
-    router.replace(`/(tabs)/reports/${r.id}` as never);
+    setSubmitting(true);
+    const result = await create({
+      title: t,
+      content: c,
+      summary: summary.trim() || undefined,
+      tripId: tripId ?? undefined,
+    });
+    setSubmitting(false);
+    if (result.ok) {
+      router.replace(`/(tabs)/reports/${result.report.id}` as never);
+    } else {
+      Alert.alert('보고서 생성 실패', result.error);
+    }
   };
 
   return (
@@ -86,7 +96,7 @@ export default function NewReport() {
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.label}>연결할 외근 *</Text>
+        <Text style={styles.label}>연결할 외근 (선택)</Text>
         {myTrips.length === 0 ? (
           <Text style={styles.hint}>
             등록된 외근이 없습니다. 외근 탭에서 외근을 먼저 시작·종료해주세요.
@@ -137,14 +147,24 @@ export default function NewReport() {
         />
         <Text style={styles.counter}>{content.length} / 50,000</Text>
 
+        <Text style={styles.label}>요약 (선택)</Text>
+        <TextInput
+          value={summary}
+          onChangeText={setSummary}
+          style={styles.input}
+          placeholder="한 줄 요약 — 목록·공유 시 노출"
+          maxLength={200}
+        />
+
         {error ? <Text style={styles.error}>{error}</Text> : null}
         {warn ? <Text style={styles.warn}>{warn}</Text> : null}
 
         <Pressable
           onPress={handleSubmit}
-          style={({ pressed }) => [styles.btn, pressed && styles.pressed]}
+          disabled={submitting}
+          style={({ pressed }) => [styles.btn, (pressed || submitting) && styles.pressed]}
         >
-          <Text style={styles.btnText}>저장</Text>
+          <Text style={styles.btnText}>{submitting ? '저장 중...' : '저장'}</Text>
         </Pressable>
 
         <Pressable onPress={() => router.back()} style={styles.cancel}>
