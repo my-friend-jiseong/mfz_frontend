@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -41,9 +42,21 @@ export default function Signup() {
     setSubmitting(false);
     if (result.ok) {
       router.replace('/(tabs)');
-    } else {
-      setError(result.error);
+      return;
     }
+    // 이미 가입된 이메일이면 로그인 화면으로 안내
+    if (result.code === 'email_already_exists') {
+      Alert.alert(
+        '이미 가입된 이메일',
+        '이 이메일로 이미 계정이 있습니다. 로그인 화면으로 이동할까요?',
+        [
+          { text: '취소', style: 'cancel' },
+          { text: '로그인', onPress: () => router.replace('/(auth)/login') },
+        ],
+      );
+      return;
+    }
+    setError(result.error);
   };
 
   return (

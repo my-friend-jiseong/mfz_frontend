@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Report } from '@/types/entities';
-import { reports as reportsApi, ApiError } from '@/api';
+import { reports as reportsApi, localizeError } from '@/api';
 import type {
   ReportListItem,
   ReportDetailResponse,
@@ -39,11 +39,7 @@ interface ReportState {
   getById: (id: string) => Report | undefined;
 }
 
-function describeError(e: unknown): string {
-  if (e instanceof ApiError) return e.message || `오류 (HTTP ${e.status})`;
-  if (e instanceof Error) return e.message;
-  return '알 수 없는 오류';
-}
+const describeError = localizeError;
 
 function listItemToReport(item: ReportListItem, currentUserId: string): Report {
   return {

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Visit, VisitStatus, TextMemo, Photo, VoiceMemo } from '@/types/entities';
-import { visits as visitsApi, ApiError } from '@/api';
+import { visits as visitsApi, localizeError } from '@/api';
 import { useFieldStore } from './fieldStore';
 
 // 백엔드 실측 (smoke test):
@@ -39,11 +39,7 @@ interface VisitState {
   photosByVisit: (visitId: string) => Photo[];
 }
 
-function describeError(e: unknown): string {
-  if (e instanceof ApiError) return e.message || `오류 (HTTP ${e.status})`;
-  if (e instanceof Error) return e.message;
-  return '알 수 없는 오류';
-}
+const describeError = localizeError;
 
 export const useVisitStore = create<VisitState>((set, get) => ({
   visits: [],

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Field, FieldStatus } from '@/types/entities';
-import { fields as fieldsApi, ApiError } from '@/api';
+import { fields as fieldsApi, ApiError, localizeError } from '@/api';
 import type { CreateFieldBody, UpdateFieldBody, ListMineParams } from '@/api';
 
 type CreateResult =
@@ -31,11 +31,7 @@ interface FieldState {
   byUser: (userId: string) => Field[];
 }
 
-function describeError(e: unknown): string {
-  if (e instanceof ApiError) return e.message || `오류 (HTTP ${e.status})`;
-  if (e instanceof Error) return e.message;
-  return '알 수 없는 오류';
-}
+const describeError = localizeError;
 
 export const useFieldStore = create<FieldState>((set, get) => ({
   fields: [],

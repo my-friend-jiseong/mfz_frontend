@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Trip } from '@/types/entities';
-import { trips as tripsApi, ApiError } from '@/api';
+import { trips as tripsApi, ApiError, localizeError } from '@/api';
 import { useAuthStore } from './authStore';
 
 type StartResult =
@@ -32,11 +32,7 @@ function currentUserId(): string {
   return useAuthStore.getState().user?.id ?? '';
 }
 
-function describeError(e: unknown): string {
-  if (e instanceof ApiError) return e.message || `오류 (HTTP ${e.status})`;
-  if (e instanceof Error) return e.message;
-  return '알 수 없는 오류';
-}
+const describeError = localizeError;
 
 export const useTripStore = create<TripState>((set, get) => ({
   // 시드 데이터 제거 — list 응답으로만 채움
