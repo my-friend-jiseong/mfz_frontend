@@ -16,6 +16,8 @@ export interface KakaoMapMarker {
   lng: number;
   label: string;
   color: string;
+  shape?: 'triangle' | 'circle' | 'check';
+  badge?: string;
 }
 
 interface Props {

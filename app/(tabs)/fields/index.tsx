@@ -17,6 +17,32 @@ const STATUS_LABEL: Record<FieldStatus, string> = {
   done: '완료',
 };
 
+// 노션 "데이터 필터" — 기간 프리셋 (시작일·종료일 직접 입력은 후속).
+// 'default_30d' 는 백엔드 기본값(visit 기준 최근 30일).
+type RangePreset = 'default_30d' | '7d' | '1d' | 'all';
+const RANGE_LABEL: Record<RangePreset, string> = {
+  default_30d: '최근 30일',
+  '7d': '최근 7일',
+  '1d': '오늘',
+  all: '전체',
+};
+
+function rangeToParams(preset: RangePreset): {
+  visitDateScope?: 'all' | 'none';
+  fromDate?: string;
+  toDate?: string;
+} {
+  if (preset === 'all') return { visitDateScope: 'all' };
+  if (preset === 'default_30d') return {}; // 백엔드 기본값
+  const now = new Date();
+  const days = preset === '7d' ? 7 : 1;
+  const from = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+  return {
+    fromDate: from.toISOString().slice(0, 10),
+    toDate: now.toISOString().slice(0, 10),
+  };
+}
+
 export default function FieldsList() {
   const router = useRouter();
   const userId = useAuthStore((s) => s.user?.id);
@@ -26,14 +52,16 @@ export default function FieldsList() {
   const [search, setSearch] = useState('');
   // status 다중 선택. 빈 배열 = 전체
   const [statusFilter, setStatusFilter] = useState<FieldStatus[]>([]);
+  // 기간 프리셋 — 기본 'all' (신규 등록 직후도 보이도록)
+  const [rangePreset, setRangePreset] = useState<RangePreset>('all');
 
-  // 탭 진입 시 + status 필터 변경 시 mine 페치 (visitDateScope=all 로 신규 현장도 노출)
+  // 탭 진입 시 + status/기간 필터 변경 시 mine 페치
   useEffect(() => {
     void refresh({
-      visitDateScope: 'all',
+      ...rangeToParams(rangePreset),
       status: statusFilter.length > 0 ? statusFilter.join(',') : undefined,
     });
-  }, [refresh, statusFilter]);
+  }, [refresh, statusFilter, rangePreset]);
 
   const fields = useMemo(() => {
     if (!userId) return [];
@@ -93,6 +121,33 @@ export default function FieldsList() {
               <Text style={styles.chipText}>해제</Text>
             </Pressable>
           ) : null}
+        </View>
+        <View style={styles.chipRow}>
+          {(Object.keys(RANGE_LABEL) as RangePreset[]).map((p) => {
+            const active = rangePreset === p;
+            return (
+              <Pressable
+                key={p}
+                onPress={() => setRangePreset(p)}
+                style={[
+                  styles.chip,
+                  active && {
+                    backgroundColor: colors.primary + '15',
+                    borderColor: colors.primary,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.chipText,
+                    active && { color: colors.primary, fontWeight: '700' },
+                  ]}
+                >
+                  {RANGE_LABEL[p]}
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
       </View>
       <BottomSheetFlatList

@@ -5,7 +5,16 @@ export type MapDisplayMode = 'markers' | 'heatmap' | 'choropleth';
 
 interface MapHtmlOptions {
   kakaoJsKey: string;
-  markers: { id: string; lat: number; lng: number; label: string; color: string }[];
+  // shape/badge: KWCAG 1.4.1 색각이상 대응 — 색 단독 표현 금지, 형상·라벨 동반.
+  markers: {
+    id: string;
+    lat: number;
+    lng: number;
+    label: string;
+    color: string;
+    shape?: 'triangle' | 'circle' | 'check';
+    badge?: string;
+  }[];
   center: { lat: number; lng: number };
   displayMode?: MapDisplayMode;
   showBoundary?: boolean;
@@ -91,15 +100,36 @@ MARKERS.forEach(function(m){
       level: 8,
     });
 
+    // KWCAG 1.4.1 — status 별 색 + 형상 + 라벨 3중 인코딩 SVG
+    function buildMarkerHtml(m){
+      var color = m.color || '#2563eb';
+      var shape = m.shape || 'circle';
+      var badge = m.badge || '';
+      var svg;
+      if (shape === 'triangle') {
+        svg = '<svg width="36" height="36" viewBox="0 0 36 36"><polygon points="18,4 32,30 4,30" fill="' + color + '" stroke="#fff" stroke-width="2"/></svg>';
+      } else if (shape === 'check') {
+        svg = '<svg width="36" height="36" viewBox="0 0 36 36"><circle cx="18" cy="18" r="14" fill="' + color + '" stroke="#fff" stroke-width="2"/><polyline points="11,18 16,23 25,13" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+      } else {
+        svg = '<svg width="36" height="36" viewBox="0 0 36 36"><circle cx="18" cy="18" r="14" fill="' + color + '" stroke="#fff" stroke-width="2"/></svg>';
+      }
+      var labelHtml = '<div style="background:#fff;padding:2px 6px;border-radius:8px;font-size:11px;font-weight:600;color:#0f172a;border:1px solid ' + color + ';margin-top:2px;white-space:nowrap;box-shadow:0 1px 2px rgba(0,0,0,0.15);">' + (badge ? '<span style="color:' + color + ';">' + badge + '</span> · ' : '') + (m.label||'') + '</div>';
+      return '<div style="display:flex;flex-direction:column;align-items:center;cursor:pointer;min-width:44px;min-height:44px;justify-content:center;">' + svg + labelHtml + '</div>';
+    }
+
     function renderMarkers(){
       MARKERS.forEach(function(m){
-        var marker = new kakao.maps.Marker({
-          position: new kakao.maps.LatLng(m.lat, m.lng),
-          map: map,
-          title: m.label,
-        });
-        kakao.maps.event.addListener(marker, 'click', function(){
+        var pos = new kakao.maps.LatLng(m.lat, m.lng);
+        var content = document.createElement('div');
+        content.innerHTML = buildMarkerHtml(m);
+        content.firstChild.addEventListener('click', function(){
           postMsg({ type: 'markerPress', fieldId: m.id });
+        });
+        new kakao.maps.CustomOverlay({
+          position: pos,
+          content: content,
+          map: map,
+          yAnchor: 1,
         });
       });
     }
