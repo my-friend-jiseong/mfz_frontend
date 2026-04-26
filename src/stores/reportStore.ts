@@ -8,6 +8,7 @@ import type {
   UpdateReportBody,
   ListReportsParams,
   ShareReportData,
+  ReportGenerateData,
 } from '@/api';
 import { useAuthStore } from './authStore';
 
@@ -19,6 +20,20 @@ type GenericResult = { ok: true } | { ok: false; error: string };
 
 type ShareResult =
   | { ok: true; share: ShareReportData }
+  | { ok: false; error: string };
+
+export interface GenerateInput {
+  notes: string;
+  title?: string;
+  extraNotes?: string;
+  tripId?: string;
+  location?: string;
+  beforePhoto?: { uri: string; name: string; type: string };
+  afterPhoto?: { uri: string; name: string; type: string };
+}
+
+type GenerateResult =
+  | { ok: true; data: ReportGenerateData }
   | { ok: false; error: string };
 
 interface ReportState {
@@ -36,6 +51,7 @@ interface ReportState {
   remove: (id: string) => Promise<GenericResult>;
   share: (id: string) => Promise<ShareResult>;
   disableShare: (id: string) => Promise<GenericResult>;
+  generate: (input: GenerateInput) => Promise<GenerateResult>;
 
   getById: (id: string) => Report | undefined;
 }
@@ -178,6 +194,43 @@ export const useReportStore = create<ReportState>((set, get) => ({
       await reportsApi.disableShare(id);
       return { ok: true };
     } catch (e) {
+      return { ok: false, error: describeError(e) };
+    }
+  },
+
+  generate: async (input) => {
+    set({ busy: true });
+    try {
+      const fd = new FormData();
+      fd.append('notes', input.notes);
+      if (input.title) fd.append('title', input.title);
+      if (input.extraNotes) fd.append('extraNotes', input.extraNotes);
+      if (input.tripId) fd.append('tripId', input.tripId);
+      if (input.location) fd.append('location', input.location);
+      if (input.beforePhoto) fd.append('before_photo', input.beforePhoto as unknown as Blob);
+      if (input.afterPhoto) fd.append('after_photo', input.afterPhoto as unknown as Blob);
+
+      const data = await reportsApi.generate(fd);
+
+      // 생성 결과를 list 캐시·detailCache 에도 즉시 반영
+      const r: Report = {
+        id: data.id,
+        creatorId: useAuthStore.getState().user?.id ?? '',
+        tripId: data.tripId ?? '',
+        title: data.title,
+        content: data.content,
+        createdAt: new Date().toISOString(),
+        updatedAt: null,
+        deletedAt: null,
+      };
+      set((s) => ({
+        reports: [r, ...s.reports.filter((x) => x.id !== r.id)],
+        detailCache: { ...s.detailCache, [r.id]: r },
+        busy: false,
+      }));
+      return { ok: true, data };
+    } catch (e) {
+      set({ busy: false });
       return { ok: false, error: describeError(e) };
     }
   },
