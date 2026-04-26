@@ -163,14 +163,24 @@ export default function TripDetail() {
           })}
         </View>
       ) : null}
-      <Pressable
-        onPress={() =>
-          router.push(`/(tabs)/reports/new?tripId=${trip.id}` as never)
-        }
-        style={({ pressed }) => [styles.cta, pressed && styles.pressed]}
-      >
-        <Text style={styles.ctaText}>이 외근으로 보고서 작성</Text>
-      </Pressable>
+      <View style={styles.ctaRow}>
+        <Pressable
+          onPress={() =>
+            router.push(`/(tabs)/reports/generate?tripId=${trip.id}` as never)
+          }
+          style={({ pressed }) => [styles.cta, styles.ctaAi, pressed && styles.pressed]}
+        >
+          <Text style={styles.ctaText}>✨ AI 보고서 생성</Text>
+        </Pressable>
+        <Pressable
+          onPress={() =>
+            router.push(`/(tabs)/reports/new?tripId=${trip.id}` as never)
+          }
+          style={({ pressed }) => [styles.cta, pressed && styles.pressed]}
+        >
+          <Text style={styles.ctaText}>수동 작성</Text>
+        </Pressable>
+      </View>
       {stateHistory.length > 0 ? (
         <View style={styles.historyBox}>
           <Text style={styles.historyTitle}>상태 전환 이력</Text>
@@ -243,13 +253,19 @@ const styles = StyleSheet.create({
   statusText: { fontSize: fontSize.xs, fontWeight: '700' },
   fieldAddr: { fontSize: fontSize.base, color: colors.text, fontWeight: '600' },
   meta: { fontSize: fontSize.sm, color: colors.textMuted, marginTop: 2 },
-  cta: {
+  ctaRow: {
     marginTop: spacing.md,
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  cta: {
+    flex: 1,
     backgroundColor: colors.primary,
     paddingVertical: spacing.md,
     borderRadius: radius.pill,
     alignItems: 'center',
   },
+  ctaAi: { backgroundColor: colors.success },
   ctaText: { color: '#fff', fontSize: fontSize.sm, fontWeight: '700' },
   planBox: {
     marginTop: spacing.sm,
