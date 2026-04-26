@@ -17,6 +17,7 @@ export default function RootLayout() {
               <Stack.Screen name="index" />
               <Stack.Screen name="(auth)" />
               <Stack.Screen name="(tabs)" />
+              <Stack.Screen name="shared/[token]" />
             </Stack>
           </View>
           <StatusBar style="dark" />
