@@ -5,6 +5,7 @@ import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import { useTripStore } from '@/stores/tripStore';
 import { useVisitStore } from '@/stores/visitStore';
 import { useFieldStore } from '@/stores/fieldStore';
+import { useDestinationStore } from '@/stores/destinationStore';
 import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
 import { colors } from '@/theme/colors';
@@ -26,6 +27,15 @@ export default function TripDetail() {
   const allTextMemos = useVisitStore((s) => s.textMemos);
   const allPhotos = useVisitStore((s) => s.photos);
   const getField = useFieldStore((s) => s.getById);
+  const allDestinations = useDestinationStore((s) => s.destinations);
+
+  const destinations = useMemo(
+    () =>
+      allDestinations
+        .filter((d) => d.tripId === tripId)
+        .sort((a, b) => a.order - b.order),
+    [allDestinations, tripId],
+  );
 
   const trip = useMemo(
     () => allTrips.find((t) => t.id === tripId),
@@ -90,7 +100,38 @@ export default function TripDetail() {
           ? new Date(trip.endedAt).toLocaleString('ko-KR')
           : '진행 중'}
       </Text>
-      <Text style={styles.meta}>총 방문 {visits.length}건</Text>
+      <Text style={styles.meta}>
+        계획 {destinations.length}곳 · 실제 방문 {visits.length}건
+      </Text>
+      {destinations.length > 0 ? (
+        <View style={styles.planBox}>
+          <Text style={styles.planTitle}>계획된 목적지</Text>
+          {destinations.map((d) => {
+            const f = getField(d.fieldId);
+            return (
+              <View key={d.id} style={styles.planRow}>
+                <Text style={styles.planOrder}>{d.order}.</Text>
+                <Text style={styles.planAddr} numberOfLines={1}>
+                  {f?.address ?? '알 수 없는 현장'}
+                </Text>
+                <Text
+                  style={[
+                    styles.planStatus,
+                    d.status === 'arrived' && { color: colors.success },
+                    d.status === 'skipped' && { color: colors.textMuted },
+                  ]}
+                >
+                  {d.status === 'arrived'
+                    ? '완료'
+                    : d.status === 'skipped'
+                      ? '건너뜀'
+                      : '예정'}
+                </Text>
+              </View>
+            );
+          })}
+        </View>
+      ) : null}
       <Pressable
         onPress={() =>
           router.push(`/(tabs)/reports/new?tripId=${trip.id}` as never)
@@ -164,4 +205,40 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   ctaText: { color: '#fff', fontSize: fontSize.sm, fontWeight: '700' },
+  planBox: {
+    marginTop: spacing.sm,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+    gap: spacing.xs,
+  },
+  planTitle: {
+    fontSize: fontSize.xs,
+    fontWeight: '700',
+    color: colors.textMuted,
+    marginBottom: 4,
+  },
+  planRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  planOrder: {
+    fontSize: fontSize.sm,
+    color: colors.text,
+    fontWeight: '700',
+    width: 20,
+  },
+  planAddr: {
+    fontSize: fontSize.sm,
+    color: colors.text,
+    flex: 1,
+  },
+  planStatus: {
+    fontSize: fontSize.xs,
+    color: colors.warning,
+    fontWeight: '700',
+  },
 });

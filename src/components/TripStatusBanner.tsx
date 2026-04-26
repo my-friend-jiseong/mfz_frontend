@@ -32,12 +32,12 @@ export function TripStatusBanner() {
 
   return (
     <Pressable
-      onPress={() => router.push(`/(tabs)/trips/${trip.id}` as never)}
+      onPress={() => router.push('/(tabs)/trips/active' as never)}
       style={({ pressed }) => [styles.banner, pressed && styles.pressed]}
     >
       <View style={styles.dot} />
       <Text style={styles.text}>
-        외근 중 · {formatElapsed(trip.startedAt)} · 탭하여 상세보기
+        외근 중 · {formatElapsed(trip.startedAt)} · 탭하여 진행 보기
       </Text>
     </Pressable>
   );

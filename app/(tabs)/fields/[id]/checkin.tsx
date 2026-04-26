@@ -14,6 +14,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFieldStore } from '@/stores/fieldStore';
 import { useTripStore } from '@/stores/tripStore';
 import { useVisitStore } from '@/stores/visitStore';
+import { useDestinationStore } from '@/stores/destinationStore';
 import { VISIT_STATUS_VALUES, type VisitStatus } from '@/types/entities';
 import { EmptyState } from '@/components/EmptyState';
 import { colors } from '@/theme/colors';
@@ -32,6 +33,8 @@ export default function FieldCheckin() {
   const addPhoto = useVisitStore((s) => s.addPhoto);
   const memosByVisit = useVisitStore((s) => s.memosByVisit);
   const photosByVisit = useVisitStore((s) => s.photosByVisit);
+  const findDestination = useDestinationStore((s) => s.findByTripField);
+  const markDestinationArrived = useDestinationStore((s) => s.markArrived);
 
   const [visitId, setVisitId] = useState<string | null>(null);
   const [memoText, setMemoText] = useState('');
@@ -91,11 +94,17 @@ export default function FieldCheckin() {
     }
     const reason = status === '기타' ? etcReason.trim() : undefined;
     const r = await setResult(visitId, status, reason);
-    if (r.ok) {
-      router.back();
-    } else {
+    if (!r.ok) {
       Alert.alert('상태 저장 실패', r.error);
+      return;
     }
+    if (activeTripId !== null) {
+      const dest = findDestination(activeTripId, fieldId);
+      if (dest && dest.status === 'pending') {
+        markDestinationArrived(dest.id);
+      }
+    }
+    router.back();
   };
 
   return (

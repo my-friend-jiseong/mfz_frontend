@@ -9,6 +9,7 @@
 
 export type FieldStatus = 'pending' | 'in_progress' | 'done';
 export type VisitStatus = '완료' | '부재' | '수취거절' | '주소불명' | '재방문필요' | '기타';
+export type DestinationStatus = 'pending' | 'arrived' | 'skipped';
 
 export interface User {
   id: string;
@@ -41,6 +42,17 @@ export interface Visit {
   tripId: string;
   fieldId: string;
   visitedAt: string;
+}
+
+// 외근 계획상의 목적지 (Trip 시작 시점에 N개 생성)
+// ERD: docs/mfjs.drawio.xml `Destination(목적지)` 테이블 참조
+// ID는 다른 엔티티와 동일하게 string. 백엔드 미연동 단계에서는 클라이언트에서 발급.
+export interface Destination {
+  id: string;
+  tripId: string;
+  fieldId: string;
+  order: number;
+  status: DestinationStatus;
 }
 
 export interface TextMemo {
@@ -94,3 +106,9 @@ export const VISIT_STATUS_VALUES: VisitStatus[] = [
 ];
 
 export const FIELD_STATUS_VALUES: FieldStatus[] = ['pending', 'in_progress', 'done'];
+
+export const DESTINATION_STATUS_VALUES: DestinationStatus[] = [
+  'pending',
+  'arrived',
+  'skipped',
+];
