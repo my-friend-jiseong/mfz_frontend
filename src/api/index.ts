@@ -24,8 +24,12 @@ export type {
   FieldListItem,
   FieldListResponse,
   FieldDetailResponse,
+  FieldDirectAttachment,
   CreateFieldBody,
   CreateFieldResponse,
+  UpdateFieldBody,
+  PatchStatusResponse,
+  FieldTextMemoResponse,
   AddressSearchResponse,
   ListMineParams,
 } from './endpoints/fields';

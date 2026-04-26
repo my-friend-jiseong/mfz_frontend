@@ -1,15 +1,19 @@
 import { create } from 'zustand';
-import type { Field } from '@/types/entities';
+import type { Field, FieldStatus } from '@/types/entities';
 import { fields as fieldsApi, ApiError } from '@/api';
-import type { CreateFieldBody, ListMineParams } from '@/api';
-
-// 백엔드 미구현 — 기존 화면은 메서드를 그대로 호출하므로 store 가 흡수.
-// (4.6 PATCH /fields/{id}, 4.7 DELETE /fields/{id}, 4.8 PATCH /fields/{id}/status)
-// 백엔드 추가 후 throw 제거하고 실 API 호출로 교체.
-const NOT_IMPLEMENTED = '아직 백엔드에 구현되지 않은 기능입니다';
+import type { CreateFieldBody, UpdateFieldBody, ListMineParams } from '@/api';
 
 type CreateResult =
   | { ok: true; field: Field }
+  | { ok: false; error: string };
+
+type GenericResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
+type DeleteResult =
+  | { ok: true }
+  | { ok: false; needsConfirm: true; message: string }
   | { ok: false; error: string };
 
 interface FieldState {
@@ -19,10 +23,9 @@ interface FieldState {
   hydrate: () => Promise<void>;
   refresh: (params?: ListMineParams) => Promise<void>;
   create: (body: CreateFieldBody) => Promise<CreateResult>;
-
-  // 백엔드 미구현 — Phase 2 합류 전까지 no-op + 경고
-  update: (id: string, patch: Partial<Omit<Field, 'id'>>) => void;
-  remove: (id: string) => void;
+  update: (id: string, body: UpdateFieldBody) => Promise<GenericResult>;
+  patchStatus: (id: string, status: FieldStatus) => Promise<GenericResult>;
+  remove: (id: string, force?: boolean) => Promise<DeleteResult>;
 
   getById: (id: string) => Field | undefined;
   byUser: (userId: string) => Field[];
@@ -35,12 +38,10 @@ function describeError(e: unknown): string {
 }
 
 export const useFieldStore = create<FieldState>((set, get) => ({
-  // 시드 제거 — mine 응답에서 채움
   fields: [],
   busy: false,
 
   hydrate: async () => {
-    // 등록 직후 방문 이력 없는 신규 현장도 보이도록 visitDateScope=all
     await get().refresh({ visitDateScope: 'all' });
   },
 
@@ -49,12 +50,12 @@ export const useFieldStore = create<FieldState>((set, get) => ({
       const res = await fieldsApi.listMine(params ?? { visitDateScope: 'all' });
       const items: Field[] = res.items.map((it) => ({
         id: it.fieldId,
-        userId: it.userId,
+        userId: it.assigneeUserId ?? it.userId ?? '',
         status: it.status,
-        address: it.address, // 백엔드는 합쳐진 단일 string 반환
-        addressDetail: '', // 응답에 분리 컬럼 없음 — 백엔드 보강 시 채움
-        latitude: 0, // 응답에 lat/lng 미포함 — 백엔드 보강 필요 (지도 표시용)
-        longitude: 0,
+        address: it.address,
+        addressDetail: it.detailAddress ?? '',
+        latitude: it.lat,
+        longitude: it.lng,
       }));
       set({ fields: items });
     } catch {
@@ -68,13 +69,12 @@ export const useFieldStore = create<FieldState>((set, get) => ({
       const res = await fieldsApi.create(body);
       const f: Field = {
         id: res.field.fieldId,
-        userId: res.field.userId,
+        userId: res.field.assigneeUserId ?? res.field.userId ?? '',
         status: res.field.status,
         address: res.field.address,
-        addressDetail: '',
-        // create 요청에 보낸 lat/lng 를 그대로 반영 (응답에 미포함이라 호출자 입력값 보존)
-        latitude: body.lat,
-        longitude: body.lng,
+        addressDetail: res.field.detailAddress ?? '',
+        latitude: res.field.lat,
+        longitude: res.field.lng,
       };
       set((s) => ({
         fields: [f, ...s.fields.filter((x) => x.id !== f.id)],
@@ -87,12 +87,64 @@ export const useFieldStore = create<FieldState>((set, get) => ({
     }
   },
 
-  update: (_id, _patch) => {
-    console.warn(`[fieldStore.update] ${NOT_IMPLEMENTED}`);
+  update: async (id, body) => {
+    set({ busy: true });
+    try {
+      const res = await fieldsApi.update(id, body);
+      set((s) => ({
+        fields: s.fields.map((f) =>
+          f.id === id
+            ? {
+                id: res.fieldId,
+                userId: res.assigneeUserId,
+                status: res.status,
+                address: res.address,
+                addressDetail: res.detailAddress ?? '',
+                latitude: res.lat,
+                longitude: res.lng,
+              }
+            : f,
+        ),
+        busy: false,
+      }));
+      return { ok: true };
+    } catch (e) {
+      set({ busy: false });
+      return { ok: false, error: describeError(e) };
+    }
   },
 
-  remove: (_id) => {
-    console.warn(`[fieldStore.remove] ${NOT_IMPLEMENTED}`);
+  patchStatus: async (id, status) => {
+    try {
+      const res = await fieldsApi.patchStatus(id, status);
+      set((s) => ({
+        fields: s.fields.map((f) =>
+          f.id === id ? { ...f, status: res.status } : f,
+        ),
+      }));
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: describeError(e) };
+    }
+  },
+
+  remove: async (id, force = false) => {
+    set({ busy: true });
+    try {
+      await fieldsApi.remove(id, force);
+      set((s) => ({
+        fields: s.fields.filter((f) => f.id !== id),
+        busy: false,
+      }));
+      return { ok: true };
+    } catch (e) {
+      set({ busy: false });
+      if (e instanceof ApiError && e.status === 409) {
+        // HAS_RELATED_VISITS — 클라이언트가 confirm 후 force=true 로 재호출
+        return { ok: false, needsConfirm: true, message: e.message };
+      }
+      return { ok: false, error: describeError(e) };
+    }
   },
 
   getById: (id) => get().fields.find((f) => f.id === id),
