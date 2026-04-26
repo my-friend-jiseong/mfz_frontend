@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -50,17 +51,26 @@ export default function NewField() {
           (a) => a.address.includes(query) || query.includes(a.address.slice(0, 4)),
         );
 
-  const handleCreate = () => {
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleCreate = async () => {
     if (!user || !selected) return;
-    const field = createField({
-      userId: user.id,
+    setSubmitting(true);
+    const result = await createField({
+      name: selected.address,
       status,
-      address: selected.address,
-      addressDetail: detail,
-      latitude: selected.lat,
-      longitude: selected.lng,
+      roadAddress: selected.address,
+      jibunAddress: selected.address,
+      detailAddress: detail,
+      lat: selected.lat,
+      lng: selected.lng,
     });
-    router.replace(`/(tabs)/fields/${field.id}` as never);
+    setSubmitting(false);
+    if (result.ok) {
+      router.replace(`/(tabs)/fields/${result.field.id}` as never);
+    } else {
+      Alert.alert('등록 실패', result.error);
+    }
   };
 
   return (
@@ -155,9 +165,10 @@ export default function NewField() {
 
             <Pressable
               onPress={handleCreate}
-              style={({ pressed }) => [styles.btn, pressed && styles.pressed]}
+              disabled={submitting}
+              style={({ pressed }) => [styles.btn, (pressed || submitting) && styles.pressed]}
             >
-              <Text style={styles.btnText}>현장 등록</Text>
+              <Text style={styles.btnText}>{submitting ? '등록 중...' : '현장 등록'}</Text>
             </Pressable>
           </>
         )}
