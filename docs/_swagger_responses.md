@@ -160,14 +160,41 @@ body: `{ fieldId: string, siteName?: string, location?: { lat, lng } }`
 - **체크인 직후 기본값은 `완료` / `normal`** — 프런트 명세는 `재방문필요` 였음. **불일치, 백엔드 정책 따라가야**
 - `memo` 가 단일 string (배열 아님) — 메모 여러 개 추가 시 어떻게 누적되는지 추가 검증 필요
 
-### 3.3 `POST /api/visits/{visitId}/memos/text` — 검증 항목
-- 시도한 body `{ content: "..." }` → **400 "메모 내용을 입력해주세요"** — 필드명 불일치
-- 추정 후보: `text`, `body`, `memo`, `note` — Phase 1 시작 시 정확한 필드명 재시도해 확정 필요
+### 3.3 `POST /api/visits/{visitId}/memos/text` — 200 (확정)
+body 필드명: **`text`** (확정. 후속 smoke test 에서 `body`/`memo`/`note` 모두 거부됨)
+```json
+{
+  "visitId": "visit-...",
+  "attachment": {
+    "id": "att-1777206562569",
+    "type": "text",
+    "text": "smoke memo",
+    "createdAt": "2026-04-26T12:29:22.569Z",
+    "latitude": null,
+    "longitude": null,
+    "locationConsent": false
+  }
+}
+```
 
-### 3.4 `PATCH /api/visits/{visitId}/status`
-- 시도 body `{ status: "부재" }` → **400 "유효하지 않은 방문 상태입니다"**
-- 원인 추정: (a) 영문 enum 기대 (`absent`, `done`, ...), (b) 별도 필드(`resultStatus`) 사용, (c) curl Windows 인코딩 문제로 한글이 깨져 전달
-- Phase 1 시작 시 (b) 가능성부터 검증: `{ resultStatus: "..." }` 또는 swagger 스펙 영문 enum 재확인 필요
+### 3.4 `PATCH /api/visits/{visitId}/status` — 200 (확정)
+**body 필드명: `status` + 한글 enum** (영문 enum 모두 거부됨. 이전 시도가 실패한 건 curl Windows 콘솔의
+한글 인코딩 문제 — JSON 파일에 UTF-8 로 저장 후 보내면 정상 통과. RN/Expo `fetch` 는 자동 UTF-8 이라
+실 클라이언트에선 영향 없음.)
+```json
+{ "status": "부재", "reason": "..."?  }
+```
+응답:
+```json
+{
+  "visitId": "...", "status": "부재", "reason": null,
+  "statusLogs": [
+    { "id": "visit-log-...", "changedAt": "...", "fromStatus": null, "toStatus": "완료", "reason": "초기 체크인" },
+    { "id": "...", "changedAt": "...", "fromStatus": "완료", "toStatus": "부재", "reason": null }
+  ]
+}
+```
+- 백엔드가 status 변경 이력을 자동 보존 (감사 로그 요건 충족)
 
 ---
 
@@ -252,13 +279,15 @@ body 필수: `name, status (pending|in_progress|done), roadAddress, jibunAddress
 
 ---
 
-## 6. 다음으로 확정해야 할 항목 (Phase 1 시작 직전)
+## 6. 미확정 항목
 
-1. **메모 텍스트 필드명** (`text`/`body`/`memo`/`note` 중 어느 것?) — 빈 body는 거부됨, 비어있지 않은 string으로 재시도
-2. **방문 status PATCH 정확한 필드** (`status` vs `resultStatus`) + **enum 형식** (한글 vs 영문)
-3. **메모 누적 방식** — `GET visit` 응답의 `memo` 가 단일 string인 점이 이상. 실제로 두 번 추가 시 어떻게 보존되는지 확인
-4. **multipart 필드명** (사진·음성) — 스웨거에 명시 안 됨, `file`/`photo`/`upload` 후보 시도
-5. **`/api/fields/mine` 좌표** — 응답에 lat/lng 없으면 지도 표시용 별도 endpoint 필요 (또는 `/api/map/fields` 의 일반 사용자 권한 부여 요청)
-6. **한글 인코딩 검증** — RN/Expo fetch는 자동 UTF-8이므로 curl보다 안전하나, 백엔드 저장이 깨져 보였던 점은 검증 필요 (curl Windows 인코딩 문제일 가능성 큼)
+### 확정 완료 (2026-04-26)
+1. ✅ **메모 텍스트 필드명** = `text`
+2. ✅ **방문 status PATCH 필드** = `status` (한글 enum) — `resultStatus` 별도 필드는 PATCH 입력에 미사용
+3. ✅ **한글 인코딩** — curl Windows 콘솔의 인코딩 문제. RN/Expo fetch 는 자동 UTF-8 이라 영향 없음. 백엔드 저장도 정상 (smoke test 시 필드명에 깨진 한글이 저장된 건 curl 입력 단계의 문제)
 
-→ Phase 1 작업의 첫 단계 (auth API client 호출 성공) 직후, 위 6개를 5분짜리 RN 콘솔 호출로 확정 후 나머지 도메인 진행.
+### 후속 검증 필요
+4. **메모 누적 방식** — `GET visit` 응답의 단일 `memo` 필드가 어떻게 채워지는지: 가장 최근 메모만? 마지막 메모? `attachments[]` 와 별도? 시연 시 두 번 추가하면서 확인.
+5. **multipart 필드명** (사진·음성) — 클라이언트에서 `file` 로 보내는 중. 첫 업로드 시도에서 ApiError 받으면 `photo`/`upload` 폴백 검토.
+6. **`/api/fields/mine` 좌표 부재** — 응답에 lat/lng 미포함 → 지도 마커 표시 불가. 백엔드 보강 요청 항목 (3.1 추가 요청 #7 와 동일).
+7. **`/api/fields` 응답에 `addressDetail` 분리 미포함** — create 요청에는 분리해서 보내지만 응답은 합쳐서 옴. 수정 화면(미구현)에서 분리 편집하려면 백엔드 분리 응답 필요.
