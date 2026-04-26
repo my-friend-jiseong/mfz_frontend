@@ -298,11 +298,13 @@ export default function ActiveTrip() {
         onPress={handleEnd}
         style={({ pressed }) => [
           styles.endBtn,
-          { backgroundColor: allDone ? colors.danger : colors.textMuted },
+          { backgroundColor: colors.danger },
           pressed && styles.pressed,
         ]}
       >
-        <Text style={styles.endText}>외근 종료</Text>
+        <Text style={styles.endText}>
+          {allDone ? '외근 종료' : '외근 종료 (미완료 목적지 있음)'}
+        </Text>
       </Pressable>
     </MapSheetLayout>
   );

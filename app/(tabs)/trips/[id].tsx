@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { StyleSheet, Text, View, Pressable } from 'react-native';
+import { Alert, StyleSheet, Text, View, Pressable } from 'react-native';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import { useTripStore } from '@/stores/tripStore';
 import { useVisitStore } from '@/stores/visitStore';
@@ -39,6 +39,8 @@ export default function TripDetail() {
   const router = useRouter();
 
   const allTrips = useTripStore((s) => s.trips);
+  const activeTripId = useTripStore((s) => s.activeTripId);
+  const endTrip = useTripStore((s) => s.end);
   const allVisits = useVisitStore((s) => s.visits);
   const allTextMemos = useVisitStore((s) => s.textMemos);
   const allPhotos = useVisitStore((s) => s.photos);
@@ -91,6 +93,29 @@ export default function TripDetail() {
       </MapSheetLayout>
     );
   }
+
+  const isActive = trip.endedAt === null && activeTripId === trip.id;
+  const handleEnd = async () => {
+    const r = await endTrip();
+    if (r.ok) return;
+    if ('needsConfirm' in r) {
+      Alert.alert('외근 종료 확인', r.message, [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '종료',
+          style: 'destructive',
+          onPress: async () => {
+            const force = await endTrip(true);
+            if (!force.ok && !('needsConfirm' in force)) {
+              Alert.alert('오류', force.error);
+            }
+          },
+        },
+      ]);
+    } else {
+      Alert.alert('오류', r.error);
+    }
+  };
 
   const renderItem = ({ item }: { item: Visit }) => {
     const field = getField(item.fieldId);
@@ -162,6 +187,14 @@ export default function TripDetail() {
             );
           })}
         </View>
+      ) : null}
+      {isActive ? (
+        <Pressable
+          onPress={() => void handleEnd()}
+          style={({ pressed }) => [styles.endBtn, pressed && styles.pressed]}
+        >
+          <Text style={styles.endBtnText}>외근 종료</Text>
+        </Pressable>
       ) : null}
       <View style={styles.ctaRow}>
         <Pressable
@@ -267,6 +300,14 @@ const styles = StyleSheet.create({
   },
   ctaAi: { backgroundColor: colors.success },
   ctaText: { color: '#fff', fontSize: fontSize.sm, fontWeight: '700' },
+  endBtn: {
+    marginTop: spacing.md,
+    backgroundColor: colors.danger,
+    paddingVertical: spacing.lg,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+  },
+  endBtnText: { color: '#fff', fontSize: fontSize.base, fontWeight: '700' },
   planBox: {
     marginTop: spacing.sm,
     backgroundColor: colors.surface,

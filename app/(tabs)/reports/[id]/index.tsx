@@ -39,12 +39,15 @@ export default function ReportDetail() {
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [shareExpiresAt, setShareExpiresAt] = useState<string | null>(null);
   const [sharing, setSharing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const disableShare = useReportStore((s) => s.disableShare);
 
-  // 진입 시 백엔드에서 detail 페치 (목록은 contentPreview 만 갖고 있음)
+  // 진입 시 백엔드에서 detail 페치 (목록은 contentPreview 만 갖고 있음).
+  // 단, 삭제 진행 중이면 호출하지 않음 — 삭제 후 router.replace 까지 한 프레임 동안
+  // 동일 화면이 잔존해 detail 재페치 → 404 → 비직관적 오류가 뜨던 문제 방지.
   useEffect(() => {
-    if (reportId) void loadDetail(reportId);
-  }, [reportId, loadDetail]);
+    if (reportId && !deleting) void loadDetail(reportId);
+  }, [reportId, loadDetail, deleting]);
 
   const report = useMemo(
     () =>
@@ -69,17 +72,35 @@ export default function ReportDetail() {
 
   const handleDelete = () => {
     const doDelete = async () => {
+      setDeleting(true); // race 가드 — 삭제 중 detail 재페치 차단
       const r = await remove(report.id);
       if (r.ok) {
+        // 성공 시 보고서 목록으로 이동. setDeleting(false) 는 unmount 되므로 불필요.
         router.replace('/(tabs)/reports' as never);
-      } else {
-        Alert.alert('삭제 실패', r.error);
+        return;
       }
+      setDeleting(false);
+      // 친절한 메시지 분기
+      const raw = r.error || '';
+      let msg = '보고서를 삭제하지 못했습니다. 잠시 후 다시 시도해주세요.';
+      if (/not_found|404/i.test(raw)) {
+        msg = '이미 삭제되었거나 찾을 수 없는 보고서입니다.';
+        // 이미 없는 보고서면 그냥 목록으로
+        router.replace('/(tabs)/reports' as never);
+        return;
+      } else if (/forbidden|403/i.test(raw)) {
+        msg = '본인 작성 보고서만 삭제할 수 있습니다.';
+      } else if (/network|연결/i.test(raw)) {
+        msg = '네트워크 연결을 확인해주세요.';
+      } else if (raw && !/^\s*$/.test(raw)) {
+        msg = `보고서를 삭제하지 못했습니다.\n${raw}`;
+      }
+      Alert.alert('보고서 삭제 실패', msg);
     };
     if (Platform.OS === 'web') {
-      if (confirm('이 보고서를 삭제할까요? (soft delete)')) void doDelete();
+      if (confirm('이 보고서를 삭제할까요?')) void doDelete();
     } else {
-      Alert.alert('보고서 삭제', '이 보고서를 삭제할까요?', [
+      Alert.alert('보고서 삭제', '이 보고서를 정말 삭제할까요?', [
         { text: '취소', style: 'cancel' },
         { text: '삭제', style: 'destructive', onPress: () => void doDelete() },
       ]);

@@ -19,6 +19,7 @@ import { VISIT_STATUS_VALUES, type VisitStatus } from '@/types/entities';
 import { EmptyState } from '@/components/EmptyState';
 import {
   pickPhoto,
+  pickDocument,
   promptPhotoSource,
   createVoiceRecorder,
   VOICE_MAX_SECONDS,
@@ -122,6 +123,54 @@ export default function FieldCheckin() {
     promptPhotoSource((src) => void uploadPhoto(src));
   };
 
+  // 일반 파일 첨부 — mime 별 라우팅:
+  //   image/* → 사진 endpoint, audio/* → 음성 endpoint, text/* → 본문 텍스트 메모, 기타 → 안내
+  const handlePickDocument = async () => {
+    if (!visitId) return;
+    const file = await pickDocument();
+    if (!file) return;
+    const mime = (file.type || '').toLowerCase();
+    setPhotoBusy(true);
+    try {
+      if (mime.startsWith('image/')) {
+        const r = await addPhoto(visitId, file);
+        if (!r.ok) Alert.alert('파일 업로드 실패', r.error);
+        return;
+      }
+      if (mime.startsWith('audio/')) {
+        const r = await addVoiceMemo(visitId, file);
+        if (!r.ok) Alert.alert('파일 업로드 실패', r.error);
+        return;
+      }
+      if (mime.startsWith('text/')) {
+        // 텍스트 파일 → 본문 메모로 변환 (단순 fetch + 텍스트 추가)
+        try {
+          const fetched = await fetch(file.uri);
+          const text = await fetched.text();
+          const trimmed = text.slice(0, 2000);
+          if (!trimmed.trim()) {
+            Alert.alert('빈 파일', '내용이 없는 파일입니다.');
+            return;
+          }
+          const r = await addTextMemo(visitId, `[${file.name}]\n${trimmed}`);
+          if (!r.ok) Alert.alert('파일 업로드 실패', r.error);
+        } catch (e) {
+          Alert.alert(
+            '파일 업로드 실패',
+            e instanceof Error ? e.message : '파일을 읽을 수 없습니다',
+          );
+        }
+        return;
+      }
+      Alert.alert(
+        '지원하지 않는 형식',
+        `'${file.name}'\n현재 사진(image/*)·음성(audio/*)·텍스트(text/*) 형식만 첨부 가능합니다.`,
+      );
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+
   const startRecording = async () => {
     if (!visitId || recording) return;
     const rec = createVoiceRecorder();
@@ -221,19 +270,31 @@ export default function FieldCheckin() {
           </View>
         ) : null}
 
-        <Text style={styles.sectionTitle}>사진</Text>
-        <Pressable
-          onPress={handleAddPhoto}
-          disabled={photoBusy || !visitId}
-          style={({ pressed }) => [
-            styles.smallBtn,
-            (pressed || photoBusy) && styles.pressed,
-          ]}
-        >
-          <Text style={styles.smallBtnText}>
-            {photoBusy ? '업로드 중...' : '+ 사진 첨부'}
-          </Text>
-        </Pressable>
+        <Text style={styles.sectionTitle}>사진·파일</Text>
+        <View style={styles.btnRow}>
+          <Pressable
+            onPress={handleAddPhoto}
+            disabled={photoBusy || !visitId}
+            style={({ pressed }) => [
+              styles.smallBtn,
+              (pressed || photoBusy) && styles.pressed,
+            ]}
+          >
+            <Text style={styles.smallBtnText}>
+              {photoBusy ? '업로드 중...' : '+ 사진'}
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => void handlePickDocument()}
+            disabled={photoBusy || !visitId}
+            style={({ pressed }) => [
+              styles.smallBtn,
+              (pressed || photoBusy) && styles.pressed,
+            ]}
+          >
+            <Text style={styles.smallBtnText}>📎 파일 첨부</Text>
+          </Pressable>
+        </View>
         <PhotoGrid photos={photos.map((p) => ({ id: p.id, fileUrl: p.fileUrl }))} />
 
         <Text style={styles.sectionTitle}>음성 메모 (최대 5분)</Text>
@@ -362,6 +423,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   smallBtnText: { fontSize: fontSize.sm, color: colors.text, fontWeight: '600' },
+  btnRow: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
   recordingBtn: { backgroundColor: colors.danger + '15', borderColor: colors.danger },
   recordingText: { color: colors.danger },
   memoList: { marginTop: spacing.sm, gap: spacing.xs },

@@ -92,7 +92,7 @@ export default function TripsList() {
         ]}
       >
         <Text style={styles.fabText}>
-          {activeTripId ? '진행 중인 외근 보기' : '외근 시작'}
+          {activeTripId ? '진행 중인 외근 — 종료하기' : '외근 시작'}
         </Text>
       </Pressable>
     </MapSheetLayout>

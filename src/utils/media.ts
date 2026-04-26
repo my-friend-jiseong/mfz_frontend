@@ -1,5 +1,6 @@
 import { Alert, Platform, Linking } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import { Audio } from 'expo-av';
 
 // 첨부 업로드 시 백엔드 multipart 가 받는 file 객체 형태.
@@ -79,6 +80,30 @@ export function promptPhotoSource(onPick: (src: 'camera' | 'library') => void) {
     { text: '카메라', onPress: () => onPick('camera') },
     { text: '갤러리에서 선택', onPress: () => onPick('library') },
   ]);
+}
+
+/**
+ * 일반 파일(문서·메모 등) 선택. 사용자가 취소하면 null.
+ * 백엔드의 multipart 사진/음성 endpoint 가 image/audio mime 만 허용하므로,
+ * 비-미디어 파일은 visit/현장 메모의 텍스트로 변환하거나 별도 endpoint 필요.
+ */
+export async function pickDocument(): Promise<UploadFile | null> {
+  try {
+    const res = await DocumentPicker.getDocumentAsync({
+      type: '*/*',
+      copyToCacheDirectory: true,
+      multiple: false,
+    });
+    if (res.canceled || !res.assets?.[0]) return null;
+    const a = res.assets[0];
+    return {
+      uri: a.uri,
+      name: a.name ?? basenameFromUri(a.uri, 'file'),
+      type: a.mimeType ?? inferMime(a.uri, 'application/octet-stream'),
+    };
+  } catch {
+    return null;
+  }
 }
 
 // ----- 음성 녹음 -----
