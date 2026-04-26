@@ -43,24 +43,53 @@ export default function EditField() {
     );
   }
 
-  const handleSave = () => {
-    update(fieldId, { addressDetail, status });
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSave = async () => {
+    setSubmitting(true);
+    const updateRes = await update(fieldId, { detailAddress: addressDetail });
+    if (!updateRes.ok) {
+      setSubmitting(false);
+      Alert.alert('수정 실패', updateRes.error);
+      return;
+    }
+    if (status !== field.status) {
+      const statusRes = await useFieldStore.getState().patchStatus(fieldId, status);
+      if (!statusRes.ok) {
+        setSubmitting(false);
+        Alert.alert('상태 변경 실패', statusRes.error);
+        return;
+      }
+    }
+    setSubmitting(false);
     router.back();
   };
 
-  const handleDelete = () => {
-    const doDelete = () => {
-      remove(fieldId);
+  const performDelete = async (force = false) => {
+    const r = await remove(fieldId, force);
+    if (r.ok) {
       router.replace('/(tabs)/fields' as never);
-    };
+      return;
+    }
+    if ('needsConfirm' in r) {
+      Alert.alert('현장 삭제 확인', r.message + '\n\n연관 방문 기록이 있습니다. 강제 삭제할까요? (관리자 권한 필요)', [
+        { text: '취소', style: 'cancel' },
+        { text: '강제 삭제', style: 'destructive', onPress: () => performDelete(true) },
+      ]);
+    } else {
+      Alert.alert('삭제 실패', r.error);
+    }
+  };
+
+  const handleDelete = () => {
     if (Platform.OS === 'web') {
       if (confirm('이 현장을 삭제할까요? 연관된 방문·첨부는 유지됩니다.')) {
-        doDelete();
+        void performDelete(false);
       }
     } else {
       Alert.alert('현장 삭제', '이 현장을 삭제할까요?', [
         { text: '취소', style: 'cancel' },
-        { text: '삭제', style: 'destructive', onPress: doDelete },
+        { text: '삭제', style: 'destructive', onPress: () => void performDelete(false) },
       ]);
     }
   };
@@ -113,9 +142,10 @@ export default function EditField() {
 
         <Pressable
           onPress={handleSave}
-          style={({ pressed }) => [styles.btn, pressed && styles.pressed]}
+          disabled={submitting}
+          style={({ pressed }) => [styles.btn, (pressed || submitting) && styles.pressed]}
         >
-          <Text style={styles.btnText}>저장</Text>
+          <Text style={styles.btnText}>{submitting ? '저장 중...' : '저장'}</Text>
         </Pressable>
 
         <Pressable

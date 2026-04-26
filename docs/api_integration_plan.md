@@ -1,183 +1,232 @@
-# 백엔드 API 연동 계획 — v0.1
+# 백엔드 API 연동 계획 — v0.2 (Phase 2)
 
-> **작성일**: 2026-04-26
-> **출처**: `http://59.21.223.137:28080/api-docs/` Swagger 스펙 → `docs/_swagger.json`
-> **비교 대상**: `docs/backend_api_request.md` (프런트가 기대한 v0.2 명세)
-> **결론 한 줄**: 인증·외근·방문·현장조회·보고서 generate 5개 도메인은 **곧바로 연동 가능**. fields PATCH/DELETE/status, reports CRUD, fields-direct memo/photo는 **백엔드 미구현(보류)**.
+> **갱신일**: 2026-04-27
+> **출처**: `http://59.21.223.137:28080/api-docs/` (54 endpoints, 이전 41 → +13)
+> **이전 버전**: v0.1 (Phase 1, 12개 endpoint 연동) — Auth/Trips/Visits/Fields read+create + visits 첨부
+> **백엔드 변경**: `docs/backend_requests_phase2.md` 의 모든 요청 사항 반영 완료(라고 백엔드 팀 통보)
+> **핵심 한 줄**: Fields PATCH/DELETE/status + Fields-direct memo/photo/voice + Reports CRUD + 공유 링크 7종 신규. 응답 shape 검증 + UI 활성화.
 
 ---
 
-## 0. 환경 정보
+## 0. 변경 요약 표
 
-| 항목 | 값 |
+### 0.1 신규 endpoint (13개)
+
+| 도메인 | Method | Path | 우선순위 | 영향 |
+|---|---|---|---|---|
+| Fields | PATCH | `/api/fields/{id}` | P1 | 수정 화면 활성화 |
+| Fields | DELETE | `/api/fields/{id}` | P1 | 삭제 버튼 활성화 |
+| Fields | PATCH | `/api/fields/{id}/status` | P1 | 상태 전환 활성화 |
+| Fields | POST | `/api/fields/{id}/memos` | P2 | 외근 밖 메모 |
+| Fields | POST | `/api/fields/{id}/photos` | P2 | 외근 밖 사진 |
+| Fields | POST | `/api/fields/{id}/voice-memos` | P2 | 외근 밖 음성 |
+| Reports | GET | `/api/reports` | **P0** | 목록 화면 정상화 |
+| Reports | POST | `/api/reports` | **P0** | 수동 작성 (in-memory → 실 저장) |
+| Reports | GET | `/api/reports/{id}` | **P0** | 상세 |
+| Reports | PATCH | `/api/reports/{id}` | **P0** | 수정 |
+| Reports | DELETE | `/api/reports/{id}` | **P0** | 삭제 |
+| Reports | POST | `/api/reports/{id}/share` | P2 | 공유 링크 발급 (신규 기능) |
+| Reports | GET | `/api/reports/shared/{token}` | P2 | 공유 링크 미리보기 |
+
+### 0.2 응답 shape 보강 (백엔드 팀이 반영했다고 한 항목 — 실 호출 검증 필요)
+
+| 엔드포인트 | 보강 내용 | 검증 |
+|---|---|---|
+| `GET /api/fields/mine` | items[] 에 `lat`·`lng` 포함 | smoke test |
+| `GET /api/fields/{id}` | `lat`·`lng` + `roadAddress/jibunAddress/detailAddress` 분리 | smoke test |
+| `POST /api/fields` | `field` 객체에 `lat`·`lng`·분리주소 | smoke test |
+| 4xx/5xx 전체 | `{ error, code, fields?, retryable? }` 일관 포맷 | 회원가입 실패 케이스로 검증 |
+
+### 0.3 기능 변경
+
+- `POST /api/reports` body 에 **`summary`** 필드 추가 (선택). `tripId` 는 **선택**으로 변경 (이전 v0.2 명세는 필수)
+- `POST /api/reports` 가 multipart 가 아니라 **JSON body** 로 동작 (수동 작성). 자동 생성은 별도로 `POST /api/reports/generate` 유지
+- `POST /api/fields/{id}/voice-memos` body 에 `durationSeconds` (≤300) 필드
+
+### 0.4 변동 없는 영역 (이미 Phase 1 에서 연동 완료)
+
+- 인증 5종 (signup/login/logout/refresh/me)
+- 외근 5종 (start/end/active/list/detail)
+- 방문 5종 (check-in/status/memo/photo/voice + drill-down)
+- 현장 4종 (mine/detail/create + address-search)
+
+→ 이미 동작하는 코드는 건드리지 않고, 응답 shape 변화(0.2)만 수용.
+
+---
+
+## 1. 작업 순서 (PR 단위)
+
+각 PR 은 tsc 0 에러 + 가능한 경우 smoke test 통과 후 commit.
+
+### PR-A. Phase 2 smoke test + 응답 shape 검증
+**목표**: 백엔드가 실제로 §0.2 의 응답 보강을 반영했는지 curl 로 확인하고 `_swagger_responses.md` 갱신.
+
+**검증 시나리오**
+1. 회원가입 → 로그인 → `GET /api/me`
+2. `GET /api/fields/mine?visitDateScope=all` — items[] 에 `lat/lng` 있는지
+3. `POST /api/fields` 후 `GET /api/fields/{id}` — `lat/lng + roadAddress/jibunAddress/detailAddress` 있는지
+4. 회원가입 시 (a) 중복 이메일 → 409 + code=EMAIL_TAKEN (b) 약한 비밀번호 → 400 + code=PASSWORD_POLICY_VIOLATION (c) 약관 미동의 → 400 + code=TERMS_NOT_AGREED 등
+5. `PATCH /api/fields/{id}/status` body shape, 응답 shape
+6. `POST /api/reports` body 에 `summary`, tripId 선택 동작 + 응답 shape
+7. `POST /api/reports/{id}/share` 응답 shape (token, expiresAt 등)
+
+**산출물**: `docs/_swagger_responses.md` v2 — 새 응답 shape 모두 캡처. 기존 §6 미해결 항목 해소 표시.
+
+### PR-B. fieldStore 라이팅 활성화
+**대상 endpoint**: `PATCH /api/fields/{id}`, `PATCH /api/fields/{id}/status`, `DELETE /api/fields/{id}`
+
+**변경**
+- `src/api/endpoints/fields.ts`: update / patchStatus / remove 함수 추가
+- `src/stores/fieldStore.ts`: 기존 no-op `update`/`remove` 를 async + 결과 객체로 교체. 새 `patchStatus(id, status)` 액션 추가
+- 화면 활성화:
+  - `app/(tabs)/fields/[id]/edit.tsx`: 백엔드에 PATCH 호출, 에러 시 Alert
+  - `app/(tabs)/fields/[id]/index.tsx`: 상태 전환 버튼 (있다면) 활성화 + 삭제 버튼 → `?force=true` 처리 흐름 (HAS_RELATED_VISITS 받으면 confirm 모달)
+- 타입 정정: `Field.address` 가 합본 + `Field.addressDetail` 등 분리 필드를 매핑하는 케이스. mine list vs detail 응답이 모두 분리 필드를 주면 store 의 `addressDetail` 정상 채움
+
+**`Field.latitude/longitude=0` 임시값 제거**: §0.2 가 검증되면 list 응답에서 lat/lng 채울 수 있음
+
+### PR-C. fieldStore 첨부 활성화 (visit 없이)
+**대상 endpoint**: `POST /api/fields/{id}/memos`, `/photos`, `/voice-memos`
+
+**변경**
+- `src/api/endpoints/fields.ts`: addTextMemo / addPhoto / addVoiceMemo 함수 추가 (visits.ts 의 multipart 패턴 재사용)
+- `src/stores/fieldStore.ts`: `addTextMemo(fieldId, text)` 등 액션. 응답 attachment 를 visitStore 의 `textMemos/photos/voiceMemos` 배열에 push (visitId=null)
+  - 또는 fieldStore 가 자체 attachments 캐시를 갖도록 설계
+- 화면: 현장 상세 (`fields/[id]/index.tsx`) 에 "이 현장에 메모 남기기" 버튼 (외근 진행 중 아닐 때만 노출). 사진/음성도 동일
+
+**보류**: 사진·음성은 RN 카메라/picker 통합이 없어 텍스트 메모만 활성화. 사진·음성은 endpoint 만 준비하고 화면은 "카메라 연동 예정" 안내. 별도 PR (expo-image-picker + expo-av).
+
+### PR-D. reportStore 실 API 연동 (in-memory → 실 저장)
+**대상 endpoint**: `GET /api/reports`, `POST /api/reports`, `GET /api/reports/{id}`, `PATCH /api/reports/{id}`, `DELETE /api/reports/{id}`
+
+**변경**
+- `src/api/endpoints/reports.ts`: list / detail / create / update / remove 함수 추가
+- `src/stores/reportStore.ts`: 시드 제거 + Phase 1 의 in-memory 패턴 → tripStore 와 동일한 hydrate/refresh/create/update/remove async 패턴
+- 화면:
+  - `app/(tabs)/reports/index.tsx`: 안내 배너 제거, list 페치
+  - `app/(tabs)/reports/new.tsx`: create 호출 (tripId 선택, summary 추가)
+  - `app/(tabs)/reports/[id]/index.tsx`: detail 페치 + 삭제 버튼 → API
+  - `app/(tabs)/reports/[id]/edit.tsx`: PATCH 호출
+
+### PR-E. 공유 링크 (신규 기능)
+**대상 endpoint**: `POST /api/reports/{id}/share`, `GET /api/reports/shared/{token}`
+
+**변경**
+- 보고서 상세 화면에 "공유 링크 만들기" 버튼 → 토큰 발급 → URL 복사 (Clipboard) + 만료시각 표시
+- 신규 화면 `app/shared/[token].tsx` (인증 불필요) — 비로그인 사용자도 미리보기 가능
+- expo-router 의 `(public)` 그룹 또는 `app/shared/` 분기 설계
+
+**보류**: PR-D 안정화 후 진행
+
+### PR-F. 에러 응답 일관성 활용
+**전제**: PR-A 에서 백엔드가 §7.4 포맷대로 응답함을 확인.
+
+**변경**
+- `src/api/errors.ts`: `ApiError.code` 가 정상 채워지므로 화면이 분기 가능
+- 회원가입/로그인 화면에서 `code` 별 메시지·다음 액션 분기:
+  - `EMAIL_TAKEN` → "이미 가입된 이메일입니다. 로그인하시겠어요?" + 로그인 화면 이동 버튼
+  - `PASSWORD_POLICY_VIOLATION` → 비밀번호 정책 안내 + `fields.password` 필드 메시지를 input 하단에 표시
+  - `LOGIN_LOCKED` → retryAfter 카운트다운
+  - `TERMS_NOT_AGREED` / `INVALID_EMAIL` / 기타 → 그대로 메시지 표시
+- authStore 의 `isValidSession` 가드는 유지 (방어적). dev 로깅도 유지하되 향후 정리 검토
+
+### PR-G. 데모용 카메라/음성 통합 (선택)
+**대상**: visits + fields 의 사진·음성 첨부
+
+**변경**
+- `expo-image-picker`, `expo-av`, `expo-file-system` 추가
+- 권한 요청 흐름 (카메라/마이크/사진앨범)
+- check-in 화면 + 현장 상세 화면의 "사진 첨부", "음성 메모" 버튼 활성화
+
+**우선순위 낮음** — Phase 2 핵심은 Reports CRUD + Fields 라이팅. 카메라 통합은 Phase 3 후보.
+
+### PR-H. 정리 (선택)
+- `client.ts` 의 `__DEV__` 응답 dump 가 너무 verbose 하면 일부 endpoint 로 제한
+- `_swagger_responses.md` v2 의 §6 미해결 항목들 (visit detail `memo` 단일 필드 의미, multipart 필드명, address-search 빈 결과 등) 해소 표시
+- `backend_requests_phase2.md` 에 "✅ 반영 완료" 표시 또는 archive 폴더로 이동
+
+---
+
+## 2. 의존성·리스크
+
+### 2.1 의존성 그래프
+
+```
+PR-A (smoke test)  ───┬──> PR-B (fields write)
+                      ├──> PR-D (reports CRUD)  ──> PR-E (share)
+                      ├──> PR-C (fields direct attach)
+                      └──> PR-F (error code branching)
+                           └──> PR-G (camera, optional)
+                                └──> PR-H (cleanup)
+```
+
+PR-A 의 검증 결과에 따라 PR-B/C/D 의 매핑 코드가 결정됨. PR-A 에서 응답 shape 가 예상과 다르면 백엔드에 재요청 필요.
+
+### 2.2 리스크
+
+| 리스크 | 완화 |
 |---|---|
-| **API base URL** | `http://59.21.223.137:8080` (스웨거 UI는 28080, API 본체는 **8080**) |
-| **Swagger UI** | `http://59.21.223.137:28080/api-docs/` |
-| **OpenAPI JSON** | `http://59.21.223.137:28080/api-docs.json` (저장본: `docs/_swagger.json`) |
-| **인증** | `Authorization: Bearer {accessToken}` (JWT) |
-| **HTTPS** | 미지원(HTTP only). RN/Expo는 iOS ATS · Android cleartext 예외 설정 필요 |
-| **관리자 클레임** | JWT payload 에 `role: "admin"` 필요 (`/api/fields` 등) |
-| **응답 wrapper** | 스펙상 `{ data: ... }` 명시 안 됨 — **실 호출로 확인 필요** (Phase 0에서 검증) |
+| 백엔드가 일부만 반영했는데 "모두 반영" 통보 | PR-A 의 smoke test 가 첫 게이트. 미반영 항목은 별도 issue 작성 |
+| 응답 shape 가 요청서와 다르게 옴 (예: `lat` 대신 `latitude`) | smoke test 결과로 어댑터에 흡수 또는 재요청 |
+| 4xx 일관 포맷이 일부 엔드포인트만 적용 | code 가 없으면 message 만 표시하는 fallback 이 이미 있음 (Phase 1) |
+| jy 가 추가한 destination wizard / active trip / route navigation 코드와 우리 store 변경 충돌 | jy 의 코드는 destinationStore 별도 슬라이스 + tripStore 일부 사용. PR-B 시작 전 5분 dry-read 로 호환 확인 |
+| 공유 링크 (PR-E) 가 비로그인 화면이라 토큰 보관·만료·재발급 UX 가 새 설계 영역 | PR-D 안정화 후 별도 디자인 시간 확보 |
+
+### 2.3 검증 게이트
+
+- 매 PR: `npx tsc --noEmit` 0 에러
+- PR-A 직후: `_swagger_responses.md` v2 commit
+- PR-B/D 직후: 실 디바이스/Expo Go 에서 회원가입 → 외근 → 현장 등록·수정·삭제·상태전환 → 보고서 작성·수정·삭제 풀 시나리오 통과
+- PR-F 직후: 회원가입 7개 실패 케이스 (중복 이메일/약한 비번/약관 미동의/이메일 형식/비번 불일치/이름 누락/빈 body) 모두 친절한 메시지 도달
 
 ---
 
-## 1. 엔드포인트 매핑 표
+## 3. 코드 변경 영향 범위 (사전 매핑)
 
-기호: ✅ 바로 적용 / ⚠️ 경로·필드명 다름 (어댑터 필요) / ❌ 백엔드 미구현 / ➕ 스웨거에만 있음
-
-### 1.1 인증·세션
-| 프런트 명세 | 스웨거 실제 | 상태 | 비고 |
-|---|---|---|---|
-| `POST /auth/signup` | `POST /auth/signup` *또는* `POST /api/system/auth/signup` | ✅ | body 키: `passwordConfirm`, `termsAgreed` (프런트 명세의 `termsVersion/privacyVersion/locationConsent`와 다름) |
-| `POST /auth/login` | `POST /auth/login` (또는 `/api/system/auth/login`) | ✅ | |
-| `POST /auth/logout` | `POST /auth/logout` (또는 `/api/system/auth/logout`) | ✅ | |
-| `POST /auth/refresh` | `POST /auth/refresh` (또는 `/api/system/auth/refresh`) | ✅ | |
-| `GET /auth/me` | `GET /api/me` | ⚠️ | 경로 다름. 응답 `{ username }` 만 — 프런트 `User` 타입(id/email/name/role) 부족, 백엔드 확장 필요 |
-| — | `POST /api/system/session/activity` | ➕ | 하트비트 (선택 적용) |
-| — | `GET /api/system/session/policy` | ➕ | 토큰 TTL·정책 클라이언트 가이드 |
-| — | `POST /api/system/session/refresh` | ➕ | `/auth/refresh` 와 동일 기능 추정 |
-
-### 1.2 외근(Trip)
-| 프런트 명세 | 스웨거 실제 | 상태 |
+| 파일 | 변경 내용 | PR |
 |---|---|---|
-| `POST /trips` | `POST /api/trips/start` | ⚠️ 경로 다름 |
-| `PATCH /trips/{id}/end` | `POST /api/trips/end` | ⚠️ method=POST, **path id 없음** (서버가 active trip 자동 식별 추정) |
-| `GET /trips/active` | `GET /api/trips/active` | ✅ |
-| `GET /trips` | `GET /api/trips` | ✅ |
-| `GET /trips/{id}` | `GET /api/trips/{tripId}` | ✅ |
-| `GET /trips/{id}/audit-log` | `GET /api/trips/state-history` | ⚠️ 별도 path, query로 trip 지정 추정 |
-| — | `POST /api/trips/offline/queue`, `/flush` | ➕ Feature 8 (오프라인 큐) |
-| — | `POST /api/trips/{tripId}/geofences/{arrival,register}` | ➕ Feature 8 |
-| — | `POST /api/trips/{tripId}/navigation/{deep-links,optimize}` | ➕ Feature 8 |
-| — | `POST /api/trips/{tripId}/official-notice` | ➕ 복무규정 보고 표시 |
-
-### 1.3 방문(Visit)
-| 프런트 명세 | 스웨거 실제 | 상태 |
-|---|---|---|
-| `POST /visits` | `POST /api/visits/check-in` | ⚠️ body: `fieldId`(string!), `siteName`, `location.{lat,lng}` — 프런트 명세는 `lat/lng` flat |
-| `PATCH /visits/{id}/status` | `PATCH /api/visits/{visitId}/status` | ✅ |
-| `POST /visits/{id}/memos` | `POST /api/visits/{visitId}/memos/text` | ⚠️ path 끝 `/text` |
-| `POST /visits/{id}/photos` | `POST /api/visits/{visitId}/photos` | ✅ multipart |
-| `POST /visits/{id}/voice-memos` | `POST /api/visits/{visitId}/voice-memos` | ✅ |
-| `GET /visits/{id}` | `GET /api/trips/{tripId}/visits/{visitId}` | ⚠️ trip 컨텍스트 필수 (drill-down) |
-
-### 1.4 현장(Field)
-| 프런트 명세 | 스웨거 실제 | 상태 |
-|---|---|---|
-| `GET /fields` (본인 기본) | `GET /api/fields/mine` (본인) + `GET /api/fields` (관리자만) | ⚠️ 분리됨 |
-| `GET /fields/{id}` | `GET /api/fields/{fieldId}` | ✅ |
-| `POST /fields` | `POST /api/fields` | ✅ |
-| `GET /geocode` | `GET /api/fields/address/search` | ⚠️ 통합됨 |
-| `GET /geocode/reverse` | — | ❌ 미구현 |
-| `PATCH /fields/{id}` | — | ❌ **미구현** |
-| `DELETE /fields/{id}` | — | ❌ **미구현** |
-| `PATCH /fields/{id}/status` | — | ❌ **미구현** |
-| — | `PATCH /api/fields/{fieldId}/assignee` | ➕ 관리자 전용 |
-| — | `GET /api/map/fields` | ➕ 지도 마커 (Feature 1·2 = bbox 대체) |
-| — | `GET /api/map/current-location-config` | ➕ |
-
-### 1.5 방문 외 직접 첨부 (visit-less)
-| 프런트 명세 | 스웨거 실제 | 상태 |
-|---|---|---|
-| `POST /fields/{id}/memos` | — | ❌ **미구현** |
-| `POST /fields/{id}/photos` | — | ❌ **미구현** |
-| `POST /fields/{id}/voice-memos` | — | ❌ 미구현 |
-
-### 1.6 보고서(Report)
-| 프런트 명세 | 스웨거 실제 | 상태 |
-|---|---|---|
-| `POST /reports` (사용자 본문 입력) | `POST /api/reports/generate` (multipart, **Gemini AI 자동 생성** + Word 출력) | ⚠️ 성격이 다름 — 백엔드는 자동 생성, 프런트 명세는 수기 입력 |
-| `GET /reports` | — | ❌ **미구현** |
-| `GET /reports/{id}` | — | ❌ **미구현** |
-| `PATCH /reports/{id}` | — | ❌ **미구현** |
-| `DELETE /reports/{id}` | — | ❌ **미구현** |
-
-### 1.7 시스템
-| 항목 | 스웨거 |
-|---|---|
-| 헬스체크 | `GET /health` |
+| `src/api/endpoints/fields.ts` | update, patchStatus, remove, addTextMemo, addPhoto, addVoiceMemo 추가 | B, C |
+| `src/api/endpoints/reports.ts` | list, detail, create, update, remove, share, getShared 추가 | D, E |
+| `src/api/index.ts` | 새 함수·타입 export | B, C, D, E |
+| `src/stores/fieldStore.ts` | update/remove no-op 제거 + patchStatus + 첨부 액션 | B, C |
+| `src/stores/reportStore.ts` | in-memory → 실 API (tripStore 패턴) | D |
+| `src/types/entities.ts` | Field 에 분리 주소 필드 추가 검토, Report 에 summary 추가 | B, D |
+| `app/(tabs)/fields/[id]/edit.tsx` | async + Alert + 백엔드 PATCH | B |
+| `app/(tabs)/fields/[id]/index.tsx` | 상태 전환 버튼 + 삭제 버튼 활성화 + 첨부 버튼 추가 | B, C |
+| `app/(tabs)/reports/index.tsx` | 안내 배너 제거, list 페치 | D |
+| `app/(tabs)/reports/new.tsx` | create 호출 + summary 입력 | D |
+| `app/(tabs)/reports/[id]/index.tsx` | detail 페치 + 삭제 + 공유 버튼 | D, E |
+| `app/(tabs)/reports/[id]/edit.tsx` | PATCH 호출 | D |
+| `app/shared/[token].tsx` (신규) | 비로그인 공유 보고서 미리보기 | E |
+| `app/(auth)/login.tsx`, `signup.tsx` | code 별 분기 | F |
+| `docs/_swagger.json` | 신규 스펙 (이미 갱신됨) | A 직전에 처리 |
+| `docs/_swagger_responses.md` | v2 — 신규/보강 응답 shape 캡처 | A |
+| `docs/api_integration_plan.md` | 본 문서 (방금 작성) | A 와 함께 |
+| `docs/backend_requests_phase2.md` | "✅ 반영 완료" 표시 또는 archive 이동 | H |
 
 ---
 
-## 2. Phase 1 — 곧바로 적용 가능 (이번 작업 범위)
+## 4. 알려진 한계 (Phase 2 후에도 남음)
 
-다음 14개 엔드포인트는 **현재 코드의 in-memory 목업을 실 API 호출로 전환 가능**. 차이가 있는 항목은 어댑터 함수로 흡수.
-
-### 도메인별
-- **인증** (4): `signup`, `login`, `logout`, `refresh` + `GET /api/me`
-- **외근** (5): `start`, `end`, `active`, list, detail
-- **방문** (5): `check-in`, status, memos/text, photos, voice-memos, drill-down detail
-- **현장** (3): `mine`, detail, create + `address/search`
-- **보고서** (1): `generate` (UI를 "AI 생성" 흐름으로 전환)
-- **지도** (1): `/api/map/fields` (Feature 1·2 마커용)
-
-### 작업 순서 (각 단계는 PR 단위로 분리)
-1. **API client 레이어 신설** (`src/api/`)
-   - `client.ts`: `fetch` 래퍼 — base URL, JSON 직렬화, Bearer 자동 첨부, 401 → refresh 재시도, 에러 정규화
-   - `endpoints/auth.ts`, `trips.ts`, `visits.ts`, `fields.ts`, `reports.ts`, `map.ts`
-   - `.env`: `EXPO_PUBLIC_API_BASE_URL=http://59.21.223.137:8080`
-   - Android `cleartextTrafficPermitted=true`, iOS `NSAppTransportSecurity` 예외 (HTTP)
-2. **토큰 저장**
-   - access: 메모리(zustand) / refresh: `expo-secure-store` (iOS Keychain · Android EncryptedSharedPreferences)
-   - 앱 부팅 시 refresh → access 재발급 → `/api/me` 로 user 복원 → `/api/trips/active` 로 진행 외근 복원
-3. **`authStore` 실 연동**
-   - mockSeed 의존 제거. `signup/login/logout/refresh` 호출
-   - `User` 타입 확장: `email`, `name`, `role` 추가 (백엔드 `/api/me` 응답 확장 협의 — 현재 `username` 만 옴 → **백엔드 보강 요청 항목**)
-4. **`tripStore` 실 연동**
-   - `start/end/active/list/detail` 호출. `activeTripId` 부팅 동기화
-5. **`fieldStore` 실 연동**
-   - `mine` 으로 본인 현장 목록, `create` 로 등록, `address/search` 로 주소 자동완성
-   - **읽기 전용으로 시작** — PATCH/DELETE/status 백엔드 추가 전까지 UI에서 수정 버튼 비활성/숨김
-6. **`visitStore` 실 연동**
-   - `check-in`, `status`, `memos/text`, `photos`(multipart), `voice-memos`(multipart)
-7. **`reportStore` 재설계**
-   - 자유 작성 → **"방문 선택 → AI 생성 → 미리보기 → 다운로드"** 흐름으로 전환 (multipart 입력으로 visit/photo 첨부)
-   - 목록·상세·수정·삭제 화면은 백엔드 보강 전까지 보류 메시지
-
-### 어댑터로 흡수할 차이점 (코드에서 변환)
-- `/visits/check-in` body: `{ fieldId: String(field.id), location: { lat, lng } }` 로 직렬화
-- `fieldId`가 string인 점 — 응답을 number로 캐스팅
-- `/api/me` 빈약한 응답 — 부족한 필드는 `null` 처리, 백엔드 보강 후 제거할 임시 코드임을 주석으로 표시 (이건 통합 끝까지 필요한 정상 어댑터가 아니라 **임시 보강 대기**)
-- `PATCH /trips/{id}/end` 와 달리 `POST /api/trips/end` — store API는 그대로 유지하고 클라이언트 함수가 active trip 식별
+- 카메라/음성 통합 미구현 → 사진/음성 endpoint 는 형식만 준비 (PR-G 가 처리하면 해소)
+- 관리자 시나리오 (현장 담당자 변경, /api/map/fields admin, /api/fields all) 는 admin 토큰 발급 절차가 §7.5 로 별도 협의 필요 → Phase 3
+- 외근 자동화 (Feature 8: geofence 도착, navigation 딥링크, 오프라인 큐, 동선 최적화, official-notice) — jy 가 일부 구현했을 가능성. 우리 작업과 별개 PR
+- 보고서 자동 생성 (`/api/reports/generate` Gemini AI) — multipart 입력 + 화면 흐름 재설계는 별도 PR
 
 ---
 
-## 3. Phase 2 — 백엔드 협의·보강 필요 (보류)
+## 5. 다음 액션
 
-### 3.1 백엔드에 추가 요청해야 할 엔드포인트
-1. `PATCH /api/fields/{fieldId}` — 현장 수정 (주소·좌표·상세주소)
-2. `PATCH /api/fields/{fieldId}/status` — 현장 상태 전환 (`pending→in_progress→done`)
-3. `DELETE /api/fields/{fieldId}` — soft delete + `?force=true` 옵션
-4. `POST /api/fields/{fieldId}/memos`, `/photos`, `/voice-memos` — **방문 없이 현장 직접 첨부** (프런트 `TextMemo.visitId: null` 케이스, 시연 시 핵심 UX)
-5. **Reports CRUD**: `GET /api/reports`, `GET /api/reports/{id}`, `PATCH /api/reports/{id}`, `DELETE /api/reports/{id}` — `generate` 만 있으면 작성 후 다시 못 봄
-6. `GET /api/me` 응답 확장: `email`, `name`, `role`, `createdAt` 포함
-7. `GET /api/fields` 의 bbox 쿼리 (지도 뷰포트) — `/api/map/fields` 가 이를 대체할 수도 있음, 응답 스펙 확인 필요
-
-### 3.2 Phase 1 도중 검증해야 할 가정
-- 응답 wrapper `{ data: ... }` 실제 형태 (스펙엔 없음 → curl 한 번 호출로 확인)
-- `/auth/login` 응답 shape (accessToken/refreshToken 필드명)
-- `/api/visits/check-in` 응답에 visit.id 가 어떤 형식(number/string)
-- multipart 필드명 (`file`? `photo`? `image`?)
-- 401 응답 시 access 만료와 refresh 만료 구분 가능 여부
-
-→ Phase 1 작업 시작 직전에 **5분짜리 curl smoke test** 로 한 번에 확인.
-
-### 3.3 Feature 8 (외근 자동화) — 추후
-오프라인 큐, geofence 자동 도착, 길안내 딥링크, 동선 최적화는 Phase 1 완료 후 Feature 8 작업 시 합류.
+1. **승인 대기**: 사용자가 본 계획서 검토 후 진행 의사 확인
+2. **PR-A 시작**: smoke test 7개 시나리오 curl 실행 → `_swagger_responses.md` v2 작성 → commit
+3. PR-B → PR-D 순으로 진행 (Reports 가 P0 라 우선이지만 fields write 가 의존 적고 단순해서 워밍업으로 먼저 권장)
+4. 매 PR commit 후 `git push origin njs` (현재 njs 위 origin/main 과 동일)
 
 ---
 
-## 4. 다음 단계 (즉시 실행)
+## 6. 변경 이력
 
-1. ✅ 이 계획서 사용자 검토 → 합의
-2. ⬜ **Phase 0 — smoke test**: `/auth/signup` → `/auth/login` → `/api/me` → `/api/trips/start` → `/api/trips/active` → `/api/trips/end` 순서로 curl 호출, 실 응답 본문 캡처해 `docs/_swagger_responses.md` 에 기록
-3. ⬜ **API client 레이어** PR — 빈 endpoints 모듈 + 토큰 저장 + interceptor (도메인 store 변경 없음)
-4. ⬜ **authStore 연동** PR — 첫 번째 실 동작 (login/logout)
-5. ⬜ tripStore → fieldStore → visitStore → reportStore 순으로 PR 분리
-
----
-
-## 5. 변경 이력
 | 날짜 | 내용 |
 |---|---|
-| 2026-04-26 | 초안 — 스웨거 41개 vs 프런트 명세 33개 매핑. Phase 1(14개 즉시) / Phase 2(7개 백엔드 보강 후) 분리 |
+| 2026-04-26 | v0.1 — 스웨거 41개 vs 프런트 명세 33개 매핑. Phase 1 12개 즉시 연동 |
+| 2026-04-27 | v0.2 — 백엔드 Phase 2 요청 반영 (54개, +13개 신규). 응답 shape 보강 검증 필요. PR-A~H 작업 분할 |

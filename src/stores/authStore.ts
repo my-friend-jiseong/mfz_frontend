@@ -1,13 +1,15 @@
 import { create } from 'zustand';
 import type { User } from '@/types/entities';
-import { auth, configureAuth, ApiError, NetworkError } from '@/api';
+import { auth, configureAuth, localizeError, errorCode } from '@/api';
 import {
   saveRefreshToken,
   loadRefreshToken,
   clearRefreshToken,
 } from '@/api/storage';
 
-type Result<T = void> = { ok: true; value?: T } | { ok: false; error: string };
+type Result<T = void> =
+  | { ok: true; value?: T }
+  | { ok: false; error: string; code?: string };
 
 interface AuthState {
   user: User | null;
@@ -30,12 +32,8 @@ interface AuthState {
   _refreshAccess: () => Promise<string | null>;
 }
 
-function describeError(e: unknown): string {
-  if (e instanceof ApiError) return e.message || `오류 (HTTP ${e.status})`;
-  if (e instanceof NetworkError) return e.message;
-  if (e instanceof Error) return e.message;
-  return '알 수 없는 오류';
-}
+// 영문 식별자 → 한국어 매핑은 src/api/errors.ts 의 localizeError 가 담당
+const describeError = localizeError;
 
 // 백엔드 응답이 비어 있거나 필수 필드 누락 시 안전 가드.
 // 정상 응답: { user, accessToken, refreshToken, ... } (smoke test 캡처)
@@ -103,7 +101,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       });
       return { ok: true };
     } catch (e) {
-      return { ok: false, error: describeError(e) };
+      return { ok: false, error: describeError(e), code: errorCode(e) ?? undefined };
     }
   },
 
@@ -129,7 +127,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       });
       return { ok: true };
     } catch (e) {
-      return { ok: false, error: describeError(e) };
+      return { ok: false, error: describeError(e), code: errorCode(e) ?? undefined };
     }
   },
 

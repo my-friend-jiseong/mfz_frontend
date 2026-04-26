@@ -1,5 +1,5 @@
 export { API_BASE_URL } from './config';
-export { ApiError, NetworkError } from './errors';
+export { ApiError, NetworkError, localizeError, errorCode } from './errors';
 export { request, configureAuth } from './client';
 
 export { auth } from './endpoints/auth';
@@ -24,13 +24,27 @@ export type {
   FieldListItem,
   FieldListResponse,
   FieldDetailResponse,
+  FieldDirectAttachment,
   CreateFieldBody,
   CreateFieldResponse,
+  UpdateFieldBody,
+  PatchStatusResponse,
+  FieldTextMemoResponse,
   AddressSearchResponse,
   ListMineParams,
 } from './endpoints/fields';
 
 export { reports } from './endpoints/reports';
+export type {
+  ReportListItem,
+  ReportListResponse,
+  ReportDetailResponse,
+  ReportCreateData,
+  CreateReportBody,
+  UpdateReportBody,
+  ListReportsParams,
+  ShareReportData,
+} from './endpoints/reports';
 export { map } from './endpoints/map';
 export { system } from './endpoints/system';
 export type { SessionPolicy } from './endpoints/system';

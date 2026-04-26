@@ -1,8 +1,16 @@
-# 백엔드 실응답 캡처 — Phase 0 smoke test
+# 백엔드 실응답 캡처 — Phase 0 + Phase 2 smoke test
 
-> **수집일**: 2026-04-26
-> **방법**: 테스트 계정 (`njs.smoke.{ts}@example.com`) 으로 회원가입→로그인→외근→체크인→메모→종료→로그아웃 풀 시나리오 실행, curl 응답 본문 그대로 기록.
+> **수집일**: 2026-04-26 (Phase 0) / 2026-04-27 (Phase 2 — 백엔드 §0.2 보강 검증)
+> **방법**: 테스트 계정으로 풀 시나리오 curl 호출, 응답 본문 그대로 기록.
 > **목적**: 스웨거 스펙에 누락된 응답 shape·필드명·enum 값을 코드로 옮기기 전 확정.
+>
+> **Phase 2 검증 결과 요약**:
+> - ✅ `lat/lng` 응답 포함 (mine/detail/POST 모두)
+> - ✅ `roadAddress/jibunAddress/detailAddress + sido/sigungu` 분리 응답
+> - ✅ Fields 라이팅 5종 + 직접 첨부 3종 모두 동작
+> - ✅ Reports CRUD 5종 + 공유 링크 2종 모두 동작
+> - ⚠️ 4xx 에러 일관성은 **부분 반영** (자세한 내용 §7 참조)
+> - ⚠️ Reports 응답 shape 가 endpoint 별 비일관 (자세한 내용 §8 참조)
 
 ---
 
@@ -215,12 +223,18 @@ body 필수: `name, status (pending|in_progress|done), roadAddress, jibunAddress
 - **`fieldId`도 `"field-{epoch}"` 커스텀 string**
 - list/summary 응답에서는 `address` 가 **단일 합쳐진 string** 으로 옴 (roadAddress + detailAddress 결합한 표시용)
 
-### 4.2 `GET /api/fields/mine` — 200
+### 4.2 `GET /api/fields/mine` — 200 (Phase 2 보강)
 **기본 필터**: `visitWindow.mode = "default_30d"` — **방문 이력이 없는 현장은 기본 결과에 안 보임!** 등록 직후 새 현장 보려면 `?visitDateScope=all` 필요.
 ```json
 {
-  "items": [{ "fieldId", "name", "address", "status", "tags", "userId", "updatedAt", "recentVisitedAt" }],
-  "pagination": {...},
+  "items": [{
+    "fieldId", "name", "address",
+    "roadAddress", "jibunAddress", "detailAddress", "sido", "sigungu",
+    "status", "lat", "lng",
+    "tags", "userId", "assigneeUserId",
+    "updatedAt", "recentVisitedAt"
+  }],
+  "pagination": { "page": 1, "limit": 50, "total": 1, "hasNext": false },
   "emptyMessage": "담당 현장이 없습니다. 관리자에게 문의하세요" | null,
   "appliedFilter": {
     "statuses": { "mode": "all" },
@@ -230,13 +244,19 @@ body 필수: `name, status (pending|in_progress|done), roadAddress, jibunAddress
   }
 }
 ```
+- ✅ `lat/lng + roadAddress/jibunAddress/detailAddress + sido/sigungu` 모두 응답에 포함 (Phase 2 반영)
+- ⚠️ `userId` 와 `assigneeUserId` 둘 다 들어옴 — 백엔드가 정렬 진행 중인 듯. 우선 `assigneeUserId` 사용 권장.
 
-### 4.3 `GET /api/fields/{fieldId}` — 200
+### 4.3 `GET /api/fields/{fieldId}` — 200 (Phase 2 보강)
 ```json
 {
-  "fieldId", "name", "address", "status", "tags",
+  "fieldId", "name", "address",
+  "roadAddress", "jibunAddress", "detailAddress", "sido", "sigungu",
+  "status", "lat", "lng", "tags",
   "assigneeUserId": "uuid",
+  "updatedAt": "...",
   "recentVisits": [],
+  "directAttachments": [],
   "attachmentSummary": { "text": 0, "photo": 0, "audio": 0, "total": 0 },
   "checkInCta": {
     "label": "체크인 시작",
@@ -246,8 +266,59 @@ body 필수: `name, status (pending|in_progress|done), roadAddress, jibunAddress
   }
 }
 ```
-- 목록과 다르게 **`assigneeUserId`** (목록은 `userId`)
+- ✅ Phase 2: `lat/lng + 분리주소` 응답 보강
+- ✅ Phase 2: **`directAttachments[]`** 신규 — 방문 없이 현장에 직접 첨부된 메모/사진/음성
+- 목록과 다르게 **`assigneeUserId`만** (목록은 `userId` + `assigneeUserId` 둘 다)
 - 백엔드가 **체크인 가능 여부 + 비활성 사유를 미리 계산** (`checkInCta`) — UI 그대로 사용 가능
+
+### 4.6 `PATCH /api/fields/{fieldId}` — 200 (Phase 2 신규)
+body: `{ name?, roadAddress?, jibunAddress?, detailAddress?, sido?, sigungu?, lat?, lng?, tags?, assignedUserId? }` (전부 선택, 부분 업데이트)
+응답: `GET /api/fields/{id}` 의 detail shape 그대로 (수정 반영된 값).
+
+### 4.7 `DELETE /api/fields/{fieldId}` — 204 (Phase 2 신규)
+응답 본문 없음. 연관 visit 있을 때 `?force=true` 동작 미검증 (smoke 시점에 visit 0건이라).
+
+### 4.8 `PATCH /api/fields/{fieldId}/status` — 200 (Phase 2 신규)
+body: `{ "status": "pending" | "in_progress" | "done" }`
+응답:
+```json
+{
+  "fieldId": "...",
+  "status": "in_progress",
+  "updatedAt": "...",
+  "previousStatus": "pending"
+}
+```
+백엔드 요청서 §2.1 명세 그대로 반영됨.
+
+### 4.9 `POST /api/fields/{fieldId}/memos` — 201 (Phase 2 신규)
+body: `{ "text": "..." }` (≤2000자)
+응답:
+```json
+{
+  "fieldId": "...",
+  "attachment": {
+    "id": "att-{epoch}",
+    "fieldId": "...",
+    "type": "text",
+    "text": "direct field memo",
+    "createdAt": "...",
+    "latitude": null,
+    "longitude": null,
+    "visitId": null
+  }
+}
+```
+- ✅ visit 없이 현장 직접 메모 — `visitId: null` 그대로
+- visits 의 `/memos/text` 응답과 동일한 `attachment` shape (백엔드 통일됨)
+
+### 4.10 `POST /api/fields/{fieldId}/photos` — 201 (Phase 2 신규)
+multipart: `file` (필수, image), `caption` (선택)
+응답: §4.9 와 동일 패턴, `type: "photo"` + `fileUrl/thumbnailUrl/captureAt` 등 (smoke 미검증, 카메라 통합 시 검증 예정).
+
+### 4.11 `POST /api/fields/{fieldId}/voice-memos` — 201 (Phase 2 신규)
+multipart: `file` (필수, audio), `durationSeconds` (≤300, 선택)
+응답: §4.9 와 동일 패턴, `type: "audio"` (smoke 미검증).
 
 ### 4.4 `GET /api/fields/address/search?keyword=...` — 200
 ```json
@@ -284,10 +355,173 @@ body 필수: `name, status (pending|in_progress|done), roadAddress, jibunAddress
 ### 확정 완료 (2026-04-26)
 1. ✅ **메모 텍스트 필드명** = `text`
 2. ✅ **방문 status PATCH 필드** = `status` (한글 enum) — `resultStatus` 별도 필드는 PATCH 입력에 미사용
-3. ✅ **한글 인코딩** — curl Windows 콘솔의 인코딩 문제. RN/Expo fetch 는 자동 UTF-8 이라 영향 없음. 백엔드 저장도 정상 (smoke test 시 필드명에 깨진 한글이 저장된 건 curl 입력 단계의 문제)
+3. ✅ **한글 인코딩** — curl Windows 콘솔의 인코딩 문제. RN/Expo fetch 는 자동 UTF-8 이라 영향 없음.
 
-### 후속 검증 필요
-4. **메모 누적 방식** — `GET visit` 응답의 단일 `memo` 필드가 어떻게 채워지는지: 가장 최근 메모만? 마지막 메모? `attachments[]` 와 별도? 시연 시 두 번 추가하면서 확인.
-5. **multipart 필드명** (사진·음성) — 클라이언트에서 `file` 로 보내는 중. 첫 업로드 시도에서 ApiError 받으면 `photo`/`upload` 폴백 검토.
-6. **`/api/fields/mine` 좌표 부재** — 응답에 lat/lng 미포함 → 지도 마커 표시 불가. 백엔드 보강 요청 항목 (3.1 추가 요청 #7 와 동일).
-7. **`/api/fields` 응답에 `addressDetail` 분리 미포함** — create 요청에는 분리해서 보내지만 응답은 합쳐서 옴. 수정 화면(미구현)에서 분리 편집하려면 백엔드 분리 응답 필요.
+### Phase 2 (2026-04-27) 해소
+4. ✅ **`/api/fields/mine` 좌표 보강** — `lat/lng` 응답에 포함됨
+5. ✅ **`addressDetail` 분리 응답** — `roadAddress/jibunAddress/detailAddress + sido/sigungu` 모두 반환
+
+### 여전히 후속 검증 필요
+6. **메모 누적 방식** — `GET visit` 응답의 단일 `memo` 필드 의미. 시연 중 두 번 추가하면서 확인 예정.
+7. **multipart 필드명** — 클라이언트가 `file` 로 보내는 중. 사진/음성 업로드 첫 시도에서 검증.
+8. **`assignedUserId` vs `assigneeUserId`** — POST body 는 `assignedUserId` (PATCH 도 동일), GET 응답은 `assigneeUserId`. 백엔드 정렬 진행 중인지 확인 필요.
+
+---
+
+## 7. 4xx 에러 응답 일관성 — **부분 반영** (Phase 2 검증)
+
+### 7.1 실측 결과 (2026-04-27)
+
+| 시나리오 | 요청서 기대 | **실제** |
+|---|---|---|
+| 중복 이메일 | 409 + `code: "EMAIL_TAKEN"` | **400** + `{ "error": "email_already_exists" }` |
+| 약한 비밀번호 | 400 + `code: "PASSWORD_POLICY_VIOLATION"` + `fields.password` | 400 + `{ "error": "password_too_short" }` |
+| termsAgreed=false | 400 + `code: "TERMS_NOT_AGREED"` | 400 + `{ "error": "terms_required" }` |
+| password ≠ confirm | 400 + `code: "PASSWORD_MISMATCH"` | 400 + `{ "error": "password_confirm_mismatch" }` |
+
+### 7.2 정리
+
+**개선된 점** (Phase 1 대비):
+- ✅ 검증 실패가 4xx + JSON body 로 옴 (이전: 201 + null body, connection reset)
+- ✅ `error` 필드는 항상 존재 (영문 snake_case 식별자)
+
+**요청서와 다른 점**:
+- HTTP status code 분기 없음 — 모든 검증 실패가 400 (요청서: 409 EMAIL_TAKEN, 401 INVALID_CREDENTIALS 등 분기)
+- 별도 `code` 필드 없음 — `error` 필드가 영문 식별자 역할 겸함
+- 한국어 메시지 미포함 — 클라이언트가 영문 코드 → 한국어 매핑 테이블 보유 필요
+- `fields` 객체 없음
+- `retryable` 없음
+
+### 7.3 클라이언트 매핑 테이블 (Phase 2 작업에 사용)
+
+```ts
+// src/api/errors.ts 또는 상수 모듈에 추가 예정
+export const AUTH_ERROR_MESSAGES: Record<string, string> = {
+  email_already_exists: '이미 가입된 이메일입니다',
+  password_too_short: '비밀번호는 10자 이상 + 영대/영소/숫자/특수문자 중 3종 조합이어야 합니다',
+  password_confirm_mismatch: '비밀번호 확인이 일치하지 않습니다',
+  terms_required: '필수 약관 동의가 필요합니다',
+  // ... 추가 발견 시 보완
+};
+```
+
+`ApiError.message` 에 들어 있는 백엔드 raw message (영문 코드) 를 위 테이블로 한국어로 매핑해 사용자에게 표시.
+
+---
+
+## 8. Reports 응답 shape — endpoint 별 비일관 (Phase 2 신규)
+
+### 8.1 endpoint 별 wrapper 차이
+
+| Endpoint | wrapper | id 필드명 |
+|---|---|---|
+| `POST /api/reports` | **`{ success, data: {...} }`** | `data.id` (= `report-{uuid}`) |
+| `GET /api/reports` (list) | flat `{ items, pagination, emptyMessage }` | `items[].reportId` |
+| `GET /api/reports/{id}` | flat | `reportId` |
+| `PATCH /api/reports/{id}` | flat | `reportId` |
+| `DELETE /api/reports/{id}` | 204 | — |
+| `POST /api/reports/{id}/share` | **`{ success, data: {...} }`** | `data.reportId` |
+| `GET /api/reports/shared/{token}` | **`{ success, data: {...} }`** | `data.id` |
+
+→ 클라이언트가 endpoint 별로 `data` unwrap + id 정규화 (`id || reportId`) 처리 필요. 자동 unwrap 위험 (다른 도메인은 flat).
+
+### 8.2 응답 본문 캡처
+
+#### POST /api/reports — 201
+body: `{ "title", "content", "summary"?, "tripId"? }` (tripId 선택)
+응답:
+```json
+{
+  "success": true,
+  "data": {
+    "id": "report-4bb3ba7f-...",
+    "tripId": null,
+    "title": "...",
+    "content": "...",
+    "summary": "...",
+    "authorUserId": "uuid",
+    "status": "draft",
+    "generatedByAi": false,
+    "outputFileUrl": null,
+    "shareEnabled": false,
+    "shareToken": null,
+    "sharedAt": null,
+    "createdAt": "...",
+    "updatedAt": "...",
+    "deletedAt": null
+  }
+}
+```
+- `id` 가 `report-{uuid}` 형식 (다른 entity 의 epoch 패턴과 다름)
+- `authorUserId` (`creator`/`creatorId` 가 아님)
+- `status: "draft" | ...` — Report 자체에 status 가 있음 (publish 흐름?)
+- `generatedByAi`, `outputFileUrl`, `shareEnabled/shareToken/sharedAt` — 풍부한 메타
+
+#### GET /api/reports (list) — 200
+```json
+{
+  "items": [{
+    "reportId": "report-...",
+    "tripId": null | string,
+    "trip": { "tripDate": null|string, "startedAt": null|string, "endedAt": null|string },
+    "title": "...",
+    "contentPreview": "본문 앞 ~120자",
+    "createdAt": "...",
+    "updatedAt": null|string,
+    "fileUrl": null|string
+  }],
+  "pagination": { "page": 1, "limit": 50, "total": 1, "hasNext": false },
+  "emptyMessage": null|string
+}
+```
+
+#### GET /api/reports/{id} — 200
+```json
+{
+  "reportId": "report-...",
+  "tripId": null|string,
+  "trip": { "startedAt": null|string, "endedAt": null|string, "visitCount": null|number },
+  "title": "...", "content": "...",
+  "createdAt": "...", "updatedAt": null|string,
+  "fileUrl": null|string,
+  "creator": { "id": "uuid", "name": "..." }
+}
+```
+- ⚠️ `creator.name` 이 `creator.id` 와 동일 값으로 들어옴 (백엔드 버그 추정 — author 이름 채워지지 않음)
+
+#### PATCH /api/reports/{id} — 200
+detail 과 동일 shape.
+
+#### DELETE /api/reports/{id} — 204 (본문 없음)
+
+#### POST /api/reports/{id}/share — 200
+body: `{}` (아무것도 안 보내도 동작)
+응답:
+```json
+{
+  "success": true,
+  "data": {
+    "reportId": "...",
+    "shareEnabled": true,
+    "shareToken": "eb16460aaf8c79b3...",
+    "shareUrl": "/api/reports/shared/eb16...",
+    "sharedAt": "..."
+  }
+}
+```
+
+#### GET /api/reports/shared/{token} — 200 (인증 불필요)
+```json
+{
+  "success": true,
+  "data": {
+    "id": "report-...", "tripId": null|string,
+    "title": "...", "content": "...", "summary": "...",
+    "authorUserId": "...", "status": "draft|...",
+    "generatedByAi": false, "outputFileUrl": null,
+    "shareEnabled": true, "shareToken": "...", "sharedAt": "...",
+    "createdAt": "...", "updatedAt": "...", "deletedAt": null
+  }
+}
+```
+비로그인 사용자도 토큰만 알면 조회 가능.
