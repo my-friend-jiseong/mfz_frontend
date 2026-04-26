@@ -35,6 +35,7 @@ interface ReportState {
   update: (id: string, body: UpdateReportBody) => Promise<GenericResult>;
   remove: (id: string) => Promise<GenericResult>;
   share: (id: string) => Promise<ShareResult>;
+  disableShare: (id: string) => Promise<GenericResult>;
 
   getById: (id: string) => Report | undefined;
 }
@@ -167,6 +168,15 @@ export const useReportStore = create<ReportState>((set, get) => ({
     try {
       const data = await reportsApi.share(id);
       return { ok: true, share: data };
+    } catch (e) {
+      return { ok: false, error: describeError(e) };
+    }
+  },
+
+  disableShare: async (id) => {
+    try {
+      await reportsApi.disableShare(id);
+      return { ok: true };
     } catch (e) {
       return { ok: false, error: describeError(e) };
     }

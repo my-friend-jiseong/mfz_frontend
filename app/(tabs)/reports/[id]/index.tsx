@@ -37,7 +37,9 @@ export default function ReportDetail() {
   const userId = useAuthStore((s) => s.user?.id);
 
   const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [shareExpiresAt, setShareExpiresAt] = useState<string | null>(null);
   const [sharing, setSharing] = useState(false);
+  const disableShare = useReportStore((s) => s.disableShare);
 
   // 진입 시 백엔드에서 detail 페치 (목록은 contentPreview 만 갖고 있음)
   useEffect(() => {
@@ -94,11 +96,28 @@ export default function ReportDetail() {
     }
     const url = `${API_BASE_URL}${r.share.shareUrl}`;
     setShareUrl(url);
+    setShareExpiresAt(r.share.expiresAt ?? r.share.shareExpiresAt ?? null);
     try {
       await Clipboard.setStringAsync(url);
-      Alert.alert('공유 링크', '링크가 클립보드에 복사되었습니다.\n비로그인 사용자도 이 링크로 미리보기 가능합니다.');
+      Alert.alert(
+        '공유 링크',
+        '링크가 클립보드에 복사되었습니다.\n비로그인 사용자도 이 링크로 미리보기 가능합니다.',
+      );
     } catch {
       Alert.alert('공유 링크', url);
+    }
+  };
+
+  const handleDisableShare = async () => {
+    setSharing(true);
+    const r = await disableShare(report.id);
+    setSharing(false);
+    if (r.ok) {
+      setShareUrl(null);
+      setShareExpiresAt(null);
+      Alert.alert('공유 해제', '이 보고서의 공유 링크가 무효화되었습니다.');
+    } else {
+      Alert.alert('공유 해제 실패', r.error);
     }
   };
 
@@ -169,6 +188,21 @@ export default function ReportDetail() {
                 <Text style={styles.shareUrlText} selectable>
                   {shareUrl}
                 </Text>
+                {shareExpiresAt ? (
+                  <Text style={styles.shareExpires}>
+                    만료: {fmtDateTime(shareExpiresAt)}
+                  </Text>
+                ) : null}
+                <Pressable
+                  onPress={() => void handleDisableShare()}
+                  disabled={sharing}
+                  style={({ pressed }) => [
+                    styles.shareDisableBtn,
+                    (pressed || sharing) && styles.pressed,
+                  ]}
+                >
+                  <Text style={styles.shareDisableText}>공유 해제</Text>
+                </Pressable>
               </View>
             ) : null}
           </>
@@ -245,5 +279,24 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     color: colors.text,
     marginTop: spacing.xs,
+  },
+  shareExpires: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    marginTop: spacing.xs,
+  },
+  shareDisableBtn: {
+    marginTop: spacing.sm,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.danger + '55',
+    alignSelf: 'flex-start',
+  },
+  shareDisableText: {
+    fontSize: fontSize.xs,
+    color: colors.danger,
+    fontWeight: '700',
   },
 });
