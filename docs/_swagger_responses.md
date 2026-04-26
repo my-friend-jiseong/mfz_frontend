@@ -11,6 +11,16 @@
 > - ✅ Reports CRUD 5종 + 공유 링크 2종 모두 동작
 > - ⚠️ 4xx 에러 일관성은 **부분 반영** (자세한 내용 §7 참조)
 > - ⚠️ Reports 응답 shape 가 endpoint 별 비일관 (자세한 내용 §8 참조)
+>
+> **Phase 3 검증 결과 (2026-04-27, [docs/backend_phase3_complete.md](backend_phase3_complete.md) 반영)**:
+> - ✅ 비밀번호 정책 8자 (회원가입 잠금 제거)
+> - ✅ `creator.name` 사용자 이름으로 정상 반환 (UUID 그대로 노출 버그 해소)
+> - ✅ `GET /api/fields/mine` items 에서 `userId` 제거 → **`assigneeUserId` 단일** (POST 응답으로 확인)
+> - ✅ `GET /api/fields/address/search` 실제 결과 — `buildingName` 포함
+> - ✅ Reports `share` 응답에 `expiresAt`/`shareExpiresAt` 추가 (기본 7일)
+> - ✅ **`DELETE /api/reports/{id}/share`** 신규 — 공유 해제
+> - ✅ 첨부 응답에 schema 명시 (`VisitPhotoAttachment`/`VisitAudioAttachment`/`FieldPhotoAttachment`/`FieldAudioAttachment`/`VisitTextMemoAttachment` + `OfficialNoticeResponse`/`ReportGenerateSuccessData`)
+> - ✅ `POST /api/reports/generate` Bearer 필수 + multipart body (`notes` 필수, `before_photo`/`after_photo` 등) + 응답 `{ success, message, data: ReportGenerateSuccessData }`
 
 ---
 

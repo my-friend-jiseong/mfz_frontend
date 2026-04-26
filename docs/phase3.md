@@ -2,6 +2,19 @@
 
 > **작성일**: 2026-04-27
 > **현황**: Phase 1·2 합쳐 25개 endpoint 연동 완료(`main` 머지·푸시 완료, commit `685e118`).
+>
+> **🟢 백엔드 Phase 3 완료 통보 (2026-04-27)** — [docs/backend_phase3_complete.md](backend_phase3_complete.md). 본 문서의 대부분 항목 반영됨:
+> - §1.1 4xx 일관성: 인증 정교화 보류 정책에 따라 미진행 (의도)
+> - §1.2 creator.name: ✅ 반영 (`USERS_AUTH` 매핑)
+> - §1.3 userId 정렬: ✅ 반영 (mine items 의 `userId` 제거)
+> - §1.4 address/search: ✅ 반영 (목업 결과 + `buildingName` shape)
+> - §1.5 fields 객체: 인증 정교화 보류 (의도)
+> - §2.1 generate 응답 shape: ✅ 반영 (`ReportGenerateSuccessData`, Bearer 필수, multipart body)
+> - §2.2 공유 만료/재발급/해제: ✅ 반영 (`expiresAt`/`shareExpiresAt`, `DELETE .../share`)
+> - §2.3 사진/음성 응답 shape: ✅ 반영 (5개 Attachment schema)
+> - §2.4 official-notice 응답 shape: ✅ 반영 (`OfficialNoticeResponse`)
+>
+> 보너스: 비밀번호 정책 8자만, 회원가입 잠금 제거 (회원가입/로그인 간소화 정책에 부합).
 > **목적**: (a) Phase 2 요청 중 백엔드가 일부만 반영해 남은 이슈, (b) 운영을 위한 신규 보강 요청, (c) 프런트가 이어가야 할 PR-G~K 작업을 한 문서에 통합.
 > **수신**: 백엔드 팀(§1, §2) + 프런트 팀 본인(§3 이후)
 
