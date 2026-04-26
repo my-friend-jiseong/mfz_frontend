@@ -66,7 +66,7 @@ function pointInFeature(
 }
 
 export interface GeoPoint {
-  id: number;
+  id: string;
   lat: number;
   lng: number;
 }

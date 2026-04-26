@@ -5,19 +5,19 @@ import { mockReports } from '@/data/mockSeed';
 interface ReportState {
   reports: Report[];
   create: (input: {
-    creatorId: number;
-    tripId: number;
+    creatorId: string;
+    tripId: string;
     title: string;
     content: string;
   }) => Report;
   update: (
-    id: number,
+    id: string,
     patch: Partial<Pick<Report, 'title' | 'content'>>,
   ) => void;
-  remove: (id: number) => void; // soft delete
+  remove: (id: string) => void; // soft delete
 }
 
-let nextId = 6000;
+let nextLocalSeq = 6000;
 
 export const useReportStore = create<ReportState>((set) => ({
   reports: [...mockReports],
@@ -25,7 +25,7 @@ export const useReportStore = create<ReportState>((set) => ({
   create: ({ creatorId, tripId, title, content }) => {
     const now = new Date().toISOString();
     const report: Report = {
-      id: ++nextId,
+      id: `report-local-${++nextLocalSeq}`,
       creatorId,
       tripId,
       title,

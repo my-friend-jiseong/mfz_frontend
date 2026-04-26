@@ -20,7 +20,7 @@ import { spacing, radius, fontSize } from '@/theme/spacing';
 
 export default function FieldCheckin() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const fieldId = Number(id);
+  const fieldId = id ?? '';
   const router = useRouter();
 
   const field = useFieldStore((s) => s.getById(fieldId));
@@ -32,7 +32,7 @@ export default function FieldCheckin() {
   const memosByVisit = useVisitStore((s) => s.memosByVisit);
   const photosByVisit = useVisitStore((s) => s.photosByVisit);
 
-  const [visitId, setVisitId] = useState<number | null>(null);
+  const [visitId, setVisitId] = useState<string | null>(null);
   const [memoText, setMemoText] = useState('');
   const [status, setStatus] = useState<VisitStatus>('완료');
   const [etcReason, setEtcReason] = useState('');

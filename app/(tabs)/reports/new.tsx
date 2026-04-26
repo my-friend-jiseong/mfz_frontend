@@ -29,8 +29,8 @@ export default function NewReport() {
   const allReports = useReportStore((s) => s.reports);
   const allTrips = useTripStore((s) => s.trips);
 
-  const initialTripId = params.tripId ? Number(params.tripId) : null;
-  const [tripId, setTripId] = useState<number | null>(initialTripId);
+  const initialTripId = params.tripId ?? null;
+  const [tripId, setTripId] = useState<string | null>(initialTripId);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [error, setError] = useState<string | null>(null);

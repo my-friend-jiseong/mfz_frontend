@@ -24,7 +24,7 @@ function fmtDateTime(iso: string) {
 export default function FieldDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const fieldId = Number(id);
+  const fieldId = id ?? '';
 
   const allFields = useFieldStore((s) => s.fields);
   const allVisits = useVisitStore((s) => s.visits);

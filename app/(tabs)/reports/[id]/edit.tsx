@@ -18,7 +18,7 @@ import { spacing, radius, fontSize } from '@/theme/spacing';
 
 export default function EditReport() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const reportId = Number(id);
+  const reportId = id ?? '';
   const router = useRouter();
 
   const allReports = useReportStore((s) => s.reports);

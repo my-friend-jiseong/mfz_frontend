@@ -6,7 +6,7 @@ import type { Field } from '@/types/entities';
 import { colors } from '@/theme/colors';
 
 export interface KakaoMapMarker {
-  id: number;
+  id: string;
   lat: number;
   lng: number;
   label: string;
@@ -18,7 +18,7 @@ interface Props {
   center?: { lat: number; lng: number };
   displayMode?: MapDisplayMode;
   showBoundary?: boolean;
-  onMarkerPress?: (fieldId: number) => void;
+  onMarkerPress?: (fieldId: string) => void;
 }
 
 const DEFAULT_CENTER = { lat: 35.17, lng: 129.07 }; // 부산 중심
@@ -58,7 +58,7 @@ export function KakaoMapWebView({
         onMessage={(event) => {
           try {
             const msg = JSON.parse(event.nativeEvent.data);
-            if (msg.type === 'markerPress' && typeof msg.fieldId === 'number') {
+            if (msg.type === 'markerPress' && typeof msg.fieldId === 'string') {
               onMarkerPress?.(msg.fieldId);
             }
           } catch {

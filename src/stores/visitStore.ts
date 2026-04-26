@@ -9,21 +9,21 @@ interface VisitState {
   voiceMemos: VoiceMemo[];
   photos: Photo[];
 
-  checkIn: (tripId: number, fieldId: number) => Visit | null;
-  setResult: (visitId: number, status: VisitStatus) => void;
-  addTextMemo: (visitId: number, content: string) => TextMemo | null;
-  addPhoto: (visitId: number, fileUrl: string) => Photo | null;
+  checkIn: (tripId: string, fieldId: string) => Visit | null;
+  setResult: (visitId: string, status: VisitStatus) => void;
+  addTextMemo: (visitId: string, content: string) => TextMemo | null;
+  addPhoto: (visitId: string, fileUrl: string) => Photo | null;
 
-  byTrip: (tripId: number) => Visit[];
-  byField: (fieldId: number) => Visit[];
-  getById: (id: number) => Visit | undefined;
-  memosByVisit: (visitId: number) => TextMemo[];
-  photosByVisit: (visitId: number) => Photo[];
+  byTrip: (tripId: string) => Visit[];
+  byField: (fieldId: string) => Visit[];
+  getById: (id: string) => Visit | undefined;
+  memosByVisit: (visitId: string) => TextMemo[];
+  photosByVisit: (visitId: string) => Photo[];
 }
 
-let nextVisitId = 2000;
-let nextMemoId = 3000;
-let nextPhotoId = 4000;
+let nextVisitSeq = 2000;
+let nextMemoSeq = 3000;
+let nextPhotoSeq = 4000;
 
 export const useVisitStore = create<VisitState>((set, get) => ({
   visits: [...mockVisits],
@@ -35,7 +35,7 @@ export const useVisitStore = create<VisitState>((set, get) => ({
     const field = useFieldStore.getState().getById(fieldId);
     if (!field) return null;
     const newVisit: Visit = {
-      id: ++nextVisitId,
+      id: `visit-local-${++nextVisitSeq}`,
       status: '재방문필요', // 초기값: 아직 결과 미지정
       tripId,
       fieldId,
@@ -58,7 +58,7 @@ export const useVisitStore = create<VisitState>((set, get) => ({
     const field = useFieldStore.getState().getById(visit.fieldId);
     if (!field) return null;
     const memo: TextMemo = {
-      id: ++nextMemoId,
+      id: `memo-local-${++nextMemoSeq}`,
       visitId,
       fieldId: visit.fieldId,
       content,
@@ -76,7 +76,7 @@ export const useVisitStore = create<VisitState>((set, get) => ({
     const field = useFieldStore.getState().getById(visit.fieldId);
     if (!field) return null;
     const photo: Photo = {
-      id: ++nextPhotoId,
+      id: `photo-local-${++nextPhotoSeq}`,
       visitId,
       fieldId: visit.fieldId,
       fileUrl,

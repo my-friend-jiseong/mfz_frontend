@@ -4,14 +4,14 @@ import { mockTrips } from '@/data/mockSeed';
 
 interface TripState {
   trips: Trip[];
-  activeTripId: number | null;
-  start: (workerId: number) => Trip | null;
+  activeTripId: string | null;
+  start: (workerId: string) => Trip | null;
   end: () => Trip | null;
-  getById: (id: number) => Trip | undefined;
-  byWorker: (workerId: number) => Trip[];
+  getById: (id: string) => Trip | undefined;
+  byWorker: (workerId: string) => Trip[];
 }
 
-let nextId = 200;
+let nextLocalSeq = 200;
 
 export const useTripStore = create<TripState>((set, get) => ({
   trips: [...mockTrips],
@@ -21,7 +21,7 @@ export const useTripStore = create<TripState>((set, get) => ({
     // 동시 1건 제한 (공공 복무 관행)
     if (get().activeTripId !== null) return null;
     const newTrip: Trip = {
-      id: ++nextId,
+      id: `trip-local-${++nextLocalSeq}`,
       workerId,
       startedAt: new Date().toISOString(),
       endedAt: null,

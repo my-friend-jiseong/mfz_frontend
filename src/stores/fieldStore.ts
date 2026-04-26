@@ -5,19 +5,19 @@ import { mockFields } from '@/data/mockSeed';
 interface FieldState {
   fields: Field[];
   create: (field: Omit<Field, 'id'>) => Field;
-  update: (id: number, patch: Partial<Omit<Field, 'id'>>) => void;
-  remove: (id: number) => void;
-  getById: (id: number) => Field | undefined;
-  byUser: (userId: number) => Field[];
+  update: (id: string, patch: Partial<Omit<Field, 'id'>>) => void;
+  remove: (id: string) => void;
+  getById: (id: string) => Field | undefined;
+  byUser: (userId: string) => Field[];
 }
 
-let nextId = 1000;
+let nextLocalSeq = 1000;
 
 export const useFieldStore = create<FieldState>((set, get) => ({
   fields: [...mockFields],
 
   create: (field) => {
-    const newField: Field = { ...field, id: ++nextId };
+    const newField: Field = { ...field, id: `field-local-${++nextLocalSeq}` };
     set((state) => ({ fields: [...state.fields, newField] }));
     return newField;
   },

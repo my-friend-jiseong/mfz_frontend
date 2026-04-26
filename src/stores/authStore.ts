@@ -20,7 +20,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   login: (email, password) => {
     if (!email.includes('@') || password.length < 4) return false;
     set({
-      user: mockUser,
+      user: { ...mockUser, email },
       token: 'mock-token-' + Date.now(),
       isAuthenticated: true,
     });
@@ -30,7 +30,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   signup: (email, password, name) => {
     if (!email.includes('@') || password.length < 4 || !name) return false;
     set({
-      user: { ...mockUser, id: Date.now() },
+      user: { ...mockUser, id: `user-local-${Date.now()}`, email, name },
       token: 'mock-token-' + Date.now(),
       isAuthenticated: true,
     });

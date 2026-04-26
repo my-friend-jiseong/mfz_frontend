@@ -34,7 +34,7 @@ export default function ReportsIndex() {
     const mine = allReports.filter(
       (r) => r.creatorId === userId && r.deletedAt === null,
     );
-    const byTripId = new Map<number, Report[]>();
+    const byTripId = new Map<string, Report[]>();
     mine.forEach((r) => {
       const arr = byTripId.get(r.tripId) ?? [];
       arr.push(r);
