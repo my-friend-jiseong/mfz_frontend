@@ -21,8 +21,10 @@ interface FieldCore {
 }
 
 export interface FieldListItem extends FieldCore {
-  userId?: string;          // 백엔드 정렬 진행 중 — userId/assigneeUserId 둘 다 옴
-  assigneeUserId?: string;
+  // Phase 3 §1.3 반영: 백엔드가 userId 제거 → assigneeUserId 단일.
+  // 과거 응답과 호환 위해 옵셔널 유지 (구버전 백엔드와 충돌 방지).
+  userId?: string;
+  assigneeUserId: string;
   recentVisitedAt: string | null;
 }
 
@@ -33,19 +35,25 @@ export interface FieldListResponse {
   appliedFilter: unknown;
 }
 
+// Phase 3 §2.3 schemas — VisitPhotoAttachment/VisitAudioAttachment/VisitTextMemoAttachment +
+// FieldPhotoAttachment/FieldAudioAttachment 통합. 모두 옵셔널 처리해서 endpoint 별 차이 흡수.
 export interface FieldDirectAttachment {
   id: string;
   fieldId: string;
   type: 'text' | 'photo' | 'audio';
   text?: string;
+  fileName?: string;
+  mimeType?: string;
   fileUrl?: string;
   thumbnailUrl?: string;
+  byteSize?: number;
   durationSec?: number;
+  durationSeconds?: number;
   caption?: string;
   createdAt: string;
-  latitude: number | null;
-  longitude: number | null;
-  visitId: null;
+  latitude?: number | null;
+  longitude?: number | null;
+  visitId: string | null;
 }
 
 export interface FieldDetailResponse extends FieldCore {
@@ -103,9 +111,16 @@ export interface FieldTextMemoResponse {
   attachment: FieldDirectAttachment;
 }
 
+// Phase 3 §1.4 — 백엔드 목업 응답에서 확정된 shape
 export interface AddressSearchItem {
-  // 백엔드 items 가 비어있어 shape 미확인
-  [key: string]: unknown;
+  roadAddress: string;
+  jibunAddress: string;
+  buildingName: string | null;
+  sido: string;
+  sigungu: string;
+  zonecode?: string;
+  lat: number;
+  lng: number;
 }
 
 export interface AddressSearchResponse {

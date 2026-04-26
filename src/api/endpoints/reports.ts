@@ -78,23 +78,55 @@ export interface ListReportsParams {
   toDate?: string;
 }
 
-// 공유 링크 응답
+// 공유 링크 응답 — Phase 3 §2.2 보강 (expiresAt/shareExpiresAt 추가, 7일 만료)
 export interface ShareReportData {
   reportId: string;
   shareEnabled: boolean;
   shareToken: string;
   shareUrl: string;
   sharedAt: string;
+  expiresAt?: string;
+  shareExpiresAt?: string;
 }
 interface ShareWrapped {
   success: boolean;
   data: ShareReportData;
 }
 
+export interface DisableShareData {
+  reportId: string;
+  shareEnabled: false;
+}
+interface DisableShareWrapped {
+  success: boolean;
+  data: DisableShareData;
+}
+
 // 비인증 공유 보고서 조회
 interface SharedReportWrapped {
   success: boolean;
   data: ReportCreateData;
+}
+
+// Phase 3 §2.1 — generate 응답
+export interface ReportGenerateData {
+  id: string;
+  tripId: string | null;
+  title: string;
+  content: string;
+  summary: string;
+  generatedByAi: boolean;
+  outputFileUrl: string;
+  fileUrl?: string;
+  downloadUrl?: string;
+  outputFileName?: string;
+  analysis?: unknown;
+  generationMetadata?: { model?: string; tokens?: number | null; elapsedMs?: number };
+}
+interface GenerateWrapped {
+  success: boolean;
+  message?: string;
+  data: ReportGenerateData;
 }
 
 export const reports = {
@@ -129,6 +161,15 @@ export const reports = {
     return res.data;
   },
 
+  /** Phase 3 §2.2 — 공유 토큰 무효화 */
+  disableShare: async (reportId: string): Promise<DisableShareData> => {
+    const res = await request<DisableShareWrapped>(
+      `/api/reports/${reportId}/share`,
+      { method: 'DELETE' },
+    );
+    return res.data;
+  },
+
   getShared: async (token: string): Promise<ReportCreateData> => {
     const res = await request<SharedReportWrapped>(
       `/api/reports/shared/${token}`,
@@ -137,11 +178,16 @@ export const reports = {
     return res.data;
   },
 
-  // generate (AI 자동 생성, multipart) — 별도 PR
-  generate: (form: FormData) =>
-    request<unknown>('/api/reports/generate', {
+  /**
+   * Phase 3 §2.1 — AI 보고서 생성·저장. multipart body:
+   *  notes (필수), title, extraNotes, tripId, location, before_photo, after_photo
+   */
+  generate: async (form: FormData): Promise<ReportGenerateData> => {
+    const res = await request<GenerateWrapped>('/api/reports/generate', {
       method: 'POST',
       body: form,
       multipart: true,
-    }),
+    });
+    return res.data;
+  },
 };

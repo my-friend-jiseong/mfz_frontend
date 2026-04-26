@@ -66,7 +66,7 @@ export const useFieldStore = create<FieldState>((set, get) => ({
       const res = await fieldsApi.listMine(params ?? { visitDateScope: 'all' });
       const items: Field[] = res.items.map((it) => ({
         id: it.fieldId,
-        userId: it.assigneeUserId ?? it.userId ?? '',
+        userId: it.assigneeUserId,
         status: it.status,
         address: it.address,
         addressDetail: it.detailAddress ?? '',
@@ -85,7 +85,7 @@ export const useFieldStore = create<FieldState>((set, get) => ({
       const res = await fieldsApi.create(body);
       const f: Field = {
         id: res.field.fieldId,
-        userId: res.field.assigneeUserId ?? res.field.userId ?? '',
+        userId: res.field.assigneeUserId,
         status: res.field.status,
         address: res.field.address,
         addressDetail: res.field.detailAddress ?? '',

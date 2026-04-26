@@ -44,6 +44,8 @@ export type {
   UpdateReportBody,
   ListReportsParams,
   ShareReportData,
+  DisableShareData,
+  ReportGenerateData,
 } from './endpoints/reports';
 export { map } from './endpoints/map';
 export { system } from './endpoints/system';
