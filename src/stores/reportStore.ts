@@ -123,8 +123,9 @@ export const useReportStore = create<ReportState>((set, get) => ({
     set({ busy: true });
     try {
       const data = await reportsApi.create(body);
+      const id = data.id ?? data.reportId ?? '';
       const r: Report = {
-        id: data.id,
+        id,
         creatorId: data.authorUserId,
         tripId: data.tripId ?? '',
         title: data.title,
@@ -214,7 +215,7 @@ export const useReportStore = create<ReportState>((set, get) => ({
 
       // 생성 결과를 list 캐시·detailCache 에도 즉시 반영
       const r: Report = {
-        id: data.id,
+        id: data.id,                                      // generate 응답은 항상 id
         creatorId: useAuthStore.getState().user?.id ?? '',
         tripId: data.tripId ?? '',
         title: data.title,

@@ -81,7 +81,13 @@ export default function NewReport() {
     });
     setSubmitting(false);
     if (result.ok) {
-      router.replace(`/(tabs)/reports/${result.report.id}` as never);
+      // 백엔드 응답에 id 가 비어있을 수 있음(회귀) — list 화면으로 폴백
+      const id = result.report.id;
+      if (id) {
+        router.replace(`/(tabs)/reports/${id}` as never);
+      } else {
+        router.replace('/(tabs)/reports' as never);
+      }
     } else {
       Alert.alert('보고서 생성 실패', result.error);
     }
