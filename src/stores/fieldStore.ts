@@ -35,6 +35,16 @@ interface FieldState {
   patchStatus: (id: string, status: FieldStatus) => Promise<GenericResult>;
   remove: (id: string) => Promise<DeleteResult>;
   addTextMemo: (id: string, text: string) => Promise<GenericResult>;
+  addPhoto: (
+    id: string,
+    file: { uri: string; name: string; type: string },
+    caption?: string,
+  ) => Promise<GenericResult>;
+  addVoiceMemo: (
+    id: string,
+    file: { uri: string; name: string; type: string },
+    durationSeconds?: number,
+  ) => Promise<GenericResult>;
 
   getById: (id: string) => Field | undefined;
   byUser: (userId: string) => Field[];
@@ -180,6 +190,36 @@ export const useFieldStore = create<FieldState>((set, get) => ({
   addTextMemo: async (id, text) => {
     try {
       const res = await fieldsApi.addTextMemo(id, text);
+      set((s) => ({
+        directAttachments: {
+          ...s.directAttachments,
+          [id]: [...(s.directAttachments[id] ?? []), res.attachment],
+        },
+      }));
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: describeError(e) };
+    }
+  },
+
+  addPhoto: async (id, file, caption) => {
+    try {
+      const res = await fieldsApi.addPhoto(id, file, caption);
+      set((s) => ({
+        directAttachments: {
+          ...s.directAttachments,
+          [id]: [...(s.directAttachments[id] ?? []), res.attachment],
+        },
+      }));
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: describeError(e) };
+    }
+  },
+
+  addVoiceMemo: async (id, file, durationSeconds) => {
+    try {
+      const res = await fieldsApi.addVoiceMemo(id, file, durationSeconds);
       set((s) => ({
         directAttachments: {
           ...s.directAttachments,

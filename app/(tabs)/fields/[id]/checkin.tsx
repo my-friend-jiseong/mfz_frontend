@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -17,6 +17,13 @@ import { useVisitStore } from '@/stores/visitStore';
 import { useDestinationStore } from '@/stores/destinationStore';
 import { VISIT_STATUS_VALUES, type VisitStatus } from '@/types/entities';
 import { EmptyState } from '@/components/EmptyState';
+import {
+  pickPhoto,
+  promptPhotoSource,
+  createVoiceRecorder,
+  VOICE_MAX_SECONDS,
+  type VoiceRecorder,
+} from '@/utils/media';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
 
@@ -31,8 +38,10 @@ export default function FieldCheckin() {
   const setResult = useVisitStore((s) => s.setResult);
   const addTextMemo = useVisitStore((s) => s.addTextMemo);
   const addPhoto = useVisitStore((s) => s.addPhoto);
+  const addVoiceMemo = useVisitStore((s) => s.addVoiceMemo);
   const memosByVisit = useVisitStore((s) => s.memosByVisit);
   const photosByVisit = useVisitStore((s) => s.photosByVisit);
+  const allVoiceMemos = useVisitStore((s) => s.voiceMemos);
   const findDestination = useDestinationStore((s) => s.findByTripField);
   const markDestinationArrived = useDestinationStore((s) => s.markArrived);
 
@@ -40,6 +49,11 @@ export default function FieldCheckin() {
   const [memoText, setMemoText] = useState('');
   const [status, setStatus] = useState<VisitStatus>('완료');
   const [etcReason, setEtcReason] = useState('');
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [recordSec, setRecordSec] = useState(0);
+  const recorderRef = useRef<VoiceRecorder | null>(null);
+  const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (activeTripId !== null && fieldId && visitId === null) {
@@ -80,12 +94,65 @@ export default function FieldCheckin() {
     }
   };
 
-  const handleAddPhoto = () => {
-    Alert.alert(
-      '사진 첨부',
-      '카메라/사진 라이브러리 통합은 아직 미구현입니다. (백엔드 multipart 엔드포인트는 준비됨)',
-    );
+  const uploadPhoto = async (source: 'camera' | 'library') => {
+    if (!visitId) return;
+    setPhotoBusy(true);
+    try {
+      const file = await pickPhoto(source);
+      if (!file) return;
+      const r = await addPhoto(visitId, file);
+      if (!r.ok) Alert.alert('사진 추가 실패', r.error);
+    } finally {
+      setPhotoBusy(false);
+    }
   };
+
+  const handleAddPhoto = () => {
+    if (!visitId || photoBusy) return;
+    promptPhotoSource((src) => void uploadPhoto(src));
+  };
+
+  const startRecording = async () => {
+    if (!visitId || recording) return;
+    const rec = createVoiceRecorder();
+    const ok = await rec.start();
+    if (!ok) return;
+    recorderRef.current = rec;
+    setRecording(true);
+    setRecordSec(0);
+    tickRef.current = setInterval(() => {
+      setRecordSec((s) => {
+        if (s + 1 >= VOICE_MAX_SECONDS) {
+          void stopRecording();
+          return VOICE_MAX_SECONDS;
+        }
+        return s + 1;
+      });
+    }, 1000);
+  };
+
+  const stopRecording = async () => {
+    if (tickRef.current) {
+      clearInterval(tickRef.current);
+      tickRef.current = null;
+    }
+    setRecording(false);
+    const rec = recorderRef.current;
+    recorderRef.current = null;
+    if (!rec || !visitId) return;
+    const result = await rec.stop();
+    if (!result) return;
+    const r = await addVoiceMemo(visitId, result.file, result.durationSec);
+    if (!r.ok) Alert.alert('음성 메모 추가 실패', r.error);
+  };
+
+  // 화면 떠날 때 녹음 정리
+  useEffect(() => {
+    return () => {
+      if (tickRef.current) clearInterval(tickRef.current);
+      void recorderRef.current?.cancel();
+    };
+  }, []);
 
   const handleSaveResult = async () => {
     if (!visitId) return;
@@ -147,12 +214,47 @@ export default function FieldCheckin() {
         <Text style={styles.sectionTitle}>사진</Text>
         <Pressable
           onPress={handleAddPhoto}
-          style={({ pressed }) => [styles.smallBtn, pressed && styles.pressed]}
+          disabled={photoBusy || !visitId}
+          style={({ pressed }) => [
+            styles.smallBtn,
+            (pressed || photoBusy) && styles.pressed,
+          ]}
         >
-          <Text style={styles.smallBtnText}>+ 사진 첨부 (placeholder)</Text>
+          <Text style={styles.smallBtnText}>
+            {photoBusy ? '업로드 중...' : '+ 사진 첨부'}
+          </Text>
         </Pressable>
         {photos.length > 0 ? (
           <Text style={styles.photoCount}>첨부된 사진: {photos.length}장</Text>
+        ) : null}
+
+        <Text style={styles.sectionTitle}>음성 메모 (최대 5분)</Text>
+        {recording ? (
+          <Pressable
+            onPress={() => void stopRecording()}
+            style={({ pressed }) => [
+              styles.smallBtn,
+              styles.recordingBtn,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={[styles.smallBtnText, styles.recordingText]}>
+              ● 녹음 중지 ({Math.floor(recordSec / 60)}:{String(recordSec % 60).padStart(2, '0')})
+            </Text>
+          </Pressable>
+        ) : (
+          <Pressable
+            onPress={() => void startRecording()}
+            disabled={!visitId}
+            style={({ pressed }) => [styles.smallBtn, pressed && styles.pressed]}
+          >
+            <Text style={styles.smallBtnText}>+ 음성 녹음 시작</Text>
+          </Pressable>
+        )}
+        {visitId && allVoiceMemos.filter((m) => m.visitId === visitId).length > 0 ? (
+          <Text style={styles.photoCount}>
+            첨부된 음성: {allVoiceMemos.filter((m) => m.visitId === visitId).length}건
+          </Text>
         ) : null}
 
         <Text style={styles.sectionTitle}>방문 결과 상태</Text>
@@ -250,6 +352,8 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   smallBtnText: { fontSize: fontSize.sm, color: colors.text, fontWeight: '600' },
+  recordingBtn: { backgroundColor: colors.danger + '15', borderColor: colors.danger },
+  recordingText: { color: colors.danger },
   memoList: { marginTop: spacing.sm, gap: spacing.xs },
   memoItem: {
     backgroundColor: colors.surface,
