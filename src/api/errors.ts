@@ -43,7 +43,6 @@ const ERROR_MESSAGES: Record<string, string> = {
   name_required: '이름을 입력해주세요',
   // 로그인
   invalid_credentials: '이메일 또는 비밀번호가 올바르지 않습니다',
-  login_locked: '로그인 시도가 너무 많습니다. 잠시 후 다시 시도해주세요',
   // 외근
   active_trip_exists: '이미 진행 중인 외근이 있습니다',
   no_active_trip: '진행 중인 외근이 없습니다',

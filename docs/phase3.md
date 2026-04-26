@@ -20,8 +20,7 @@
 | **P1** | [§3.2] PR-H Reports `generate` AI 흐름 + UI 재설계 | 프런트 | 🟡 시연 차별화 포인트 | 프런트 |
 | **P2** | [§1.4] `/api/fields/address/search` 빈 결과 (Daum/Kakao 키 미설정 추정) | 백엔드 회귀 | 🟢 mock 주소 우회 중 | 백엔드 |
 | **P2** | [§1.5] 4xx body 에 `fields` 객체 (검증 필드별 메시지) | 백엔드 회귀 | 🟢 단일 메시지로도 동작 | 백엔드 |
-| **P2** | [§2.3] `Retry-After` 헤더 + `LOGIN_LOCKED retryAfter` | 백엔드 신규 | 🟢 잠금 카운트다운 | 백엔드 |
-| **P2** | [§2.4] 관리자 토큰 발급 흐름 (admin role 시나리오) | 백엔드 신규 | 🟢 Phase 3 후반 | 백엔드 |
+| **P2** | [§2.3] 관리자 토큰 발급 흐름 (admin role 시나리오) | 백엔드 신규 | 🟢 Phase 3 후반 | 백엔드 |
 | **P2** | [§3.3] PR-I 외근 자동화 (geofence/navigation/오프라인 큐) | 프런트 | 🟢 jy 진행분과 정합 | 프런트 |
 | **P3** | [§3.4] PR-J 관리자 전용 화면 | 프런트 | 🟢 admin 토큰 흐름 후 | 프런트 |
 | **P3** | [§3.5] PR-K 정리·튜닝 | 프런트 | 🟢 인지 부담 정리 | 프런트 |
@@ -44,6 +43,8 @@
 | password ≠ confirm | 400 + `code: "PASSWORD_MISMATCH"` | 400 + `{"error":"password_confirm_mismatch"}` |
 | 로그인 실패 | 401 + `code: "INVALID_CREDENTIALS"` | (미검증, 동일 패턴 추정) |
 
+> 로그인 잠금(LOGIN_LOCKED / 5회 실패 후 잠금) 정책은 백엔드에서 제거됨. 매핑·UX 모두 불필요.
+
 **현재 영향**
 - 모든 검증 실패가 HTTP 400 — 클라이언트가 status 만으론 분기 불가능
 - `error` 필드가 영문 식별자 + 한국어 메시지 역할 겸함 → 프런트가 별도 매핑 테이블 보유 (`src/api/errors.ts`)
@@ -65,7 +66,6 @@ Content-Type: application/json
 |---|---|
 | `EMAIL_TAKEN` | 409 |
 | `INVALID_CREDENTIALS` | 401 |
-| `LOGIN_LOCKED` | 429 (+ `Retry-After` 헤더) |
 | `FORBIDDEN` (권한 부족) | 403 |
 | `NOT_FOUND` | 404 |
 | `HAS_RELATED_VISITS` (현장 삭제) | 409 |
@@ -198,23 +198,7 @@ extraNotes: "추가 메모"          # 선택
 }
 ```
 
-### 2.3 [P2] 로그인 잠금 — `Retry-After` 헤더 + `retryAfter` 필드
-
-**용도**: 5회 연속 실패 → 15분 잠금 UX. 클라이언트가 카운트다운 표시.
-
-**응답 (잠금 시)**
-```http
-HTTP/1.1 429 Too Many Requests
-Retry-After: 900
-Content-Type: application/json
-{
-  "error": "로그인 시도가 너무 많습니다. 잠시 후 다시 시도해주세요",
-  "code": "LOGIN_LOCKED",
-  "retryAfter": 900           // 초 단위
-}
-```
-
-### 2.4 [P2] 관리자 토큰 발급 절차
+### 2.3 [P2] 관리자 토큰 발급 절차
 
 **현재**: 스웨거 description — `signAccessToken` 으로 직접 서명 (백엔드 개발자만)
 
@@ -224,7 +208,7 @@ Content-Type: application/json
 
 이게 들어와야 프런트가 admin 시나리오(현장 담당자 변경, /api/fields 전체 조회, /api/map/fields) 화면을 만들 수 있음.
 
-### 2.5 [P2] 보고서 공유 링크 — 만료·재발급·해제
+### 2.4 [P2] 보고서 공유 링크 — 만료·재발급·해제
 
 **현재**: `POST /api/reports/{id}/share` — 토큰 발급. 만료시간·재발급·취소 미명세.
 
@@ -233,13 +217,13 @@ Content-Type: application/json
 - `POST /api/reports/{id}/share` 재호출 시: 이전 토큰 무효 + 새 토큰? 아니면 동일 토큰 유지?
 - `DELETE /api/reports/{id}/share` — 공유 해제 (토큰 무효화)
 
-### 2.6 [P3] 사진·음성 multipart 응답 shape 명세
+### 2.5 [P3] 사진·음성 multipart 응답 shape 명세
 
 **현재**: 스웨거에 입력 multipart 명시, 응답 description 만.
 
 **요청**: 응답에 `attachment` 객체 shape 명시 — `id`, `fieldId`, `visitId`, `type`, `fileUrl`, `thumbnailUrl?`, `capturedAt?`, `durationSec?`, `mimeType`, `byteSize` 등. PR-G 시작 전에 확정 필요.
 
-### 2.7 [P3] 외근 변경 시 보고 — `POST /api/trips/{tripId}/official-notice` 응답 shape
+### 2.6 [P3] 외근 변경 시 보고 — `POST /api/trips/{tripId}/official-notice` 응답 shape
 
 스웨거에 endpoint 만 있고 입력·응답 미명세. PR-I 작업 시 필요.
 
@@ -275,13 +259,13 @@ npx expo install expo-image-picker expo-av expo-file-system
 **검증**
 - iOS/Android 권한 거부 → 안내 (`Linking.openSettings()`)
 - 큰 파일 업로드 시 진행률 (RN fetch 는 progress 미지원 → axios + onUploadProgress 또는 XMLHttpRequest 우회 — 또는 단순 spinner 로 대체)
-- 응답 attachment shape 검증 (§2.6 필요)
+- 응답 attachment shape 검증 (§2.5 필요)
 
 ### 3.2 [P1] PR-H — Reports `generate` AI 흐름
 
 **목표**: "외근 → AI 자동 보고서 생성" UX. 수동 작성과 별개 진입점.
 
-**의존성**: §2.1 응답 shape 확정 후
+**의존성**: §2.1 응답 shape 확정 후·§2.5 사진 응답 shape 확정 후
 
 **UI 흐름**
 1. 외근 상세 (`/(tabs)/trips/[id]`) 의 `reportEntryPoint.createUrl` 활용 — "AI 보고서 생성" 버튼
@@ -311,7 +295,7 @@ npx expo install expo-image-picker expo-av expo-file-system
 - `POST /api/trips/{tripId}/navigation/deep-links` — 외부 지도 앱 길안내
 - `POST /api/trips/{tripId}/navigation/optimize` — 다중 현장 동선 최적화
 - `POST /api/trips/offline/queue` / `flush` — 오프라인 큐
-- `POST /api/trips/{tripId}/official-notice` — 보고 필요 표시 (§2.7)
+- `POST /api/trips/{tripId}/official-notice` — 보고 필요 표시 (§2.6)
 - `GET /api/trips/state-history` — 상태 전환 이력 (감사용)
 - `GET /api/map/current-location-config` — 현재 위치 UX 설정
 
@@ -322,7 +306,7 @@ npx expo install expo-image-picker expo-av expo-file-system
 
 ### 3.4 [P3] PR-J — 관리자 전용 화면
 
-**선행**: §2.4 admin 토큰 발급 절차 확정
+**선행**: §2.3 admin 토큰 발급 절차 확정
 
 **대상**
 - `GET /api/fields` — 전체 현장 목록
@@ -384,11 +368,11 @@ npx expo install expo-image-picker expo-av expo-file-system
 
 ### 5.2 프런트 진행 권장 순서
 
-1. **PR-G** (사진·음성 통합) — 백엔드 §2.6 응답 shape 명세 받으면 바로
+1. **PR-G** (사진·음성 통합) — 백엔드 §2.5 응답 shape 명세 받으면 바로
 2. (백엔드 §1.1·§1.2·§2.1 처리 대기)
 3. **PR-H** (AI 보고서 생성) — §2.1 받은 후
-4. **PR-I** (외근 자동화) — jy 코드 정합 + §2.7 받은 후
-5. **PR-J** (관리자) — §2.4 admin 토큰 흐름 확정 후
+4. **PR-I** (외근 자동화) — jy 코드 정합 + §2.6 받은 후
+5. **PR-J** (관리자) — §2.3 admin 토큰 흐름 확정 후
 6. **PR-K** (정리) — 위 모두 끝난 후
 
 ### 5.3 분기점
