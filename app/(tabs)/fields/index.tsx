@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Pressable, StyleSheet, Text } from 'react-native';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import { useRouter } from 'expo-router';
@@ -14,6 +14,13 @@ export default function FieldsList() {
   const router = useRouter();
   const userId = useAuthStore((s) => s.user?.id);
   const allFields = useFieldStore((s) => s.fields);
+  const refresh = useFieldStore((s) => s.refresh);
+
+  // 탭 진입 시 mine 페치 (등록 직후 빈 결과 방지 위해 visitDateScope=all)
+  useEffect(() => {
+    void refresh({ visitDateScope: 'all' });
+  }, [refresh]);
+
   const fields = useMemo(
     () => (userId ? allFields.filter((f) => f.userId === userId) : []),
     [allFields, userId],

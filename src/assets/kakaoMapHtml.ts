@@ -5,7 +5,7 @@ export type MapDisplayMode = 'markers' | 'heatmap' | 'choropleth';
 
 interface MapHtmlOptions {
   kakaoJsKey: string;
-  markers: { id: number; lat: number; lng: number; label: string; color: string }[];
+  markers: { id: string; lat: number; lng: number; label: string; color: string }[];
   center: { lat: number; lng: number };
   displayMode?: MapDisplayMode;
   showBoundary?: boolean;

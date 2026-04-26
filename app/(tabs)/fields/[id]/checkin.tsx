@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -20,7 +21,7 @@ import { spacing, radius, fontSize } from '@/theme/spacing';
 
 export default function FieldCheckin() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const fieldId = Number(id);
+  const fieldId = id ?? '';
   const router = useRouter();
 
   const field = useFieldStore((s) => s.getById(fieldId));
@@ -32,15 +33,21 @@ export default function FieldCheckin() {
   const memosByVisit = useVisitStore((s) => s.memosByVisit);
   const photosByVisit = useVisitStore((s) => s.photosByVisit);
 
-  const [visitId, setVisitId] = useState<number | null>(null);
+  const [visitId, setVisitId] = useState<string | null>(null);
   const [memoText, setMemoText] = useState('');
   const [status, setStatus] = useState<VisitStatus>('완료');
   const [etcReason, setEtcReason] = useState('');
 
   useEffect(() => {
     if (activeTripId !== null && fieldId && visitId === null) {
-      const v = checkIn(activeTripId, fieldId);
-      if (v) setVisitId(v.id);
+      void (async () => {
+        const r = await checkIn(activeTripId, fieldId);
+        if (r.ok) {
+          setVisitId(r.visit.id);
+        } else {
+          Alert.alert('체크인 실패', r.error);
+        }
+      })();
     }
   }, [activeTripId, fieldId, visitId, checkIn]);
 
@@ -60,25 +67,35 @@ export default function FieldCheckin() {
   const memos = visitId !== null ? memosByVisit(visitId) : [];
   const photos = visitId !== null ? photosByVisit(visitId) : [];
 
-  const handleAddMemo = () => {
+  const handleAddMemo = async () => {
     if (!visitId || !memoText.trim()) return;
-    addTextMemo(visitId, memoText.trim());
-    setMemoText('');
+    const r = await addTextMemo(visitId, memoText.trim());
+    if (r.ok) {
+      setMemoText('');
+    } else {
+      Alert.alert('메모 추가 실패', r.error);
+    }
   };
 
   const handleAddPhoto = () => {
-    if (!visitId) return;
-    // 프로토타입: 실제 카메라 연동 없이 placeholder URL 추가
-    addPhoto(visitId, `https://placehold.co/400x300?text=photo-${Date.now()}`);
+    Alert.alert(
+      '사진 첨부',
+      '카메라/사진 라이브러리 통합은 아직 미구현입니다. (백엔드 multipart 엔드포인트는 준비됨)',
+    );
   };
 
-  const handleSaveResult = () => {
+  const handleSaveResult = async () => {
     if (!visitId) return;
     if (status === '기타' && etcReason.trim().length < 10) {
       return;
     }
-    setResult(visitId, status);
-    router.back();
+    const reason = status === '기타' ? etcReason.trim() : undefined;
+    const r = await setResult(visitId, status, reason);
+    if (r.ok) {
+      router.back();
+    } else {
+      Alert.alert('상태 저장 실패', r.error);
+    }
   };
 
   return (

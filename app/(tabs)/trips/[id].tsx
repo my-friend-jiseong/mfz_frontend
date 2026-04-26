@@ -18,7 +18,7 @@ function fmtTime(iso: string) {
 
 export default function TripDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const tripId = Number(id);
+  const tripId = id ?? '';
   const router = useRouter();
 
   const allTrips = useTripStore((s) => s.trips);
@@ -38,9 +38,9 @@ export default function TripDetail() {
         .sort((a, b) => a.visitedAt.localeCompare(b.visitedAt)),
     [allVisits, tripId],
   );
-  const memoCountByVisit = (visitId: number) =>
+  const memoCountByVisit = (visitId: string) =>
     allTextMemos.filter((m) => m.visitId === visitId).length;
-  const photoCountByVisit = (visitId: number) =>
+  const photoCountByVisit = (visitId: string) =>
     allPhotos.filter((p) => p.visitId === visitId).length;
 
   if (!trip) {

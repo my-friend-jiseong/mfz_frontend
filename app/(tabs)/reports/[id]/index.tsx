@@ -23,7 +23,7 @@ function fmtDateTime(iso: string) {
 
 export default function ReportDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const reportId = Number(id);
+  const reportId = id ?? '';
   const router = useRouter();
 
   const allReports = useReportStore((s) => s.reports);

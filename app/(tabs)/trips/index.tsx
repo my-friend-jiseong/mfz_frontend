@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import { useRouter } from 'expo-router';
 import { useTripStore } from '@/stores/tripStore';
@@ -43,12 +43,31 @@ export default function TripsList() {
     [allTrips, userId],
   );
 
-  const handleToggle = () => {
+  const handleToggle = async () => {
     if (!userId) return;
     if (activeTripId) {
-      end();
+      const r = await end();
+      if (r.ok) return;
+      if ('needsConfirm' in r) {
+        Alert.alert('외근 종료 확인', r.message, [
+          { text: '취소', style: 'cancel' },
+          {
+            text: '종료',
+            style: 'destructive',
+            onPress: async () => {
+              const force = await end(true);
+              if (!force.ok && !('needsConfirm' in force)) {
+                Alert.alert('오류', force.error);
+              }
+            },
+          },
+        ]);
+      } else {
+        Alert.alert('오류', r.error);
+      }
     } else {
-      start(userId);
+      const r = await start();
+      if (!r.ok) Alert.alert('오류', r.error);
     }
   };
 

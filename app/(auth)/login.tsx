@@ -17,16 +17,20 @@ import { spacing, radius, fontSize } from '@/theme/spacing';
 export default function Login() {
   const router = useRouter();
   const login = useAuthStore((s) => s.login);
-  const [email, setEmail] = useState('test@mfz.local');
-  const [password, setPassword] = useState('test1234');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     setError(null);
-    if (login(email, password)) {
+    setSubmitting(true);
+    const result = await login(email, password);
+    setSubmitting(false);
+    if (result.ok) {
       router.replace('/(tabs)');
     } else {
-      setError('이메일 또는 비밀번호가 올바르지 않습니다');
+      setError(result.error);
     }
   };
 
@@ -60,17 +64,17 @@ export default function Login() {
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          <Pressable onPress={handleLogin} style={({ pressed }) => [styles.btn, pressed && styles.pressed]}>
-            <Text style={styles.btnText}>로그인</Text>
+          <Pressable
+            onPress={handleLogin}
+            disabled={submitting}
+            style={({ pressed }) => [styles.btn, (pressed || submitting) && styles.pressed]}
+          >
+            <Text style={styles.btnText}>{submitting ? '로그인 중...' : '로그인'}</Text>
           </Pressable>
 
           <Pressable onPress={() => router.push('/(auth)/signup')} style={styles.link}>
             <Text style={styles.linkText}>회원가입</Text>
           </Pressable>
-
-          <Text style={styles.hint}>
-            프로토타입: 이메일 형식 + 4자 이상이면 모두 로그인 가능
-          </Text>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

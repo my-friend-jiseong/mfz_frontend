@@ -11,7 +11,7 @@ import { colors } from '@/theme/colors';
 import { spacing, fontSize } from '@/theme/spacing';
 
 export interface KakaoMapMarker {
-  id: number;
+  id: string;
   lat: number;
   lng: number;
   label: string;
@@ -23,7 +23,7 @@ interface Props {
   center?: { lat: number; lng: number };
   displayMode?: MapDisplayMode;
   showBoundary?: boolean;
-  onMarkerPress?: (fieldId: number) => void;
+  onMarkerPress?: (fieldId: string) => void;
 }
 
 const DEFAULT_CENTER = { lat: 35.17, lng: 129.07 };

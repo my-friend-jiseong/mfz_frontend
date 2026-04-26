@@ -44,7 +44,7 @@ export function MapDashboard() {
 
   const attachmentPresenceByField = useMemo(() => {
     const map = new Map<
-      number,
+      string,
       { text: boolean; voice: boolean; photo: boolean }
     >();
     visibleFields.forEach((f) => {

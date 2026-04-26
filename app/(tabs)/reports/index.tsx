@@ -34,7 +34,7 @@ export default function ReportsIndex() {
     const mine = allReports.filter(
       (r) => r.creatorId === userId && r.deletedAt === null,
     );
-    const byTripId = new Map<number, Report[]>();
+    const byTripId = new Map<string, Report[]>();
     mine.forEach((r) => {
       const arr = byTripId.get(r.tripId) ?? [];
       arr.push(r);
@@ -61,6 +61,11 @@ export default function ReportsIndex() {
 
   return (
     <MapSheetLayout title="보고서">
+      <View style={styles.notice}>
+        <Text style={styles.noticeText}>
+          ℹ️ 보고서 영구 저장은 백엔드 보강 후 활성화됩니다. 지금은 세션 단위로만 보관됩니다.
+        </Text>
+      </View>
       <BottomSheetFlatList
         data={groups}
         keyExtractor={(g) => String(g.trip.id)}
@@ -161,4 +166,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   fabText: { color: '#fff', fontSize: fontSize.base, fontWeight: '700' },
+  notice: {
+    backgroundColor: colors.primary + '10',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+  noticeText: {
+    fontSize: fontSize.xs,
+    color: colors.primary,
+    fontWeight: '600',
+  },
 });

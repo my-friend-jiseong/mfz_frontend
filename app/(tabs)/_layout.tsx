@@ -1,7 +1,9 @@
+import { useEffect } from 'react';
 import { Tabs } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/theme/colors';
+import { useTripStore } from '@/stores/tripStore';
 
 type IonName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -25,6 +27,13 @@ function TabItem({
 }
 
 export default function TabsLayout() {
+  const hydrateTrips = useTripStore((s) => s.hydrate);
+
+  // 인증 후 진입 시 외근 목록·진행 상태 초기 페치
+  useEffect(() => {
+    void hydrateTrips();
+  }, [hydrateTrips]);
+
   return (
     <Tabs
       initialRouteName="trips"

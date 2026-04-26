@@ -25,7 +25,7 @@ const STATUS_LABEL: Record<FieldStatus, string> = {
 
 export default function EditField() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const fieldId = Number(id);
+  const fieldId = id ?? '';
   const router = useRouter();
 
   const field = useFieldStore((s) => s.getById(fieldId));
