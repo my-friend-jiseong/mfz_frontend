@@ -24,6 +24,7 @@ import {
   VOICE_MAX_SECONDS,
   type VoiceRecorder,
 } from '@/utils/media';
+import { PhotoGrid, VoiceMemoList } from '@/components/AttachmentPreview';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
 
@@ -233,9 +234,7 @@ export default function FieldCheckin() {
             {photoBusy ? '업로드 중...' : '+ 사진 첨부'}
           </Text>
         </Pressable>
-        {photos.length > 0 ? (
-          <Text style={styles.photoCount}>첨부된 사진: {photos.length}장</Text>
-        ) : null}
+        <PhotoGrid photos={photos.map((p) => ({ id: p.id, fileUrl: p.fileUrl }))} />
 
         <Text style={styles.sectionTitle}>음성 메모 (최대 5분)</Text>
         {recording ? (
@@ -260,10 +259,12 @@ export default function FieldCheckin() {
             <Text style={styles.smallBtnText}>+ 음성 녹음 시작</Text>
           </Pressable>
         )}
-        {visitId && allVoiceMemos.filter((m) => m.visitId === visitId).length > 0 ? (
-          <Text style={styles.photoCount}>
-            첨부된 음성: {allVoiceMemos.filter((m) => m.visitId === visitId).length}건
-          </Text>
+        {visitId ? (
+          <VoiceMemoList
+            memos={allVoiceMemos
+              .filter((m) => m.visitId === visitId)
+              .map((m) => ({ id: m.id, fileUrl: m.content, createdAt: m.createdAt }))}
+          />
         ) : null}
 
         <Text style={styles.sectionTitle}>방문 결과 상태</Text>

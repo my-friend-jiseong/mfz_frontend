@@ -156,3 +156,56 @@ export function createVoiceRecorder(): VoiceRecorder {
 }
 
 export const VOICE_MAX_SECONDS = MAX_RECORD_SEC;
+
+// ----- 음성 재생 -----
+
+export interface VoicePlayer {
+  play: () => Promise<void>;
+  stop: () => Promise<void>;
+  isPlaying: () => boolean;
+  unload: () => Promise<void>;
+}
+
+/** uri 의 음성 파일을 재생하는 단일 컨트롤러 (재생/중지/정리). */
+export async function createVoicePlayer(uri: string): Promise<VoicePlayer | null> {
+  try {
+    const { sound } = await Audio.Sound.createAsync({ uri });
+    let playing = false;
+    sound.setOnPlaybackStatusUpdate((status) => {
+      if (!status.isLoaded) return;
+      playing = status.isPlaying ?? false;
+      if (status.didJustFinish) {
+        playing = false;
+        void sound.setPositionAsync(0);
+      }
+    });
+    return {
+      play: async () => {
+        try {
+          await sound.replayAsync();
+          playing = true;
+        } catch {
+          /* ignore */
+        }
+      },
+      stop: async () => {
+        try {
+          await sound.stopAsync();
+        } catch {
+          /* ignore */
+        }
+        playing = false;
+      },
+      isPlaying: () => playing,
+      unload: async () => {
+        try {
+          await sound.unloadAsync();
+        } catch {
+          /* ignore */
+        }
+      },
+    };
+  } catch {
+    return null;
+  }
+}

@@ -21,6 +21,7 @@ import {
   VOICE_MAX_SECONDS,
   type VoiceRecorder,
 } from '@/utils/media';
+import { PhotoGrid, VoiceMemoList } from '@/components/AttachmentPreview';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
 import type { Visit } from '@/types/entities';
@@ -60,8 +61,19 @@ export default function FieldDetail() {
   );
   const directAttachments = directAttachmentsMap[fieldId] ?? [];
   const directTextMemos = directAttachments.filter((a) => a.type === 'text');
-  const directPhotoCount = directAttachments.filter((a) => a.type === 'photo').length;
-  const directAudioCount = directAttachments.filter((a) => a.type === 'audio').length;
+  const directPhotos = directAttachments
+    .filter((a) => a.type === 'photo' && a.fileUrl)
+    .map((a) => ({ id: a.id, fileUrl: a.fileUrl as string }));
+  const directVoices = directAttachments
+    .filter((a) => a.type === 'audio' && a.fileUrl)
+    .map((a) => ({
+      id: a.id,
+      fileUrl: a.fileUrl as string,
+      durationSec: a.durationSec ?? a.durationSeconds,
+      createdAt: a.createdAt,
+    }));
+  const directPhotoCount = directPhotos.length;
+  const directAudioCount = directVoices.length;
 
   const [memoInput, setMemoInput] = useState('');
   const [memoSubmitting, setMemoSubmitting] = useState(false);
@@ -302,6 +314,9 @@ export default function FieldDetail() {
           </Pressable>
         )}
       </View>
+
+      <PhotoGrid photos={directPhotos} />
+      <VoiceMemoList memos={directVoices} />
 
       <Text style={styles.sectionTitle}>방문 이력 ({visits.length})</Text>
     </View>
