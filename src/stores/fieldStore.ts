@@ -1,7 +1,12 @@
 import { create } from 'zustand';
 import type { Field, FieldStatus } from '@/types/entities';
 import { fields as fieldsApi, ApiError, localizeError } from '@/api';
-import type { CreateFieldBody, UpdateFieldBody, ListMineParams } from '@/api';
+import type {
+  CreateFieldBody,
+  UpdateFieldBody,
+  ListMineParams,
+  FieldDirectAttachment,
+} from '@/api';
 
 type CreateResult =
   | { ok: true; field: Field }
@@ -18,14 +23,18 @@ type DeleteResult =
 
 interface FieldState {
   fields: Field[];
+  // 현장별 직접 첨부 캐시 (visitId=null 인 메모/사진/음성)
+  directAttachments: Record<string, FieldDirectAttachment[]>;
   busy: boolean;
 
   hydrate: () => Promise<void>;
   refresh: (params?: ListMineParams) => Promise<void>;
+  loadDetail: (id: string) => Promise<void>;
   create: (body: CreateFieldBody) => Promise<CreateResult>;
   update: (id: string, body: UpdateFieldBody) => Promise<GenericResult>;
   patchStatus: (id: string, status: FieldStatus) => Promise<GenericResult>;
   remove: (id: string, force?: boolean) => Promise<DeleteResult>;
+  addTextMemo: (id: string, text: string) => Promise<GenericResult>;
 
   getById: (id: string) => Field | undefined;
   byUser: (userId: string) => Field[];
@@ -35,6 +44,7 @@ const describeError = localizeError;
 
 export const useFieldStore = create<FieldState>((set, get) => ({
   fields: [],
+  directAttachments: {},
   busy: false,
 
   hydrate: async () => {
@@ -139,6 +149,45 @@ export const useFieldStore = create<FieldState>((set, get) => ({
         // HAS_RELATED_VISITS — 클라이언트가 confirm 후 force=true 로 재호출
         return { ok: false, needsConfirm: true, message: e.message };
       }
+      return { ok: false, error: describeError(e) };
+    }
+  },
+
+  loadDetail: async (id) => {
+    try {
+      const res = await fieldsApi.detail(id);
+      set((s) => ({
+        fields: s.fields.map((f) =>
+          f.id === id
+            ? {
+                id: res.fieldId,
+                userId: res.assigneeUserId,
+                status: res.status,
+                address: res.address,
+                addressDetail: res.detailAddress ?? '',
+                latitude: res.lat,
+                longitude: res.lng,
+              }
+            : f,
+        ),
+        directAttachments: { ...s.directAttachments, [id]: res.directAttachments ?? [] },
+      }));
+    } catch {
+      // ignore
+    }
+  },
+
+  addTextMemo: async (id, text) => {
+    try {
+      const res = await fieldsApi.addTextMemo(id, text);
+      set((s) => ({
+        directAttachments: {
+          ...s.directAttachments,
+          [id]: [...(s.directAttachments[id] ?? []), res.attachment],
+        },
+      }));
+      return { ok: true };
+    } catch (e) {
       return { ok: false, error: describeError(e) };
     }
   },

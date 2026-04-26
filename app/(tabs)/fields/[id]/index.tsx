@@ -1,6 +1,13 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  Alert,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import { useFieldStore } from '@/stores/fieldStore';
 import { useVisitStore } from '@/stores/visitStore';
@@ -27,13 +34,38 @@ export default function FieldDetail() {
   const fieldId = id ?? '';
 
   const allFields = useFieldStore((s) => s.fields);
+  const directAttachmentsMap = useFieldStore((s) => s.directAttachments);
+  const loadFieldDetail = useFieldStore((s) => s.loadDetail);
+  const addFieldTextMemo = useFieldStore((s) => s.addTextMemo);
   const allVisits = useVisitStore((s) => s.visits);
   const activeTripId = useTripStore((s) => s.activeTripId);
+
+  // 진입 시 detail 페치 (directAttachments 채우기)
+  useEffect(() => {
+    if (fieldId) void loadFieldDetail(fieldId);
+  }, [fieldId, loadFieldDetail]);
 
   const field = useMemo(
     () => allFields.find((f) => f.id === fieldId),
     [allFields, fieldId],
   );
+  const directAttachments = directAttachmentsMap[fieldId] ?? [];
+  const directTextMemos = directAttachments.filter((a) => a.type === 'text');
+
+  const [memoInput, setMemoInput] = useState('');
+  const [memoSubmitting, setMemoSubmitting] = useState(false);
+  const handleAddDirectMemo = async () => {
+    const t = memoInput.trim();
+    if (!t) return;
+    setMemoSubmitting(true);
+    const r = await addFieldTextMemo(fieldId, t);
+    setMemoSubmitting(false);
+    if (r.ok) {
+      setMemoInput('');
+    } else {
+      Alert.alert('메모 추가 실패', r.error);
+    }
+  };
   const visits = useMemo(
     () =>
       allVisits
@@ -120,6 +152,43 @@ export default function FieldDetail() {
         </Pressable>
       </View>
 
+      <Text style={styles.sectionTitle}>현장 직접 메모 ({directTextMemos.length})</Text>
+      <Text style={styles.directHint}>
+        외근 진행 중이 아닐 때도 이 현장에 메모를 남길 수 있습니다.
+      </Text>
+      <View style={styles.memoInputRow}>
+        <TextInput
+          value={memoInput}
+          onChangeText={setMemoInput}
+          style={styles.memoInput}
+          placeholder="현장에 남길 메모"
+          maxLength={2000}
+          multiline
+        />
+        <Pressable
+          onPress={handleAddDirectMemo}
+          disabled={memoSubmitting || !memoInput.trim()}
+          style={({ pressed }) => [
+            styles.memoBtn,
+            (pressed || memoSubmitting || !memoInput.trim()) && styles.pressed,
+          ]}
+        >
+          <Text style={styles.memoBtnText}>
+            {memoSubmitting ? '추가 중...' : '추가'}
+          </Text>
+        </Pressable>
+      </View>
+      {directTextMemos.length > 0 ? (
+        <View style={styles.memoList}>
+          {directTextMemos.map((m) => (
+            <View key={m.id} style={styles.memoItem}>
+              <Text style={styles.memoText}>{m.text}</Text>
+              <Text style={styles.memoMeta}>{fmtDateTime(m.createdAt)}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+
       <Text style={styles.sectionTitle}>방문 이력 ({visits.length})</Text>
     </View>
   );
@@ -196,4 +265,47 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   visitDate: { fontSize: fontSize.sm, color: colors.text },
+  directHint: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    marginTop: spacing.xs,
+  },
+  memoInputRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+    alignItems: 'flex-end',
+  },
+  memoInput: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    fontSize: fontSize.sm,
+    color: colors.text,
+    minHeight: 44,
+  },
+  memoBtn: {
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.md,
+  },
+  memoBtnText: { color: '#fff', fontSize: fontSize.sm, fontWeight: '700' },
+  memoList: { marginTop: spacing.sm, gap: spacing.xs },
+  memoItem: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.sm,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  memoText: { fontSize: fontSize.sm, color: colors.text },
+  memoMeta: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    marginTop: spacing.xs,
+  },
 });
