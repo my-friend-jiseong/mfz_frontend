@@ -12,9 +12,18 @@ type EndResult =
   | { ok: false; needsConfirm: true; message: string }
   | { ok: false; error: string };
 
+// 외근 변경 시 소속기관장 보고 필요 — /api/trips/active 응답이 줌.
+// 작업자 본인의 책무 (공무원 복무규정) 를 보조하는 안내.
+export interface OfficialNotice {
+  required: boolean;
+  message: string | null;
+}
+
 interface TripState {
   trips: Trip[];
   activeTripId: string | null;
+  // PR-I: active 응답에 들어 있는 보고 필요 안내. 화면에서 카드/배너로 노출 가능.
+  officialNotice: OfficialNotice;
   // 호출 측에서 로딩 표시할 수 있도록 — 거친 단일 플래그 (충분)
   busy: boolean;
 
@@ -38,6 +47,7 @@ export const useTripStore = create<TripState>((set, get) => ({
   // 시드 데이터 제거 — list 응답으로만 채움
   trips: [],
   activeTripId: null,
+  officialNotice: { required: false, message: null },
   busy: false,
 
   hydrate: async () => {
@@ -47,7 +57,13 @@ export const useTripStore = create<TripState>((set, get) => ({
   refreshActive: async () => {
     try {
       const res = await tripsApi.active();
-      set({ activeTripId: res.isActive ? res.tripId : null });
+      set({
+        activeTripId: res.isActive ? res.tripId : null,
+        officialNotice: {
+          required: !!res.reportNoticeRequired,
+          message: res.reportNoticeMessage ?? null,
+        },
+      });
     } catch {
       // 비로그인 상태에서 호출되는 경우 등 — 무시
     }
