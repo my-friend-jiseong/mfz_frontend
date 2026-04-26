@@ -29,6 +29,8 @@ export default function ActiveTrip() {
 
   const activeTripId = useTripStore((s) => s.activeTripId);
   const endTrip = useTripStore((s) => s.end);
+  const officialNotice = useTripStore((s) => s.officialNotice);
+  const ackOfficialNotice = useTripStore((s) => s.ackOfficialNotice);
 
   const allDestinations = useDestinationStore((s) => s.destinations);
   const markSkipped = useDestinationStore((s) => s.markSkipped);
@@ -153,8 +155,27 @@ export default function ActiveTrip() {
     );
   };
 
+  const handleAckNotice = async () => {
+    const r = await ackOfficialNotice();
+    if (!r.ok) Alert.alert('보고 완료 표시 실패', r.error);
+  };
+
   const ListHeader = () => (
     <View style={styles.header}>
+      {officialNotice.required ? (
+        <View style={styles.noticeCard}>
+          <Text style={styles.noticeLabel}>⚠️ 소속기관장 보고 필요</Text>
+          <Text style={styles.noticeText}>
+            {officialNotice.message ?? '외근 변경 사항을 소속기관장에게 보고해주세요.'}
+          </Text>
+          <Pressable
+            onPress={() => void handleAckNotice()}
+            style={({ pressed }) => [styles.noticeBtn, pressed && styles.pressed]}
+          >
+            <Text style={styles.noticeBtnText}>보고 완료 표시</Text>
+          </Pressable>
+        </View>
+      ) : null}
       {currentDest ? (
         (() => {
           const field = getField(currentDest.fieldId);
@@ -363,4 +384,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   endText: { color: '#fff', fontSize: fontSize.base, fontWeight: '700' },
+  noticeCard: {
+    backgroundColor: colors.warning + '15',
+    borderRadius: radius.md,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.warning + '66',
+    gap: spacing.xs,
+  },
+  noticeLabel: {
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+    color: colors.warning,
+  },
+  noticeText: {
+    fontSize: fontSize.sm,
+    color: colors.text,
+    lineHeight: 20,
+  },
+  noticeBtn: {
+    marginTop: spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.warning,
+    alignSelf: 'flex-start',
+  },
+  noticeBtnText: { color: '#fff', fontSize: fontSize.sm, fontWeight: '700' },
 });

@@ -32,6 +32,7 @@ interface TripState {
   refreshList: () => Promise<void>;
   start: () => Promise<StartResult>;
   end: (force?: boolean) => Promise<EndResult>;
+  ackOfficialNotice: () => Promise<{ ok: true } | { ok: false; error: string }>;
 
   getById: (id: string) => Trip | undefined;
   byWorker: (workerId: string) => Trip[];
@@ -134,6 +135,21 @@ export const useTripStore = create<TripState>((set, get) => ({
       if (e instanceof ApiError && e.code === 'confirm_required_zero_visits') {
         return { ok: false, needsConfirm: true, message: e.message };
       }
+      return { ok: false, error: describeError(e) };
+    }
+  },
+
+  ackOfficialNotice: async () => {
+    const tripId = get().activeTripId;
+    if (!tripId) return { ok: false, error: '진행 중인 외근이 없습니다' };
+    try {
+      await tripsApi.officialNotice(tripId);
+      // 백엔드가 다음 active 응답에서 required=false 로 줄 거지만 즉시 UI 반영 위해 클리어
+      set({ officialNotice: { required: false, message: null } });
+      // 응답 보강 가능성 있으니 한 번 더 동기화
+      void get().refreshActive();
+      return { ok: true };
+    } catch (e) {
       return { ok: false, error: describeError(e) };
     }
   },
