@@ -44,7 +44,7 @@
 }
 ```
 - **`user.id`는 UUID string** (number 아님)
-- `role`: `"user"` 기본 / `"admin"` 별도
+- `role`: 백엔드 스펙상 존재하지만 본 서비스는 단일 Actor (필드 워커) 라 분기에 사용하지 않음
 
 ### 1.2 `POST /auth/login` — 200
 signup과 동일 + `expiresIn: "1h"` 추가.
@@ -210,7 +210,7 @@ body 필드명: **`text`** (확정. 후속 smoke test 에서 `body`/`memo`/`note
 
 ### 4.1 `POST /api/fields` — 201
 body 필수: `name, status (pending|in_progress|done), roadAddress, jibunAddress, detailAddress, lat (33~43), lng (124~132)`
-선택: `sido, sigungu, userId(관리자만), forceCreateWithDuplicate`
+선택: `sido, sigungu, forceCreateWithDuplicate` (`userId` 는 백엔드 스펙상 존재하나 본 서비스 미사용)
 ```json
 {
   "fieldId": "field-1777204180506",
@@ -331,8 +331,8 @@ multipart: `file` (필수, audio), `durationSeconds` (≤300, 선택)
 ```
 - 테스트 시점 `items: []` — Daum/Kakao API 키 미설정일 가능성. 실 사용 시 재검증 필요.
 
-### 4.5 `GET /api/map/fields` — 403 (일반 사용자)
-**관리자 전용**. 데모 일반 계정으로는 접근 불가 → 일반 사용자용 지도 마커는 `/api/fields/mine` 의 좌표 데이터 활용해야 함 (단, mine 응답에 `lat/lng` 없음 → 상세 호출하거나 백엔드 보강 필요).
+### 4.5 `GET /api/map/fields` — 본 서비스 미사용
+백엔드 스펙상 다른 권한이 가정된 endpoint. 본 서비스는 단일 Actor(필드 워커) 라 호출하지 않음. 지도 마커는 `/api/fields/mine` 응답의 `lat`·`lng` 사용 (Phase 2 보강 후 가능).
 
 ---
 

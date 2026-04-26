@@ -66,7 +66,7 @@ export interface CreateFieldBody {
   lng: number;
   sido?: string;
   sigungu?: string;
-  userId?: string; // 관리자만
+  // userId/forceCreateWithDuplicate 는 백엔드 스펙상 존재하나 본 서비스에서 사용 안 함
   forceCreateWithDuplicate?: boolean;
 }
 
@@ -88,7 +88,7 @@ export interface UpdateFieldBody {
   lat?: number;
   lng?: number;
   tags?: string[];
-  assignedUserId?: string; // 관리자만
+  // assignedUserId 는 백엔드 스펙상 존재하나 본 서비스(단일 Actor)에서는 사용 안 함
 }
 
 export interface PatchStatusResponse {
@@ -146,11 +146,9 @@ export const fields = {
       body: { status },
     }),
 
-  remove: (fieldId: string, force = false) =>
-    request<null>(`/api/fields/${fieldId}`, {
-      method: 'DELETE',
-      query: force ? { force: true } : undefined,
-    }),
+  // force=true 옵션은 백엔드 스펙에만 존재하며 본 서비스(단일 Actor)에서는 사용하지 않음.
+  remove: (fieldId: string) =>
+    request<null>(`/api/fields/${fieldId}`, { method: 'DELETE' }),
 
   addressSearch: (keyword: string) =>
     request<AddressSearchResponse>('/api/fields/address/search', {

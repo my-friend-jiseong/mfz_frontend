@@ -20,10 +20,10 @@
 | **P1** | [§3.2] PR-H Reports `generate` AI 흐름 + UI 재설계 | 프런트 | 🟡 시연 차별화 포인트 | 프런트 |
 | **P2** | [§1.4] `/api/fields/address/search` 빈 결과 (Daum/Kakao 키 미설정 추정) | 백엔드 회귀 | 🟢 mock 주소 우회 중 | 백엔드 |
 | **P2** | [§1.5] 4xx body 에 `fields` 객체 (검증 필드별 메시지) | 백엔드 회귀 | 🟢 단일 메시지로도 동작 | 백엔드 |
-| **P2** | [§2.3] 관리자 토큰 발급 흐름 (admin role 시나리오) | 백엔드 신규 | 🟢 Phase 3 후반 | 백엔드 |
 | **P2** | [§3.3] PR-I 외근 자동화 (geofence/navigation/오프라인 큐) | 프런트 | 🟢 jy 진행분과 정합 | 프런트 |
-| **P3** | [§3.4] PR-J 관리자 전용 화면 | 프런트 | 🟢 admin 토큰 흐름 후 | 프런트 |
-| **P3** | [§3.5] PR-K 정리·튜닝 | 프런트 | 🟢 인지 부담 정리 | 프런트 |
+| **P3** | [§3.4] PR-K 정리·튜닝 | 프런트 | 🟢 인지 부담 정리 | 프런트 |
+
+> **중요**: 본 서비스에는 **관리자(admin) Actor 가 존재하지 않습니다**. 작업자(필드 워커) 본인만 자신의 외근·현장·방문·보고서를 다룹니다. 백엔드 스웨거에 admin 전용으로 표시된 endpoint (`GET /api/fields`, `PATCH /api/fields/{id}/assignee`, `GET /api/map/fields`) 는 **프런트에서 사용하지 않습니다**.
 
 ---
 
@@ -66,7 +66,7 @@ Content-Type: application/json
 |---|---|
 | `EMAIL_TAKEN` | 409 |
 | `INVALID_CREDENTIALS` | 401 |
-| `FORBIDDEN` (권한 부족) | 403 |
+| `FORBIDDEN` (본인 소유가 아닌 자원 접근 등) | 403 |
 | `NOT_FOUND` | 404 |
 | `HAS_RELATED_VISITS` (현장 삭제) | 409 |
 | `ACTIVE_TRIP_EXISTS` | 409 |
@@ -198,17 +198,7 @@ extraNotes: "추가 메모"          # 선택
 }
 ```
 
-### 2.3 [P2] 관리자 토큰 발급 절차
-
-**현재**: 스웨거 description — `signAccessToken` 으로 직접 서명 (백엔드 개발자만)
-
-**요청**: 둘 중 하나
-1. **`PATCH /api/users/{userId}/role`** (super-admin 전용) — 일반 사용자를 admin 으로 승급
-2. **백엔드 서버 측 환경변수** 로 admin 이메일 화이트리스트 → 해당 계정 가입/로그인 시 자동 admin role 부여
-
-이게 들어와야 프런트가 admin 시나리오(현장 담당자 변경, /api/fields 전체 조회, /api/map/fields) 화면을 만들 수 있음.
-
-### 2.4 [P2] 보고서 공유 링크 — 만료·재발급·해제
+### 2.3 [P2] 보고서 공유 링크 — 만료·재발급·해제
 
 **현재**: `POST /api/reports/{id}/share` — 토큰 발급. 만료시간·재발급·취소 미명세.
 
@@ -217,13 +207,15 @@ extraNotes: "추가 메모"          # 선택
 - `POST /api/reports/{id}/share` 재호출 시: 이전 토큰 무효 + 새 토큰? 아니면 동일 토큰 유지?
 - `DELETE /api/reports/{id}/share` — 공유 해제 (토큰 무효화)
 
-### 2.5 [P3] 사진·음성 multipart 응답 shape 명세
+### 2.4 [P3] 사진·음성 multipart 응답 shape 명세
 
 **현재**: 스웨거에 입력 multipart 명시, 응답 description 만.
 
 **요청**: 응답에 `attachment` 객체 shape 명시 — `id`, `fieldId`, `visitId`, `type`, `fileUrl`, `thumbnailUrl?`, `capturedAt?`, `durationSec?`, `mimeType`, `byteSize` 등. PR-G 시작 전에 확정 필요.
 
-### 2.6 [P3] 외근 변경 시 보고 — `POST /api/trips/{tripId}/official-notice` 응답 shape
+### 2.5 [P3] 외근 변경 시 보고 — `POST /api/trips/{tripId}/official-notice` 응답 shape
+
+공무원 복무규정상 외근 중 일정·예정지·종료시각이 사전 계획과 달라지면 *"지체없이 소속기관장에게 보고"* 의무가 있어, 변경이 발생했음을 시스템이 표시·체크하는 기능. (`/api/trips/active` 응답의 `reportNoticeRequired`/`reportNoticeMessage` 와 짝.) 작업자 본인의 책무를 보조 — admin 기능 아님.
 
 스웨거에 endpoint 만 있고 입력·응답 미명세. PR-I 작업 시 필요.
 
@@ -259,13 +251,13 @@ npx expo install expo-image-picker expo-av expo-file-system
 **검증**
 - iOS/Android 권한 거부 → 안내 (`Linking.openSettings()`)
 - 큰 파일 업로드 시 진행률 (RN fetch 는 progress 미지원 → axios + onUploadProgress 또는 XMLHttpRequest 우회 — 또는 단순 spinner 로 대체)
-- 응답 attachment shape 검증 (§2.5 필요)
+- 응답 attachment shape 검증 (§2.4 필요)
 
 ### 3.2 [P1] PR-H — Reports `generate` AI 흐름
 
 **목표**: "외근 → AI 자동 보고서 생성" UX. 수동 작성과 별개 진입점.
 
-**의존성**: §2.1 응답 shape 확정 후·§2.5 사진 응답 shape 확정 후
+**의존성**: §2.1 응답 shape 확정 후·§2.4 사진 응답 shape 확정 후
 
 **UI 흐름**
 1. 외근 상세 (`/(tabs)/trips/[id]`) 의 `reportEntryPoint.createUrl` 활용 — "AI 보고서 생성" 버튼
@@ -295,7 +287,7 @@ npx expo install expo-image-picker expo-av expo-file-system
 - `POST /api/trips/{tripId}/navigation/deep-links` — 외부 지도 앱 길안내
 - `POST /api/trips/{tripId}/navigation/optimize` — 다중 현장 동선 최적화
 - `POST /api/trips/offline/queue` / `flush` — 오프라인 큐
-- `POST /api/trips/{tripId}/official-notice` — 보고 필요 표시 (§2.6)
+- `POST /api/trips/{tripId}/official-notice` — 외근 변경 시 소속기관장 보고 필요 표시 (§2.5)
 - `GET /api/trips/state-history` — 상태 전환 이력 (감사용)
 - `GET /api/map/current-location-config` — 현재 위치 UX 설정
 
@@ -304,21 +296,7 @@ npx expo install expo-image-picker expo-av expo-file-system
 - `react-native-background-geolocation` 또는 expo-task-manager 의 백그라운드 위치 (geofence)
 - AsyncStorage 또는 expo-sqlite (오프라인 큐)
 
-### 3.4 [P3] PR-J — 관리자 전용 화면
-
-**선행**: §2.3 admin 토큰 발급 절차 확정
-
-**대상**
-- `GET /api/fields` — 전체 현장 목록
-- `PATCH /api/fields/{id}/assignee` — 담당자 변경 (드롭다운으로 사용자 선택)
-- `GET /api/map/fields` — 모든 마커 (admin 전용 지도)
-- `GET /api/trips/{id}/audit-log` (검토) — 외근 상태 전환 이력
-
-**UI 흐름**
-- 사용자 role 이 `admin` 일 때만 노출되는 별도 탭 또는 설정 메뉴 진입점
-- 일반 사용자가 admin endpoint 시도 시 받는 403 — 친절한 안내
-
-### 3.5 [P3] PR-K — 정리·튜닝
+### 3.4 [P3] PR-K — 정리·튜닝
 
 - `client.ts` 의 `__DEV__` 응답 dump 를 endpoint별 화이트리스트 또는 4xx/5xx 만 dump 로 축소 (현재 모든 응답 verbose)
 - `mockSeed.ts` 검토 — 실 API 연동 후 사용 안 되는 시드는 제거 (이미 일부 비어있음)
@@ -348,7 +326,7 @@ npx expo install expo-image-picker expo-av expo-file-system
 | 11 | 비로그인 브라우저로 공유 URL 열기 | `app/shared/{token}` 미리보기 |
 | 12 | 보고서 삭제 | 목록에서 사라짐 |
 | 13 | 앱 완전 종료 후 재실행 | 자동 세션 복원 (외근·보고서 그대로) |
-| 14 | 현장 삭제 (방문 1건 있는 현장) | 409 confirm → 강제 삭제 (관리자만) |
+| 14 | 현장 삭제 (방문 1건 있는 현장) | 409 — "방문 기록이 있어 삭제할 수 없습니다" 안내 |
 
 각 단계에서 **콘솔의 `[api]` dev 로그** 캡처 — 비정상 응답 발견 시 백엔드 측 회귀 가능성.
 
@@ -362,18 +340,17 @@ npx expo install expo-image-picker expo-av expo-file-system
 ## 5. 일정·진행 순서 제안
 
 ### 5.1 백엔드 차단 항목
-- §1.1 (status 분기 + code) — P0, **PR-G 까지는 우회 가능** 하지만 PR-J (관리자) 시작 전 필요
+- §1.1 (status 분기 + code) — P0, 매핑 코드 단순화 위해
 - §1.2 (creator.name) — P0, 보고서 화면 사용자 신뢰도 직접 영향
 - §2.1 (generate 응답 shape) — PR-H **시작 자체를 차단**
 
 ### 5.2 프런트 진행 권장 순서
 
-1. **PR-G** (사진·음성 통합) — 백엔드 §2.5 응답 shape 명세 받으면 바로
+1. **PR-G** (사진·음성 통합) — 백엔드 §2.4 응답 shape 명세 받으면 바로
 2. (백엔드 §1.1·§1.2·§2.1 처리 대기)
 3. **PR-H** (AI 보고서 생성) — §2.1 받은 후
-4. **PR-I** (외근 자동화) — jy 코드 정합 + §2.6 받은 후
-5. **PR-J** (관리자) — §2.3 admin 토큰 흐름 확정 후
-6. **PR-K** (정리) — 위 모두 끝난 후
+4. **PR-I** (외근 자동화) — jy 코드 정합 + §2.5 받은 후
+5. **PR-K** (정리) — 위 모두 끝난 후
 
 ### 5.3 분기점
 

@@ -33,7 +33,7 @@ interface FieldState {
   create: (body: CreateFieldBody) => Promise<CreateResult>;
   update: (id: string, body: UpdateFieldBody) => Promise<GenericResult>;
   patchStatus: (id: string, status: FieldStatus) => Promise<GenericResult>;
-  remove: (id: string, force?: boolean) => Promise<DeleteResult>;
+  remove: (id: string) => Promise<DeleteResult>;
   addTextMemo: (id: string, text: string) => Promise<GenericResult>;
 
   getById: (id: string) => Field | undefined;
@@ -134,10 +134,10 @@ export const useFieldStore = create<FieldState>((set, get) => ({
     }
   },
 
-  remove: async (id, force = false) => {
+  remove: async (id) => {
     set({ busy: true });
     try {
-      await fieldsApi.remove(id, force);
+      await fieldsApi.remove(id);
       set((s) => ({
         fields: s.fields.filter((f) => f.id !== id),
         busy: false,
@@ -146,7 +146,7 @@ export const useFieldStore = create<FieldState>((set, get) => ({
     } catch (e) {
       set({ busy: false });
       if (e instanceof ApiError && e.status === 409) {
-        // HAS_RELATED_VISITS — 클라이언트가 confirm 후 force=true 로 재호출
+        // HAS_RELATED_VISITS — 본 서비스는 단일 Actor 라 강제 삭제 없음, 안내만.
         return { ok: false, needsConfirm: true, message: e.message };
       }
       return { ok: false, error: describeError(e) };

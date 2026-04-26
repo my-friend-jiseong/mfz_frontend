@@ -15,7 +15,9 @@ export interface User {
   id: string;
   email: string;
   name: string;
-  role: 'user' | 'admin';
+  // 본 서비스에는 단일 Actor (필드 워커) 만 존재. 백엔드 응답에 들어 있는 role 값은
+  // 그대로 받아만 두고 분기에는 사용하지 않음.
+  role: string;
   createdAt: string;
 }
 

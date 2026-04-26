@@ -6,7 +6,7 @@ export interface ApiUser {
   id: string;
   email: string;
   name: string;
-  role: 'user' | 'admin';
+  role: string; // 본 서비스는 단일 Actor — 분기에 사용하지 않음
   createdAt: string;
 }
 
