@@ -149,7 +149,9 @@ export default function TripDetail() {
     return (
       <Pressable
         onPress={() =>
-          field && router.push(`/(tabs)/fields/${field.id}` as never)
+          router.push(
+            `/(tabs)/trips/visit?tripId=${tripId}&visitId=${item.id}` as never,
+          )
         }
         style={({ pressed }) => [styles.visitCard, pressed && styles.pressed]}
       >

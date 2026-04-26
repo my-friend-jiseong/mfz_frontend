@@ -18,6 +18,7 @@ export function MapDashboard() {
   const router = useRouter();
   const userId = useAuthStore((s) => s.user?.id);
   const allFields = useFieldStore((s) => s.fields);
+  const directAttachmentsMap = useFieldStore((s) => s.directAttachments);
   const allVisits = useVisitStore((s) => s.visits);
   const allTextMemos = useVisitStore((s) => s.textMemos);
   const allVoiceMemos = useVisitStore((s) => s.voiceMemos);
@@ -51,19 +52,28 @@ export function MapDashboard() {
       const visitIds = allVisits
         .filter((v) => v.fieldId === f.id)
         .map((v) => v.id);
-      const hasText = visitIds.some((vid) =>
+      const visitText = visitIds.some((vid) =>
         allTextMemos.some((m) => m.visitId === vid),
       );
-      const hasVoice = visitIds.some((vid) =>
+      const visitVoice = visitIds.some((vid) =>
         allVoiceMemos.some((m) => m.visitId === vid),
       );
-      const hasPhoto = visitIds.some((vid) =>
+      const visitPhoto = visitIds.some((vid) =>
         allPhotos.some((p) => p.visitId === vid),
       );
-      map.set(f.id, { text: hasText, voice: hasVoice, photo: hasPhoto });
+      // 현장 직접 첨부(visit 없이) 도 포함 — checkin 흐름이 아닌 현장 상세에서 추가된 것
+      const direct = directAttachmentsMap[f.id] ?? [];
+      const directText = direct.some((a) => a.type === 'text');
+      const directVoice = direct.some((a) => a.type === 'audio');
+      const directPhoto = direct.some((a) => a.type === 'photo');
+      map.set(f.id, {
+        text: visitText || directText,
+        voice: visitVoice || directVoice,
+        photo: visitPhoto || directPhoto,
+      });
     });
     return map;
-  }, [visibleFields, allVisits, allTextMemos, allVoiceMemos, allPhotos]);
+  }, [visibleFields, allVisits, allTextMemos, allVoiceMemos, allPhotos, directAttachmentsMap]);
 
   const markers = useMemo(() => {
     const base = fieldsToMarkers(visibleFields);

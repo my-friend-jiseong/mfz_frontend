@@ -54,33 +54,63 @@ const photoStyles = StyleSheet.create({
   image: { width: '100%', height: '100%' },
 });
 
-/** 음성 메모 1건 재생 버튼 — 토글식 (재생/중지). */
+// 동시 재생 방지를 위한 전역 단일 활성 row 등록.
+// 새 row 가 재생 시작하면 직전 row 를 stop 시킴.
+type StopHandler = () => void;
+let activeStop: StopHandler | null = null;
+function registerActive(stop: StopHandler) {
+  if (activeStop && activeStop !== stop) activeStop();
+  activeStop = stop;
+}
+function clearActive(stop: StopHandler) {
+  if (activeStop === stop) activeStop = null;
+}
+
+/** 음성 메모 1건 재생 버튼 — 토글식 (재생/중지). 동시에 한 row 만 재생. */
 export function VoiceMemoRow({ memo }: { memo: VoiceItem }) {
   const playerRef = useRef<VoicePlayer | null>(null);
   const [playing, setPlaying] = useState(false);
+  const playingRef = useRef(false);
 
   useEffect(() => {
     return () => {
+      // 이 row 가 활성이었다면 등록 해제
+      clearActive(stopSelf);
       void playerRef.current?.unload();
       playerRef.current = null;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const stopSelf: StopHandler = () => {
+    if (playerRef.current && playingRef.current) {
+      void playerRef.current.stop();
+    }
+    playingRef.current = false;
+    setPlaying(false);
+  };
 
   const toggle = async () => {
     if (playing) {
-      await playerRef.current?.stop();
-      setPlaying(false);
+      stopSelf();
+      clearActive(stopSelf);
       return;
     }
     if (!playerRef.current) {
       playerRef.current = await createVoicePlayer(memo.fileUrl);
       if (!playerRef.current) return;
     }
+    registerActive(stopSelf); // 다른 row 정지
     await playerRef.current.play();
+    playingRef.current = true;
     setPlaying(true);
     // 길이 만료 후 자동 false 처리
     if (memo.durationSec) {
-      setTimeout(() => setPlaying(false), memo.durationSec * 1000 + 200);
+      setTimeout(() => {
+        playingRef.current = false;
+        setPlaying(false);
+        clearActive(stopSelf);
+      }, memo.durationSec * 1000 + 200);
     }
   };
 

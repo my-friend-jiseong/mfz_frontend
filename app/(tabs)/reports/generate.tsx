@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -46,6 +46,14 @@ export default function GenerateReport() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // unmount 후 setState 경고 방지 — pickPhoto/generate 가 비동기라 화면 떠난 후 콜백 가능
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   const myTrips = useMemo(() => {
     if (!userId) return [];
     return allTrips
@@ -56,13 +64,13 @@ export default function GenerateReport() {
   const pickBefore = () =>
     promptPhotoSource(async (src) => {
       const f = await pickPhoto(src);
-      if (f) setBeforePhoto(f);
+      if (f && mountedRef.current) setBeforePhoto(f);
     });
 
   const pickAfter = () =>
     promptPhotoSource(async (src) => {
       const f = await pickPhoto(src);
-      if (f) setAfterPhoto(f);
+      if (f && mountedRef.current) setAfterPhoto(f);
     });
 
   const handleGenerate = async () => {
@@ -81,6 +89,7 @@ export default function GenerateReport() {
       beforePhoto: beforePhoto ?? undefined,
       afterPhoto: afterPhoto ?? undefined,
     });
+    if (!mountedRef.current) return;
     setBusy(false);
     if (r.ok) {
       router.replace(`/(tabs)/reports/${r.data.id}` as never);
