@@ -37,6 +37,18 @@ function describeError(e: unknown): string {
   return '알 수 없는 오류';
 }
 
+// 백엔드 응답이 비어 있거나 필수 필드 누락 시 안전 가드.
+// 정상 응답: { user, accessToken, refreshToken, ... } (smoke test 캡처)
+function isValidSession(s: unknown): s is { user: User; accessToken: string; refreshToken: string } {
+  return (
+    !!s &&
+    typeof s === 'object' &&
+    typeof (s as { accessToken?: unknown }).accessToken === 'string' &&
+    typeof (s as { refreshToken?: unknown }).refreshToken === 'string' &&
+    !!(s as { user?: unknown }).user
+  );
+}
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   accessToken: null,
@@ -53,6 +65,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         return;
       }
       const session = await auth.refresh(refresh);
+      if (!isValidSession(session)) throw new Error('세션 응답이 비어있습니다');
       await saveRefreshToken(session.refreshToken);
       set({
         user: session.user,
@@ -77,6 +90,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   login: async (email, password) => {
     try {
       const session = await auth.login({ email, password });
+      if (!isValidSession(session)) {
+        if (__DEV__) console.warn('[authStore] login 응답 shape 비정상:', session);
+        return { ok: false, error: '서버 응답이 올바르지 않습니다' };
+      }
       await saveRefreshToken(session.refreshToken);
       set({
         user: session.user,
@@ -99,6 +116,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         name,
         termsAgreed: true,
       });
+      if (!isValidSession(session)) {
+        if (__DEV__) console.warn('[authStore] signup 응답 shape 비정상:', session);
+        return { ok: false, error: '서버 응답이 올바르지 않습니다' };
+      }
       await saveRefreshToken(session.refreshToken);
       set({
         user: session.user,
@@ -136,6 +157,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (!rt) return null;
     try {
       const session = await auth.refresh(rt);
+      if (!isValidSession(session)) throw new Error('refresh 응답이 비어있습니다');
       await saveRefreshToken(session.refreshToken);
       set({
         user: session.user,
