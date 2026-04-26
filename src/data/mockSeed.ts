@@ -1,14 +1,7 @@
-import type { User, Trip, Field, Visit, Report, TextMemo, Photo, VoiceMemo } from '@/types/entities';
+import type { Trip, Field, Visit, Report, TextMemo, Photo, VoiceMemo } from '@/types/entities';
 
 // 시연용 in-memory 시드. 백엔드 ID 패턴 모방(string).
-
-export const mockUser: User = {
-  id: 'user-1',
-  email: 'demo@mfz.local',
-  name: '데모 작업자',
-  role: 'user',
-  createdAt: '2026-04-01T09:00:00Z',
-};
+// 사용자(User) 는 실 인증 흐름에서 백엔드가 제공하므로 시드 불필요.
 
 // 부산·대구 실좌표 기반 시드 현장 6개
 export const mockFields: Field[] = [

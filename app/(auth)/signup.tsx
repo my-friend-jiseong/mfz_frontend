@@ -24,8 +24,9 @@ export default function Signup() {
   const [name, setName] = useState('');
   const [agreeRequired, setAgreeRequired] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSignup = () => {
+  const handleSignup = async () => {
     setError(null);
     if (!agreeRequired) {
       setError('필수 약관에 동의해주세요');
@@ -35,10 +36,13 @@ export default function Signup() {
       setError('비밀번호가 일치하지 않습니다');
       return;
     }
-    if (signup(email, password, name)) {
+    setSubmitting(true);
+    const result = await signup(email, password, passwordConfirm, name);
+    setSubmitting(false);
+    if (result.ok) {
       router.replace('/(tabs)');
     } else {
-      setError('입력을 확인해주세요 (이메일 형식, 비밀번호 4자 이상, 이름 필수)');
+      setError(result.error);
     }
   };
 
@@ -98,8 +102,12 @@ export default function Signup() {
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          <Pressable onPress={handleSignup} style={({ pressed }) => [styles.btn, pressed && styles.pressed]}>
-            <Text style={styles.btnText}>가입하고 시작하기</Text>
+          <Pressable
+            onPress={handleSignup}
+            disabled={submitting}
+            style={({ pressed }) => [styles.btn, (pressed || submitting) && styles.pressed]}
+          >
+            <Text style={styles.btnText}>{submitting ? '가입 중...' : '가입하고 시작하기'}</Text>
           </Pressable>
 
           <Pressable onPress={() => router.back()} style={styles.link}>
