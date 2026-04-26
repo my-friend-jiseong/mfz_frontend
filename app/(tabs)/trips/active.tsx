@@ -8,6 +8,8 @@ import { useFieldStore } from '@/stores/fieldStore';
 import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
 import { openKakaoRouteTo } from '@/utils/kakaoMap';
+import { trips as tripsApi } from '@/api';
+import * as Linking from 'expo-linking';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
 import type { Destination } from '@/types/entities';
@@ -65,10 +67,50 @@ export default function ActiveTrip() {
     );
   }
 
-  const handleNavigate = () => {
+  const handleNavigate = async () => {
     if (!currentDest) return;
     const field = getField(currentDest.fieldId);
     if (!field) return;
+
+    // 백엔드 deep-links 응답을 시도 — 다중 provider URL 묶음 (응답 shape 미명세)
+    if (activeTripId) {
+      try {
+        const res = (await tripsApi.navigationDeepLinks(activeTripId, {
+          fieldId: field.id,
+          lat: field.latitude,
+          lng: field.longitude,
+        })) as Record<string, unknown>;
+        // 응답이 { kakao: url, google: url, naver: url } 형태로 추정 — 확인되는 것만 모달
+        const entries: Array<{ provider: string; url: string }> = [];
+        for (const [k, v] of Object.entries(res ?? {})) {
+          if (typeof v === 'string' && v.startsWith('http')) {
+            entries.push({ provider: k, url: v });
+          } else if (
+            v &&
+            typeof v === 'object' &&
+            typeof (v as { url?: unknown }).url === 'string'
+          ) {
+            entries.push({ provider: k, url: (v as { url: string }).url });
+          }
+        }
+        if (entries.length === 1) {
+          await Linking.openURL(entries[0].url);
+          return;
+        }
+        if (entries.length > 1) {
+          Alert.alert('길찾기 — 지도 앱 선택', undefined, [
+            { text: '취소', style: 'cancel' },
+            ...entries.map((e) => ({
+              text: e.provider,
+              onPress: () => void Linking.openURL(e.url),
+            })),
+          ]);
+          return;
+        }
+      } catch {
+        // 백엔드 미응답 시 카카오맵 직링크로 폴백
+      }
+    }
     void openKakaoRouteTo(field.address, field.latitude, field.longitude);
   };
 
@@ -189,7 +231,7 @@ export default function ActiveTrip() {
               ) : null}
               <View style={styles.actions}>
                 <Pressable
-                  onPress={handleNavigate}
+                  onPress={() => void handleNavigate()}
                   style={({ pressed }) => [
                     styles.actionBtn,
                     styles.primaryBtn,

@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StyleSheet, Text, View, Pressable } from 'react-native';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
@@ -8,9 +8,25 @@ import { useFieldStore } from '@/stores/fieldStore';
 import { useDestinationStore } from '@/stores/destinationStore';
 import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
+import { trips as tripsApi } from '@/api';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
 import type { Visit } from '@/types/entities';
+
+interface StateHistoryItem {
+  changedAt?: string;
+  fromStatus?: string | null;
+  toStatus?: string;
+  reason?: string | null;
+  actor?: string;
+  [key: string]: unknown;
+}
+
+function fmtDateTime(iso?: string) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
 
 function fmtTime(iso: string) {
   const d = new Date(iso);
@@ -52,6 +68,21 @@ export default function TripDetail() {
     allTextMemos.filter((m) => m.visitId === visitId).length;
   const photoCountByVisit = (visitId: string) =>
     allPhotos.filter((p) => p.visitId === visitId).length;
+
+  // 상태 전환 이력 (감사용) — 응답 shape 백엔드 미명세 → unknown 으로 받아 안전 매핑
+  const [stateHistory, setStateHistory] = useState<StateHistoryItem[]>([]);
+  useEffect(() => {
+    if (!tripId) return;
+    void (async () => {
+      try {
+        const res = await tripsApi.stateHistory({ tripId });
+        const items = Array.isArray(res?.items) ? (res.items as StateHistoryItem[]) : [];
+        setStateHistory(items);
+      } catch {
+        setStateHistory([]);
+      }
+    })();
+  }, [tripId]);
 
   if (!trip) {
     return (
@@ -140,6 +171,21 @@ export default function TripDetail() {
       >
         <Text style={styles.ctaText}>이 외근으로 보고서 작성</Text>
       </Pressable>
+      {stateHistory.length > 0 ? (
+        <View style={styles.historyBox}>
+          <Text style={styles.historyTitle}>상태 전환 이력</Text>
+          {stateHistory.map((h, idx) => (
+            <View key={idx} style={styles.historyRow}>
+              <Text style={styles.historyTime}>{fmtDateTime(h.changedAt)}</Text>
+              <Text style={styles.historyText}>
+                {h.fromStatus ? `${h.fromStatus} → ` : ''}
+                {h.toStatus ?? ''}
+                {h.reason ? ` · ${h.reason}` : ''}
+              </Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
     </View>
   );
 
@@ -240,5 +286,35 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     color: colors.warning,
     fontWeight: '700',
+  },
+  historyBox: {
+    marginTop: spacing.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    gap: spacing.xs,
+  },
+  historyTitle: {
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+    color: colors.textMuted,
+    marginBottom: spacing.xs,
+  },
+  historyRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+  },
+  historyTime: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    minWidth: 70,
+  },
+  historyText: {
+    fontSize: fontSize.xs,
+    color: colors.text,
+    flex: 1,
   },
 });
