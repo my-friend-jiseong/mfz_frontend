@@ -7,23 +7,32 @@
 
 ---
 
-## 0. 우선순위 한 눈에
+## 0. 작업 원칙
 
-| 순위 | 항목 | 카테고리 | 차단도 | 처리 주체 |
+> **두 가지 보류 영역 (이번 사이클에서 진행 안 함)**
+>
+> 1. **관리자(admin) Actor 부재** — 본 서비스는 단일 Actor (필드 워커) 만 존재. 백엔드 스웨거에 admin 전용으로 표시된 endpoint (`GET /api/fields`, `PATCH /api/fields/{id}/assignee`, `GET /api/map/fields`) 와 admin role·권한 분기·관리자 화면(舊 PR-J) 은 **모두 사용하지 않음**.
+> 2. **회원가입/로그인 정교화 보류** — 인증 화면은 의도적으로 간소화된 상태 유지. 따라서 **§1.1 (4xx status·code 분리), §1.5 (`fields` 객체), §2.2 (PATCH /auth/password)** 등 인증 메시지·세션 정교화 요구는 본 사이클에서 다루지 않음. 회원가입/로그인 자체는 동작하므로 시연·검증에 영향 없음.
+
+## 0.1 노션 우선 — Feature 매핑 표
+
+[노션 아이디어 보드 DB](https://www.notion.so/01bbd7a8eb4882e38efc017749e9ef7f) 에 등록된 21개 Feature 중 프런트 미구현/부분 구현 항목 위주로 우선순위 재정렬.
+
+| 순위 | 노션 Feature (Domain) | 프런트 상태 | 작업 | 차단·의존 |
 |---|---|---|---|---|
-| **P0** | [§1.1] 4xx 에러 응답 status code 분기 + `code` 필드 분리 | 백엔드 회귀 | 🔴 분기 UX 정확도 저하 | 백엔드 |
-| **P0** | [§1.2] `creator.name` 이 user.id 와 동일 (이름 미매핑) | 백엔드 버그 | 🔴 작성자 이름이 안 보임 | 백엔드 |
-| **P0** | [§3.1] PR-G 사진·음성 multipart 화면 통합 | 프런트 | 🔴 시연 핵심 — 메모만으론 한계 | 프런트 |
-| **P1** | [§1.3] `userId` vs `assigneeUserId` 정렬 (둘 다 옴) | 백엔드 회귀 | 🟡 어느 쪽 신뢰? | 백엔드 |
-| **P1** | [§2.1] `/api/reports/generate` 응답 shape 명세 | 백엔드 신규 | 🟡 AI 흐름 시작 전 차단 | 백엔드 |
-| **P1** | [§2.2] 비밀번호 변경 `PATCH /auth/password` | 백엔드 신규 | 🟡 Feature 18 기본 기능 | 백엔드 |
-| **P1** | [§3.2] PR-H Reports `generate` AI 흐름 + UI 재설계 | 프런트 | 🟡 시연 차별화 포인트 | 프런트 |
-| **P2** | [§1.4] `/api/fields/address/search` 빈 결과 (Daum/Kakao 키 미설정 추정) | 백엔드 회귀 | 🟢 mock 주소 우회 중 | 백엔드 |
-| **P2** | [§1.5] 4xx body 에 `fields` 객체 (검증 필드별 메시지) | 백엔드 회귀 | 🟢 단일 메시지로도 동작 | 백엔드 |
-| **P2** | [§3.3] PR-I 외근 자동화 (geofence/navigation/오프라인 큐) | 프런트 | 🟢 jy 진행분과 정합 | 프런트 |
-| **P3** | [§3.4] PR-K 정리·튜닝 | 프런트 | 🟢 인지 부담 정리 | 프런트 |
-
-> **중요**: 본 서비스에는 **관리자(admin) Actor 가 존재하지 않습니다**. 작업자(필드 워커) 본인만 자신의 외근·현장·방문·보고서를 다룹니다. 백엔드 스웨거에 admin 전용으로 표시된 endpoint (`GET /api/fields`, `PATCH /api/fields/{id}/assignee`, `GET /api/map/fields`) 는 **프런트에서 사용하지 않습니다**.
+| **P0** | 방문 기록 (외근) — 사진·음성 첨부 | 🟡 텍스트 메모만, 사진/음성 placeholder | **PR-G** 카메라/마이크 통합 | §2.4 응답 shape 받으면 즉시 |
+| **P0** | `creator.name` 이름 미매핑 | (구현됐으나 표시 깨짐) | 백엔드 §1.2 | 백엔드 단독 |
+| **P1** | 외근 자동화·보조 (외근) | 🔴 미구현 (jy 가 일부 진행 중) | **PR-I** geofence/navigation/오프라인/official-notice | jy 코드 dry-read + §2.5 |
+| **P1** | 보고서 자동화·공유 (보고서) — AI 자동 생성 | 🟡 공유 링크만, generate 미통합 | **PR-H** AI 흐름 + UI 재설계 | §2.1 응답 shape 받은 후 |
+| **P1** | `/api/reports/generate` 응답 shape | (백엔드 미명세) | 백엔드 §2.1 | 백엔드 단독 |
+| **P1** | `userId` vs `assigneeUserId` 정렬 | (둘 다 받아 fallback 중) | 백엔드 §1.3 | 백엔드 단독 |
+| **P1** | 사진·음성 multipart 응답 shape | (백엔드 미명세) | 백엔드 §2.4 | PR-G 시작 차단 |
+| **P2** | 현장 탐색·운영 (현장 관리) | 🟡 mine 필터 일부 (status/visitDateScope), search·tag UI 없음 | **신규 PR** 검색·태그·일괄 import | 노션 본문 검토 후 |
+| **P2** | 보고서 공유 링크 만료·재발급·해제 | 🟡 발급만 | 백엔드 §2.3 + 프런트 보강 | 노션 §"PDF 내보내기/공유" 에 명시 필요 |
+| **P2** | `/api/fields/address/search` 빈 결과 | (mock 주소 우회) | 백엔드 §1.4 | mock 우회 중이라 비차단 |
+| **P3** | 지도 기본 조작·시각화 모드·데이터 필터·대시보드 보조 요소 | 🟡 일부 구현 (Kakao WebView, MapFilterBar) | 노션 본문 검증 후 결정 | 본문 미확인 |
+| **P3** | 외근 변경 보고 응답 shape (official-notice) | (백엔드 미명세) | 백엔드 §2.5 | PR-I 합류 |
+| **P3** | 정리·튜닝 (코드 — 노션 무관) | (필요 시) | **PR-K** | 의존 없음 |
 
 ---
 
@@ -31,7 +40,9 @@
 
 > 모두 [docs/backend_requests_phase2.md](backend_requests_phase2.md) 에서 이미 요청한 항목 중 **부분 반영** 또는 **회귀**된 사항. 우선 처리 부탁드립니다.
 
-### 1.1 [P0] 4xx 에러 응답 — status 분기 + `code` 필드 분리
+### 1.1 [보류] 4xx 에러 응답 — status 분기 + `code` 필드 분리
+
+> **보류 사유**: 회원가입/로그인은 의도적 간소화 영역. 현재 클라이언트 매핑 (`src/api/errors.ts`) 으로 동작하므로 백엔드 일관성 정렬은 인증 정교화 사이클에서 다룸.
 
 **문제 (실측, [_swagger_responses.md §7](_swagger_responses.md))**
 
@@ -107,7 +118,9 @@ DB join 누락 또는 select 매핑 오류로 추정. 보고서 상세 화면 + 
 
 **요청**: 운영 환경에 키 설정 + `items[]` shape 명세 (필드명: `roadAddress`, `jibunAddress`, `lat`, `lng`, `buildingName` 등).
 
-### 1.5 [P2] 4xx body 에 `fields` 객체 (필드별 메시지)
+### 1.5 [보류] 4xx body 에 `fields` 객체 (필드별 메시지)
+
+> **보류 사유**: §1.1 과 동일. 회원가입/로그인 정교화 사이클에서 다룸.
 
 **현재**: 단일 `error` 만.
 
@@ -167,38 +180,7 @@ extraNotes: "추가 메모"          # 선택
 - 처리 시간 (동기 응답인지, 작업 큐 + polling 인지)
 - 실패 시 응답 (모델 호출 실패, 토큰 한도, 부적절 컨텐츠 검출 등)
 
-### 2.2 [P1] `PATCH /auth/password` — 비밀번호 변경
-
-**용도**: 로그인된 사용자가 비밀번호 변경 (Feature 18).
-
-**요청 body**
-```json
-{
-  "currentPassword": "...",
-  "newPassword": "...",
-  "newPasswordConfirm": "..."
-}
-```
-
-**검증**
-- `currentPassword` 일치 확인 → 불일치 401 `INVALID_CREDENTIALS`
-- `newPassword` KISA 정책 (10자 이상 + 영대/영소/숫자/특수문자 3종) → 400 `PASSWORD_POLICY_VIOLATION`
-- `newPassword === currentPassword` → 400 `PASSWORD_REUSE`
-- `newPassword !== newPasswordConfirm` → 400 `PASSWORD_MISMATCH`
-
-**처리**
-- 새 해시 저장 + **모든 기존 refresh token 무효화** (재로그인 강제)
-- 변경 이력 감사 로그 (1년 보관)
-
-**응답 200**
-```json
-{
-  "message": "비밀번호가 변경되었습니다. 다시 로그인해주세요.",
-  "revokedSessionCount": 3
-}
-```
-
-### 2.3 [P2] 보고서 공유 링크 — 만료·재발급·해제
+### 2.2 [P2] 보고서 공유 링크 — 만료·재발급·해제
 
 **현재**: `POST /api/reports/{id}/share` — 토큰 발급. 만료시간·재발급·취소 미명세.
 
@@ -207,13 +189,13 @@ extraNotes: "추가 메모"          # 선택
 - `POST /api/reports/{id}/share` 재호출 시: 이전 토큰 무효 + 새 토큰? 아니면 동일 토큰 유지?
 - `DELETE /api/reports/{id}/share` — 공유 해제 (토큰 무효화)
 
-### 2.4 [P3] 사진·음성 multipart 응답 shape 명세
+### 2.3 [P1] 사진·음성 multipart 응답 shape 명세
 
 **현재**: 스웨거에 입력 multipart 명시, 응답 description 만.
 
 **요청**: 응답에 `attachment` 객체 shape 명시 — `id`, `fieldId`, `visitId`, `type`, `fileUrl`, `thumbnailUrl?`, `capturedAt?`, `durationSec?`, `mimeType`, `byteSize` 등. PR-G 시작 전에 확정 필요.
 
-### 2.5 [P3] 외근 변경 시 보고 — `POST /api/trips/{tripId}/official-notice` 응답 shape
+### 2.4 [P3] 외근 변경 시 보고 — `POST /api/trips/{tripId}/official-notice` 응답 shape
 
 공무원 복무규정상 외근 중 일정·예정지·종료시각이 사전 계획과 달라지면 *"지체없이 소속기관장에게 보고"* 의무가 있어, 변경이 발생했음을 시스템이 표시·체크하는 기능. (`/api/trips/active` 응답의 `reportNoticeRequired`/`reportNoticeMessage` 와 짝.) 작업자 본인의 책무를 보조 — admin 기능 아님.
 
@@ -251,13 +233,13 @@ npx expo install expo-image-picker expo-av expo-file-system
 **검증**
 - iOS/Android 권한 거부 → 안내 (`Linking.openSettings()`)
 - 큰 파일 업로드 시 진행률 (RN fetch 는 progress 미지원 → axios + onUploadProgress 또는 XMLHttpRequest 우회 — 또는 단순 spinner 로 대체)
-- 응답 attachment shape 검증 (§2.4 필요)
+- 응답 attachment shape 검증 (§2.3 필요)
 
 ### 3.2 [P1] PR-H — Reports `generate` AI 흐름
 
 **목표**: "외근 → AI 자동 보고서 생성" UX. 수동 작성과 별개 진입점.
 
-**의존성**: §2.1 응답 shape 확정 후·§2.4 사진 응답 shape 확정 후
+**의존성**: §2.1 응답 shape 확정 후·§2.3 사진 응답 shape 확정 후
 
 **UI 흐름**
 1. 외근 상세 (`/(tabs)/trips/[id]`) 의 `reportEntryPoint.createUrl` 활용 — "AI 보고서 생성" 버튼
@@ -287,7 +269,7 @@ npx expo install expo-image-picker expo-av expo-file-system
 - `POST /api/trips/{tripId}/navigation/deep-links` — 외부 지도 앱 길안내
 - `POST /api/trips/{tripId}/navigation/optimize` — 다중 현장 동선 최적화
 - `POST /api/trips/offline/queue` / `flush` — 오프라인 큐
-- `POST /api/trips/{tripId}/official-notice` — 외근 변경 시 소속기관장 보고 필요 표시 (§2.5)
+- `POST /api/trips/{tripId}/official-notice` — 외근 변경 시 소속기관장 보고 필요 표시 (§2.4)
 - `GET /api/trips/state-history` — 상태 전환 이력 (감사용)
 - `GET /api/map/current-location-config` — 현재 위치 UX 설정
 
@@ -339,18 +321,22 @@ npx expo install expo-image-picker expo-av expo-file-system
 
 ## 5. 일정·진행 순서 제안
 
-### 5.1 백엔드 차단 항목
-- §1.1 (status 분기 + code) — P0, 매핑 코드 단순화 위해
+### 5.1 백엔드 차단 항목 (이번 사이클 적용 대상)
 - §1.2 (creator.name) — P0, 보고서 화면 사용자 신뢰도 직접 영향
+- §1.3 (userId/assigneeUserId 정렬) — P1, 응답 매핑 단순화
 - §2.1 (generate 응답 shape) — PR-H **시작 자체를 차단**
+- §2.3 (사진/음성 응답 shape) — PR-G **응답 매핑 차단**
+
+§1.1·§1.5·(舊)§2.2 (인증 정교화) 는 회원가입/로그인 간소화 정책에 따라 보류.
 
 ### 5.2 프런트 진행 권장 순서
 
-1. **PR-G** (사진·음성 통합) — 백엔드 §2.4 응답 shape 명세 받으면 바로
-2. (백엔드 §1.1·§1.2·§2.1 처리 대기)
-3. **PR-H** (AI 보고서 생성) — §2.1 받은 후
-4. **PR-I** (외근 자동화) — jy 코드 정합 + §2.5 받은 후
-5. **PR-K** (정리) — 위 모두 끝난 후
+1. **PR-G** (사진·음성 통합) — 노션 "방문 기록" 의 Input/Output 표 그대로. 백엔드 §2.3 받으면 즉시 시작
+2. **PR-I** (외근 자동화) — 노션 "외근 자동화·보조" + jy 코드 dry-read + §2.4 official-notice
+3. **PR-H** (AI 보고서 생성) — 노션 "보고서 자동화·공유" + §2.1 응답 shape
+4. **신규 PR** 현장 탐색·운영 — 노션 본문 검토 후 검색·태그·일괄 import
+5. **신규 PR** 지도 5개 페이지 (기본 조작·시각화 모드·데이터 필터·대시보드 보조 요소) — 노션 본문 검토 후
+6. **PR-K** (정리) — 마지막
 
 ### 5.3 분기점
 
