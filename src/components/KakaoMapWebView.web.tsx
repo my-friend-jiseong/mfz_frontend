@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import type { Field } from '@/types/entities';
+import type { Field, FieldStatus } from '@/types/entities';
 import type { MapDisplayMode } from '@/assets/kakaoMapHtml';
 import {
   loadSigunguGeoJson,
@@ -18,6 +18,34 @@ export interface KakaoMapMarker {
   color: string;
   shape?: 'triangle' | 'circle' | 'check';
   badge?: string;
+}
+
+// KWCAG 1.4.1 — 색 + 형상 + 라벨 3중 인코딩.
+const STATUS_TO_SHAPE: Record<FieldStatus, 'triangle' | 'circle' | 'check'> = {
+  pending: 'triangle',
+  in_progress: 'circle',
+  done: 'check',
+};
+const STATUS_TO_BADGE: Record<FieldStatus, string> = {
+  pending: '대기',
+  in_progress: '진행',
+  done: '완료',
+};
+
+function buildMarkerHtml(m: KakaoMapMarker): string {
+  const color = m.color || '#2563eb';
+  const shape = m.shape || 'circle';
+  const badge = m.badge || '';
+  let svg: string;
+  if (shape === 'triangle') {
+    svg = `<svg width="36" height="36" viewBox="0 0 36 36"><polygon points="18,4 32,30 4,30" fill="${color}" stroke="#fff" stroke-width="2"/></svg>`;
+  } else if (shape === 'check') {
+    svg = `<svg width="36" height="36" viewBox="0 0 36 36"><circle cx="18" cy="18" r="14" fill="${color}" stroke="#fff" stroke-width="2"/><polyline points="11,18 16,23 25,13" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  } else {
+    svg = `<svg width="36" height="36" viewBox="0 0 36 36"><circle cx="18" cy="18" r="14" fill="${color}" stroke="#fff" stroke-width="2"/></svg>`;
+  }
+  const labelHtml = `<div style="background:#fff;padding:2px 6px;border-radius:8px;font-size:11px;font-weight:600;color:#0f172a;border:1px solid ${color};margin-top:2px;white-space:nowrap;box-shadow:0 1px 2px rgba(0,0,0,0.15);">${badge ? `<span style="color:${color};">${badge}</span> · ` : ''}${m.label || ''}</div>`;
+  return `<div style="display:flex;flex-direction:column;align-items:center;cursor:pointer;min-width:44px;min-height:44px;justify-content:center;">${svg}${labelHtml}</div>`;
 }
 
 interface Props {
@@ -228,17 +256,28 @@ export function KakaoMapWebView({
         overlaysRef.current.push(circle);
       });
     } else {
-      // markers 또는 choropleth(데이터 없어서 마커 폴백)
+      // markers 또는 choropleth(데이터 없어서 마커 폴백) — KWCAG 1.4.1 색+형상+라벨
       markers.forEach((m) => {
-        const marker = new k.maps.Marker({
+        const content = document.createElement('div');
+        content.innerHTML = buildMarkerHtml(m);
+        const child = content.firstChild as HTMLElement | null;
+        if (child) {
+          child.addEventListener('click', () => onMarkerPress?.(m.id));
+        }
+        const overlay = new (k.maps as unknown as {
+          CustomOverlay: new (opts: {
+            position: unknown;
+            content: Element;
+            map: unknown;
+            yAnchor?: number;
+          }) => { setMap: (m: unknown) => void };
+        }).CustomOverlay({
           position: new k.maps.LatLng(m.lat, m.lng),
+          content,
           map: mapRef.current,
-          title: m.label,
+          yAnchor: 1,
         });
-        k.maps.event.addListener(marker, 'click', () => {
-          onMarkerPress?.(m.id);
-        });
-        overlaysRef.current.push(marker);
+        overlaysRef.current.push(overlay);
       });
     }
   }, [markers, ready, onMarkerPress, displayMode]);
@@ -297,6 +336,8 @@ export function fieldsToMarkers(fields: Field[]): KakaoMapMarker[] {
     lng: f.longitude,
     label: f.address.split(' ').slice(-1)[0] || '현장',
     color: colors.fieldStatus[f.status],
+    shape: STATUS_TO_SHAPE[f.status],
+    badge: STATUS_TO_BADGE[f.status],
   }));
 }
 

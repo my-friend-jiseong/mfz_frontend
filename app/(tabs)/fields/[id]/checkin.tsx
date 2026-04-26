@@ -54,14 +54,23 @@ export default function FieldCheckin() {
   const [recordSec, setRecordSec] = useState(0);
   const recorderRef = useRef<VoiceRecorder | null>(null);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // checkIn 중복 호출 가드 — StrictMode dev 더블 마운트 / 빠른 재 mount 시 visit 두 번 생성 방지
+  const checkInGuardRef = useRef(false);
 
   useEffect(() => {
-    if (activeTripId !== null && fieldId && visitId === null) {
+    if (
+      activeTripId !== null &&
+      fieldId &&
+      visitId === null &&
+      !checkInGuardRef.current
+    ) {
+      checkInGuardRef.current = true;
       void (async () => {
         const r = await checkIn(activeTripId, fieldId);
         if (r.ok) {
           setVisitId(r.visit.id);
         } else {
+          checkInGuardRef.current = false;
           Alert.alert('체크인 실패', r.error);
         }
       })();
