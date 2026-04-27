@@ -3,6 +3,16 @@
 > **작성일**: 2026-04-27
 > **검증 환경**: `http://59.21.223.137:28080`, 신규 가입 계정
 > **방법**: 풀 시나리오 18단계 curl smoke test 중 보고서 도메인에서 발견.
+>
+> **🟢 복구 확인 (2026-04-27 후속)**: 백엔드 [docs/backend_phase3_regressions_fix_report.md](backend_phase3_regressions_fix_report.md) 적용 + CI/CD 배포 완료 후 재검증 결과 §1·§2 모두 정상 동작.
+> - POST /api/reports → `data.id="11"` (BigInt → string), authorUserId·status·generatedByAi 정상
+> - GET /api/reports → `items[].reportId`, pagination 정상
+> - GET detail → `creator.name` 본인 이름 (UUID 노출 버그도 해소)
+> - PATCH / share / DELETE share / DELETE report 모두 정상
+>
+> ⚠️ **작은 잔여 항목**: `POST /api/reports/{id}/share` 응답에 `expiresAt` / `shareExpiresAt` 가 들어오지 않음 (백엔드 보고서 §5 명세상으론 포함되어야 함). 화면에 만료시각 표시가 누락되는 UX 격차 — 백엔드 보강 권장.
+>
+> 프런트 폴백(`reports.list` 빈 결과 / `id ?? reportId` 흡수) 은 정상 응답 시 분기로 빠지지 않으므로 그대로 유지해도 무해. 다음 정리 사이클에서 제거 가능.
 
 ## 1. `POST /api/reports` 응답 `data` 가 비어있음
 
