@@ -8,6 +8,7 @@ import { useTripStore } from '@/stores/tripStore';
 import { useDestinationStore } from '@/stores/destinationStore';
 import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
+import { nearestNeighborOrder } from '@/utils/routeOptimize';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
 
@@ -15,6 +16,11 @@ interface OrderedField {
   id: string;
   address: string;
   addressDetail: string;
+  lat: number;
+  lng: number;
+  // 추천 적용 시 채워짐 — 추천 미사용 시 undefined
+  distanceFromPrevKm?: number;
+  etaMinutes?: number;
 }
 
 export default function NewTripOrder() {
@@ -37,11 +43,40 @@ export default function NewTripOrder() {
         id: f.id,
         address: f.address,
         addressDetail: f.addressDetail,
+        lat: f.latitude,
+        lng: f.longitude,
       }));
   }, [params.fieldIds, getField]);
 
   const [list, setList] = useState<OrderedField[]>(initialList);
   const [submitting, setSubmitting] = useState(false);
+  const [optimized, setOptimized] = useState(false);
+
+  // 클라이언트 측 nearest neighbor 추천. 출발지: 첫 번째 field 좌표 (현재 위치 권한
+  // 없이도 동작하도록). expo-location 통합은 후속 PR 에서 보강 가능.
+  const handleOptimize = () => {
+    if (list.length < 2) {
+      Alert.alert('최적 순서 추천', '최소 2개 이상의 현장이 필요합니다.');
+      return;
+    }
+    const valid = list.filter((f) => f.lat !== 0 || f.lng !== 0);
+    if (valid.length < list.length) {
+      Alert.alert(
+        '좌표 누락',
+        '일부 현장에 좌표가 없어 추천 결과가 부정확할 수 있습니다.',
+      );
+    }
+    const start = { lat: list[0].lat, lng: list[0].lng };
+    const ordered = nearestNeighborOrder(start, list);
+    setList(ordered);
+    setOptimized(true);
+    const total = ordered.reduce((a, x) => a + (x.distanceFromPrevKm ?? 0), 0);
+    const eta = ordered.reduce((a, x) => a + (x.etaMinutes ?? 0), 0);
+    Alert.alert(
+      '✨ 최적 순서 적용됨',
+      `총 ${total.toFixed(1)}km · 예상 ${eta}분\n\n수동으로 더 조정하셔도 됩니다.`,
+    );
+  };
 
   const moveUp = (idx: number) => {
     if (idx <= 0) return;
@@ -50,6 +85,7 @@ export default function NewTripOrder() {
       [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
       return next;
     });
+    setOptimized(false); // 수동 조정 시 추천 라벨 해제
   };
 
   const moveDown = (idx: number) => {
@@ -59,6 +95,7 @@ export default function NewTripOrder() {
       [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
       return next;
     });
+    setOptimized(false);
   };
 
   const handleConfirm = async () => {
@@ -104,6 +141,11 @@ export default function NewTripOrder() {
         {item.addressDetail ? (
           <Text style={styles.detail}>{item.addressDetail}</Text>
         ) : null}
+        {optimized && item.distanceFromPrevKm !== undefined ? (
+          <Text style={styles.eta}>
+            {index === 0 ? '출발지 인근' : `+${item.distanceFromPrevKm}km · ${item.etaMinutes}분`}
+          </Text>
+        ) : null}
       </View>
       <View style={styles.controls}>
         <Pressable
@@ -137,6 +179,23 @@ export default function NewTripOrder() {
       <View style={styles.head}>
         <Text style={styles.headTitle}>위에서부터 순서대로 방문합니다</Text>
         <Text style={styles.headMeta}>▲▼ 버튼으로 순서를 조정하세요</Text>
+        <Pressable
+          onPress={handleOptimize}
+          style={({ pressed }) => [
+            styles.optimizeBtn,
+            optimized && styles.optimizeBtnActive,
+            pressed && styles.pressed,
+          ]}
+        >
+          <Text
+            style={[
+              styles.optimizeText,
+              optimized && styles.optimizeTextActive,
+            ]}
+          >
+            {optimized ? '✓ 최적 순서 적용됨 · 다시 추천' : '✨ 최적 순서 추천'}
+          </Text>
+        </Pressable>
       </View>
       <BottomSheetFlatList
         data={list}
@@ -193,6 +252,27 @@ const styles = StyleSheet.create({
   rowText: { flex: 1 },
   address: { fontSize: fontSize.base, color: colors.text, fontWeight: '600' },
   detail: { fontSize: fontSize.sm, color: colors.textMuted, marginTop: 2 },
+  eta: { fontSize: fontSize.xs, color: colors.primary, marginTop: 4, fontWeight: '600' },
+  optimizeBtn: {
+    marginTop: spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.primary + '55',
+    backgroundColor: colors.primary + '10',
+    alignSelf: 'flex-start',
+  },
+  optimizeBtnActive: {
+    backgroundColor: colors.success + '15',
+    borderColor: colors.success,
+  },
+  optimizeText: {
+    fontSize: fontSize.sm,
+    color: colors.primary,
+    fontWeight: '700',
+  },
+  optimizeTextActive: { color: colors.success },
   controls: { gap: 4 },
   ctrlBtn: {
     width: 32,
