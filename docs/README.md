@@ -10,9 +10,8 @@
 ### 백엔드 협업
 | 파일 | 상태 | 내용 |
 |---|---|---|
-| [backend_requests_phase4.md](backend_requests_phase4.md) | 🟡 §3 진행 중 (백엔드) | §1·§2 ✅ 복구 / §3 반복 회귀 패턴 — 백엔드 후속 작업 |
-| [backend_phase4_fix_report.md](backend_phase4_fix_report.md) | 🟢 방금 수신 (2026-04-27) | 백엔드의 §1·§2 복구 보고 + 프런트 폴백 제거 가이드 |
-| [backend_requests_phase5.md](backend_requests_phase5.md) | 📦 백로그 | Daum → Kakao Local 단독 전환 (Phase 4 완료 후 재논의) |
+| [backend_requests_phase4.md](backend_requests_phase4.md) | 🟡 §3 진행 중 (백엔드) | §1·§2 ✅ 복구 + 프런트 폴백 제거 완료 / §3 반복 회귀 패턴 — 백엔드 후속 작업 |
+| [backend_requests_phase5.md](backend_requests_phase5.md) | 📦 백로그 | Daum → Kakao Local 단독 전환 (Phase 4 §3 완료 후 재논의) |
 
 ### 프런트 자체 참조
 | 파일 | 상태 | 내용 |
@@ -39,6 +38,7 @@
 | [archive/backend_phase3_regressions.md](archive/backend_phase3_regressions.md) | Phase 3 회귀 검증 | 18단계 smoke test 로 발견한 회귀 보고. Phase 3 fix → Phase 4 §1·§2 로 이어짐 |
 | [archive/backend_phase3_regressions_fix_report.md](archive/backend_phase3_regressions_fix_report.md) | Phase 3 1차 복구 | 백엔드의 await/async 마이그레이션 복구 보고. 후속 회귀는 Phase 4 가 처리 |
 | [archive/phase3.md](archive/phase3.md) | 프런트 Phase 3 작업 계획 | PR-G/H/I 등 완료. 작업 자체는 git history 가 진실원 |
+| [archive/backend_phase4_fix_report.md](archive/backend_phase4_fix_report.md) | Phase 4 §1·§2 복구 | tripId FK / share expiresAt 복구 보고. 프런트 폴백 제거 완료 |
 
 archive 폴더의 문서는 **읽기 전용**. 새 결정이나 변경은 active 폴더에만 추가하고 archive 는 손대지 않습니다.
 
@@ -48,8 +48,7 @@ archive 폴더의 문서는 **읽기 전용**. 새 결정이나 변경은 active
 
 | 트리거 | 처리 |
 |---|---|
-| 백엔드 Phase 4 §3 (smoke test 자동화) 보고 수신 | `backend_phase4_fix_report.md` 와 함께 archive 로 이동, 새 보고서 active |
-| 프런트 폴백 제거 PR 머지 | `_swagger_responses.md` 에 폴백 제거 시점 기록, fix report 도 archive 후보 |
+| 백엔드 Phase 4 §3 (smoke test 자동화) 보고 수신 | 새 보고서를 active 로, 처리 완료 후 archive |
 | Phase 5 (Daum → Kakao Local) 본격 진행 | `backend_requests_phase5.md` 를 활성 사이클로 승격, fix report 수신 시 같은 패턴으로 archive |
 
 > 다음 사이클이 끝날 때마다 이 README 의 표를 한 줄씩만 옮기면 됨.

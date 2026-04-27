@@ -33,11 +33,9 @@ export interface ReportDetailResponse {
   creator: { id: string; name: string };
 }
 
-// POST 응답 ({ success, data: { id, ... } } wrapper). 일부 백엔드 변종이 reportId 로
-// 보낼 가능성이 있어 양쪽 모두 옵셔널.
+// POST 응답 ({ success, data: { id, ... } } wrapper)
 export interface ReportCreateData {
-  id?: string;
-  reportId?: string;
+  id: string;
   tripId: string | null;
   title: string;
   content: string;
@@ -49,14 +47,10 @@ export interface ReportCreateData {
   shareEnabled: boolean;
   shareToken: string | null;
   sharedAt: string | null;
+  shareExpiresAt: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
-}
-
-/** id 와 reportId 중 정의된 쪽을 반환 (백엔드 응답 변종 흡수). */
-export function reportDataId(d: ReportCreateData): string {
-  return d.id ?? d.reportId ?? '';
 }
 
 interface CreateWrapped {
@@ -136,24 +130,9 @@ interface GenerateWrapped {
   data: ReportGenerateData;
 }
 
-// 백엔드가 200 status 로 { success:false, error } 보내는 회귀를 흡수.
-// 진짜 list 본문이 안 오면 빈 결과로 폴백해 화면 깨짐 방지.
-const EMPTY_LIST: ReportListResponse = {
-  items: [],
-  pagination: { page: 1, limit: 50, total: 0, hasNext: false },
-  emptyMessage: null,
-};
-
 export const reports = {
-  list: async (params?: ListReportsParams): Promise<ReportListResponse> => {
-    const res = (await request<ReportListResponse | { success: false; error?: string }>(
-      '/api/reports',
-      { query: params },
-    )) as ReportListResponse & { success?: boolean };
-    if (res && res.success === false) return EMPTY_LIST;
-    if (!res || !Array.isArray((res as ReportListResponse).items)) return EMPTY_LIST;
-    return res as ReportListResponse;
-  },
+  list: (params?: ListReportsParams) =>
+    request<ReportListResponse>('/api/reports', { query: params }),
 
   detail: (reportId: string) =>
     request<ReportDetailResponse>(`/api/reports/${reportId}`),

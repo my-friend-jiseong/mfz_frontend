@@ -123,9 +123,8 @@ export const useReportStore = create<ReportState>((set, get) => ({
     set({ busy: true });
     try {
       const data = await reportsApi.create(body);
-      const id = data.id ?? data.reportId ?? '';
       const r: Report = {
-        id,
+        id: data.id,
         creatorId: data.authorUserId,
         tripId: data.tripId ?? '',
         title: data.title,
