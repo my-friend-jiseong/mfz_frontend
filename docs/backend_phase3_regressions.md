@@ -14,6 +14,54 @@
 >
 > 프런트 폴백(`reports.list` 빈 결과 / `id ?? reportId` 흡수) 은 정상 응답 시 분기로 빠지지 않으므로 그대로 유지해도 무해. 다음 정리 사이클에서 제거 가능.
 
+---
+
+## 🔴 §3 신규 회귀 — `POST /api/reports` 가 `tripId` 동반 시 500 FK violation
+
+### 재현
+```http
+POST /api/reports
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "title": "...",
+  "content": "...",
+  "summary": "...",
+  "tripId": "trip-1777253303533"
+}
+```
+
+### 응답
+```json
+{
+  "success": false,
+  "error": "\nInvalid `prisma.report.create()` invocation:\n\n\nForeign key constraint violated: `reports_trip_id_fkey (index)`"
+}
+```
+HTTP **500**.
+
+### 원인 추정
+- Reports 테이블이 Phase 3 에서 Prisma DB 로 마이그레이션됨 (`reports.trip_id → trips.id` FK 제약 포함)
+- 그러나 **Trips 는 여전히 인메모리 Map 에 저장** (Phase 2 시점의 데이터 모델)
+- Trip ID `"trip-{epoch}"` 가 DB 의 `trips` 테이블에는 존재하지 않음 → FK 제약 위반
+
+### 영향
+- **외근에 연결된 보고서 작성 불가** — UX 핵심 흐름 (외근 → AI 보고서 생성, 외근 → 수동 보고서) 차단
+- `POST /api/reports/generate` 도 같은 FK 가질 가능성 → AI 생성 시 외근 연결도 깨질 수 있음 (별도 검증 필요)
+- 외근 상세 화면의 "이 외근으로 보고서 작성" / "✨ AI 보고서 생성" 버튼이 모두 영향
+
+### 권장 조치 (백엔드)
+둘 중 하나:
+1. **trips 도 DB 마이그레이션** (정합성 정답) — Phase 3 의 보고서 마이그레이션과 같은 패턴. 단 jy 의 destination·navigation 등도 영향 검토 필요
+2. 또는 `reports.trip_id` 를 FK 가 아닌 **plain string nullable 컬럼**으로 변경 (인메모리 trip ID 를 그대로 보관) — 빠른 우회
+
+### 프런트 임시 우회 (필요 시)
+- 사용자가 trip 선택 후 보고서 작성 → 백엔드가 500 → 프런트가 자동으로 tripId 없이 재시도? 너무 마법적. 차라리 명확한 안내가 나음.
+- 또는 보고서 작성 화면에서 외근 선택 옵션을 일시 비활성 + 안내 메시지
+
+→ 우선 백엔드 복구를 기다립니다. 차단 항목.
+
 ## 1. `POST /api/reports` 응답 `data` 가 비어있음
 
 ### 재현
