@@ -1,10 +1,11 @@
-# 백엔드 추가 보강 요청 — Phase 5 (백로그)
+# 백엔드 추가 보강 요청 — Phase 5
 
 > **수신**: mfz_backend 팀
 > **발신**: mfz_frontend 팀 (njs)
 > **작성일**: 2026-04-27
-> **상태**: 📦 **백로그 — Phase 4 완료 후 재논의**
-> **선행 의존**: [`docs/backend_requests_phase4.md`](backend_requests_phase4.md) 의 P0 항목들이 먼저 처리되어야 합니다. Phase 5 는 그 이후 사이클에서 다룰 항목.
+> **승격일**: 2026-04-27 (백로그 → 활성)
+> **상태**: 🟡 **활성 사이클 — 백엔드 §1 응답 대기**
+> **선행 의존**: [`docs/archive/backend_phase4_fix_report.md`](archive/backend_phase4_fix_report.md) 의 §1·§2 P0 항목 ✅ 복구 + 프런트 검증 완료. Phase 4 §3 (smoke test 자동화) 는 백엔드 후속 작업과 병렬 진행 가능.
 
 ---
 
@@ -98,9 +99,9 @@
 
 ## 2. 진행 시점
 
-- **언제**: [Phase 4](backend_requests_phase4.md) 의 P0 항목 (§1 tripId FK violation, §3 반복 패턴 체계 보강) 처리 완료 후
-- **누가 먼저 의제 제기**: 프런트 — 다음 시연 후 Phase 4 검증 통과 시점에 본 문서 다시 꺼내서 백엔드와 논의
-- **시연 영향**: 없음. Phase 4 가 차단 항목이라 그쪽 우선
+- **언제**: ✅ Phase 4 §1·§2 (tripId FK / share expiresAt) P0 복구 검증 완료 — 본 문서 활성 승격
+- **현 단계**: 백엔드 §1 (Daum 분기 제거 + Kakao Local 단독) 적용 → 프런트 어댑터 호환성 검증 사이클
+- **시연 영향**: 없음 — 응답 shape 동일 유지 시 프런트 변경 0
 
 ---
 
@@ -109,11 +110,13 @@
 | 날짜 | 내용 |
 |---|---|
 | 2026-04-27 | Phase 5 백로그 초안 — Daum → Kakao Local 단독 전환 |
+| 2026-04-27 | Phase 4 §1·§2 복구 검증 완료 트리거로 **백로그 → 활성 사이클 승격**. 백엔드 §1 적용 대기 |
 
 ---
 
 ## 4. 참조
 
-- [docs/backend_requests_phase4.md](backend_requests_phase4.md) — 선행 의존 항목 (P0)
+- [docs/backend_requests_phase4.md](backend_requests_phase4.md) — 선행 의존 항목 (P0 ✅ 복구, §3 백엔드 후속)
+- [docs/archive/backend_phase4_fix_report.md](archive/backend_phase4_fix_report.md) — Phase 4 §1·§2 복구 보고 (트리거 근거)
 - [docs/_swagger_responses.md §4.4](_swagger_responses.md) — 현재 `address/search` 응답 shape
 - Kakao Local API 문서: https://developers.kakao.com/docs/latest/ko/local/dev-guide

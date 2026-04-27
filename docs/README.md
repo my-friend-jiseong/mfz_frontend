@@ -1,6 +1,6 @@
 # 내친지(mfz) 프런트엔드 문서 인덱스
 
-> **갱신일**: 2026-04-27 (Phase 4 백엔드 §1·§2 복구 직후)
+> **갱신일**: 2026-04-27 (Phase 5 활성 승격 — Phase 4 §1·§2 복구 검증 완료 직후)
 > **목적**: 활성 문서 / 백로그 / archive 분리. 새 사람도 진입하면 이 README 만 읽고 어떤 문서가 살아있는지 파악할 수 있게.
 
 ---
@@ -11,7 +11,7 @@
 | 파일 | 상태 | 내용 |
 |---|---|---|
 | [backend_requests_phase4.md](backend_requests_phase4.md) | 🟡 §3 진행 중 (백엔드) | §1·§2 ✅ 복구 + 프런트 폴백 제거 완료 / §3 반복 회귀 패턴 — 백엔드 후속 작업 |
-| [backend_requests_phase5.md](backend_requests_phase5.md) | 📦 백로그 | Daum → Kakao Local 단독 전환 (Phase 4 §3 완료 후 재논의) |
+| [backend_requests_phase5.md](backend_requests_phase5.md) | 🟡 활성 사이클 | Daum → Kakao Local 단독 전환 — Phase 4 P0 완료 트리거로 백로그 → 활성 승격 (백엔드 §1 응답 대기) |
 
 ### 프런트 자체 참조
 | 파일 | 상태 | 내용 |
@@ -49,6 +49,6 @@ archive 폴더의 문서는 **읽기 전용**. 새 결정이나 변경은 active
 | 트리거 | 처리 |
 |---|---|
 | 백엔드 Phase 4 §3 (smoke test 자동화) 보고 수신 | 새 보고서를 active 로, 처리 완료 후 archive |
-| Phase 5 (Daum → Kakao Local) 본격 진행 | `backend_requests_phase5.md` 를 활성 사이클로 승격, fix report 수신 시 같은 패턴으로 archive |
+| 백엔드 Phase 5 §1 fix report 수신 | 어댑터 호환성 검증 → fix report 를 archive 로, `backend_requests_phase5.md` 도 함께 archive |
 
 > 다음 사이클이 끝날 때마다 이 README 의 표를 한 줄씩만 옮기면 됨.
