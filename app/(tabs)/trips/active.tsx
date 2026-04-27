@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import { useRouter } from 'expo-router';
@@ -8,7 +8,8 @@ import { useFieldStore } from '@/stores/fieldStore';
 import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
 import { openKakaoRouteTo } from '@/utils/kakaoMap';
-import { trips as tripsApi } from '@/api';
+import { trips as tripsApi, localizeError } from '@/api';
+import { nearestNeighborOrder } from '@/utils/routeOptimize';
 import * as Linking from 'expo-linking';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
@@ -38,8 +39,11 @@ export default function ActiveTrip() {
   const markSkipped = useDestinationStore((s) => s.markSkipped);
   const isAllResolved = useDestinationStore((s) => s.isAllResolved);
   const removeByTrip = useDestinationStore((s) => s.removeByTrip);
+  const reorderDestinations = useDestinationStore((s) => s.reorder);
 
   const getField = useFieldStore((s) => s.getById);
+
+  const [optimizing, setOptimizing] = useState(false);
 
   const destinations = useMemo<Destination[]>(() => {
     if (activeTripId === null) return [];
@@ -129,6 +133,110 @@ export default function ActiveTrip() {
         onPress: () => markSkipped(currentDest.id),
       },
     ]);
+  };
+
+  // 남은 (pending) 목적지가 2개 이상일 때만 재최적화 가능
+  const pendingDests = useMemo(
+    () => destinations.filter((d) => d.status === 'pending'),
+    [destinations],
+  );
+  const lastArrivedDest = useMemo(() => {
+    const arrived = destinations.filter((d) => d.status === 'arrived');
+    return arrived.length > 0 ? arrived[arrived.length - 1] : null;
+  }, [destinations]);
+
+  const applyOptimizedOrder = (
+    pendingOrderedIds: string[],
+    summary: { algorithm: string; totalDistanceKm: number; totalEtaMinutes: number },
+  ) => {
+    if (!activeTripId) return;
+    // 이미 처리된(arrived/skipped) 목적지는 현재 순서를 보존, 그 뒤에 재최적화된 pending 을 이어붙임
+    const resolvedIds = destinations
+      .filter((d) => d.status !== 'pending')
+      .map((d) => d.id);
+    reorderDestinations(activeTripId, [...resolvedIds, ...pendingOrderedIds]);
+    Alert.alert(
+      '경로 재최적화 완료',
+      `알고리즘: ${summary.algorithm}\n총 거리: ${summary.totalDistanceKm.toFixed(1)} km\n예상 ETA: ${summary.totalEtaMinutes}분`,
+    );
+  };
+
+  const handleReoptimize = async () => {
+    if (!activeTripId || pendingDests.length < 2) return;
+
+    const pendingFields = pendingDests
+      .map((d) => {
+        const f = getField(d.fieldId);
+        if (!f) return null;
+        return {
+          destId: d.id,
+          fieldId: f.id,
+          name: f.address,
+          lat: f.latitude,
+          lng: f.longitude,
+        };
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null);
+
+    if (pendingFields.length < 2) {
+      Alert.alert('재최적화 불가', '좌표가 있는 남은 목적지가 2개 이상 필요합니다.');
+      return;
+    }
+
+    // 출발점: 마지막으로 도착한 목적지 좌표, 없으면 첫 pending 의 좌표 (PR-α 와 동일 전략)
+    const startSource = lastArrivedDest
+      ? getField(lastArrivedDest.fieldId)
+      : null;
+    const start = startSource
+      ? { lat: startSource.latitude, lng: startSource.longitude }
+      : { lat: pendingFields[0].lat, lng: pendingFields[0].lng };
+
+    setOptimizing(true);
+    try {
+      const res = await tripsApi.optimizeNavigation(activeTripId, {
+        startLat: start.lat,
+        startLng: start.lng,
+        fields: pendingFields.map((f) => ({
+          fieldId: f.fieldId,
+          name: f.name,
+          lat: f.lat,
+          lng: f.lng,
+        })),
+      });
+      // 백엔드 응답의 fieldId 순서를 destId 순서로 변환
+      const fieldToDest = new Map(pendingFields.map((f) => [f.fieldId, f.destId]));
+      const orderedDestIds = res.optimizedOrder
+        .map((o) => fieldToDest.get(o.fieldId))
+        .filter((id): id is string => typeof id === 'string');
+      if (orderedDestIds.length !== pendingFields.length) {
+        throw new Error('optimized_order_mismatch');
+      }
+      applyOptimizedOrder(orderedDestIds, res.summary);
+    } catch (e) {
+      // 백엔드 미응답·오류 시 클라이언트 fallback (PR-α 와 동일 알고리즘)
+      const ordered = nearestNeighborOrder(
+        start,
+        pendingFields.map((f) => ({ id: f.destId, lat: f.lat, lng: f.lng })),
+      );
+      const totalDistanceKm = ordered.reduce(
+        (sum, n) => sum + n.distanceFromPrevKm,
+        0,
+      );
+      const totalEtaMinutes = ordered.reduce(
+        (sum, n) => sum + n.etaMinutes,
+        0,
+      );
+      applyOptimizedOrder(
+        ordered.map((n) => n.id),
+        {
+          algorithm: `nearest_neighbor (offline · ${localizeError(e)})`,
+          totalDistanceKm: Math.round(totalDistanceKm * 100) / 100,
+          totalEtaMinutes,
+        },
+      );
+    } finally {
+      setOptimizing(false);
+    }
   };
 
   const finalizeEnd = (endedTripId: string, originalTripId: string | null) => {
@@ -264,6 +372,22 @@ export default function ActiveTrip() {
               >
                 <Text style={styles.skipText}>이 목적지 건너뛰기</Text>
               </Pressable>
+              {pendingDests.length >= 2 ? (
+                <Pressable
+                  onPress={() => void handleReoptimize()}
+                  disabled={optimizing}
+                  style={({ pressed }) => [
+                    styles.reopBtn,
+                    (pressed || optimizing) && styles.pressed,
+                  ]}
+                >
+                  <Text style={styles.reopText}>
+                    {optimizing
+                      ? '최적화 중...'
+                      : `✨ 남은 경로 재최적화 (${pendingDests.length}개)`}
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
           );
         })()
@@ -358,6 +482,17 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     textDecorationLine: 'underline',
   },
+  reopBtn: {
+    marginTop: spacing.xs,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.primary + '88',
+    backgroundColor: colors.primary + '10',
+    alignItems: 'center',
+  },
+  reopText: { fontSize: fontSize.sm, color: colors.primary, fontWeight: '700' },
   doneCard: {
     backgroundColor: colors.success + '12',
     borderRadius: radius.md,
