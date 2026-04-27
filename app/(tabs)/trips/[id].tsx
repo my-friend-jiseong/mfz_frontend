@@ -1,6 +1,14 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { StyleSheet, Text, View, Pressable } from 'react-native';
+import {
+  Alert,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  ToastAndroid,
+  View,
+} from 'react-native';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import { useTripStore } from '@/stores/tripStore';
 import { useVisitStore } from '@/stores/visitStore';
@@ -8,9 +16,25 @@ import { useFieldStore } from '@/stores/fieldStore';
 import { useDestinationStore } from '@/stores/destinationStore';
 import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
+import { trips as tripsApi } from '@/api';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
 import type { Visit } from '@/types/entities';
+
+interface StateHistoryItem {
+  changedAt?: string;
+  fromStatus?: string | null;
+  toStatus?: string;
+  reason?: string | null;
+  actor?: string;
+  [key: string]: unknown;
+}
+
+function fmtDateTime(iso?: string) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
 
 function fmtTime(iso: string) {
   const d = new Date(iso);
@@ -23,6 +47,8 @@ export default function TripDetail() {
   const router = useRouter();
 
   const allTrips = useTripStore((s) => s.trips);
+  const activeTripId = useTripStore((s) => s.activeTripId);
+  const endTrip = useTripStore((s) => s.end);
   const allVisits = useVisitStore((s) => s.visits);
   const allTextMemos = useVisitStore((s) => s.textMemos);
   const allPhotos = useVisitStore((s) => s.photos);
@@ -53,6 +79,21 @@ export default function TripDetail() {
   const photoCountByVisit = (visitId: string) =>
     allPhotos.filter((p) => p.visitId === visitId).length;
 
+  // 상태 전환 이력 (감사용) — 응답 shape 백엔드 미명세 → unknown 으로 받아 안전 매핑
+  const [stateHistory, setStateHistory] = useState<StateHistoryItem[]>([]);
+  useEffect(() => {
+    if (!tripId) return;
+    void (async () => {
+      try {
+        const res = await tripsApi.stateHistory({ tripId });
+        const items = Array.isArray(res?.items) ? (res.items as StateHistoryItem[]) : [];
+        setStateHistory(items);
+      } catch {
+        setStateHistory([]);
+      }
+    })();
+  }, [tripId]);
+
   if (!trip) {
     return (
       <MapSheetLayout title="외근 상세" onBack={() => router.back()}>
@@ -60,6 +101,44 @@ export default function TripDetail() {
       </MapSheetLayout>
     );
   }
+
+  const isActive = trip.endedAt === null && activeTripId === trip.id;
+
+  const finishEnd = (toastMsg: string) => {
+    if (Platform.OS !== 'web') {
+      ToastAndroid.show?.(toastMsg, ToastAndroid.SHORT);
+    }
+  };
+
+  const handleEnd = async () => {
+    const r = await endTrip();
+    if (r.ok) {
+      Alert.alert('외근 종료', '외근이 정상 종료되었습니다.');
+      finishEnd('외근이 종료되었습니다');
+      return;
+    }
+    if ('needsConfirm' in r) {
+      Alert.alert('외근 종료 확인', r.message, [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '종료',
+          style: 'destructive',
+          onPress: async () => {
+            const force = await endTrip(true);
+            if (force.ok) {
+              Alert.alert('외근 종료', '외근이 정상 종료되었습니다.');
+              return;
+            }
+            if (!('needsConfirm' in force)) {
+              Alert.alert('오류', force.error);
+            }
+          },
+        },
+      ]);
+    } else {
+      Alert.alert('오류', r.error);
+    }
+  };
 
   const renderItem = ({ item }: { item: Visit }) => {
     const field = getField(item.fieldId);
@@ -70,7 +149,9 @@ export default function TripDetail() {
     return (
       <Pressable
         onPress={() =>
-          field && router.push(`/(tabs)/fields/${field.id}` as never)
+          router.push(
+            `/(tabs)/trips/visit?tripId=${tripId}&visitId=${item.id}` as never,
+          )
         }
         style={({ pressed }) => [styles.visitCard, pressed && styles.pressed]}
       >
@@ -132,14 +213,47 @@ export default function TripDetail() {
           })}
         </View>
       ) : null}
-      <Pressable
-        onPress={() =>
-          router.push(`/(tabs)/reports/new?tripId=${trip.id}` as never)
-        }
-        style={({ pressed }) => [styles.cta, pressed && styles.pressed]}
-      >
-        <Text style={styles.ctaText}>이 외근으로 보고서 작성</Text>
-      </Pressable>
+      {isActive ? (
+        <Pressable
+          onPress={() => void handleEnd()}
+          style={({ pressed }) => [styles.endBtn, pressed && styles.pressed]}
+        >
+          <Text style={styles.endBtnText}>외근 종료</Text>
+        </Pressable>
+      ) : null}
+      <View style={styles.ctaRow}>
+        <Pressable
+          onPress={() =>
+            router.push(`/(tabs)/reports/generate?tripId=${trip.id}` as never)
+          }
+          style={({ pressed }) => [styles.cta, styles.ctaAi, pressed && styles.pressed]}
+        >
+          <Text style={styles.ctaText}>✨ AI 보고서 생성</Text>
+        </Pressable>
+        <Pressable
+          onPress={() =>
+            router.push(`/(tabs)/reports/new?tripId=${trip.id}` as never)
+          }
+          style={({ pressed }) => [styles.cta, pressed && styles.pressed]}
+        >
+          <Text style={styles.ctaText}>수동 작성</Text>
+        </Pressable>
+      </View>
+      {stateHistory.length > 0 ? (
+        <View style={styles.historyBox}>
+          <Text style={styles.historyTitle}>상태 전환 이력</Text>
+          {stateHistory.map((h, idx) => (
+            <View key={idx} style={styles.historyRow}>
+              <Text style={styles.historyTime}>{fmtDateTime(h.changedAt)}</Text>
+              <Text style={styles.historyText}>
+                {h.fromStatus ? `${h.fromStatus} → ` : ''}
+                {h.toStatus ?? ''}
+                {h.reason ? ` · ${h.reason}` : ''}
+              </Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
     </View>
   );
 
@@ -197,14 +311,28 @@ const styles = StyleSheet.create({
   statusText: { fontSize: fontSize.xs, fontWeight: '700' },
   fieldAddr: { fontSize: fontSize.base, color: colors.text, fontWeight: '600' },
   meta: { fontSize: fontSize.sm, color: colors.textMuted, marginTop: 2 },
-  cta: {
+  ctaRow: {
     marginTop: spacing.md,
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  cta: {
+    flex: 1,
     backgroundColor: colors.primary,
     paddingVertical: spacing.md,
     borderRadius: radius.pill,
     alignItems: 'center',
   },
+  ctaAi: { backgroundColor: colors.success },
   ctaText: { color: '#fff', fontSize: fontSize.sm, fontWeight: '700' },
+  endBtn: {
+    marginTop: spacing.md,
+    backgroundColor: colors.danger,
+    paddingVertical: spacing.lg,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+  },
+  endBtnText: { color: '#fff', fontSize: fontSize.base, fontWeight: '700' },
   planBox: {
     marginTop: spacing.sm,
     backgroundColor: colors.surface,
@@ -240,5 +368,35 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     color: colors.warning,
     fontWeight: '700',
+  },
+  historyBox: {
+    marginTop: spacing.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    gap: spacing.xs,
+  },
+  historyTitle: {
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+    color: colors.textMuted,
+    marginBottom: spacing.xs,
+  },
+  historyRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+  },
+  historyTime: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    minWidth: 70,
+  },
+  historyText: {
+    fontSize: fontSize.xs,
+    color: colors.text,
+    flex: 1,
   },
 });

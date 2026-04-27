@@ -209,8 +209,9 @@ PR-A 의 검증 결과에 따라 PR-B/C/D 의 매핑 코드가 결정됨. PR-A �
 ## 4. 알려진 한계 (Phase 2 후에도 남음)
 
 - 카메라/음성 통합 미구현 → 사진/음성 endpoint 는 형식만 준비 (PR-G 가 처리하면 해소)
-- 관리자 시나리오 (현장 담당자 변경, /api/map/fields admin, /api/fields all) 는 admin 토큰 발급 절차가 §7.5 로 별도 협의 필요 → Phase 3
 - 외근 자동화 (Feature 8: geofence 도착, navigation 딥링크, 오프라인 큐, 동선 최적화, official-notice) — jy 가 일부 구현했을 가능성. 우리 작업과 별개 PR
+
+> 본 서비스에는 관리자(admin) Actor 가 없습니다. 백엔드 스펙에 admin 전용으로 표시된 endpoint (`GET /api/fields`, `PATCH /api/fields/{id}/assignee`, `GET /api/map/fields`) 는 프런트에서 사용하지 않습니다.
 - 보고서 자동 생성 (`/api/reports/generate` Gemini AI) — multipart 입력 + 화면 흐름 재설계는 별도 PR
 
 ---

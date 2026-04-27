@@ -43,7 +43,6 @@ const ERROR_MESSAGES: Record<string, string> = {
   name_required: '이름을 입력해주세요',
   // 로그인
   invalid_credentials: '이메일 또는 비밀번호가 올바르지 않습니다',
-  login_locked: '로그인 시도가 너무 많습니다. 잠시 후 다시 시도해주세요',
   // 외근
   active_trip_exists: '이미 진행 중인 외근이 있습니다',
   no_active_trip: '진행 중인 외근이 없습니다',
@@ -51,8 +50,17 @@ const ERROR_MESSAGES: Record<string, string> = {
   // 권한
   forbidden: '권한이 없습니다',
   unauthorized: '로그인이 필요합니다',
+  not_found: '대상을 찾을 수 없습니다',
   // 검증 일반
   validation_failed: '입력값이 올바르지 않습니다',
+  // 보고서
+  report_not_found: '이미 삭제되었거나 찾을 수 없는 보고서입니다',
+  report_forbidden: '본인 작성 보고서만 변경할 수 있습니다',
+  ai_analysis_empty: 'AI 분석 결과가 비어 있습니다. 메모·사진을 보강 후 다시 시도해주세요',
+  trip_id_immutable: '연결 외근은 변경할 수 없습니다',
+  // 공유
+  share_not_enabled: '공유가 활성화되지 않은 보고서입니다',
+  share_expired: '공유 링크가 만료되었습니다',
 };
 
 /** 백엔드 에러 식별자에 매핑된 한국어 메시지가 있으면 그것, 없으면 원본 message */

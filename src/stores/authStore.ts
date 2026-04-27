@@ -151,13 +151,25 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   _refreshAccess: async () => {
-    const rt = get().refreshToken;
+    return refreshAccessSingleFlight();
+  },
+}));
+
+// Single-flight refresh — 동시 401 다중 발생 시 refresh 가 여러 번 호출되어
+// 백엔드의 "refresh rotation/재사용 감지" 정책에 걸려 전체 세션이 강제 로그아웃되는
+// 회귀 방지. 첫 호출이 진행 중이면 같은 promise 를 공유.
+let refreshInflight: Promise<string | null> | null = null;
+async function refreshAccessSingleFlight(): Promise<string | null> {
+  if (refreshInflight) return refreshInflight;
+  refreshInflight = (async () => {
+    const store = useAuthStore.getState();
+    const rt = store.refreshToken;
     if (!rt) return null;
     try {
       const session = await auth.refresh(rt);
       if (!isValidSession(session)) throw new Error('refresh 응답이 비어있습니다');
       await saveRefreshToken(session.refreshToken);
-      set({
+      useAuthStore.setState({
         user: session.user,
         accessToken: session.accessToken,
         refreshToken: session.refreshToken,
@@ -165,18 +177,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       });
       return session.accessToken;
     } catch {
-      // refresh 자체가 실패하면 강제 로그아웃
       await clearRefreshToken();
-      set({
+      useAuthStore.setState({
         user: null,
         accessToken: null,
         refreshToken: null,
         isAuthenticated: false,
       });
       return null;
+    } finally {
+      // 다음 사이클에서 새 호출은 새 refresh 를 시도할 수 있도록 클리어
+      refreshInflight = null;
     }
-  },
-}));
+  })();
+  return refreshInflight;
+}
 
 // API 클라이언트에 토큰 핸들러 주입 (모듈 로드 시 1회)
 configureAuth({

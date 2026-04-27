@@ -33,8 +33,18 @@ interface FieldState {
   create: (body: CreateFieldBody) => Promise<CreateResult>;
   update: (id: string, body: UpdateFieldBody) => Promise<GenericResult>;
   patchStatus: (id: string, status: FieldStatus) => Promise<GenericResult>;
-  remove: (id: string, force?: boolean) => Promise<DeleteResult>;
+  remove: (id: string) => Promise<DeleteResult>;
   addTextMemo: (id: string, text: string) => Promise<GenericResult>;
+  addPhoto: (
+    id: string,
+    file: { uri: string; name: string; type: string },
+    caption?: string,
+  ) => Promise<GenericResult>;
+  addVoiceMemo: (
+    id: string,
+    file: { uri: string; name: string; type: string },
+    durationSeconds?: number,
+  ) => Promise<GenericResult>;
 
   getById: (id: string) => Field | undefined;
   byUser: (userId: string) => Field[];
@@ -56,7 +66,7 @@ export const useFieldStore = create<FieldState>((set, get) => ({
       const res = await fieldsApi.listMine(params ?? { visitDateScope: 'all' });
       const items: Field[] = res.items.map((it) => ({
         id: it.fieldId,
-        userId: it.assigneeUserId ?? it.userId ?? '',
+        userId: it.assigneeUserId,
         status: it.status,
         address: it.address,
         addressDetail: it.detailAddress ?? '',
@@ -75,7 +85,7 @@ export const useFieldStore = create<FieldState>((set, get) => ({
       const res = await fieldsApi.create(body);
       const f: Field = {
         id: res.field.fieldId,
-        userId: res.field.assigneeUserId ?? res.field.userId ?? '',
+        userId: res.field.assigneeUserId,
         status: res.field.status,
         address: res.field.address,
         addressDetail: res.field.detailAddress ?? '',
@@ -134,10 +144,10 @@ export const useFieldStore = create<FieldState>((set, get) => ({
     }
   },
 
-  remove: async (id, force = false) => {
+  remove: async (id) => {
     set({ busy: true });
     try {
-      await fieldsApi.remove(id, force);
+      await fieldsApi.remove(id);
       set((s) => ({
         fields: s.fields.filter((f) => f.id !== id),
         busy: false,
@@ -146,7 +156,7 @@ export const useFieldStore = create<FieldState>((set, get) => ({
     } catch (e) {
       set({ busy: false });
       if (e instanceof ApiError && e.status === 409) {
-        // HAS_RELATED_VISITS — 클라이언트가 confirm 후 force=true 로 재호출
+        // HAS_RELATED_VISITS — 본 서비스는 단일 Actor 라 강제 삭제 없음, 안내만.
         return { ok: false, needsConfirm: true, message: e.message };
       }
       return { ok: false, error: describeError(e) };
@@ -180,6 +190,36 @@ export const useFieldStore = create<FieldState>((set, get) => ({
   addTextMemo: async (id, text) => {
     try {
       const res = await fieldsApi.addTextMemo(id, text);
+      set((s) => ({
+        directAttachments: {
+          ...s.directAttachments,
+          [id]: [...(s.directAttachments[id] ?? []), res.attachment],
+        },
+      }));
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: describeError(e) };
+    }
+  },
+
+  addPhoto: async (id, file, caption) => {
+    try {
+      const res = await fieldsApi.addPhoto(id, file, caption);
+      set((s) => ({
+        directAttachments: {
+          ...s.directAttachments,
+          [id]: [...(s.directAttachments[id] ?? []), res.attachment],
+        },
+      }));
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: describeError(e) };
+    }
+  },
+
+  addVoiceMemo: async (id, file, durationSeconds) => {
+    try {
+      const res = await fieldsApi.addVoiceMemo(id, file, durationSeconds);
       set((s) => ({
         directAttachments: {
           ...s.directAttachments,

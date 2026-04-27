@@ -14,6 +14,9 @@ export type {
   TripListItem,
   TripDetailResponse,
   TripTimelineEntry,
+  OptimizeNavigationBody,
+  OptimizeNavigationResponse,
+  OptimizedOrderItem,
 } from './endpoints/trips';
 
 export { visits } from './endpoints/visits';
@@ -44,6 +47,8 @@ export type {
   UpdateReportBody,
   ListReportsParams,
   ShareReportData,
+  DisableShareData,
+  ReportGenerateData,
 } from './endpoints/reports';
 export { map } from './endpoints/map';
 export { system } from './endpoints/system';

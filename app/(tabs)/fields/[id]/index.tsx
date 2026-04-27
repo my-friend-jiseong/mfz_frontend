@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   Alert,
@@ -14,6 +14,14 @@ import { useVisitStore } from '@/stores/visitStore';
 import { useTripStore } from '@/stores/tripStore';
 import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
+import {
+  pickPhoto,
+  promptPhotoSource,
+  createVoiceRecorder,
+  VOICE_MAX_SECONDS,
+  type VoiceRecorder,
+} from '@/utils/media';
+import { PhotoGrid, VoiceMemoList } from '@/components/AttachmentPreview';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
 import type { Visit } from '@/types/entities';
@@ -37,6 +45,8 @@ export default function FieldDetail() {
   const directAttachmentsMap = useFieldStore((s) => s.directAttachments);
   const loadFieldDetail = useFieldStore((s) => s.loadDetail);
   const addFieldTextMemo = useFieldStore((s) => s.addTextMemo);
+  const addFieldPhoto = useFieldStore((s) => s.addPhoto);
+  const addFieldVoiceMemo = useFieldStore((s) => s.addVoiceMemo);
   const allVisits = useVisitStore((s) => s.visits);
   const activeTripId = useTripStore((s) => s.activeTripId);
 
@@ -51,9 +61,28 @@ export default function FieldDetail() {
   );
   const directAttachments = directAttachmentsMap[fieldId] ?? [];
   const directTextMemos = directAttachments.filter((a) => a.type === 'text');
+  const directPhotos = directAttachments
+    .filter((a) => a.type === 'photo' && a.fileUrl)
+    .map((a) => ({ id: a.id, fileUrl: a.fileUrl as string }));
+  const directVoices = directAttachments
+    .filter((a) => a.type === 'audio' && a.fileUrl)
+    .map((a) => ({
+      id: a.id,
+      fileUrl: a.fileUrl as string,
+      durationSec: a.durationSec ?? a.durationSeconds,
+      createdAt: a.createdAt,
+    }));
+  const directPhotoCount = directPhotos.length;
+  const directAudioCount = directVoices.length;
 
   const [memoInput, setMemoInput] = useState('');
   const [memoSubmitting, setMemoSubmitting] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [recordSec, setRecordSec] = useState(0);
+  const recorderRef = useRef<VoiceRecorder | null>(null);
+  const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const handleAddDirectMemo = async () => {
     const t = memoInput.trim();
     if (!t) return;
@@ -66,6 +95,64 @@ export default function FieldDetail() {
       Alert.alert('메모 추가 실패', r.error);
     }
   };
+
+  const uploadDirectPhoto = async (source: 'camera' | 'library') => {
+    setPhotoBusy(true);
+    try {
+      const file = await pickPhoto(source);
+      if (!file) return;
+      const r = await addFieldPhoto(fieldId, file);
+      if (!r.ok) Alert.alert('사진 추가 실패', r.error);
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+
+  const handleAddDirectPhoto = () => {
+    if (photoBusy) return;
+    promptPhotoSource((src) => void uploadDirectPhoto(src));
+  };
+
+  const startDirectRecording = async () => {
+    if (recording) return;
+    const rec = createVoiceRecorder();
+    const ok = await rec.start();
+    if (!ok) return;
+    recorderRef.current = rec;
+    setRecording(true);
+    setRecordSec(0);
+    tickRef.current = setInterval(() => {
+      setRecordSec((s) => {
+        if (s + 1 >= VOICE_MAX_SECONDS) {
+          void stopDirectRecording();
+          return VOICE_MAX_SECONDS;
+        }
+        return s + 1;
+      });
+    }, 1000);
+  };
+
+  const stopDirectRecording = async () => {
+    if (tickRef.current) {
+      clearInterval(tickRef.current);
+      tickRef.current = null;
+    }
+    setRecording(false);
+    const rec = recorderRef.current;
+    recorderRef.current = null;
+    if (!rec) return;
+    const result = await rec.stop();
+    if (!result) return;
+    const r = await addFieldVoiceMemo(fieldId, result.file, result.durationSec);
+    if (!r.ok) Alert.alert('음성 메모 추가 실패', r.error);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (tickRef.current) clearInterval(tickRef.current);
+      void recorderRef.current?.cancel();
+    };
+  }, []);
   const visits = useMemo(
     () =>
       allVisits
@@ -189,6 +276,48 @@ export default function FieldDetail() {
         </View>
       ) : null}
 
+      <View style={styles.directMediaRow}>
+        <Pressable
+          onPress={handleAddDirectPhoto}
+          disabled={photoBusy}
+          style={({ pressed }) => [
+            styles.mediaBtn,
+            (pressed || photoBusy) && styles.pressed,
+          ]}
+        >
+          <Text style={styles.mediaBtnText}>
+            📷 사진 {directPhotoCount > 0 ? `(${directPhotoCount})` : ''}
+            {photoBusy ? ' · 업로드 중' : ''}
+          </Text>
+        </Pressable>
+        {recording ? (
+          <Pressable
+            onPress={() => void stopDirectRecording()}
+            style={({ pressed }) => [
+              styles.mediaBtn,
+              styles.recordingBtn,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={[styles.mediaBtnText, styles.recordingText]}>
+              ● 녹음 중지 ({Math.floor(recordSec / 60)}:{String(recordSec % 60).padStart(2, '0')})
+            </Text>
+          </Pressable>
+        ) : (
+          <Pressable
+            onPress={() => void startDirectRecording()}
+            style={({ pressed }) => [styles.mediaBtn, pressed && styles.pressed]}
+          >
+            <Text style={styles.mediaBtnText}>
+              🎙 음성 {directAudioCount > 0 ? `(${directAudioCount})` : ''}
+            </Text>
+          </Pressable>
+        )}
+      </View>
+
+      <PhotoGrid photos={directPhotos} />
+      <VoiceMemoList memos={directVoices} />
+
       <Text style={styles.sectionTitle}>방문 이력 ({visits.length})</Text>
     </View>
   );
@@ -308,4 +437,21 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginTop: spacing.xs,
   },
+  directMediaRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  mediaBtn: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+  },
+  mediaBtnText: { fontSize: fontSize.sm, color: colors.text, fontWeight: '600' },
+  recordingBtn: { backgroundColor: colors.danger + '15', borderColor: colors.danger },
+  recordingText: { color: colors.danger },
 });

@@ -1,17 +1,9 @@
 import { request } from '../client';
 
-// /api/map/fields 는 admin 전용 (smoke test 일반 계정 → 403).
-// 일반 사용자는 fields.listMine 으로 좌표 보강된 응답이 필요한지 확인 후 사용.
-
-export interface MapField {
-  // 백엔드 응답 shape 미캡처 (admin 필요)
-  [key: string]: unknown;
-}
+// 본 서비스에는 단일 Actor (필드 워커) 만 존재.
+// `/api/map/fields` 는 백엔드 스펙상 다른 권한이 가정된 endpoint 라 사용하지 않음 — 본 서비스의 지도 마커는 fields.listMine 의 lat/lng 응답을 사용.
 
 export const map = {
-  fields: (params?: { bbox?: string }) =>
-    request<{ items: MapField[] }>('/api/map/fields', { query: params }),
-
   currentLocationConfig: () =>
     request<unknown>('/api/map/current-location-config'),
 };

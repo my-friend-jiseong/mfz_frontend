@@ -2,8 +2,23 @@ import { useMemo, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { buildKakaoMapHtml, type MapDisplayMode } from '@/assets/kakaoMapHtml';
-import type { Field } from '@/types/entities';
+import type { Field, FieldStatus } from '@/types/entities';
 import { colors } from '@/theme/colors';
+
+// KWCAG 1.4.1 — 색 단독 의미 전달 금지. status 별 색 + 형상 + 라벨 3중 인코딩.
+export type MarkerShape = 'triangle' | 'circle' | 'check';
+
+const STATUS_TO_SHAPE: Record<FieldStatus, MarkerShape> = {
+  pending: 'triangle',
+  in_progress: 'circle',
+  done: 'check',
+};
+
+const STATUS_TO_BADGE: Record<FieldStatus, string> = {
+  pending: '대기',
+  in_progress: '진행',
+  done: '완료',
+};
 
 export interface KakaoMapMarker {
   id: string;
@@ -11,6 +26,8 @@ export interface KakaoMapMarker {
   lng: number;
   label: string;
   color: string;
+  shape?: MarkerShape;
+  badge?: string;
 }
 
 interface Props {
@@ -78,6 +95,8 @@ export function fieldsToMarkers(fields: Field[]): KakaoMapMarker[] {
     lng: f.longitude,
     label: f.address.split(' ').slice(-1)[0] || '현장',
     color: colors.fieldStatus[f.status],
+    shape: STATUS_TO_SHAPE[f.status],
+    badge: STATUS_TO_BADGE[f.status],
   }));
 }
 

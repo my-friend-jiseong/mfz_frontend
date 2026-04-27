@@ -31,6 +31,11 @@ interface VisitState {
     visitId: string,
     file: { uri: string; name: string; type: string },
   ) => Promise<GenericResult>;
+  addVoiceMemo: (
+    visitId: string,
+    file: { uri: string; name: string; type: string },
+    durationSeconds?: number,
+  ) => Promise<GenericResult>;
 
   byTrip: (tripId: string) => Visit[];
   byField: (fieldId: string) => Visit[];
@@ -141,6 +146,42 @@ export const useVisitStore = create<VisitState>((set, get) => ({
         createdAt: att.createdAt,
       };
       set((s) => ({ photos: [...s.photos, photo] }));
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: describeError(e) };
+    }
+  },
+
+  addVoiceMemo: async (visitId, file, durationSeconds) => {
+    const visit = get().visits.find((v) => v.id === visitId);
+    if (!visit) return { ok: false, error: '방문 정보를 찾을 수 없습니다' };
+    try {
+      // visitsApi.addVoiceMemo 시그니처는 (visitId, file) 만 받으나 백엔드는
+      // multipart 의 durationSeconds 도 받음 — 향후 endpoint 함수 확장 시 사용.
+      void durationSeconds;
+      const res = (await visitsApi.addVoiceMemo(visitId, file)) as {
+        attachment?: {
+          id: string;
+          fileUrl?: string;
+          url?: string;
+          durationSec?: number;
+          createdAt: string;
+          latitude: number | null;
+          longitude: number | null;
+        };
+      };
+      const att = res?.attachment;
+      if (!att) return { ok: true };
+      const memo: VoiceMemo = {
+        id: att.id,
+        visitId,
+        fieldId: visit.fieldId,
+        content: att.fileUrl ?? att.url ?? file.uri,
+        latitude: att.latitude ?? 0,
+        longitude: att.longitude ?? 0,
+        createdAt: att.createdAt,
+      };
+      set((s) => ({ voiceMemos: [...s.voiceMemos, memo] }));
       return { ok: true };
     } catch (e) {
       return { ok: false, error: describeError(e) };

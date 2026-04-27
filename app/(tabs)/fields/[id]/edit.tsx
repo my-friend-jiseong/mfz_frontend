@@ -65,17 +65,18 @@ export default function EditField() {
     router.back();
   };
 
-  const performDelete = async (force = false) => {
-    const r = await remove(fieldId, force);
+  const performDelete = async () => {
+    const r = await remove(fieldId);
     if (r.ok) {
       router.replace('/(tabs)/fields' as never);
       return;
     }
     if ('needsConfirm' in r) {
-      Alert.alert('현장 삭제 확인', r.message + '\n\n연관 방문 기록이 있습니다. 강제 삭제할까요? (관리자 권한 필요)', [
-        { text: '취소', style: 'cancel' },
-        { text: '강제 삭제', style: 'destructive', onPress: () => performDelete(true) },
-      ]);
+      // 본 서비스는 단일 Actor — 강제 삭제(force=true) 흐름 없음. 사용자에게 안내만.
+      Alert.alert(
+        '삭제할 수 없습니다',
+        r.message + '\n\n방문 기록이 남아 있는 현장은 삭제할 수 없습니다.',
+      );
     } else {
       Alert.alert('삭제 실패', r.error);
     }
@@ -84,12 +85,12 @@ export default function EditField() {
   const handleDelete = () => {
     if (Platform.OS === 'web') {
       if (confirm('이 현장을 삭제할까요? 연관된 방문·첨부는 유지됩니다.')) {
-        void performDelete(false);
+        void performDelete();
       }
     } else {
       Alert.alert('현장 삭제', '이 현장을 삭제할까요?', [
         { text: '취소', style: 'cancel' },
-        { text: '삭제', style: 'destructive', onPress: () => void performDelete(false) },
+        { text: '삭제', style: 'destructive', onPress: () => void performDelete() },
       ]);
     }
   };

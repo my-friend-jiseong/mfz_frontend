@@ -8,6 +8,8 @@ import { useFieldStore } from '@/stores/fieldStore';
 import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
 import { openKakaoRouteTo } from '@/utils/kakaoMap';
+import { trips as tripsApi } from '@/api';
+import * as Linking from 'expo-linking';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
 import type { Destination } from '@/types/entities';
@@ -29,6 +31,8 @@ export default function ActiveTrip() {
 
   const activeTripId = useTripStore((s) => s.activeTripId);
   const endTrip = useTripStore((s) => s.end);
+  const officialNotice = useTripStore((s) => s.officialNotice);
+  const ackOfficialNotice = useTripStore((s) => s.ackOfficialNotice);
 
   const allDestinations = useDestinationStore((s) => s.destinations);
   const markSkipped = useDestinationStore((s) => s.markSkipped);
@@ -63,10 +67,50 @@ export default function ActiveTrip() {
     );
   }
 
-  const handleNavigate = () => {
+  const handleNavigate = async () => {
     if (!currentDest) return;
     const field = getField(currentDest.fieldId);
     if (!field) return;
+
+    // 백엔드 deep-links 응답을 시도 — 다중 provider URL 묶음 (응답 shape 미명세)
+    if (activeTripId) {
+      try {
+        const res = (await tripsApi.navigationDeepLinks(activeTripId, {
+          fieldId: field.id,
+          lat: field.latitude,
+          lng: field.longitude,
+        })) as Record<string, unknown>;
+        // 응답이 { kakao: url, google: url, naver: url } 형태로 추정 — 확인되는 것만 모달
+        const entries: Array<{ provider: string; url: string }> = [];
+        for (const [k, v] of Object.entries(res ?? {})) {
+          if (typeof v === 'string' && v.startsWith('http')) {
+            entries.push({ provider: k, url: v });
+          } else if (
+            v &&
+            typeof v === 'object' &&
+            typeof (v as { url?: unknown }).url === 'string'
+          ) {
+            entries.push({ provider: k, url: (v as { url: string }).url });
+          }
+        }
+        if (entries.length === 1) {
+          await Linking.openURL(entries[0].url);
+          return;
+        }
+        if (entries.length > 1) {
+          Alert.alert('길찾기 — 지도 앱 선택', undefined, [
+            { text: '취소', style: 'cancel' },
+            ...entries.map((e) => ({
+              text: e.provider,
+              onPress: () => void Linking.openURL(e.url),
+            })),
+          ]);
+          return;
+        }
+      } catch {
+        // 백엔드 미응답 시 카카오맵 직링크로 폴백
+      }
+    }
     void openKakaoRouteTo(field.address, field.latitude, field.longitude);
   };
 
@@ -153,8 +197,27 @@ export default function ActiveTrip() {
     );
   };
 
+  const handleAckNotice = async () => {
+    const r = await ackOfficialNotice();
+    if (!r.ok) Alert.alert('보고 완료 표시 실패', r.error);
+  };
+
   const ListHeader = () => (
     <View style={styles.header}>
+      {officialNotice.required ? (
+        <View style={styles.noticeCard}>
+          <Text style={styles.noticeLabel}>⚠️ 소속기관장 보고 필요</Text>
+          <Text style={styles.noticeText}>
+            {officialNotice.message ?? '외근 변경 사항을 소속기관장에게 보고해주세요.'}
+          </Text>
+          <Pressable
+            onPress={() => void handleAckNotice()}
+            style={({ pressed }) => [styles.noticeBtn, pressed && styles.pressed]}
+          >
+            <Text style={styles.noticeBtnText}>보고 완료 표시</Text>
+          </Pressable>
+        </View>
+      ) : null}
       {currentDest ? (
         (() => {
           const field = getField(currentDest.fieldId);
@@ -168,7 +231,7 @@ export default function ActiveTrip() {
               ) : null}
               <View style={styles.actions}>
                 <Pressable
-                  onPress={handleNavigate}
+                  onPress={() => void handleNavigate()}
                   style={({ pressed }) => [
                     styles.actionBtn,
                     styles.primaryBtn,
@@ -235,11 +298,13 @@ export default function ActiveTrip() {
         onPress={handleEnd}
         style={({ pressed }) => [
           styles.endBtn,
-          { backgroundColor: allDone ? colors.danger : colors.textMuted },
+          { backgroundColor: colors.danger },
           pressed && styles.pressed,
         ]}
       >
-        <Text style={styles.endText}>외근 종료</Text>
+        <Text style={styles.endText}>
+          {allDone ? '외근 종료' : '외근 종료 (미완료 목적지 있음)'}
+        </Text>
       </Pressable>
     </MapSheetLayout>
   );
@@ -363,4 +428,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   endText: { color: '#fff', fontSize: fontSize.base, fontWeight: '700' },
+  noticeCard: {
+    backgroundColor: colors.warning + '15',
+    borderRadius: radius.md,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.warning + '66',
+    gap: spacing.xs,
+  },
+  noticeLabel: {
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+    color: colors.warning,
+  },
+  noticeText: {
+    fontSize: fontSize.sm,
+    color: colors.text,
+    lineHeight: 20,
+  },
+  noticeBtn: {
+    marginTop: spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.warning,
+    alignSelf: 'flex-start',
+  },
+  noticeBtnText: { color: '#fff', fontSize: fontSize.sm, fontWeight: '700' },
 });

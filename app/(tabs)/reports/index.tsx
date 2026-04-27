@@ -109,12 +109,20 @@ export default function ReportsIndex() {
           />
         }
       />
-      <Pressable
-        onPress={() => router.push('/(tabs)/reports/new' as never)}
-        style={({ pressed }) => [styles.fab, pressed && styles.pressed]}
-      >
-        <Text style={styles.fabText}>+ 새 보고서</Text>
-      </Pressable>
+      <View style={styles.fabRow}>
+        <Pressable
+          onPress={() => router.push('/(tabs)/reports/generate' as never)}
+          style={({ pressed }) => [styles.fab, styles.fabAi, pressed && styles.pressed]}
+        >
+          <Text style={styles.fabText}>✨ AI 생성</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => router.push('/(tabs)/reports/new' as never)}
+          style={({ pressed }) => [styles.fab, pressed && styles.pressed]}
+        >
+          <Text style={styles.fabText}>+ 수동 작성</Text>
+        </Pressable>
+      </View>
     </MapSheetLayout>
   );
 }
@@ -155,16 +163,22 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginTop: spacing.sm,
   },
-  fab: {
+  fabRow: {
     position: 'absolute',
     bottom: spacing.xl,
     left: spacing.xl,
     right: spacing.xl,
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  fab: {
+    flex: 1,
     backgroundColor: colors.primary,
     paddingVertical: spacing.lg,
     borderRadius: radius.pill,
     alignItems: 'center',
   },
+  fabAi: { backgroundColor: colors.success },
   fabText: { color: '#fff', fontSize: fontSize.base, fontWeight: '700' },
   notice: {
     backgroundColor: colors.primary + '10',
