@@ -14,6 +14,9 @@ export type {
   TripListItem,
   TripDetailResponse,
   TripTimelineEntry,
+  OptimizeNavigationBody,
+  OptimizeNavigationResponse,
+  OptimizedOrderItem,
 } from './endpoints/trips';
 
 export { visits } from './endpoints/visits';

@@ -96,6 +96,37 @@ export interface StateHistoryResponse {
   pagination?: { page: number; limit: number; total: number; hasNext: boolean };
 }
 
+// 다중 경로 최적화 — POST /api/trips/{tripId}/navigation/optimize
+export interface OptimizeNavigationBody {
+  startLat: number;
+  startLng: number;
+  fields: Array<{
+    fieldId: string;
+    name?: string;
+    lat: number;
+    lng: number;
+  }>;
+}
+
+export interface OptimizedOrderItem {
+  fieldId: string;
+  name?: string;
+  lat: number;
+  lng: number;
+  distanceFromPrevKm: number;
+  etaMinutes: number;
+}
+
+export interface OptimizeNavigationResponse {
+  tripId: string;
+  optimizedOrder: OptimizedOrderItem[];
+  summary: {
+    algorithm: string;            // 예: 'nearest_neighbor'
+    totalDistanceKm: number;
+    totalEtaMinutes: number;
+  };
+}
+
 export const trips = {
   start: (startLocation?: { lat: number; lng: number }) =>
     request<TripStartResponse>('/api/trips/start', {
@@ -146,9 +177,12 @@ export const trips = {
       { method: 'POST', body },
     ),
 
-  /** 다중 현장 동선 최적 순서 제안 */
-  optimizeNavigation: (tripId: string, body: { fieldIds: string[] }) =>
-    request<{ orderedFieldIds: string[] }>(
+  /** 다중 현장 동선 최적 순서 제안 (nearest neighbor 등) */
+  optimizeNavigation: (
+    tripId: string,
+    body: OptimizeNavigationBody,
+  ) =>
+    request<OptimizeNavigationResponse>(
       `/api/trips/${tripId}/navigation/optimize`,
       { method: 'POST', body },
     ),
