@@ -56,7 +56,7 @@ Authorization: Bearer {token}
 ```json
 { "success": false, "error": "all.filter is not a function" }
 ```
-(HTTP 200 status — error wrapper 형태로 옴)
+HTTP **500** Internal Server Error (재확인 결과 — 첫 캡처 시 status 미기록).
 
 ### 추정 원인
 `registerReportRoutes.js` 에서 reports collection 을 `.filter()` 호출하는데 `all` 변수가 array 가 아닌 다른 자료형인 경우. `createReport` 가 인메모리 Map 에 저장 후 list 호출 시 collection 형식 불일치 가능성.
