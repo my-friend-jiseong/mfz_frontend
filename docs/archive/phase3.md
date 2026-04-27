@@ -57,7 +57,7 @@
 
 > **보류 사유**: 회원가입/로그인은 의도적 간소화 영역. 현재 클라이언트 매핑 (`src/api/errors.ts`) 으로 동작하므로 백엔드 일관성 정렬은 인증 정교화 사이클에서 다룸.
 
-**문제 (실측, [_swagger_responses.md §7](_swagger_responses.md))**
+**문제 (실측, [_swagger_responses.md §7](../_swagger_responses.md))**
 
 | 시나리오 | 요청서 | 실측 |
 |---|---|---|
@@ -370,6 +370,6 @@ npx expo install expo-image-picker expo-av expo-file-system
 
 - [docs/backend_api_request.md](backend_api_request.md) — 프런트 명세 v0.2 (Phase 1 시점)
 - [docs/backend_requests_phase2.md](backend_requests_phase2.md) — Phase 2 백엔드 요청 (대부분 반영됨)
-- [docs/_swagger.json](_swagger.json) — 현재 백엔드 OpenAPI 스펙 (54 endpoints)
-- [docs/_swagger_responses.md](_swagger_responses.md) — 실 응답 캡처 (Phase 0 + Phase 2 검증 결과)
-- [docs/api_integration_plan.md](api_integration_plan.md) — 프런트 연동 계획 v0.2 (Phase 2 PR 분할)
+- [docs/_swagger.json](../_swagger.json) — 현재 백엔드 OpenAPI 스펙 (54 endpoints)
+- [docs/_swagger_responses.md](../_swagger_responses.md) — 실 응답 캡처 (Phase 0 + Phase 2 검증 결과)
+- [docs/api_integration_plan.md](../api_integration_plan.md) — 프런트 연동 계획 v0.2 (Phase 2 PR 분할)

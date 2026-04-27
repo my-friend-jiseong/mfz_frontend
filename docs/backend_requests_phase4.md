@@ -5,7 +5,7 @@
 > **작성일**: 2026-04-27
 > **검증 환경**: `http://59.21.223.137:28080`
 > **방법**: Phase 3 회귀 복구 후 풀 시나리오 18단계 curl smoke test 재실행
-> **현황**: Phase 3 응답 shape 회귀(`docs/backend_phase3_regressions.md`)는 [`docs/backend_phase3_regressions_fix_report.md`](backend_phase3_regressions_fix_report.md) 의 await/async 마이그레이션으로 복구됐으나, **재검증 중 같은 도메인(Reports)에서 신규 회귀 + 누락 항목 추가 확인**.
+> **현황**: Phase 3 응답 shape 회귀(`docs/archive/backend_phase3_regressions.md`)는 [`docs/archive/backend_phase3_regressions_fix_report.md`](archive/backend_phase3_regressions_fix_report.md) 의 await/async 마이그레이션으로 복구됐으나, **재검증 중 같은 도메인(Reports)에서 신규 회귀 + 누락 항목 추가 확인**.
 
 ---
 
@@ -88,7 +88,7 @@ Authorization: Bearer {token}
 }
 ```
 
-### 기대 (백엔드 [`backend_phase3_complete.md` §5](backend_phase3_complete.md))
+### 기대 (백엔드 [`backend_phase3_complete.md` §5](archive/backend_phase3_complete.md))
 ```json
 {
   ...,
@@ -201,7 +201,7 @@ Phase 3 시작(2026-04-27) 이후 Reports 도메인에서 **4건의 회귀가 �
 
 ## 6. 참조
 
-- [docs/backend_phase3_regressions.md](backend_phase3_regressions.md) — Phase 3 회귀 보고 (1·2·3 항목 일부 복구)
-- [docs/backend_phase3_regressions_fix_report.md](backend_phase3_regressions_fix_report.md) — 백엔드 1차 복구 보고
-- [docs/backend_phase3_complete.md](backend_phase3_complete.md) — Phase 3 작업 완료 보고
+- [docs/archive/backend_phase3_regressions.md](archive/backend_phase3_regressions.md) — Phase 3 회귀 보고 (1·2·3 항목 일부 복구)
+- [docs/archive/backend_phase3_regressions_fix_report.md](archive/backend_phase3_regressions_fix_report.md) — 백엔드 1차 복구 보고
+- [docs/archive/backend_phase3_complete.md](archive/backend_phase3_complete.md) — Phase 3 작업 완료 보고
 - [docs/_swagger_responses.md](_swagger_responses.md) — 실응답 캡처
