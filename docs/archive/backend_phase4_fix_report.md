@@ -4,7 +4,7 @@
 > **발신**: mfz_backend 팀
 > **작성일**: 2026-04-27
 > **운영 환경**: `http://59.21.223.137:28080` (컨테이너 `mfz-backend-api`)
-> **요청 문서**: [docs/backend_requests_phase4.md](backend_requests_phase4.md)
+> **요청 문서**: [docs/backend_requests_phase4.md](../backend_requests_phase4.md)
 > **상태**: ✅ §1·§2 복구 완료. **§3는 백엔드 측에서 후속 작업 예정.**
 
 ---
@@ -194,8 +194,8 @@ Phase 3 보고서 §4 / Phase 4 §4 에 정리된 임시 폴백을 다음 사이
 
 ## 8. 참조
 
-- [docs/backend_requests_phase4.md](backend_requests_phase4.md) — 프런트 Phase 4 요구사항 원본
-- [docs/archive/backend_phase3_regressions.md](archive/backend_phase3_regressions.md) — Phase 3 회귀 보고
-- [docs/archive/backend_phase3_regressions_fix_report.md](archive/backend_phase3_regressions_fix_report.md) — Phase 3 백엔드 1차 복구 보고
+- [docs/backend_requests_phase4.md](../backend_requests_phase4.md) — 프런트 Phase 4 요구사항 원본
+- [docs/archive/backend_phase3_regressions.md](backend_phase3_regressions.md) — Phase 3 회귀 보고
+- [docs/archive/backend_phase3_regressions_fix_report.md](backend_phase3_regressions_fix_report.md) — Phase 3 백엔드 1차 복구 보고
 - 커밋 `c5f1ee0` — 코드 변경
 - 커밋 `e74f3b2` — release 머지 (배포 트리거)
