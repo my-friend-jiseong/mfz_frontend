@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { Field, FieldStatus } from '@/types/entities';
 import type { MapDisplayMode } from '@/assets/kakaoMapHtml';
 import {
@@ -8,7 +8,8 @@ import {
   opacityForCount,
 } from '@/assets/boundaries/sigungu';
 import { colors } from '@/theme/colors';
-import { spacing, fontSize } from '@/theme/spacing';
+import { spacing, fontSize, radius } from '@/theme/spacing';
+import { groupSameLocationMarkers } from '@/utils/groupSameLocationMarkers';
 
 export interface KakaoMapMarker {
   id: string;
@@ -32,7 +33,7 @@ const STATUS_TO_BADGE: Record<FieldStatus, string> = {
   done: '완료',
 };
 
-function buildMarkerHtml(m: KakaoMapMarker): string {
+function buildMarkerHtml(m: KakaoMapMarker, count = 1): string {
   const color = m.color || '#2563eb';
   const shape = m.shape || 'circle';
   const badge = m.badge || '';
@@ -44,8 +45,15 @@ function buildMarkerHtml(m: KakaoMapMarker): string {
   } else {
     svg = `<svg width="36" height="36" viewBox="0 0 36 36"><circle cx="18" cy="18" r="14" fill="${color}" stroke="#fff" stroke-width="2"/></svg>`;
   }
-  const labelHtml = `<div style="background:#fff;padding:2px 6px;border-radius:8px;font-size:11px;font-weight:600;color:#0f172a;border:1px solid ${color};margin-top:2px;white-space:nowrap;box-shadow:0 1px 2px rgba(0,0,0,0.15);">${badge ? `<span style="color:${color};">${badge}</span> · ` : ''}${m.label || ''}</div>`;
-  return `<div style="display:flex;flex-direction:column;align-items:center;cursor:pointer;min-width:44px;min-height:44px;justify-content:center;">${svg}${labelHtml}</div>`;
+  // 동일 좌표 그룹: 마커 우상단에 카운트 뱃지 — 좌표는 안 움직임, 다중임만 명시.
+  const countBadge =
+    count > 1
+      ? `<div style="position:absolute;top:-4px;right:-6px;min-width:20px;height:20px;padding:0 5px;border-radius:10px;background:#dc2626;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 1px 2px rgba(0,0,0,0.25);box-sizing:border-box;">${count}</div>`
+      : '';
+  // 라벨은 absolute 로 SVG 아래에 띄움 — anchor 박스를 SVG(36×36) 로 한정해서
+  // 줌 변화에 관계없이 SVG 중앙이 좌표에 정확히 정렬되도록.
+  const labelHtml = `<div style="position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:4px;background:#fff;padding:2px 6px;border-radius:8px;font-size:11px;font-weight:600;color:#0f172a;border:1px solid ${color};white-space:nowrap;box-shadow:0 1px 2px rgba(0,0,0,0.15);">${badge ? `<span style="color:${color};">${badge}</span> · ` : ''}${m.label || ''}</div>`;
+  return `<div style="position:relative;width:36px;height:36px;cursor:pointer;">${svg}${countBadge}${labelHtml}</div>`;
 }
 
 interface Props {
@@ -141,7 +149,11 @@ export function KakaoMapWebView({
   const boundaryOverlaysRef = useRef<Overlay[]>([]);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeGroup, setActiveGroup] = useState<KakaoMapMarker[] | null>(null);
   const kakaoJsKey = process.env.EXPO_PUBLIC_KAKAO_JS_KEY ?? '';
+
+  // 동일 좌표 마커는 그룹으로 묶어 첫 마커만 표시 + "+N" 뱃지. 좌표 무손실.
+  const markerGroups = useMemo(() => groupSameLocationMarkers(markers), [markers]);
 
   // 지도 인스턴스 1회 생성
   useEffect(() => {
@@ -243,7 +255,7 @@ export function KakaoMapWebView({
     overlaysRef.current = [];
 
     if (displayMode === 'heatmap') {
-      // heatmap.js 없이 Circle로 밀도 근사 표현
+      // heatmap.js 없이 Circle로 밀도 근사 표현. 밀도는 raw markers 기준이 정확.
       markers.forEach((m) => {
         const circle = new k.maps.Circle({
           center: new k.maps.LatLng(m.lat, m.lng),
@@ -256,31 +268,42 @@ export function KakaoMapWebView({
         overlaysRef.current.push(circle);
       });
     } else {
-      // markers 또는 choropleth(데이터 없어서 마커 폴백) — KWCAG 1.4.1 색+형상+라벨
-      markers.forEach((m) => {
+      // markers 또는 choropleth(데이터 없어서 마커 폴백) — KWCAG 1.4.1 색+형상+라벨.
+      // 동일 좌표 그룹은 첫 마커만 그리고 카운트 뱃지로 표시 — 좌표 무손실.
+      markerGroups.forEach((group) => {
+        const head = group[0];
         const content = document.createElement('div');
-        content.innerHTML = buildMarkerHtml(m);
+        content.innerHTML = buildMarkerHtml(head, group.length);
         const child = content.firstChild as HTMLElement | null;
         if (child) {
-          child.addEventListener('click', () => onMarkerPress?.(m.id));
+          child.addEventListener('click', () => {
+            if (group.length === 1) {
+              onMarkerPress?.(head.id);
+            } else {
+              setActiveGroup(group);
+            }
+          });
         }
         const overlay = new (k.maps as unknown as {
           CustomOverlay: new (opts: {
             position: unknown;
             content: Element;
             map: unknown;
+            xAnchor?: number;
             yAnchor?: number;
           }) => { setMap: (m: unknown) => void };
         }).CustomOverlay({
-          position: new k.maps.LatLng(m.lat, m.lng),
+          position: new k.maps.LatLng(head.lat, head.lng),
           content,
           map: mapRef.current,
-          yAnchor: 1,
+          // anchor 박스 = SVG 36×36. 중앙(0.5, 0.5)이 좌표에 정확히 정렬되어 줌 무관 정확.
+          xAnchor: 0.5,
+          yAnchor: 0.5,
         });
         overlaysRef.current.push(overlay);
       });
     }
-  }, [markers, ready, onMarkerPress, displayMode]);
+  }, [markers, markerGroups, ready, onMarkerPress, displayMode]);
 
   if (!kakaoJsKey) {
     return (
@@ -325,6 +348,49 @@ export function KakaoMapWebView({
           </Text>
         </View>
       ) : null}
+      <Modal
+        visible={activeGroup !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setActiveGroup(null)}
+      >
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => setActiveGroup(null)}
+        >
+          <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
+            <Text style={styles.modalTitle}>
+              이 위치의 현장 {activeGroup?.length ?? 0}건
+            </Text>
+            <ScrollView style={styles.modalList}>
+              {activeGroup?.map((m) => (
+                <Pressable
+                  key={m.id}
+                  style={({ pressed }) => [
+                    styles.modalItem,
+                    pressed && styles.modalItemPressed,
+                  ]}
+                  onPress={() => {
+                    setActiveGroup(null);
+                    onMarkerPress?.(m.id);
+                  }}
+                >
+                  {m.badge ? (
+                    <View
+                      style={[styles.modalItemBadge, { backgroundColor: m.color }]}
+                    >
+                      <Text style={styles.modalItemBadgeText}>{m.badge}</Text>
+                    </View>
+                  ) : null}
+                  <Text style={styles.modalItemLabel} numberOfLines={1}>
+                    {m.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -399,4 +465,55 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   warnText: { color: '#fff', fontSize: fontSize.sm, fontWeight: '600' },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.xl,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 360,
+    maxHeight: '80%',
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
+  },
+  modalTitle: {
+    fontSize: fontSize.base,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: spacing.md,
+  },
+  modalList: { maxHeight: 360 },
+  modalItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    gap: spacing.sm,
+  },
+  modalItemPressed: { backgroundColor: colors.background },
+  modalItemBadge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+  },
+  modalItemBadgeText: {
+    color: '#fff',
+    fontSize: fontSize.xs,
+    fontWeight: '700',
+  },
+  modalItemLabel: {
+    flex: 1,
+    fontSize: fontSize.sm,
+    color: colors.text,
+  },
 });
