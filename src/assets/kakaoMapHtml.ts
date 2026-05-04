@@ -6,6 +6,8 @@ export type MapDisplayMode = 'markers' | 'heatmap' | 'choropleth';
 interface MapHtmlOptions {
   kakaoJsKey: string;
   // shape/badge: KWCAG 1.4.1 색각이상 대응 — 색 단독 표현 금지, 형상·라벨 동반.
+  // count/groupIds: 호출 측에서 동일 좌표를 그루핑한 head 마커. count>1이면 카운트 뱃지 표시,
+  //                 클릭 시 markerGroupPress 메시지로 groupIds 배열 전송.
   markers: {
     id: string;
     lat: number;
@@ -14,6 +16,8 @@ interface MapHtmlOptions {
     color: string;
     shape?: 'triangle' | 'circle' | 'check';
     badge?: string;
+    count?: number;
+    groupIds?: string[];
   }[];
   center: { lat: number; lng: number };
   displayMode?: MapDisplayMode;
@@ -100,11 +104,13 @@ MARKERS.forEach(function(m){
       level: 8,
     });
 
-    // KWCAG 1.4.1 — status 별 색 + 형상 + 라벨 3중 인코딩 SVG
+    // KWCAG 1.4.1 — status 별 색 + 형상 + 라벨 3중 인코딩 SVG.
+    // count>1: 우상단 카운트 뱃지 + 라벨 absolute(좌표 정확도 무손실).
     function buildMarkerHtml(m){
       var color = m.color || '#2563eb';
       var shape = m.shape || 'circle';
       var badge = m.badge || '';
+      var count = m.count || 1;
       var svg;
       if (shape === 'triangle') {
         svg = '<svg width="36" height="36" viewBox="0 0 36 36"><polygon points="18,4 32,30 4,30" fill="' + color + '" stroke="#fff" stroke-width="2"/></svg>';
@@ -113,8 +119,11 @@ MARKERS.forEach(function(m){
       } else {
         svg = '<svg width="36" height="36" viewBox="0 0 36 36"><circle cx="18" cy="18" r="14" fill="' + color + '" stroke="#fff" stroke-width="2"/></svg>';
       }
-      var labelHtml = '<div style="background:#fff;padding:2px 6px;border-radius:8px;font-size:11px;font-weight:600;color:#0f172a;border:1px solid ' + color + ';margin-top:2px;white-space:nowrap;box-shadow:0 1px 2px rgba(0,0,0,0.15);">' + (badge ? '<span style="color:' + color + ';">' + badge + '</span> · ' : '') + (m.label||'') + '</div>';
-      return '<div style="display:flex;flex-direction:column;align-items:center;cursor:pointer;min-width:44px;min-height:44px;justify-content:center;">' + svg + labelHtml + '</div>';
+      var countBadge = count > 1
+        ? '<div style="position:absolute;top:-4px;right:-6px;min-width:20px;height:20px;padding:0 5px;border-radius:10px;background:#dc2626;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 1px 2px rgba(0,0,0,0.25);box-sizing:border-box;">' + count + '</div>'
+        : '';
+      var labelHtml = '<div style="position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:4px;background:#fff;padding:2px 6px;border-radius:8px;font-size:11px;font-weight:600;color:#0f172a;border:1px solid ' + color + ';white-space:nowrap;box-shadow:0 1px 2px rgba(0,0,0,0.15);">' + (badge ? '<span style="color:' + color + ';">' + badge + '</span> · ' : '') + (m.label||'') + '</div>';
+      return '<div style="position:relative;width:36px;height:36px;cursor:pointer;">' + svg + countBadge + labelHtml + '</div>';
     }
 
     function renderMarkers(){
@@ -123,13 +132,19 @@ MARKERS.forEach(function(m){
         var content = document.createElement('div');
         content.innerHTML = buildMarkerHtml(m);
         content.firstChild.addEventListener('click', function(){
-          postMsg({ type: 'markerPress', fieldId: m.id });
+          if ((m.count || 1) > 1) {
+            postMsg({ type: 'markerGroupPress', groupIds: m.groupIds || [m.id] });
+          } else {
+            postMsg({ type: 'markerPress', fieldId: m.id });
+          }
         });
         new kakao.maps.CustomOverlay({
           position: pos,
           content: content,
           map: map,
-          yAnchor: 1,
+          // anchor 박스 = SVG 36×36. 중앙(0.5,0.5)이 좌표에 정확히 정렬되어 줌 무관 정확.
+          xAnchor: 0.5,
+          yAnchor: 0.5,
         });
       });
     }

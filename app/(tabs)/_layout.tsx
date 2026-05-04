@@ -1,9 +1,10 @@
 import { useEffect } from 'react';
-import { Tabs } from 'expo-router';
+import { Tabs, router } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/theme/colors';
 import { useTripStore } from '@/stores/tripStore';
+import { useFieldStore } from '@/stores/fieldStore';
 
 type IonName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -28,11 +29,14 @@ function TabItem({
 
 export default function TabsLayout() {
   const hydrateTrips = useTripStore((s) => s.hydrate);
+  const hydrateFields = useFieldStore((s) => s.hydrate);
 
-  // 인증 후 진입 시 외근 목록·진행 상태 초기 페치
+  // 인증 후 진입 시 외근/현장 초기 페치 — trips 탭이 첫 화면이라도 지도(MapDashboard)에
+  // 마커가 즉시 그려지도록 fields 도 함께 hydrate. fields 탭의 filter 기반 refresh 는 그대로.
   useEffect(() => {
     void hydrateTrips();
-  }, [hydrateTrips]);
+    void hydrateFields();
+  }, [hydrateTrips, hydrateFields]);
 
   return (
     <Tabs
@@ -73,6 +77,12 @@ export default function TabsLayout() {
             <TabItem label="현장" icon="location" color={color} size={size} />
           ),
         }}
+        listeners={() => ({
+          tabPress: () => {
+            // 탭 클릭 시 항상 현장 목록(index)로 리셋 — 이전 [id] 상세에 머물러 있던 stack 잔재를 클리어
+            router.replace('/(tabs)/fields' as never);
+          },
+        })}
       />
       <Tabs.Screen
         name="reports"

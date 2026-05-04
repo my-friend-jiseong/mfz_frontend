@@ -164,6 +164,7 @@ async function refreshAccessSingleFlight(): Promise<string | null> {
   refreshInflight = (async () => {
     const store = useAuthStore.getState();
     const rt = store.refreshToken;
+    if (__DEV__) console.log('[auth] _refreshAccess start, hasRefresh=', !!rt);
     if (!rt) return null;
     try {
       const session = await auth.refresh(rt);
@@ -175,8 +176,10 @@ async function refreshAccessSingleFlight(): Promise<string | null> {
         refreshToken: session.refreshToken,
         isAuthenticated: true,
       });
+      if (__DEV__) console.log('[auth] _refreshAccess SUCCESS');
       return session.accessToken;
-    } catch {
+    } catch (e) {
+      if (__DEV__) console.error('[auth] _refreshAccess FAILED — store cleared', e);
       await clearRefreshToken();
       useAuthStore.setState({
         user: null,
