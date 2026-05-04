@@ -82,10 +82,9 @@ async function rawRequest<T>(path: string, init: RequestInit_, accessToken: stri
   }
 
   if (__DEV__) {
-    // 진단용 — 백엔드 응답 shape 가 비정상일 때 추적 가능하도록
-    // (비밀번호 등 민감정보는 body 가 아닌 request 단계에서 마스킹해야 함)
+    const authTag = init.skipAuth ? '[skip-auth]' : accessToken ? '[auth]' : '[NO_AUTH]';
     console.log(
-      `[api] ${init.method ?? 'GET'} ${path} → ${res.status} ${text.length === 0 ? '(empty body)' : ''}`,
+      `[api] ${init.method ?? 'GET'} ${path} → ${res.status} ${authTag} ${text.length === 0 ? '(empty body)' : ''}`,
       text.length > 0 && text.length < 2000 ? body : `(${text.length} bytes)`,
     );
   }
