@@ -74,8 +74,8 @@ export const useFieldStore = create<FieldState>((set, get) => ({
         longitude: it.lng,
       }));
       set({ fields: items });
-    } catch {
-      // ignore
+    } catch (e) {
+      if (__DEV__) console.error('[fieldStore.refresh] failed', e);
     }
   },
 
