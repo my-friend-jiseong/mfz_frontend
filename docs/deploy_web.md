@@ -11,21 +11,14 @@
 
 CI 는 지금 바로 동작한다. **배포(Vercel)** 는 아래 활성화 절차를 거쳐야 켜진다.
 
-## 2. 활성화가 막혀 있는 이유 (HTTPS 종단점 필요)
+## 2. 백엔드 HTTPS 종단점 — 준비 완료
 
-- 현재 백엔드: `http://59.21.223.137:28080` (HTTP, IP only).
-- Vercel 은 HTTPS 로만 서빙됨 → 브라우저가 **mixed‑content** 로 API 호출을 전부 차단.
-- 따라서 **백엔드 HTTPS 도메인이 준비된 뒤** 배포를 활성화한다.
+- 운영 도메인: `https://ilgayo.co.kr` (Swagger: `https://ilgayo.co.kr/api-docs/`).
+- 프런트 코드 반영 완료:
+  - [src/api/config.ts](../src/api/config.ts) fallback `https://ilgayo.co.kr`
+  - [app.json](../app.json) iOS `NSExceptionDomains` / Android `usesCleartextTraffic` 제거 (ATS 기본 정책 그대로 — cleartext 호출 전부 차단)
 
-당장 필요한 선행 작업:
-1. 도메인 구입 (예: Cloudflare Registrar / 가비아).
-2. 백엔드에 HTTPS 종단점 부여 — 옵션:
-   - 리버스 프록시 (Caddy / Nginx + Let's Encrypt) 를 백엔드 서버에 설치.
-   - 또는 Cloudflare Tunnel 로 HTTPS 노출 (서버에 인증서 설치 불필요).
-3. `EXPO_PUBLIC_API_BASE_URL` 을 새 HTTPS URL 로 교체.
-4. [app.json](../app.json) 의 `NSExceptionDomains` / `usesCleartextTraffic` 제거.
-
-## 3. Vercel 활성화 절차 (백엔드 HTTPS 준비 후)
+## 3. Vercel 활성화 절차
 
 ### 3‑1. 프로젝트 연결
 
@@ -41,7 +34,7 @@ Project Settings → Environment Variables 에 아래를 등록.
 
 | Key | 값 | 비고 |
 |---|---|---|
-| `EXPO_PUBLIC_API_BASE_URL` | `https://api.example.com` | 백엔드 HTTPS URL |
+| `EXPO_PUBLIC_API_BASE_URL` | `https://ilgayo.co.kr` | 백엔드 HTTPS URL |
 | `EXPO_PUBLIC_KAKAO_JS_KEY` | (Kakao Developers 의 JS 키) | Kakao 콘솔 Web 플랫폼에 Vercel 도메인 등록 필수 |
 
 > Kakao 지도가 새 도메인에서 로드되려면 카카오 개발자 콘솔 → 내 애플리케이션 → 플랫폼 → Web 에
