@@ -6,13 +6,19 @@ import { StatusBar } from 'expo-status-bar';
 import { View, StyleSheet } from 'react-native';
 import { TripStatusBanner } from '@/components/TripStatusBanner';
 import { SessionGuardModal } from '@/components/SessionGuardModal';
+import { OfflineBadge } from '@/components/OfflineBadge';
 import { startSessionActivity, stopSessionActivity } from '@/stores/sessionActivity';
+import { startNetworkWatcher, stopNetworkWatcher } from '@/api/network';
 import { colors } from '@/theme/colors';
 
 export default function RootLayout() {
   useEffect(() => {
     startSessionActivity();
-    return () => stopSessionActivity();
+    startNetworkWatcher();
+    return () => {
+      stopSessionActivity();
+      stopNetworkWatcher();
+    };
   }, []);
 
   return (
@@ -20,6 +26,7 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <SafeAreaView style={styles.root} edges={['top']}>
           <TripStatusBanner />
+          <OfflineBadge />
           <View style={styles.content}>
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="index" />

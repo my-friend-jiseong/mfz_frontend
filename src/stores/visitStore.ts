@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import type { Visit, VisitStatus, TextMemo, Photo, VoiceMemo } from '@/types/entities';
-import { visits as visitsApi, localizeError } from '@/api';
+import { visits as visitsApi, localizeError, NetworkError } from '@/api';
 import { useFieldStore } from './fieldStore';
+import { useOfflineQueueStore } from './offlineQueueStore';
 
 // 백엔드 실측 (smoke test):
 //   - 메모 body 필드명: { text } 확정
@@ -85,6 +86,20 @@ export const useVisitStore = create<VisitState>((set, get) => ({
       }));
       return { ok: true };
     } catch (e) {
+      // 네트워크 끊김이면 큐잉 + optimistic UI (복구 시 자동 flush).
+      if (e instanceof NetworkError) {
+        await useOfflineQueueStore.getState().enqueue({
+          kind: 'visitStatus',
+          path: `/api/visits/${visitId}/status`,
+          body: { status, ...(reason ? { statusReason: reason } : {}) },
+        });
+        set((s) => ({
+          visits: s.visits.map((v) =>
+            v.id === visitId ? { ...v, status } : v,
+          ),
+        }));
+        return { ok: true };
+      }
       return { ok: false, error: describeError(e) };
     }
   },
