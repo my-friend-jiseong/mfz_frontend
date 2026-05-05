@@ -143,3 +143,29 @@ export function errorCode(e: unknown): string | null {
   if (!(e instanceof ApiError)) return null;
   return e.code ?? null;
 }
+
+/**
+ * Phase 7 contract 의 error.fields ({ 필드명: 사유 }) 를 폼 측에 적용.
+ * react-hook-form 등의 setError(name, { message }) 시그니처에 맞춰진 setter 를 받음.
+ *
+ * 사용:
+ *   try { ... } catch (e) {
+ *     if (applyFieldErrors(e, (name, msg) => form.setError(name, { message: msg }))) return;
+ *     toast(localizeError(e));
+ *   }
+ *
+ * 반환: fields 가 있어 처리됐으면 true, 그 외 false (호출자가 일반 에러로 처리).
+ * 현재 백엔드 라우트는 fields 를 채우지 않지만, 향후 채우기 시작하면 자동 동작.
+ */
+export function applyFieldErrors(
+  e: unknown,
+  setFieldError: (name: string, message: string) => void,
+): boolean {
+  if (!(e instanceof ApiError) || !e.fields) return false;
+  const entries = Object.entries(e.fields);
+  if (entries.length === 0) return false;
+  for (const [name, reason] of entries) {
+    setFieldError(name, reason);
+  }
+  return true;
+}

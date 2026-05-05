@@ -110,11 +110,23 @@ export default function TripDetail() {
     }
   };
 
+  const promptReportAfterEnd = (endedTripId: string) => {
+    // IA cross-link X2 — 외근 종료 → AI 보고서 작성 진입
+    Alert.alert('외근 종료', '외근이 정상 종료되었습니다. 지금 AI 보고서를 작성할까요?', [
+      { text: '나중에', style: 'cancel' },
+      {
+        text: '지금 작성',
+        onPress: () =>
+          router.replace(`/(tabs)/reports/generate?tripId=${endedTripId}` as never),
+      },
+    ]);
+  };
+
   const handleEnd = async () => {
     const r = await endTrip();
     if (r.ok) {
-      Alert.alert('외근 종료', '외근이 정상 종료되었습니다.');
       finishEnd('외근이 종료되었습니다');
+      promptReportAfterEnd(r.trip.id);
       return;
     }
     if ('needsConfirm' in r) {
@@ -126,7 +138,7 @@ export default function TripDetail() {
           onPress: async () => {
             const force = await endTrip(true);
             if (force.ok) {
-              Alert.alert('외근 종료', '외근이 정상 종료되었습니다.');
+              promptReportAfterEnd(force.trip.id);
               return;
             }
             if (!('needsConfirm' in force)) {

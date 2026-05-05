@@ -36,6 +36,9 @@ export interface Field {
   addressDetail: string;
   latitude: number;
   longitude: number;
+  tags?: string[];
+  recentVisitedAt?: string | null;
+  updatedAt?: string;
 }
 
 export interface Visit {

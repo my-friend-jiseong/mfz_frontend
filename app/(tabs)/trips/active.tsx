@@ -243,7 +243,18 @@ export default function ActiveTrip() {
     if (originalTripId !== null) {
       removeByTrip(originalTripId);
     }
-    router.replace(`/(tabs)/trips/${endedTripId}` as never);
+    // 종료 직후 AI 보고서 작성 진입 옵션 — IA cross-link X2
+    Alert.alert('외근 종료', '외근이 종료되었습니다. 지금 AI 보고서를 작성할까요?', [
+      {
+        text: '나중에',
+        style: 'cancel',
+        onPress: () => router.replace(`/(tabs)/trips/${endedTripId}` as never),
+      },
+      {
+        text: '지금 작성',
+        onPress: () => router.replace(`/(tabs)/reports/generate?tripId=${endedTripId}` as never),
+      },
+    ]);
   };
 
   const handleEnd = async () => {
