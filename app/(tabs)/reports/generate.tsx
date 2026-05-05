@@ -161,6 +161,26 @@ export default function GenerateReport() {
   // 마지막 시도 결과 — 실패 시 재시도 노출 / 성공 시 즉시 라우팅이라 무관.
   const [lastAttemptFailed, setLastAttemptFailed] = useState(false);
 
+  // 생성 진행 시각화 — 백엔드 streaming 이 없어 시간 기반 시뮬레이션.
+  // 단계는 "안심용" 시각 신호. 실제 단계 전환 시점과 정확히 일치하지 않을 수 있음.
+  const [elapsedSec, setElapsedSec] = useState(0);
+  const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const startTickerRef = useRef<((reset: boolean) => void) | null>(null);
+  startTickerRef.current = (reset: boolean) => {
+    if (tickRef.current) clearInterval(tickRef.current);
+    if (reset) setElapsedSec(0);
+    tickRef.current = setInterval(() => {
+      setElapsedSec((s) => s + 1);
+    }, 1000);
+  };
+  const stopTicker = () => {
+    if (tickRef.current) {
+      clearInterval(tickRef.current);
+      tickRef.current = null;
+    }
+  };
+  useEffect(() => () => stopTicker(), []);
+
   const handleGenerate = async () => {
     setError(null);
     setLastAttemptFailed(false);
@@ -169,6 +189,7 @@ export default function GenerateReport() {
       return;
     }
     setBusy(true);
+    startTickerRef.current?.(true);
     const r = await generate({
       notes: notes.trim(),
       title: title.trim() || undefined,
@@ -180,6 +201,7 @@ export default function GenerateReport() {
     });
     if (!mountedRef.current) return;
     setBusy(false);
+    stopTicker();
     if (r.ok) {
       router.replace(`/(tabs)/reports/${r.data.id}` as never);
     } else {
@@ -187,6 +209,14 @@ export default function GenerateReport() {
       setLastAttemptFailed(true);
     }
   };
+
+  // 단계 산출 — 시간 cutoff 기반.
+  const stepLabel = (() => {
+    if (elapsedSec < 3) return { idx: 1, text: '메모·사진 업로드 중' };
+    if (elapsedSec < 12) return { idx: 2, text: 'AI 분석 중' };
+    return { idx: 3, text: '문서 작성 중' };
+  })();
+  const remainEstSec = Math.max(0, 30 - elapsedSec);
 
   return (
     <KeyboardAvoidingView
@@ -320,6 +350,43 @@ export default function GenerateReport() {
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
+        {busy ? (
+          <View style={styles.progressBox}>
+            <View style={styles.progressSteps}>
+              {[1, 2, 3].map((i) => {
+                const done = i < stepLabel.idx;
+                const active = i === stepLabel.idx;
+                return (
+                  <View
+                    key={i}
+                    style={[
+                      styles.progressDot,
+                      done && styles.progressDotDone,
+                      active && styles.progressDotActive,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.progressDotText,
+                        (done || active) && styles.progressDotTextActive,
+                      ]}
+                    >
+                      {i}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+            <Text style={styles.progressTitle}>
+              {stepLabel.idx}/3 · {stepLabel.text}
+            </Text>
+            <Text style={styles.progressMeta}>
+              {elapsedSec}초 경과
+              {remainEstSec > 0 ? ` · 약 ${remainEstSec}초 남음` : ' · 마무리 중'}
+            </Text>
+          </View>
+        ) : null}
+
         <Pressable
           onPress={handleGenerate}
           disabled={busy}
@@ -327,7 +394,7 @@ export default function GenerateReport() {
         >
           <Text style={styles.btnText}>
             {busy
-              ? 'AI 생성 중... (5~30초)'
+              ? 'AI 생성 중...'
               : lastAttemptFailed
                 ? '↻ 다시 시도'
                 : 'AI 보고서 생성'}
@@ -441,6 +508,42 @@ const styles = StyleSheet.create({
   },
   photoBtnText: { fontSize: fontSize.sm, color: colors.text, fontWeight: '600' },
   error: { color: colors.danger, fontSize: fontSize.sm, marginTop: spacing.md },
+  progressBox: {
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.primary + '55',
+    backgroundColor: colors.primary + '0d',
+  },
+  progressSteps: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  progressDot: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  progressDotDone: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  progressDotActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primary + '20',
+  },
+  progressDotText: { fontSize: fontSize.xs, color: colors.textMuted, fontWeight: '700' },
+  progressDotTextActive: { color: colors.primary },
+  progressTitle: { fontSize: fontSize.sm, color: colors.text, fontWeight: '700' },
+  progressMeta: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: 2 },
   btn: {
     backgroundColor: colors.primary,
     paddingVertical: spacing.lg,
