@@ -10,6 +10,7 @@ import {
   type DisplayMode,
   type AttachmentKind,
   type VisibleAttachments,
+  type RangePreset,
 } from '@/components/MapFilterBar';
 import type { FieldStatus } from '@/types/entities';
 import { colors } from '@/theme/colors';
@@ -26,6 +27,8 @@ export function MapDashboard() {
 
   const [displayMode, setDisplayMode] = useState<DisplayMode>('markers');
   const [selectedStatuses, setSelectedStatuses] = useState<FieldStatus[]>([]);
+  const [rangePreset, setRangePreset] = useState<RangePreset>('all');
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [visibleAttachments, setVisibleAttachments] = useState<VisibleAttachments>({
     text: true,
     voice: true,
@@ -38,10 +41,35 @@ export function MapDashboard() {
     [allFields, userId],
   );
 
+  // 가용 태그 — 내 현장에 등록된 태그 합집합 (정렬)
+  const availableTags = useMemo(() => {
+    const set = new Set<string>();
+    myFields.forEach((f) => f.tags?.forEach((t) => set.add(t)));
+    return Array.from(set).sort();
+  }, [myFields]);
+
   const visibleFields = useMemo(() => {
-    if (selectedStatuses.length === 0) return myFields;
-    return myFields.filter((f) => selectedStatuses.includes(f.status));
-  }, [myFields, selectedStatuses]);
+    let list = myFields;
+    if (selectedStatuses.length > 0) {
+      list = list.filter((f) => selectedStatuses.includes(f.status));
+    }
+    if (rangePreset !== 'all') {
+      const days = rangePreset === '30d' ? 30 : rangePreset === '7d' ? 7 : 1;
+      const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+      list = list.filter((f) => {
+        const t = f.recentVisitedAt ?? f.updatedAt;
+        if (!t) return false;
+        const ms = new Date(t).getTime();
+        return Number.isFinite(ms) && ms >= cutoff;
+      });
+    }
+    if (selectedTags.length > 0) {
+      list = list.filter((f) =>
+        selectedTags.every((tag) => f.tags?.includes(tag)),
+      );
+    }
+    return list;
+  }, [myFields, selectedStatuses, rangePreset, selectedTags]);
 
   const attachmentPresenceByField = useMemo(() => {
     const map = new Map<
@@ -95,6 +123,11 @@ export function MapDashboard() {
       prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s],
     );
 
+  const toggleTag = (tag: string) =>
+    setSelectedTags((prev) =>
+      prev.includes(tag) ? prev.filter((x) => x !== tag) : [...prev, tag],
+    );
+
   const toggleAttachment = (kind: AttachmentKind) =>
     setVisibleAttachments((prev) => ({ ...prev, [kind]: !prev[kind] }));
 
@@ -107,6 +140,11 @@ export function MapDashboard() {
         onChangeDisplayMode={setDisplayMode}
         selectedStatuses={selectedStatuses}
         onToggleStatus={toggleStatus}
+        rangePreset={rangePreset}
+        onChangeRangePreset={setRangePreset}
+        availableTags={availableTags}
+        selectedTags={selectedTags}
+        onToggleTag={toggleTag}
         visibleAttachments={visibleAttachments}
         onToggleAttachment={toggleAttachment}
         showBoundary={showBoundary}

@@ -74,6 +74,9 @@ export const useFieldStore = create<FieldState>((set, get) => ({
         addressDetail: it.detailAddress ?? '',
         latitude: it.lat,
         longitude: it.lng,
+        tags: it.tags,
+        recentVisitedAt: it.recentVisitedAt,
+        updatedAt: it.updatedAt,
       }));
       set({ fields: items });
     } catch (e) {

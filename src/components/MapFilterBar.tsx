@@ -8,6 +8,7 @@ import type { FieldStatus } from '@/types/entities';
 export type DisplayMode = 'markers' | 'heatmap' | 'choropleth';
 export type AttachmentKind = 'text' | 'voice' | 'photo';
 export type VisibleAttachments = Record<AttachmentKind, boolean>;
+export type RangePreset = 'all' | '30d' | '7d' | '1d';
 type GroupKey = 'display' | 'visibility' | 'filter';
 
 interface Props {
@@ -15,6 +16,11 @@ interface Props {
   onChangeDisplayMode: (mode: DisplayMode) => void;
   selectedStatuses: FieldStatus[];
   onToggleStatus: (status: FieldStatus) => void;
+  rangePreset: RangePreset;
+  onChangeRangePreset: (preset: RangePreset) => void;
+  availableTags: string[];
+  selectedTags: string[];
+  onToggleTag: (tag: string) => void;
   visibleAttachments: VisibleAttachments;
   onToggleAttachment: (kind: AttachmentKind) => void;
   showBoundary: boolean;
@@ -25,6 +31,13 @@ const DISPLAY_LABEL: Record<DisplayMode, string> = {
   markers: '마커',
   heatmap: '히트맵',
   choropleth: '단계구분도',
+};
+
+const RANGE_LABEL: Record<RangePreset, string> = {
+  all: '전체',
+  '30d': '최근 30일',
+  '7d': '최근 7일',
+  '1d': '오늘',
 };
 
 const STATUS_CHIPS: { value: FieldStatus; label: string }[] = [
@@ -44,6 +57,11 @@ export function MapFilterBar({
   onChangeDisplayMode,
   selectedStatuses,
   onToggleStatus,
+  rangePreset,
+  onChangeRangePreset,
+  availableTags,
+  selectedTags,
+  onToggleTag,
   visibleAttachments,
   onToggleAttachment,
   showBoundary,
@@ -54,11 +72,12 @@ export function MapFilterBar({
   const toggleGroup = (key: GroupKey) =>
     setExpanded((prev) => (prev === key ? null : key));
 
-  // 각 그룹이 "활성 선택"을 가졌는지 요약
   const displayActive = displayMode !== 'markers';
-  const filterActiveCount = selectedStatuses.length; // 추후 기간·주제 포함
+  const rangeActive = rangePreset !== 'all';
+  const filterActiveCount =
+    selectedStatuses.length + (rangeActive ? 1 : 0) + selectedTags.length;
 
-  // 표시 여부: 기본 상태 = 메모·음성·사진 ON, 경계 OFF. 기본에서 벗어나면 "active"
+  // 표시 여부: 기본 = 메모·음성·사진 ON, 경계 OFF.
   const attachmentOnCount =
     (visibleAttachments.text ? 1 : 0) +
     (visibleAttachments.voice ? 1 : 0) +
@@ -133,23 +152,50 @@ export function MapFilterBar({
       ) : null}
 
       {expanded === 'filter' ? (
-        <ExpandedRow>
-          <SubChip label="시작일/종료일 (UI)" active={false} onPress={() => {}} />
-          {STATUS_CHIPS.map((s) => {
-            const active = selectedStatuses.includes(s.value);
-            const accent = colors.fieldStatus[s.value];
-            return (
+        <View>
+          <ExpandedRow>
+            <SubLabel>기간</SubLabel>
+            {(['all', '30d', '7d', '1d'] as RangePreset[]).map((p) => (
               <SubChip
-                key={s.value}
-                label={s.label}
-                active={active}
-                accent={accent}
-                onPress={() => onToggleStatus(s.value)}
+                key={p}
+                label={RANGE_LABEL[p]}
+                active={rangePreset === p}
+                onPress={() => onChangeRangePreset(p)}
               />
-            );
-          })}
-          <SubChip label="주제" disabled />
-        </ExpandedRow>
+            ))}
+          </ExpandedRow>
+          <ExpandedRow>
+            <SubLabel>상태</SubLabel>
+            {STATUS_CHIPS.map((s) => {
+              const active = selectedStatuses.includes(s.value);
+              const accent = colors.fieldStatus[s.value];
+              return (
+                <SubChip
+                  key={s.value}
+                  label={s.label}
+                  active={active}
+                  accent={accent}
+                  onPress={() => onToggleStatus(s.value)}
+                />
+              );
+            })}
+          </ExpandedRow>
+          <ExpandedRow>
+            <SubLabel>태그</SubLabel>
+            {availableTags.length === 0 ? (
+              <Text style={styles.emptyHint}>등록된 태그 없음</Text>
+            ) : (
+              availableTags.map((tag) => (
+                <SubChip
+                  key={tag}
+                  label={tag}
+                  active={selectedTags.includes(tag)}
+                  onPress={() => onToggleTag(tag)}
+                />
+              ))
+            )}
+          </ExpandedRow>
+        </View>
       ) : null}
     </View>
   );
@@ -218,6 +264,10 @@ function ExpandedRow({ children }: { children: React.ReactNode }) {
       </ScrollView>
     </View>
   );
+}
+
+function SubLabel({ children }: { children: React.ReactNode }) {
+  return <Text style={styles.subLabel}>{children}</Text>;
 }
 
 function SubChip({
@@ -312,6 +362,13 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     alignItems: 'center',
   },
+  subLabel: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    fontWeight: '700',
+    marginRight: spacing.xs,
+    minWidth: 36,
+  },
   subChip: {
     paddingHorizontal: spacing.md,
     paddingVertical: 6,
@@ -330,10 +387,10 @@ const styles = StyleSheet.create({
   subChipLabel: { fontSize: fontSize.sm, color: colors.textMuted },
   subChipLabelActive: { color: colors.primary, fontWeight: '700' },
   subChipLabelDisabled: { color: colors.textMuted },
-  disabledHint: {
+  emptyHint: {
     fontSize: fontSize.xs,
     color: colors.textMuted,
-    alignSelf: 'center',
-    marginLeft: spacing.xs,
+    fontStyle: 'italic',
+    paddingHorizontal: spacing.sm,
   },
 });
