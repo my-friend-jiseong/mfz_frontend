@@ -21,10 +21,16 @@ import {
   VOICE_MAX_SECONDS,
   type VoiceRecorder,
 } from '@/utils/media';
+import { openKakaoRouteTo } from '@/utils/kakaoMap';
 import { PhotoGrid, VoiceMemoList } from '@/components/AttachmentPreview';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
-import type { Visit } from '@/types/entities';
+import {
+  FIELD_STATUS_VALUES,
+  VISIT_STATUS_LABEL,
+  type FieldStatus,
+  type Visit,
+} from '@/types/entities';
 
 const FIELD_STATUS_LABEL = {
   pending: '대기',
@@ -47,7 +53,11 @@ export default function FieldDetail() {
   const addFieldTextMemo = useFieldStore((s) => s.addTextMemo);
   const addFieldPhoto = useFieldStore((s) => s.addPhoto);
   const addFieldVoiceMemo = useFieldStore((s) => s.addVoiceMemo);
+  const patchFieldStatus = useFieldStore((s) => s.patchStatus);
   const allVisits = useVisitStore((s) => s.visits);
+  const allTextMemos = useVisitStore((s) => s.textMemos);
+  const allPhotos = useVisitStore((s) => s.photos);
+  const allVoiceMemos = useVisitStore((s) => s.voiceMemos);
   const activeTripId = useTripStore((s) => s.activeTripId);
 
   // 진입 시 detail 페치 (directAttachments 채우기)
@@ -169,29 +179,77 @@ export default function FieldDetail() {
     );
   }
 
+  const memoCount = (visitId: string) =>
+    allTextMemos.filter((m) => m.visitId === visitId).length;
+  const photoCount = (visitId: string) =>
+    allPhotos.filter((p) => p.visitId === visitId).length;
+  const voiceCount = (visitId: string) =>
+    allVoiceMemos.filter((m) => m.visitId === visitId).length;
+
   const renderVisit = ({ item }: { item: Visit }) => {
     const c = colors.visitStatus[item.status];
+    const m = memoCount(item.id);
+    const p = photoCount(item.id);
+    const v = voiceCount(item.id);
+    const totalAtt = m + p + v;
     return (
-      <View style={styles.visitRow}>
-        <Text style={styles.visitDate}>{fmtDateTime(item.visitedAt)}</Text>
-        <View style={[styles.statusChip, { backgroundColor: c + '22' }]}>
-          <Text style={[styles.statusText, { color: c }]}>{item.status}</Text>
+      <Pressable
+        onPress={() =>
+          router.push(
+            `/(tabs)/trips/visit?tripId=${item.tripId}&visitId=${item.id}` as never,
+          )
+        }
+        style={({ pressed }) => [styles.visitRow, pressed && styles.pressed]}
+      >
+        <View style={styles.visitRowMain}>
+          <Text style={styles.visitDate}>{fmtDateTime(item.visitedAt)}</Text>
+          <View style={[styles.statusChip, { backgroundColor: c + '22' }]}>
+            <Text style={[styles.statusText, { color: c }]}>
+              {VISIT_STATUS_LABEL[item.status]}
+            </Text>
+          </View>
         </View>
-      </View>
+        {totalAtt > 0 ? (
+          <Text style={styles.visitAttachments}>
+            {m > 0 ? `메모 ${m}` : ''}
+            {m > 0 && (p > 0 || v > 0) ? ' · ' : ''}
+            {p > 0 ? `사진 ${p}` : ''}
+            {p > 0 && v > 0 ? ' · ' : ''}
+            {v > 0 ? `음성 ${v}` : ''}
+          </Text>
+        ) : null}
+      </Pressable>
     );
   };
 
   const canCheckIn = activeTripId !== null;
 
+  // 상태 변경 — chip tap 시 3개 상태 중 선택. patchStatus 즉시 호출.
+  const handleStatusTap = () => {
+    const others = FIELD_STATUS_VALUES.filter((s) => s !== field.status);
+    Alert.alert('상태 변경', `현재: ${FIELD_STATUS_LABEL[field.status]}`, [
+      { text: '취소', style: 'cancel' },
+      ...others.map((s) => ({
+        text: FIELD_STATUS_LABEL[s],
+        onPress: async () => {
+          const r = await patchFieldStatus(field.id, s);
+          if (!r.ok) Alert.alert('상태 변경 실패', r.error);
+        },
+      })),
+    ]);
+  };
+
   const ListHeader = () => (
     <View style={styles.summary}>
-      <View
-        style={[
-          styles.statusChip,
+      <Pressable
+        onPress={handleStatusTap}
+        style={({ pressed }) => [
+          styles.statusChipTappable,
           {
             backgroundColor: colors.fieldStatus[field.status] + '22',
-            alignSelf: 'flex-start',
+            borderColor: colors.fieldStatus[field.status],
           },
+          pressed && styles.pressed,
         ]}
       >
         <Text
@@ -200,16 +258,26 @@ export default function FieldDetail() {
             { color: colors.fieldStatus[field.status] },
           ]}
         >
-          {FIELD_STATUS_LABEL[field.status]}
+          {FIELD_STATUS_LABEL[field.status]} ▾
         </Text>
-      </View>
+      </Pressable>
       <Text style={styles.addr}>{field.address}</Text>
       {field.addressDetail ? (
         <Text style={styles.detail}>{field.addressDetail}</Text>
       ) : null}
-      <Text style={styles.coord}>
-        좌표: {field.latitude.toFixed(4)}, {field.longitude.toFixed(4)}
-      </Text>
+      <View style={styles.coordRow}>
+        <Text style={styles.coord}>
+          좌표: {field.latitude.toFixed(4)}, {field.longitude.toFixed(4)}
+        </Text>
+        <Pressable
+          onPress={() =>
+            void openKakaoRouteTo(field.address, field.latitude, field.longitude)
+          }
+          style={({ pressed }) => [styles.routeBtn, pressed && styles.pressed]}
+        >
+          <Text style={styles.routeBtnText}>길찾기</Text>
+        </Pressable>
+      </View>
 
       <View style={styles.actions}>
         <Pressable
@@ -352,10 +420,36 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: radius.pill,
   },
+  statusChipTappable: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+  },
   statusText: { fontSize: fontSize.xs, fontWeight: '700' },
   addr: { fontSize: fontSize.lg, fontWeight: '700', color: colors.text },
   detail: { fontSize: fontSize.base, color: colors.text },
-  coord: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: spacing.xs },
+  coordRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing.xs,
+  },
+  coord: { fontSize: fontSize.xs, color: colors.textMuted },
+  routeBtn: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.surface,
+  },
+  routeBtnText: {
+    fontSize: fontSize.xs,
+    color: colors.primary,
+    fontWeight: '700',
+  },
   actions: {
     flexDirection: 'row',
     gap: spacing.sm,
@@ -383,17 +477,21 @@ const styles = StyleSheet.create({
   },
   list: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
   visitRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.md,
     padding: spacing.md,
     marginBottom: spacing.xs,
+    gap: 4,
+  },
+  visitRowMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   visitDate: { fontSize: fontSize.sm, color: colors.text },
+  visitAttachments: { fontSize: fontSize.xs, color: colors.textMuted },
   directHint: {
     fontSize: fontSize.xs,
     color: colors.textMuted,
