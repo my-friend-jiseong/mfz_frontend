@@ -1,5 +1,5 @@
 export { API_BASE_URL } from './config';
-export { ApiError, NetworkError, localizeError, errorCode } from './errors';
+export { ApiError, NetworkError, localizeError, errorCode, applyFieldErrors } from './errors';
 export { request, configureAuth } from './client';
 
 export { auth } from './endpoints/auth';

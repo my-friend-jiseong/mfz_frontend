@@ -19,6 +19,26 @@ export interface CheckInResponse {
   message: string;
 }
 
+// 방문 첨부 (smoke 캡처 + Phase 3 §2.3 schema 합집합).
+export interface VisitAttachment {
+  id: string;
+  type: 'text' | 'photo' | 'audio';
+  text?: string;
+  fileName?: string;
+  mimeType?: string;
+  fileUrl?: string;
+  url?: string;
+  thumbnailUrl?: string;
+  byteSize?: number;
+  durationSec?: number;
+  durationSeconds?: number;
+  caption?: string;
+  createdAt: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  locationConsent?: boolean;
+}
+
 export interface VisitDetailResponse {
   tripId: string;
   visitId: string;
@@ -29,7 +49,7 @@ export interface VisitDetailResponse {
   statusReason: string | null;
   memo: string;
   attachmentCounts: { text: number; photo: number; audio: number };
-  attachments: unknown[];
+  attachments: VisitAttachment[];
 }
 
 export const visits = {
@@ -62,9 +82,14 @@ export const visits = {
     });
   },
 
-  addVoiceMemo: (visitId: string, file: { uri: string; name: string; type: string }) => {
+  addVoiceMemo: (
+    visitId: string,
+    file: { uri: string; name: string; type: string },
+    durationSeconds?: number,
+  ) => {
     const fd = new FormData();
     fd.append('file', file as unknown as Blob);
+    if (durationSeconds !== undefined) fd.append('durationSeconds', String(durationSeconds));
     return request<unknown>(`/api/visits/${visitId}/voice-memos`, {
       method: 'POST',
       body: fd,

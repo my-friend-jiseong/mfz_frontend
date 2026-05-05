@@ -171,10 +171,7 @@ export const useVisitStore = create<VisitState>((set, get) => ({
     const visit = get().visits.find((v) => v.id === visitId);
     if (!visit) return { ok: false, error: '방문 정보를 찾을 수 없습니다' };
     try {
-      // visitsApi.addVoiceMemo 시그니처는 (visitId, file) 만 받으나 백엔드는
-      // multipart 의 durationSeconds 도 받음 — 향후 endpoint 함수 확장 시 사용.
-      void durationSeconds;
-      const res = (await visitsApi.addVoiceMemo(visitId, file)) as {
+      const res = (await visitsApi.addVoiceMemo(visitId, file, durationSeconds)) as {
         attachment?: {
           id: string;
           fileUrl?: string;
