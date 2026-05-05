@@ -1,6 +1,6 @@
 import { request } from '../client';
 
-// docs/_swagger_responses.md §8 — Reports endpoint 별 응답 shape 비일관 (어댑터로 흡수)
+// Phase 7 cut-over — 모든 reports 라우트가 raw 도메인 객체 반환 ({success, data} envelope 제거).
 
 // list 응답 item (flat, reportId)
 export interface ReportListItem {
@@ -33,7 +33,7 @@ export interface ReportDetailResponse {
   creator: { id: string; name: string };
 }
 
-// POST 응답 ({ success, data: { id, ... } } wrapper)
+// POST /api/reports 응답 (Phase 7 부터 raw)
 export interface ReportCreateData {
   id: string;
   tripId: string | null;
@@ -51,11 +51,6 @@ export interface ReportCreateData {
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
-}
-
-interface CreateWrapped {
-  success: boolean;
-  data: ReportCreateData;
 }
 
 export interface CreateReportBody {
@@ -79,7 +74,7 @@ export interface ListReportsParams {
   toDate?: string;
 }
 
-// 공유 링크 응답 — Phase 3 §2.2 보강 (expiresAt/shareExpiresAt 추가, 7일 만료)
+// 공유 링크 응답
 export interface ShareReportData {
   reportId: string;
   shareEnabled: boolean;
@@ -89,27 +84,13 @@ export interface ShareReportData {
   expiresAt?: string;
   shareExpiresAt?: string;
 }
-interface ShareWrapped {
-  success: boolean;
-  data: ShareReportData;
-}
 
 export interface DisableShareData {
   reportId: string;
   shareEnabled: false;
 }
-interface DisableShareWrapped {
-  success: boolean;
-  data: DisableShareData;
-}
 
-// 비인증 공유 보고서 조회
-interface SharedReportWrapped {
-  success: boolean;
-  data: ReportCreateData;
-}
-
-// Phase 3 §2.1 — generate 응답
+// Phase 3 §2.1 — generate 응답 (Phase 7 부터 raw, message 는 동위 필드)
 export interface ReportGenerateData {
   id: string;
   tripId: string | null;
@@ -123,11 +104,7 @@ export interface ReportGenerateData {
   outputFileName?: string;
   analysis?: unknown;
   generationMetadata?: { model?: string; tokens?: number | null; elapsedMs?: number };
-}
-interface GenerateWrapped {
-  success: boolean;
   message?: string;
-  data: ReportGenerateData;
 }
 
 export const reports = {
@@ -137,13 +114,8 @@ export const reports = {
   detail: (reportId: string) =>
     request<ReportDetailResponse>(`/api/reports/${reportId}`),
 
-  create: async (body: CreateReportBody): Promise<ReportCreateData> => {
-    const res = await request<CreateWrapped>('/api/reports', {
-      method: 'POST',
-      body,
-    });
-    return res.data;
-  },
+  create: (body: CreateReportBody) =>
+    request<ReportCreateData>('/api/reports', { method: 'POST', body }),
 
   update: (reportId: string, body: UpdateReportBody) =>
     request<ReportDetailResponse>(`/api/reports/${reportId}`, {
@@ -154,41 +126,29 @@ export const reports = {
   remove: (reportId: string) =>
     request<null>(`/api/reports/${reportId}`, { method: 'DELETE' }),
 
-  share: async (reportId: string): Promise<ShareReportData> => {
-    const res = await request<ShareWrapped>(`/api/reports/${reportId}/share`, {
+  share: (reportId: string) =>
+    request<ShareReportData>(`/api/reports/${reportId}/share`, {
       method: 'POST',
       body: {},
-    });
-    return res.data;
-  },
+    }),
 
   /** Phase 3 §2.2 — 공유 토큰 무효화 */
-  disableShare: async (reportId: string): Promise<DisableShareData> => {
-    const res = await request<DisableShareWrapped>(
-      `/api/reports/${reportId}/share`,
-      { method: 'DELETE' },
-    );
-    return res.data;
-  },
+  disableShare: (reportId: string) =>
+    request<DisableShareData>(`/api/reports/${reportId}/share`, {
+      method: 'DELETE',
+    }),
 
-  getShared: async (token: string): Promise<ReportCreateData> => {
-    const res = await request<SharedReportWrapped>(
-      `/api/reports/shared/${token}`,
-      { skipAuth: true },
-    );
-    return res.data;
-  },
+  getShared: (token: string) =>
+    request<ReportCreateData>(`/api/reports/shared/${token}`, { skipAuth: true }),
 
   /**
    * Phase 3 §2.1 — AI 보고서 생성·저장. multipart body:
    *  notes (필수), title, extraNotes, tripId, location, before_photo, after_photo
    */
-  generate: async (form: FormData): Promise<ReportGenerateData> => {
-    const res = await request<GenerateWrapped>('/api/reports/generate', {
+  generate: (form: FormData) =>
+    request<ReportGenerateData>('/api/reports/generate', {
       method: 'POST',
       body: form,
       multipart: true,
-    });
-    return res.data;
-  },
+    }),
 };
