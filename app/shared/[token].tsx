@@ -7,7 +7,7 @@ import {
   View,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { reports as reportsApi, type ReportCreateData, localizeError } from '@/api';
+import { reports as reportsApi, type ReportCreateData, localizeError, errorCode } from '@/api';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
 
@@ -18,10 +18,12 @@ function fmtDateTime(iso: string) {
   return new Date(iso).toLocaleString('ko-KR');
 }
 
+type ShareErrorKind = 'expired' | 'disabled' | 'not_found' | 'generic';
+
 export default function SharedReport() {
   const { token } = useLocalSearchParams<{ token: string }>();
   const [report, setReport] = useState<ReportCreateData | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ kind: ShareErrorKind; message: string } | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -31,7 +33,13 @@ export default function SharedReport() {
         const data = await reportsApi.getShared(token);
         setReport(data);
       } catch (e) {
-        setError(localizeError(e));
+        const code = errorCode(e);
+        const kind: ShareErrorKind =
+          code === 'share_expired' ? 'expired'
+            : code === 'share_not_enabled' ? 'disabled'
+            : code === 'report_not_found' ? 'not_found'
+            : 'generic';
+        setError({ kind, message: localizeError(e) });
       } finally {
         setLoading(false);
       }
@@ -47,10 +55,24 @@ export default function SharedReport() {
   }
 
   if (error || !report) {
+    const titleByKind: Record<ShareErrorKind, string> = {
+      expired: '공유 링크가 만료되었습니다',
+      disabled: '공유가 해제된 보고서입니다',
+      not_found: '존재하지 않는 보고서입니다',
+      generic: '공유 링크를 열 수 없습니다',
+    };
+    const helpByKind: Record<ShareErrorKind, string> = {
+      expired: '공유자에게 새 링크 발급을 요청해주세요.',
+      disabled: '공유자가 공유를 중지했습니다.',
+      not_found: '잘못된 링크이거나 보고서가 삭제되었습니다.',
+      generic: '잠시 후 다시 시도해주세요.',
+    };
+    const kind: ShareErrorKind = error?.kind ?? 'generic';
     return (
       <View style={styles.center}>
-        <Text style={styles.errorTitle}>공유 링크를 열 수 없습니다</Text>
-        <Text style={styles.errorBody}>{error ?? '만료되었거나 잘못된 링크입니다'}</Text>
+        <Text style={styles.errorTitle}>{titleByKind[kind]}</Text>
+        <Text style={styles.errorBody}>{error?.message ?? '만료되었거나 잘못된 링크입니다'}</Text>
+        <Text style={styles.errorHelp}>{helpByKind[kind]}</Text>
       </View>
     );
   }
@@ -93,6 +115,13 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   errorBody: { fontSize: fontSize.sm, color: colors.textMuted, textAlign: 'center' },
+  errorHelp: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginTop: spacing.md,
+    fontStyle: 'italic',
+  },
   scroll: { padding: spacing.xl, paddingBottom: spacing.xxl },
   badge: {
     alignSelf: 'flex-start',
