@@ -237,17 +237,20 @@ GET /api/trips/state-history?tripId=...
 
 ---
 
-## 7. 부수 — 미typed 응답 정리
+## 7. 부수 — 미typed 응답 정리 (대부분 정렬 완료)
 
-다음 응답들이 `unknown` / `unknown[]` 으로 받아지고 있음. 백엔드 명세 합의 후 frontend 가 typed 인터페이스 작성:
-
-| 위치 | 현재 | 필요 |
+| 위치 | 이전 | 현재 |
 |---|---|---|
-| `Report.analysis` ([reports.ts:105](../src/api/endpoints/reports.ts#L105)) | `unknown` | AI 분석 결과 schema (model, tokens, sections 등) |
-| `FieldDetail.recentVisits` ([fields.ts:61](../src/api/endpoints/fields.ts#L61)) | `unknown[]` | RecentVisitItem (visit 요약) |
-| `FieldList.appliedFilter` ([fields.ts:35](../src/api/endpoints/fields.ts#L35)) | `unknown` | 적용된 필터 echo (필요 시) |
-| `Trips.offlineQueue/flush` ([trips.ts:191-199](../src/api/endpoints/trips.ts#L191-L199)) | `unknown` | 큐 적재/flush 응답 (현재 frontend 미사용) |
-| `system.sessionActivity` ([system.ts:26](../src/api/endpoints/system.ts#L26)) | `unknown` | 204 또는 `{ refreshedUntil }` 류 |
+| `Report.analysis` ([reports.ts](../src/api/endpoints/reports.ts)) | `unknown` | ✅ `ReportAnalysis` (summary, keypoints, recommendations, sentiment, raw + free-form 흡수) |
+| `FieldDetail.recentVisits` ([fields.ts](../src/api/endpoints/fields.ts)) | `unknown[]` | ✅ `RecentVisitItem[]` (visitId, tripId, visitedAt, resultStatus, status, statusReason, memoPreview, attachmentCounts) |
+| `system.sessionActivity` ([system.ts](../src/api/endpoints/system.ts)) | `unknown` | ✅ `SessionActivityResponse \| null` (ok, refreshedUntil — 옵셔널) |
+| `FieldList.appliedFilter` ([fields.ts](../src/api/endpoints/fields.ts)) | `unknown` | ⏳ 백엔드 명세 받은 후 정렬 (현재 frontend 미사용) |
+| `Trips.offlineQueue/flush` ([trips.ts](../src/api/endpoints/trips.ts)) | `unknown` | ⏳ frontend 가 endpoint 직접 사용 안 함 — 우선순위 낮음 |
+
+### 백엔드가 해야 할 것
+- 위 ✅ 항목의 응답이 typed contract 와 정렬되는지 확인.
+- `Report.analysis` 의 실제 모델 출력 필드 목록 명세 (현재 free-form 흡수로 미래 안전).
+- `system.sessionActivity` 가 실제로 `refreshedUntil` 같은 정보를 보내는지 또는 204 No Content 인지.
 
 ---
 

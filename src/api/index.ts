@@ -36,6 +36,7 @@ export type {
   FieldListResponse,
   FieldDetailResponse,
   FieldDirectAttachment,
+  RecentVisitItem,
   CreateFieldBody,
   CreateFieldResponse,
   UpdateFieldBody,
@@ -58,7 +59,8 @@ export type {
   ShareReportData,
   DisableShareData,
   ReportGenerateData,
+  ReportAnalysis,
 } from './endpoints/reports';
 export { map } from './endpoints/map';
 export { system } from './endpoints/system';
-export type { SessionPolicy } from './endpoints/system';
+export type { SessionPolicy, SessionActivityResponse } from './endpoints/system';
