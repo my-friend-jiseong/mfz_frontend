@@ -1,24 +1,15 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { visits as visitsApi, localizeError } from '@/api';
 import type { VisitDetailResponse } from '@/api';
+import { useTripStore } from '@/stores/tripStore';
+import { useVisitStore } from '@/stores/visitStore';
 import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
 import { PhotoGrid, VoiceMemoList } from '@/components/AttachmentPreview';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
-
-// 백엔드 attachments[] shape — type 별로 union (text/photo/audio).
-interface AttachmentBase {
-  id: string;
-  type: 'text' | 'photo' | 'audio';
-  text?: string;
-  fileUrl?: string;
-  durationSec?: number;
-  durationSeconds?: number;
-  createdAt?: string;
-}
 
 function fmtDateTime(iso: string) {
   return new Date(iso).toLocaleString('ko-KR');
@@ -31,20 +22,19 @@ export default function VisitDetail() {
     visitId: string;
   }>();
 
-  const [data, setData] = useState<
-    (VisitDetailResponse & { attachments?: AttachmentBase[] }) | null
-  >(null);
+  const [data, setData] = useState<VisitDetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const activeTripId = useTripStore((s) => s.activeTripId);
+  const visitInStore = useVisitStore((s) => s.getById)(visitId ?? '');
 
   useEffect(() => {
     if (!tripId || !visitId) return;
     let cancelled = false;
     void (async () => {
       try {
-        const res = (await visitsApi.detail(tripId, visitId)) as VisitDetailResponse & {
-          attachments?: AttachmentBase[];
-        };
+        const res = await visitsApi.detail(tripId, visitId);
         if (!cancelled) setData(res);
       } catch (e) {
         if (!cancelled) setError(localizeError(e));
@@ -75,22 +65,26 @@ export default function VisitDetail() {
     );
   }
 
-  const attachments = (data.attachments ?? []) as AttachmentBase[];
+  const attachments = data.attachments ?? [];
   const textMemos = attachments.filter((a) => a.type === 'text');
   const photos = attachments
-    .filter((a) => a.type === 'photo' && a.fileUrl)
-    .map((a) => ({ id: a.id, fileUrl: a.fileUrl as string }));
+    .filter((a) => a.type === 'photo' && (a.fileUrl ?? a.url))
+    .map((a) => ({ id: a.id, fileUrl: (a.fileUrl ?? a.url) as string }));
   const voices = attachments
-    .filter((a) => a.type === 'audio' && a.fileUrl)
+    .filter((a) => a.type === 'audio' && (a.fileUrl ?? a.url))
     .map((a) => ({
       id: a.id,
-      fileUrl: a.fileUrl as string,
+      fileUrl: (a.fileUrl ?? a.url) as string,
       durationSec: a.durationSec ?? a.durationSeconds,
       createdAt: a.createdAt,
     }));
   // resultStatus 는 영문 enum, status 는 한국어 표시값 — 색은 영문으로 조회.
   const statusColor =
     colors.visitStatus[data.resultStatus as keyof typeof colors.visitStatus] ?? colors.text;
+  // 활성 외근의 visit 일 때만 "추가 첨부" CTA 노출 (이미 종료된 외근은 view-only).
+  const canAddMore =
+    activeTripId !== null && data.tripId === activeTripId && !!visitInStore;
+  const fieldIdForCheckin = visitInStore?.fieldId ?? null;
 
   return (
     <MapSheetLayout title="방문 상세" onBack={() => router.back()} initialIndex={2}>
@@ -102,6 +96,23 @@ export default function VisitDetail() {
         <Text style={styles.meta}>방문 시각: {fmtDateTime(data.visitedAt)}</Text>
         {data.statusReason ? (
           <Text style={styles.reason}>사유: {data.statusReason}</Text>
+        ) : null}
+
+        <View style={styles.summaryRow}>
+          <SummaryBadge label="텍스트" count={textMemos.length} />
+          <SummaryBadge label="사진" count={photos.length} />
+          <SummaryBadge label="음성" count={voices.length} />
+        </View>
+
+        {canAddMore && fieldIdForCheckin ? (
+          <Pressable
+            onPress={() =>
+              router.push(`/(tabs)/fields/${fieldIdForCheckin}/checkin` as never)
+            }
+            style={({ pressed }) => [styles.addBtn, pressed && styles.pressed]}
+          >
+            <Text style={styles.addBtnText}>+ 메모·사진 더 첨부하기</Text>
+          </Pressable>
         ) : null}
 
         {textMemos.length > 0 ? (
@@ -137,6 +148,15 @@ export default function VisitDetail() {
         ) : null}
       </ScrollView>
     </MapSheetLayout>
+  );
+}
+
+function SummaryBadge({ label, count }: { label: string; count: number }) {
+  return (
+    <View style={[styles.badge, count === 0 && styles.badgeMuted]}>
+      <Text style={[styles.badgeLabel, count === 0 && styles.badgeLabelMuted]}>{label}</Text>
+      <Text style={[styles.badgeCount, count === 0 && styles.badgeCountMuted]}>{count}</Text>
+    </View>
   );
 }
 
@@ -177,4 +197,39 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
     textAlign: 'center',
   },
+  summaryRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.primary + '15',
+  },
+  badgeMuted: {
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  badgeLabel: { fontSize: fontSize.xs, color: colors.primary, fontWeight: '700' },
+  badgeLabelMuted: { color: colors.textMuted, fontWeight: '600' },
+  badgeCount: { fontSize: fontSize.xs, color: colors.primary, fontWeight: '700' },
+  badgeCountMuted: { color: colors.textMuted },
+  addBtn: {
+    marginTop: spacing.md,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.primary + '0d',
+    alignItems: 'center',
+  },
+  addBtnText: { fontSize: fontSize.sm, color: colors.primary, fontWeight: '700' },
+  pressed: { opacity: 0.7 },
 });
