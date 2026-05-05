@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -14,24 +15,59 @@ import { useAuthStore } from '@/stores/authStore';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
 
+interface FieldErrors {
+  email?: string;
+  password?: string;
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export default function Login() {
   const router = useRouter();
   const login = useAuthStore((s) => s.login);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [globalError, setGlobalError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const passwordRef = useRef<TextInput>(null);
+
+  const validate = (): FieldErrors => {
+    const errs: FieldErrors = {};
+    if (!email.trim()) errs.email = '이메일을 입력해주세요';
+    else if (!EMAIL_RE.test(email.trim())) errs.email = '이메일 형식이 올바르지 않습니다';
+    if (!password) errs.password = '비밀번호를 입력해주세요';
+    return errs;
+  };
 
   const handleLogin = async () => {
-    setError(null);
+    setGlobalError(null);
+    const errs = validate();
+    setFieldErrors(errs);
+    if (Object.keys(errs).length > 0) return;
+
     setSubmitting(true);
-    const result = await login(email, password);
+    const result = await login(email.trim(), password);
     setSubmitting(false);
+
     if (result.ok) {
       router.replace('/(tabs)');
-    } else {
-      setError(result.error);
+      return;
     }
+
+    // Phase 7 코드 분기 — invalid_credentials 면 비밀번호 비우고 포커스, 인라인 표시.
+    if (result.code === 'invalid_credentials') {
+      setPassword('');
+      setFieldErrors({ password: '이메일 또는 비밀번호가 올바르지 않습니다' });
+      passwordRef.current?.focus();
+      return;
+    }
+    if (result.code === 'invalid_email' || result.code === 'email_invalid') {
+      setFieldErrors({ email: result.error });
+      return;
+    }
+    setGlobalError(result.error);
   };
 
   return (
@@ -47,22 +83,55 @@ export default function Login() {
           <Text style={styles.label}>이메일</Text>
           <TextInput
             value={email}
-            onChangeText={setEmail}
+            onChangeText={(v) => {
+              setEmail(v);
+              if (fieldErrors.email) setFieldErrors((p) => ({ ...p, email: undefined }));
+            }}
             autoCapitalize="none"
             keyboardType="email-address"
-            style={styles.input}
+            returnKeyType="next"
+            onSubmitEditing={() => passwordRef.current?.focus()}
+            editable={!submitting}
+            style={[styles.input, fieldErrors.email && styles.inputError]}
             placeholder="example@domain.com"
           />
-          <Text style={styles.label}>비밀번호</Text>
-          <TextInput
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            style={styles.input}
-            placeholder="비밀번호"
-          />
+          {fieldErrors.email ? (
+            <Text style={styles.fieldError}>{fieldErrors.email}</Text>
+          ) : null}
 
-          {error ? <Text style={styles.error}>{error}</Text> : null}
+          <Text style={styles.label}>비밀번호</Text>
+          <View style={styles.passwordRow}>
+            <TextInput
+              ref={passwordRef}
+              value={password}
+              onChangeText={(v) => {
+                setPassword(v);
+                if (fieldErrors.password) setFieldErrors((p) => ({ ...p, password: undefined }));
+              }}
+              secureTextEntry={!showPassword}
+              returnKeyType="go"
+              onSubmitEditing={() => void handleLogin()}
+              editable={!submitting}
+              style={[
+                styles.input,
+                styles.passwordInput,
+                fieldErrors.password && styles.inputError,
+              ]}
+              placeholder="비밀번호"
+            />
+            <Pressable
+              onPress={() => setShowPassword((v) => !v)}
+              style={styles.eyeBtn}
+              accessibilityLabel={showPassword ? '비밀번호 숨기기' : '비밀번호 보기'}
+            >
+              <Text style={styles.eyeBtnText}>{showPassword ? '🙈' : '👁'}</Text>
+            </Pressable>
+          </View>
+          {fieldErrors.password ? (
+            <Text style={styles.fieldError}>{fieldErrors.password}</Text>
+          ) : null}
+
+          {globalError ? <Text style={styles.error}>{globalError}</Text> : null}
 
           <Pressable
             onPress={handleLogin}
@@ -73,7 +142,19 @@ export default function Login() {
           </Pressable>
 
           <Pressable onPress={() => router.push('/(auth)/signup')} style={styles.link}>
-            <Text style={styles.linkText}>회원가입</Text>
+            <Text style={styles.linkText}>처음 사용하시나요? 회원가입</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() =>
+              Alert.alert(
+                '비밀번호 찾기',
+                '비밀번호 재설정은 현재 관리자에게 요청해주세요. 이메일로 임시 비밀번호를 발급해드립니다.',
+              )
+            }
+            style={styles.link}
+          >
+            <Text style={styles.linkSubtle}>비밀번호를 잊으셨나요?</Text>
           </Pressable>
         </View>
       </ScrollView>
@@ -114,6 +195,24 @@ const styles = StyleSheet.create({
     fontSize: fontSize.base,
     color: colors.text,
   },
+  inputError: { borderColor: colors.danger },
+  fieldError: {
+    color: colors.danger,
+    fontSize: fontSize.xs,
+    marginTop: 4,
+    marginLeft: 4,
+  },
+  passwordRow: { position: 'relative' },
+  passwordInput: { paddingRight: spacing.xl * 2 },
+  eyeBtn: {
+    position: 'absolute',
+    right: spacing.md,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
+  },
+  eyeBtnText: { fontSize: 18 },
   error: {
     color: colors.danger,
     fontSize: fontSize.sm,
@@ -141,10 +240,9 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     fontWeight: '600',
   },
-  hint: {
-    fontSize: fontSize.xs,
+  linkSubtle: {
     color: colors.textMuted,
-    textAlign: 'center',
-    marginTop: spacing.md,
+    fontSize: fontSize.xs,
+    fontWeight: '500',
   },
 });

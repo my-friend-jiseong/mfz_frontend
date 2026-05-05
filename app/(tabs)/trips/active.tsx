@@ -1,15 +1,23 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import { useRouter } from 'expo-router';
 import { useTripStore } from '@/stores/tripStore';
 import { useDestinationStore } from '@/stores/destinationStore';
 import { useFieldStore } from '@/stores/fieldStore';
+import { useVisitStore } from '@/stores/visitStore';
 import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
 import { openKakaoRouteTo } from '@/utils/kakaoMap';
 import { trips as tripsApi, localizeError } from '@/api';
+import { VISIT_STATUS_LABEL } from '@/types/entities';
 import { nearestNeighborOrder } from '@/utils/routeOptimize';
+import {
+  registerGeofencesForTrip,
+  startArrivalWatcher,
+  type ArrivalTarget,
+  type ArrivalEvent,
+} from '@/utils/geofence';
 import * as Linking from 'expo-linking';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
@@ -42,8 +50,23 @@ export default function ActiveTrip() {
   const reorderDestinations = useDestinationStore((s) => s.reorder);
 
   const getField = useFieldStore((s) => s.getById);
+  const allVisits = useVisitStore((s) => s.visits);
+
+  const allTrips = useTripStore((s) => s.trips);
+  const activeTrip = useMemo(
+    () => (activeTripId ? allTrips.find((t) => t.id === activeTripId) : null),
+    [allTrips, activeTripId],
+  );
 
   const [optimizing, setOptimizing] = useState(false);
+  const [elapsedTick, setElapsedTick] = useState(0);
+
+  // 외근 진행 시간을 1분 주기로 갱신. 화면이 active 일 때만 동작.
+  useEffect(() => {
+    if (!activeTrip) return;
+    const id = setInterval(() => setElapsedTick((n) => n + 1), 60_000);
+    return () => clearInterval(id);
+  }, [activeTrip]);
 
   const destinations = useMemo<Destination[]>(() => {
     if (activeTripId === null) return [];
@@ -51,6 +74,96 @@ export default function ActiveTrip() {
       .filter((d) => d.tripId === activeTripId)
       .sort((a, b) => a.order - b.order);
   }, [allDestinations, activeTripId]);
+
+  // 진행률 통계 — arrived + skipped 가 처리됨, pending 만 남음.
+  const progress = useMemo(() => {
+    const total = destinations.length;
+    const arrived = destinations.filter((d) => d.status === 'arrived').length;
+    const skipped = destinations.filter((d) => d.status === 'skipped').length;
+    const resolved = arrived + skipped;
+    const ratio = total === 0 ? 0 : Math.round((resolved / total) * 100);
+    return { total, arrived, skipped, resolved, ratio };
+  }, [destinations]);
+
+  // destination 의 fieldId 에 해당하는 활성 외근의 visit 찾기 (있으면 visit 결과 라벨 사용).
+  const visitForDestination = (fieldId: string) => {
+    if (!activeTripId) return null;
+    return (
+      allVisits.find((v) => v.tripId === activeTripId && v.fieldId === fieldId) ??
+      null
+    );
+  };
+
+  // 외근 시작 시각·경과 시간 — elapsedTick 의존으로 1분마다 자동 갱신.
+  const elapsedLabel = useMemo(() => {
+    void elapsedTick;
+    if (!activeTrip) return null;
+    const start = new Date(activeTrip.startedAt);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const startedAtStr = `${pad(start.getHours())}:${pad(start.getMinutes())}`;
+    const diffMs = Math.max(0, Date.now() - start.getTime());
+    const totalMin = Math.floor(diffMs / 60_000);
+    const h = Math.floor(totalMin / 60);
+    const m = totalMin % 60;
+    const dur = h > 0 ? `${h}시간 ${m}분` : `${m}분`;
+    return `${startedAtStr} 시작 · ${dur} 진행 중`;
+  }, [activeTrip, elapsedTick]);
+
+  // 외근 시작 시 geofence 등록 (한 번만, best-effort 백엔드 보고).
+  const registeredRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (activeTripId === null || destinations.length === 0) return;
+    if (registeredRef.current === activeTripId) return;
+    registeredRef.current = activeTripId;
+    const fields = destinations
+      .map((d) => getField(d.fieldId))
+      .filter((f): f is NonNullable<typeof f> => !!f && Number.isFinite(f.latitude) && Number.isFinite(f.longitude))
+      .map((f) => ({ id: f.id, latitude: f.latitude, longitude: f.longitude }));
+    if (fields.length === 0) return;
+    void registerGeofencesForTrip(activeTripId, fields);
+  }, [activeTripId, destinations, getField]);
+
+  // 도착 자동 감지 watcher — pending destination 만 타겟. 외근 변경/언마운트 시 정지.
+  useEffect(() => {
+    if (activeTripId === null) return;
+    const targets: ArrivalTarget[] = destinations
+      .filter((d) => d.status === 'pending')
+      .map((d) => {
+        const f = getField(d.fieldId);
+        if (!f || !Number.isFinite(f.latitude) || !Number.isFinite(f.longitude)) return null;
+        return { fieldId: f.id, fieldName: f.address, lat: f.latitude, lng: f.longitude };
+      })
+      .filter((t): t is ArrivalTarget => t !== null);
+    if (targets.length === 0) return;
+
+    let stop: (() => void) | null = null;
+    let cancelled = false;
+    void (async () => {
+      const fn = await startArrivalWatcher(activeTripId, targets, (event: ArrivalEvent) => {
+        Alert.alert(
+          '현장 도착 감지',
+          `${event.fieldName} (약 ${Math.round(event.distanceMeters)}m). 지금 체크인할까요?`,
+          [
+            { text: '나중에', style: 'cancel' },
+            {
+              text: '지금 체크인',
+              onPress: () =>
+                router.push(`/(tabs)/fields/${event.fieldId}/checkin` as never),
+            },
+          ],
+        );
+      });
+      if (cancelled) {
+        fn();
+      } else {
+        stop = fn;
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (stop) stop();
+    };
+  }, [activeTripId, destinations, getField, router]);
 
   const currentDest = useMemo(
     () => destinations.find((d) => d.status === 'pending'),
@@ -76,25 +189,25 @@ export default function ActiveTrip() {
     const field = getField(currentDest.fieldId);
     if (!field) return;
 
-    // 백엔드 deep-links 응답을 시도 — 다중 provider URL 묶음 (응답 shape 미명세)
+    // 백엔드 deep-links 응답 — { kakao?, naver?, google? } 평탄 URL 묶음 (handoff §6b).
+    // 응답 받기 실패 시 카카오맵 직링크로 폴백.
     if (activeTripId) {
       try {
-        const res = (await tripsApi.navigationDeepLinks(activeTripId, {
+        const res = await tripsApi.navigationDeepLinks(activeTripId, {
           fieldId: field.id,
           lat: field.latitude,
           lng: field.longitude,
-        })) as Record<string, unknown>;
-        // 응답이 { kakao: url, google: url, naver: url } 형태로 추정 — 확인되는 것만 모달
-        const entries: Array<{ provider: string; url: string }> = [];
-        for (const [k, v] of Object.entries(res ?? {})) {
-          if (typeof v === 'string' && v.startsWith('http')) {
-            entries.push({ provider: k, url: v });
-          } else if (
-            v &&
-            typeof v === 'object' &&
-            typeof (v as { url?: unknown }).url === 'string'
-          ) {
-            entries.push({ provider: k, url: (v as { url: string }).url });
+        });
+        const PROVIDERS = [
+          { key: 'kakao', label: '카카오맵' },
+          { key: 'naver', label: '네이버 지도' },
+          { key: 'google', label: '구글 지도' },
+        ] as const;
+        const entries: Array<{ label: string; url: string }> = [];
+        for (const p of PROVIDERS) {
+          const url = res[p.key];
+          if (typeof url === 'string' && url.startsWith('http')) {
+            entries.push({ label: p.label, url });
           }
         }
         if (entries.length === 1) {
@@ -105,14 +218,14 @@ export default function ActiveTrip() {
           Alert.alert('길찾기 — 지도 앱 선택', undefined, [
             { text: '취소', style: 'cancel' },
             ...entries.map((e) => ({
-              text: e.provider,
+              text: e.label,
               onPress: () => void Linking.openURL(e.url),
             })),
           ]);
           return;
         }
       } catch {
-        // 백엔드 미응답 시 카카오맵 직링크로 폴백
+        // fallthrough — 카카오맵 직링크
       }
     }
     void openKakaoRouteTo(field.address, field.latitude, field.longitude);
@@ -289,11 +402,25 @@ export default function ActiveTrip() {
     const field = getField(item.fieldId);
     const isCurrent = item.id === currentDest?.id;
     const c = STATUS_COLOR[item.status];
+    // arrived 인 경우 visit 결과 라벨 우선 노출 (정상/부재/거절 등). pending/skipped 은 destination status 그대로.
+    const visit = item.status === 'arrived' ? visitForDestination(item.fieldId) : null;
+    const visitColor = visit ? colors.visitStatus[visit.status] : null;
+    const onPress = () => {
+      if (visit) {
+        router.push(
+          `/(tabs)/trips/visit?tripId=${visit.tripId}&visitId=${visit.id}` as never,
+        );
+      } else if (field) {
+        router.push(`/(tabs)/fields/${field.id}` as never);
+      }
+    };
     return (
-      <View
-        style={[
+      <Pressable
+        onPress={onPress}
+        style={({ pressed }) => [
           styles.destRow,
           isCurrent && styles.destRowCurrent,
+          pressed && styles.pressed,
         ]}
       >
         <View style={styles.orderBadge}>
@@ -307,12 +434,20 @@ export default function ActiveTrip() {
             <Text style={styles.detail}>{field.addressDetail}</Text>
           ) : null}
         </View>
-        <View style={[styles.statusChip, { backgroundColor: c + '22' }]}>
-          <Text style={[styles.statusText, { color: c }]}>
-            {STATUS_LABEL[item.status]}
-          </Text>
-        </View>
-      </View>
+        {visit && visitColor ? (
+          <View style={[styles.statusChip, { backgroundColor: visitColor + '22' }]}>
+            <Text style={[styles.statusText, { color: visitColor }]}>
+              {VISIT_STATUS_LABEL[visit.status]}
+            </Text>
+          </View>
+        ) : (
+          <View style={[styles.statusChip, { backgroundColor: c + '22' }]}>
+            <Text style={[styles.statusText, { color: c }]}>
+              {STATUS_LABEL[item.status]}
+            </Text>
+          </View>
+        )}
+      </Pressable>
     );
   };
 
@@ -323,6 +458,29 @@ export default function ActiveTrip() {
 
   const ListHeader = () => (
     <View style={styles.header}>
+      <View style={styles.summaryCard}>
+        {elapsedLabel ? (
+          <Text style={styles.summaryTime}>{elapsedLabel}</Text>
+        ) : null}
+        <View style={styles.progressRow}>
+          <Text style={styles.progressLabel}>
+            방문 {progress.arrived}
+            {progress.skipped > 0 ? ` · 건너뜀 ${progress.skipped}` : ''}
+            {' / '}
+            총 {progress.total}곳
+          </Text>
+          <Text style={styles.progressRatio}>{progress.ratio}%</Text>
+        </View>
+        <View style={styles.progressTrack}>
+          <View
+            style={[
+              styles.progressFill,
+              { width: `${progress.ratio}%` },
+            ]}
+          />
+        </View>
+      </View>
+
       {officialNotice.required ? (
         <View style={styles.noticeCard}>
           <Text style={styles.noticeLabel}>⚠️ 소속기관장 보고 필요</Text>
@@ -448,6 +606,43 @@ export default function ActiveTrip() {
 const styles = StyleSheet.create({
   list: { paddingHorizontal: spacing.lg, paddingBottom: 120 },
   header: { paddingTop: spacing.md, gap: spacing.sm },
+  summaryCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  summaryTime: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    fontWeight: '600',
+  },
+  progressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  progressLabel: { fontSize: fontSize.sm, color: colors.text, fontWeight: '600' },
+  progressRatio: {
+    fontSize: fontSize.sm,
+    color: colors.primary,
+    fontWeight: '800',
+  },
+  progressTrack: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.border,
+    overflow: 'hidden',
+    marginTop: 2,
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: colors.primary,
+    borderRadius: 3,
+  },
   currentCard: {
     backgroundColor: colors.primary + '0e',
     borderRadius: radius.md,

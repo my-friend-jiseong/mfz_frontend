@@ -17,14 +17,14 @@ export const colors = {
     done: '#16a34a',
   },
 
-  // visit.status별 (KWCAG 3중 인코딩 준수 — 색 + 형상 + 라벨 전제)
+  // visit.status별 (KWCAG 3중 인코딩 준수 — 색 + 형상 + 라벨 전제). 키는 영문 enum.
   visitStatus: {
-    '완료': '#16a34a',
-    '부재': '#64748b',
-    '수취거절': '#dc2626',
-    '주소불명': '#a855f7',
-    '재방문필요': '#d97706',
-    '기타': '#475569',
+    normal: '#16a34a',
+    absent: '#64748b',
+    refused: '#dc2626',
+    unknown_address: '#a855f7',
+    revisit_required: '#d97706',
+    other: '#475569',
   },
 
   // 외근 진행 중 배너

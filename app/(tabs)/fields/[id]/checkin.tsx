@@ -15,7 +15,7 @@ import { useFieldStore } from '@/stores/fieldStore';
 import { useTripStore } from '@/stores/tripStore';
 import { useVisitStore } from '@/stores/visitStore';
 import { useDestinationStore } from '@/stores/destinationStore';
-import { VISIT_STATUS_VALUES, type VisitStatus } from '@/types/entities';
+import { VISIT_STATUS_VALUES, VISIT_STATUS_LABEL, type VisitStatus } from '@/types/entities';
 import { EmptyState } from '@/components/EmptyState';
 import {
   pickPhoto,
@@ -50,7 +50,7 @@ export default function FieldCheckin() {
 
   const [visitId, setVisitId] = useState<string | null>(null);
   const [memoText, setMemoText] = useState('');
-  const [status, setStatus] = useState<VisitStatus>('완료');
+  const [status, setStatus] = useState<VisitStatus>('normal');
   const [etcReason, setEtcReason] = useState('');
   const [photoBusy, setPhotoBusy] = useState(false);
   const [recording, setRecording] = useState(false);
@@ -216,10 +216,10 @@ export default function FieldCheckin() {
 
   const handleSaveResult = async () => {
     if (!visitId) return;
-    if (status === '기타' && etcReason.trim().length < 10) {
+    if (status === 'other' && etcReason.trim().length < 10) {
       return;
     }
-    const reason = status === '기타' ? etcReason.trim() : undefined;
+    const reason = status === 'other' ? etcReason.trim() : undefined;
     const r = await setResult(visitId, status, reason);
     if (!r.ok) {
       Alert.alert('상태 저장 실패', r.error);
@@ -349,13 +349,13 @@ export default function FieldCheckin() {
                     active && { color: c, fontWeight: '700' },
                   ]}
                 >
-                  {s}
+                  {VISIT_STATUS_LABEL[s]}
                 </Text>
               </Pressable>
             );
           })}
         </View>
-        {status === '기타' ? (
+        {status === 'other' ? (
           <>
             <TextInput
               value={etcReason}
@@ -371,11 +371,11 @@ export default function FieldCheckin() {
 
         <Pressable
           onPress={handleSaveResult}
-          disabled={status === '기타' && etcReason.trim().length < 10}
+          disabled={status === 'other' && etcReason.trim().length < 10}
           style={({ pressed }) => [
             styles.btn,
             pressed && styles.pressed,
-            status === '기타' && etcReason.trim().length < 10 && styles.btnDisabled,
+            status === 'other' && etcReason.trim().length < 10 && styles.btnDisabled,
           ]}
         >
           <Text style={styles.btnText}>결과 저장하고 완료</Text>

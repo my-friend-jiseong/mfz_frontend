@@ -72,27 +72,56 @@ export interface TripDetailResponse {
   reportEntryPoint: { label: string; createUrl: string } | null;
 }
 
-// PR-I: 외근 자동화 — geofence/navigation/offline/official-notice/state-history.
-// 응답 shape 은 백엔드 미명세인 곳이 많아 unknown 으로 받음 (호출 측이 안전하게 사용).
+// 외근 자동화 — geofence / navigation / offline / official-notice / state-history.
+// docs/backend-handoff.md §6 contract 정렬. 백엔드 명세 합의 시 반영됨.
 
 export interface GeofenceRegisterBody {
   fieldId: string;
   lat: number;
   lng: number;
-  radiusMeters?: number; // 기본 150~200m 권장
+  radiusMeters?: number; // 기본 150m 권장
 }
 
+export interface GeofenceRegisterResponse {
+  geofenceId: string;
+  registeredAt: string; // ISO8601
+}
+
+export interface GeofenceArrivalBody {
+  fieldId: string;
+  arrivedAt?: string; // ISO8601 (생략 시 서버 시각)
+}
+
+export interface GeofenceArrivalResponse {
+  acknowledged: boolean;
+  suggestCheckIn: boolean;
+}
+
+// 외부 지도 앱 길찾기 deep-link — 카카오/네이버/구글 3종 평탄 URL 묶음.
 export interface NavigationDeepLinksResponse {
-  // 백엔드 응답 미명세 — 일반적으로 카카오/구글/네이버 3종 URL 묶음 추정
-  [provider: string]: unknown;
+  kakao?: string;
+  naver?: string;
+  google?: string;
+  // 향후 provider 추가 대비 — 필수 키는 위 3개로 typed.
+  [provider: string]: string | undefined;
 }
 
 export interface OfficialNoticeBody {
   reason?: string; // 변경 사유 (선택)
 }
 
+// 외근 상태 전환 이력 (감사용).
+// eventType: 'started' | 'ended' | 'paused' | 'resumed' | 'visit_added' | 그 외 미래 확장.
+export interface StateHistoryItem {
+  tripId: string;
+  eventType: string;
+  occurredAt: string;     // ISO8601
+  reason: string | null;
+  changedBy: string;      // userId
+}
+
 export interface StateHistoryResponse {
-  items: unknown[];
+  items: StateHistoryItem[];
   pagination?: { page: number; limit: number; total: number; hasNext: boolean };
 }
 
@@ -148,21 +177,18 @@ export const trips = {
 
   detail: (tripId: string) => request<TripDetailResponse>(`/api/trips/${tripId}`),
 
-  // ----- PR-I: 자동화 endpoint (응답 shape 은 백엔드 §2.4 받은 후 정정) -----
+  // ----- 외근 자동화 endpoint (handoff §6 contract) -----
 
-  /** 현장 도착 감지를 위한 geofence 등록 — 백엔드 감사 로그용 */
+  /** 현장 도착 감지를 위한 geofence 등록 — 외근 시작 시 각 방문 현장에 자동 등록 */
   registerGeofence: (tripId: string, body: GeofenceRegisterBody) =>
-    request<unknown>(`/api/trips/${tripId}/geofences/register`, {
+    request<GeofenceRegisterResponse>(`/api/trips/${tripId}/geofences/register`, {
       method: 'POST',
       body,
     }),
 
-  /** geofence 도착 이벤트 보고 — 클라이언트가 도착 감지 시 호출 */
-  notifyGeofenceArrival: (
-    tripId: string,
-    body: { fieldId: string; arrivedAt?: string },
-  ) =>
-    request<unknown>(`/api/trips/${tripId}/geofences/arrival`, {
+  /** geofence 도착 이벤트 보고 — 클라이언트가 위치 watcher 로 도착 감지 시 호출 */
+  notifyGeofenceArrival: (tripId: string, body: GeofenceArrivalBody) =>
+    request<GeofenceArrivalResponse>(`/api/trips/${tripId}/geofences/arrival`, {
       method: 'POST',
       body,
     }),

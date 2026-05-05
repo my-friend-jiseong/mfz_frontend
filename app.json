@@ -19,7 +19,8 @@
       "infoPlist": {
         "NSCameraUsageDescription": "방문 기록에 사진을 첨부하기 위해 카메라를 사용합니다.",
         "NSPhotoLibraryUsageDescription": "방문 기록에 사진을 첨부하기 위해 사진 라이브러리에 접근합니다.",
-        "NSMicrophoneUsageDescription": "방문 기록에 음성 메모를 첨부하기 위해 마이크를 사용합니다."
+        "NSMicrophoneUsageDescription": "방문 기록에 음성 메모를 첨부하기 위해 마이크를 사용합니다.",
+        "NSLocationWhenInUseUsageDescription": "외근 중 현장 도착을 자동으로 감지하기 위해 위치 정보를 사용합니다."
       }
     },
     "android": {
@@ -56,6 +57,12 @@
         "expo-av",
         {
           "microphonePermission": "방문 기록에 음성 메모를 첨부하기 위해 마이크를 사용합니다."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "외근 중 현장 도착을 자동으로 감지하기 위해 위치 정보를 사용합니다."
         }
       ],
       "@sentry/react-native"

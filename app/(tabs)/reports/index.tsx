@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { useReportStore } from '@/stores/reportStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useTripStore } from '@/stores/tripStore';
+import { useVisitStore } from '@/stores/visitStore';
 import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
 import { colors } from '@/theme/colors';
@@ -14,6 +15,12 @@ import type { Report, Trip } from '@/types/entities';
 function fmtDate(iso: string) {
   const d = new Date(iso);
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function fmtTime(iso: string) {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 function summary(content: string, limit = 60) {
@@ -29,6 +36,7 @@ export default function ReportsIndex() {
   const allReports = useReportStore((s) => s.reports);
   const refresh = useReportStore((s) => s.refresh);
   const allTrips = useTripStore((s) => s.trips);
+  const visitsByTrip = useVisitStore((s) => s.byTrip);
 
   useEffect(() => {
     void refresh();
@@ -71,15 +79,32 @@ export default function ReportsIndex() {
         keyExtractor={(g) => String(g.trip.id)}
         renderItem={({ item }) => (
           <View style={styles.group}>
-            <Pressable
-              onPress={() =>
-                router.push(`/(tabs)/trips/${item.trip.id}` as never)
-              }
-            >
-              <Text style={styles.tripHeader}>
-                외근 · {fmtDate(item.trip.startedAt)} #{item.trip.id}
-              </Text>
-            </Pressable>
+            <View style={styles.tripHeaderRow}>
+              <Pressable
+                onPress={() =>
+                  router.push(`/(tabs)/trips/${item.trip.id}` as never)
+                }
+                style={styles.tripHeaderTextWrap}
+              >
+                <Text style={styles.tripHeader}>
+                  외근 · {fmtDate(item.trip.startedAt)}
+                </Text>
+                <Text style={styles.tripHeaderMeta}>
+                  {fmtTime(item.trip.startedAt)}
+                  {item.trip.endedAt ? `–${fmtTime(item.trip.endedAt)}` : ' · 진행 중'}
+                  {' · 방문 '}
+                  {visitsByTrip(item.trip.id).length}건
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() =>
+                  router.push(`/(tabs)/reports/generate?tripId=${item.trip.id}` as never)
+                }
+                style={({ pressed }) => [styles.addReportBtn, pressed && styles.pressed]}
+              >
+                <Text style={styles.addReportBtnText}>+ 추가</Text>
+              </Pressable>
+            </View>
             {item.reports.map((r) => (
               <Pressable
                 key={r.id}
@@ -131,13 +156,37 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   list: { padding: spacing.lg, paddingBottom: 120 },
   group: { marginBottom: spacing.lg },
+  tripHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  tripHeaderTextWrap: { flex: 1 },
   tripHeader: {
     fontSize: fontSize.sm,
     fontWeight: '700',
     color: colors.primary,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
-    marginBottom: spacing.xs,
+  },
+  tripHeaderMeta: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  addReportBtn: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.surface,
+  },
+  addReportBtnText: {
+    fontSize: fontSize.xs,
+    color: colors.primary,
+    fontWeight: '700',
   },
   reportCard: {
     backgroundColor: colors.surface,

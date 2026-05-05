@@ -98,6 +98,15 @@ export default function TabsLayout() {
           ),
         }}
       />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: '내 정보',
+          tabBarIcon: ({ color, size }) => (
+            <TabItem label="내 정보" icon="person-circle" color={color} size={size} />
+          ),
+        }}
+      />
     </Tabs>
   );
 }

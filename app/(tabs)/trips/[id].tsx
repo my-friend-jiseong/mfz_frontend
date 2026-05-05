@@ -16,19 +16,22 @@ import { useFieldStore } from '@/stores/fieldStore';
 import { useDestinationStore } from '@/stores/destinationStore';
 import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
-import { trips as tripsApi } from '@/api';
+import { trips as tripsApi, type StateHistoryItem } from '@/api';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
-import type { Visit } from '@/types/entities';
+import { VISIT_STATUS_LABEL, type Visit } from '@/types/entities';
 
-interface StateHistoryItem {
-  changedAt?: string;
-  fromStatus?: string | null;
-  toStatus?: string;
-  reason?: string | null;
-  actor?: string;
-  [key: string]: unknown;
-}
+// 외근 상태 전환 이벤트의 한국어 라벨 (백엔드 영문 eventType 매핑).
+// 알 수 없는 eventType 은 그대로 노출 (미래 확장 안전).
+const EVENT_LABEL: Record<string, string> = {
+  started: '외근 시작',
+  ended: '외근 종료',
+  paused: '일시 중지',
+  resumed: '재개',
+  visit_added: '방문 추가',
+  visit_removed: '방문 제거',
+  reordered: '경로 재정렬',
+};
 
 function fmtDateTime(iso?: string) {
   if (!iso) return '';
@@ -79,15 +82,14 @@ export default function TripDetail() {
   const photoCountByVisit = (visitId: string) =>
     allPhotos.filter((p) => p.visitId === visitId).length;
 
-  // 상태 전환 이력 (감사용) — 응답 shape 백엔드 미명세 → unknown 으로 받아 안전 매핑
+  // 상태 전환 이력 (감사용) — 백엔드 typed contract (handoff §6c).
   const [stateHistory, setStateHistory] = useState<StateHistoryItem[]>([]);
   useEffect(() => {
     if (!tripId) return;
     void (async () => {
       try {
         const res = await tripsApi.stateHistory({ tripId });
-        const items = Array.isArray(res?.items) ? (res.items as StateHistoryItem[]) : [];
-        setStateHistory(items);
+        setStateHistory(res.items);
       } catch {
         setStateHistory([]);
       }
@@ -171,7 +173,7 @@ export default function TripDetail() {
           <Text style={styles.visitTime}>{fmtTime(item.visitedAt)}</Text>
           <View style={[styles.statusChip, { backgroundColor: statusColor + '22' }]}>
             <Text style={[styles.statusText, { color: statusColor }]}>
-              {item.status}
+              {VISIT_STATUS_LABEL[item.status]}
             </Text>
           </View>
         </View>
@@ -255,11 +257,10 @@ export default function TripDetail() {
         <View style={styles.historyBox}>
           <Text style={styles.historyTitle}>상태 전환 이력</Text>
           {stateHistory.map((h, idx) => (
-            <View key={idx} style={styles.historyRow}>
-              <Text style={styles.historyTime}>{fmtDateTime(h.changedAt)}</Text>
+            <View key={`${h.occurredAt}-${idx}`} style={styles.historyRow}>
+              <Text style={styles.historyTime}>{fmtDateTime(h.occurredAt)}</Text>
               <Text style={styles.historyText}>
-                {h.fromStatus ? `${h.fromStatus} → ` : ''}
-                {h.toStatus ?? ''}
+                {EVENT_LABEL[h.eventType] ?? h.eventType}
                 {h.reason ? ` · ${h.reason}` : ''}
               </Text>
             </View>

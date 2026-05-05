@@ -56,9 +56,21 @@ export interface FieldDirectAttachment {
   visitId: string | null;
 }
 
+// 현장 상세 응답의 recentVisits 항목 — 최근 방문 요약.
+export interface RecentVisitItem {
+  visitId: string;
+  tripId: string;
+  visitedAt: string;
+  resultStatus: string;     // 영문 enum (VisitStatus)
+  status: string;           // 한국어 표시값 (백엔드)
+  statusReason: string | null;
+  memoPreview?: string;
+  attachmentCounts?: { text: number; photo: number; audio: number };
+}
+
 export interface FieldDetailResponse extends FieldCore {
   assigneeUserId: string;
-  recentVisits: unknown[];
+  recentVisits: RecentVisitItem[];
   directAttachments: FieldDirectAttachment[];
   attachmentSummary: { text: number; photo: number; audio: number; total: number };
   checkInCta: { label: string; enabled: boolean; reason: string | null; action: string | null };

@@ -90,6 +90,18 @@ export interface DisableShareData {
   shareEnabled: false;
 }
 
+// AI 분석 결과 schema — 공통 필드는 typed, 모델 raw output 등 나머지는 free-form 통과.
+// 백엔드 모델 변경에 안정적 (필드 추가는 unknown 으로 받아도 기존 코드 안 깨짐).
+export interface ReportAnalysis {
+  summary?: string;
+  keypoints?: string[];
+  recommendations?: string[];
+  sentiment?: 'positive' | 'neutral' | 'negative' | string;
+  raw?: string;
+  // 미래 확장 — 모델 응답에 추가 필드가 와도 흡수
+  [key: string]: unknown;
+}
+
 // Phase 3 §2.1 — generate 응답 (Phase 7 부터 raw, message 는 동위 필드)
 export interface ReportGenerateData {
   id: string;
@@ -102,7 +114,7 @@ export interface ReportGenerateData {
   fileUrl?: string;
   downloadUrl?: string;
   outputFileName?: string;
-  analysis?: unknown;
+  analysis?: ReportAnalysis;
   generationMetadata?: { model?: string; tokens?: number | null; elapsedMs?: number };
   message?: string;
 }

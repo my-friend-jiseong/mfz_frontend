@@ -15,7 +15,9 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useReportStore } from '@/stores/reportStore';
 import { useTripStore } from '@/stores/tripStore';
 import { useAuthStore } from '@/stores/authStore';
-import { pickPhoto, promptPhotoSource, type UploadFile } from '@/utils/media';
+import { useVisitStore } from '@/stores/visitStore';
+import { useFieldStore } from '@/stores/fieldStore';
+import { pickPhoto, promptPhotoSource, downloadToUploadFile, type UploadFile } from '@/utils/media';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
 
@@ -28,6 +30,18 @@ function fmtDate(iso: string) {
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
 }
 
+function fmtDateTime(iso: string) {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function fmtTime(iso: string) {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 export default function GenerateReport() {
   const router = useRouter();
   const params = useLocalSearchParams<{ tripId?: string }>();
@@ -35,6 +49,10 @@ export default function GenerateReport() {
   const generate = useReportStore((s) => s.generate);
   const allTrips = useTripStore((s) => s.trips);
   const userId = useAuthStore((s) => s.user?.id);
+  const visitsByTrip = useVisitStore((s) => s.byTrip);
+  const allTextMemos = useVisitStore((s) => s.textMemos);
+  const allPhotos = useVisitStore((s) => s.photos);
+  const allFields = useFieldStore((s) => s.fields);
 
   const [tripId, setTripId] = useState<string | null>(params.tripId ?? null);
   const [title, setTitle] = useState('');
@@ -61,6 +79,108 @@ export default function GenerateReport() {
       .sort((a, b) => b.startedAt.localeCompare(a.startedAt));
   }, [allTrips, userId]);
 
+  // 선택한 외근의 visit 들에 첨부된 글자 메모 — 자동 import 대상.
+  const importableBlocks = useMemo(() => {
+    if (!tripId) return [];
+    const visits = visitsByTrip(tripId);
+    return visits.map((v) => {
+      const field = allFields.find((f) => f.id === v.fieldId);
+      const memos = allTextMemos.filter((m) => m.visitId === v.id);
+      return { visit: v, field, memos };
+    });
+  }, [tripId, visitsByTrip, allTextMemos, allFields]);
+
+  const importableMemoCount = useMemo(
+    () => importableBlocks.reduce((sum, b) => sum + b.memos.length, 0),
+    [importableBlocks],
+  );
+
+  // 외근의 visit 들에 첨부된 사진 — before/after 슬롯에 import 가능.
+  const importablePhotos = useMemo(() => {
+    if (!tripId) return [];
+    const visits = visitsByTrip(tripId);
+    const visitIds = new Set(visits.map((v) => v.id));
+    return allPhotos
+      .filter((p) => p.visitId && visitIds.has(p.visitId))
+      .filter((p) => p.fileUrl && /^https?:\/\//.test(p.fileUrl))
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  }, [tripId, visitsByTrip, allPhotos]);
+
+  const [importingPhoto, setImportingPhoto] = useState<string | null>(null);
+
+  const importPhotoToSlot = async (photoUrl: string, slot: 'before' | 'after') => {
+    setImportingPhoto(photoUrl);
+    const file = await downloadToUploadFile(photoUrl);
+    if (!mountedRef.current) return;
+    setImportingPhoto(null);
+    if (!file) {
+      Alert.alert('사진 가져오기 실패', '사진을 다운로드할 수 없습니다. 네트워크를 확인해주세요.');
+      return;
+    }
+    if (slot === 'before') setBeforePhoto(file);
+    else setAfterPhoto(file);
+  };
+
+  const handleImportPhotoTap = (photoUrl: string) => {
+    Alert.alert('사진 위치 선택', '어느 슬롯에 넣을까요?', [
+      { text: '취소', style: 'cancel' },
+      { text: '조치 전', onPress: () => void importPhotoToSlot(photoUrl, 'before') },
+      { text: '조치 후', onPress: () => void importPhotoToSlot(photoUrl, 'after') },
+    ]);
+  };
+
+  const buildImportText = () => {
+    const blocks = importableBlocks
+      .filter((b) => b.memos.length > 0)
+      .map((b) => {
+        const time = fmtDateTime(b.visit.visitedAt);
+        const where = b.field?.address ?? '알 수 없는 현장';
+        const lines = b.memos.map((m) => `- ${m.content}`).join('\n');
+        return `[${time} · ${where}]\n${lines}`;
+      });
+    return blocks.join('\n\n');
+  };
+
+  // 외근 선택 토글 + 위치 자동 prefill (사용자가 직접 입력하지 않은 상태에서만).
+  const handleSelectTrip = (newTripId: string | null) => {
+    setTripId(newTripId);
+    if (!newTripId) return;
+    if (location.trim().length > 0) return; // 사용자 입력 보존
+    const visits = visitsByTrip(newTripId);
+    if (visits.length === 0) return;
+    // 첫 방문 현장 주소 우선, 없으면 마지막 방문 — 다수 visit 의 일반화된 라벨로 사용.
+    const firstField = allFields.find((f) => f.id === visits[0].fieldId);
+    const lastField = allFields.find((f) => f.id === visits[visits.length - 1].fieldId);
+    const candidate = firstField?.address ?? lastField?.address;
+    if (candidate) setLocation(candidate);
+  };
+
+  const handleImportFromTrip = () => {
+    if (importableMemoCount === 0) return;
+    const compiled = buildImportText();
+    if (!compiled) return;
+    if (notes.trim().length === 0) {
+      setNotes(compiled);
+      return;
+    }
+    Alert.alert(
+      '외근 메모 가져오기',
+      `${importableMemoCount}건의 외근 메모를 어떻게 처리할까요?`,
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '이어 붙이기',
+          onPress: () => setNotes((prev) => `${prev}\n\n${compiled}`),
+        },
+        {
+          text: '교체',
+          style: 'destructive',
+          onPress: () => setNotes(compiled),
+        },
+      ],
+    );
+  };
+
   const pickBefore = () =>
     promptPhotoSource(async (src) => {
       const f = await pickPhoto(src);
@@ -73,13 +193,38 @@ export default function GenerateReport() {
       if (f && mountedRef.current) setAfterPhoto(f);
     });
 
+  // 마지막 시도 결과 — 실패 시 재시도 노출 / 성공 시 즉시 라우팅이라 무관.
+  const [lastAttemptFailed, setLastAttemptFailed] = useState(false);
+
+  // 생성 진행 시각화 — 백엔드 streaming 이 없어 시간 기반 시뮬레이션.
+  // 단계는 "안심용" 시각 신호. 실제 단계 전환 시점과 정확히 일치하지 않을 수 있음.
+  const [elapsedSec, setElapsedSec] = useState(0);
+  const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const startTickerRef = useRef<((reset: boolean) => void) | null>(null);
+  startTickerRef.current = (reset: boolean) => {
+    if (tickRef.current) clearInterval(tickRef.current);
+    if (reset) setElapsedSec(0);
+    tickRef.current = setInterval(() => {
+      setElapsedSec((s) => s + 1);
+    }, 1000);
+  };
+  const stopTicker = () => {
+    if (tickRef.current) {
+      clearInterval(tickRef.current);
+      tickRef.current = null;
+    }
+  };
+  useEffect(() => () => stopTicker(), []);
+
   const handleGenerate = async () => {
     setError(null);
+    setLastAttemptFailed(false);
     if (!notes.trim()) {
       setError('현장 메모(notes)를 입력해주세요');
       return;
     }
     setBusy(true);
+    startTickerRef.current?.(true);
     const r = await generate({
       notes: notes.trim(),
       title: title.trim() || undefined,
@@ -91,12 +236,22 @@ export default function GenerateReport() {
     });
     if (!mountedRef.current) return;
     setBusy(false);
+    stopTicker();
     if (r.ok) {
       router.replace(`/(tabs)/reports/${r.data.id}` as never);
     } else {
-      Alert.alert('AI 보고서 생성 실패', r.error);
+      setError(r.error);
+      setLastAttemptFailed(true);
     }
   };
+
+  // 단계 산출 — 시간 cutoff 기반.
+  const stepLabel = (() => {
+    if (elapsedSec < 3) return { idx: 1, text: '메모·사진 업로드 중' };
+    if (elapsedSec < 12) return { idx: 2, text: 'AI 분석 중' };
+    return { idx: 3, text: '문서 작성 중' };
+  })();
+  const remainEstSec = Math.max(0, 30 - elapsedSec);
 
   return (
     <KeyboardAvoidingView
@@ -117,16 +272,22 @@ export default function GenerateReport() {
           <Text style={styles.hint}>등록된 외근이 없습니다.</Text>
         ) : (
           <View style={styles.tripList}>
-            {myTrips.slice(0, 8).map((t) => {
+            {myTrips.map((t) => {
               const active = t.id === tripId;
+              const visitCount = visitsByTrip(t.id).length;
               return (
                 <Pressable
                   key={t.id}
-                  onPress={() => setTripId(active ? null : t.id)}
+                  onPress={() => handleSelectTrip(active ? null : t.id)}
                   style={[styles.tripItem, active && styles.tripItemActive]}
                 >
-                  <Text style={[styles.tripItemText, active && styles.tripItemTextActive]}>
-                    {fmtDate(t.startedAt)} · #{t.id}
+                  <Text style={[styles.tripItemDate, active && styles.tripItemTextActive]}>
+                    {fmtDate(t.startedAt)}
+                  </Text>
+                  <Text style={[styles.tripItemMeta, active && styles.tripItemMetaActive]}>
+                    {fmtTime(t.startedAt)}
+                    {t.endedAt ? `–${fmtTime(t.endedAt)}` : ' · 진행 중'}
+                    {visitCount > 0 ? ` · 방문 ${visitCount}건` : ' · 방문 없음'}
                   </Text>
                 </Pressable>
               );
@@ -134,7 +295,10 @@ export default function GenerateReport() {
           </View>
         )}
 
-        <Text style={styles.label}>제목 (선택 — 미입력 시 AI 제안)</Text>
+        <View style={styles.notesHeader}>
+          <Text style={[styles.label, styles.labelInline]}>제목 (선택 — 미입력 시 AI 제안)</Text>
+          <Text style={styles.counter}>{title.length} / 100</Text>
+        </View>
         <TextInput
           value={title}
           onChangeText={setTitle}
@@ -143,7 +307,22 @@ export default function GenerateReport() {
           maxLength={100}
         />
 
-        <Text style={styles.label}>현장 메모 *</Text>
+        <View style={styles.notesHeader}>
+          <View style={styles.notesHeaderLeft}>
+            <Text style={[styles.label, styles.labelInline]}>현장 메모 *</Text>
+            <Text style={styles.counter}>{notes.length} / 5000</Text>
+          </View>
+          {tripId && importableMemoCount > 0 ? (
+            <Pressable
+              onPress={handleImportFromTrip}
+              style={({ pressed }) => [styles.importBtn, pressed && styles.pressed]}
+            >
+              <Text style={styles.importBtnText}>
+                📎 외근 메모 {importableMemoCount}건 가져오기
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
         <TextInput
           value={notes}
           onChangeText={setNotes}
@@ -153,7 +332,10 @@ export default function GenerateReport() {
           maxLength={5000}
         />
 
-        <Text style={styles.label}>추가 메모 (선택)</Text>
+        <View style={styles.notesHeader}>
+          <Text style={[styles.label, styles.labelInline]}>추가 메모 (선택)</Text>
+          <Text style={styles.counter}>{extraNotes.length} / 2000</Text>
+        </View>
         <TextInput
           value={extraNotes}
           onChangeText={setExtraNotes}
@@ -171,19 +353,67 @@ export default function GenerateReport() {
           placeholder="예: 부산광역시 해운대구 우동 123"
         />
 
+        {tripId && importablePhotos.length > 0 ? (
+          <View>
+            <Text style={styles.label}>외근 사진 가져오기 ({importablePhotos.length}장)</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.galleryRow}
+            >
+              {importablePhotos.map((p) => {
+                const isLoading = importingPhoto === p.fileUrl;
+                return (
+                  <Pressable
+                    key={p.id}
+                    onPress={() => handleImportPhotoTap(p.fileUrl)}
+                    disabled={isLoading}
+                    style={({ pressed }) => [
+                      styles.galleryThumbBox,
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <Image source={{ uri: p.fileUrl }} style={styles.galleryThumb} />
+                    {isLoading ? (
+                      <View style={styles.galleryThumbOverlay}>
+                        <Text style={styles.galleryThumbOverlayText}>가져오는 중...</Text>
+                      </View>
+                    ) : null}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+            <Text style={styles.hint}>썸네일을 누르면 조치 전·후 슬롯에 배치합니다.</Text>
+          </View>
+        ) : null}
+
         <Text style={styles.label}>조치 전 사진 (선택)</Text>
         <View style={styles.photoBox}>
           {beforePhoto ? (
             <Image source={{ uri: beforePhoto.uri }} style={styles.photoPreview} />
           ) : null}
-          <Pressable
-            onPress={pickBefore}
-            style={({ pressed }) => [styles.photoBtn, pressed && styles.pressed]}
-          >
-            <Text style={styles.photoBtnText}>
-              {beforePhoto ? '다시 선택' : '+ 사진 첨부'}
-            </Text>
-          </Pressable>
+          <View style={styles.photoActions}>
+            <Pressable
+              onPress={pickBefore}
+              style={({ pressed }) => [
+                styles.photoBtn,
+                styles.photoBtnPrimary,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={styles.photoBtnText}>
+                {beforePhoto ? '다시 선택' : '+ 사진 첨부'}
+              </Text>
+            </Pressable>
+            {beforePhoto ? (
+              <Pressable
+                onPress={() => setBeforePhoto(null)}
+                style={({ pressed }) => [styles.photoBtn, styles.photoBtnGhost, pressed && styles.pressed]}
+              >
+                <Text style={styles.photoBtnGhostText}>제거</Text>
+              </Pressable>
+            ) : null}
+          </View>
         </View>
 
         <Text style={styles.label}>조치 후 사진 (선택)</Text>
@@ -191,17 +421,68 @@ export default function GenerateReport() {
           {afterPhoto ? (
             <Image source={{ uri: afterPhoto.uri }} style={styles.photoPreview} />
           ) : null}
-          <Pressable
-            onPress={pickAfter}
-            style={({ pressed }) => [styles.photoBtn, pressed && styles.pressed]}
-          >
-            <Text style={styles.photoBtnText}>
-              {afterPhoto ? '다시 선택' : '+ 사진 첨부'}
-            </Text>
-          </Pressable>
+          <View style={styles.photoActions}>
+            <Pressable
+              onPress={pickAfter}
+              style={({ pressed }) => [
+                styles.photoBtn,
+                styles.photoBtnPrimary,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={styles.photoBtnText}>
+                {afterPhoto ? '다시 선택' : '+ 사진 첨부'}
+              </Text>
+            </Pressable>
+            {afterPhoto ? (
+              <Pressable
+                onPress={() => setAfterPhoto(null)}
+                style={({ pressed }) => [styles.photoBtn, styles.photoBtnGhost, pressed && styles.pressed]}
+              >
+                <Text style={styles.photoBtnGhostText}>제거</Text>
+              </Pressable>
+            ) : null}
+          </View>
         </View>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
+
+        {busy ? (
+          <View style={styles.progressBox}>
+            <View style={styles.progressSteps}>
+              {[1, 2, 3].map((i) => {
+                const done = i < stepLabel.idx;
+                const active = i === stepLabel.idx;
+                return (
+                  <View
+                    key={i}
+                    style={[
+                      styles.progressDot,
+                      done && styles.progressDotDone,
+                      active && styles.progressDotActive,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.progressDotText,
+                        (done || active) && styles.progressDotTextActive,
+                      ]}
+                    >
+                      {i}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+            <Text style={styles.progressTitle}>
+              {stepLabel.idx}/3 · {stepLabel.text}
+            </Text>
+            <Text style={styles.progressMeta}>
+              {elapsedSec}초 경과
+              {remainEstSec > 0 ? ` · 약 ${remainEstSec}초 남음` : ' · 마무리 중'}
+            </Text>
+          </View>
+        ) : null}
 
         <Pressable
           onPress={handleGenerate}
@@ -209,7 +490,11 @@ export default function GenerateReport() {
           style={({ pressed }) => [styles.btn, (pressed || busy) && styles.pressed]}
         >
           <Text style={styles.btnText}>
-            {busy ? 'AI 생성 중... (5~30초)' : 'AI 보고서 생성'}
+            {busy
+              ? 'AI 생성 중...'
+              : lastAttemptFailed
+                ? '↻ 다시 시도'
+                : 'AI 보고서 생성'}
           </Text>
         </Pressable>
 
@@ -256,7 +541,9 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
     backgroundColor: colors.primary + '10',
   },
-  tripItemText: { fontSize: fontSize.sm, color: colors.text },
+  tripItemDate: { fontSize: fontSize.sm, color: colors.text, fontWeight: '600' },
+  tripItemMeta: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: 2 },
+  tripItemMetaActive: { color: colors.primary },
   tripItemTextActive: { color: colors.primary, fontWeight: '700' },
   input: {
     backgroundColor: colors.surface,
@@ -269,7 +556,61 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   multiline: { minHeight: 140, textAlignVertical: 'top' },
+  notesHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
+  },
+  notesHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  labelInline: { marginTop: 0, marginBottom: 0 },
+  counter: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    fontWeight: '600',
+  },
+  importBtn: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.primary + '15',
+  },
+  importBtnText: {
+    fontSize: fontSize.xs,
+    color: colors.primary,
+    fontWeight: '700',
+  },
   multilineSmall: { minHeight: 80, textAlignVertical: 'top' },
+  galleryRow: { gap: spacing.sm, paddingVertical: spacing.xs },
+  galleryThumbBox: {
+    width: 88,
+    height: 88,
+    borderRadius: radius.md,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  galleryThumb: { width: '100%', height: '100%' },
+  galleryThumbOverlay: {
+    position: 'absolute',
+    inset: 0,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  galleryThumbOverlayText: {
+    color: '#fff',
+    fontSize: fontSize.xs,
+    fontWeight: '700',
+  },
   photoBox: { gap: spacing.sm },
   photoPreview: {
     width: '100%',
@@ -277,16 +618,60 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     backgroundColor: colors.surface,
   },
+  photoActions: { flexDirection: 'row', gap: spacing.sm },
   photoBtn: {
     paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
     borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
     alignItems: 'center',
   },
+  photoBtnPrimary: { flex: 1 },
+  photoBtnGhost: {
+    borderColor: colors.danger,
+    backgroundColor: colors.surface,
+  },
   photoBtnText: { fontSize: fontSize.sm, color: colors.text, fontWeight: '600' },
+  photoBtnGhostText: { fontSize: fontSize.sm, color: colors.danger, fontWeight: '700' },
   error: { color: colors.danger, fontSize: fontSize.sm, marginTop: spacing.md },
+  progressBox: {
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.primary + '55',
+    backgroundColor: colors.primary + '0d',
+  },
+  progressSteps: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  progressDot: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  progressDotDone: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  progressDotActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primary + '20',
+  },
+  progressDotText: { fontSize: fontSize.xs, color: colors.textMuted, fontWeight: '700' },
+  progressDotTextActive: { color: colors.primary },
+  progressTitle: { fontSize: fontSize.sm, color: colors.text, fontWeight: '700' },
+  progressMeta: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: 2 },
   btn: {
     backgroundColor: colors.primary,
     paddingVertical: spacing.lg,

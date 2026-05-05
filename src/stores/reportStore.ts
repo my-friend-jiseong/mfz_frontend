@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Report } from '@/types/entities';
-import { reports as reportsApi, localizeError } from '@/api';
+import { reports as reportsApi, localizeError, errorCode } from '@/api';
 import type {
   ReportListItem,
   ReportDetailResponse,
@@ -16,7 +16,9 @@ type CreateResult =
   | { ok: true; report: Report }
   | { ok: false; error: string };
 
-type GenericResult = { ok: true } | { ok: false; error: string };
+type GenericResult =
+  | { ok: true }
+  | { ok: false; error: string; code?: string };
 
 type ShareResult =
   | { ok: true; share: ShareReportData }
@@ -81,6 +83,7 @@ function detailToReport(d: ReportDetailResponse): Report {
     createdAt: d.createdAt,
     updatedAt: d.updatedAt,
     deletedAt: null,
+    fileUrl: d.fileUrl,
   };
 }
 
@@ -132,6 +135,7 @@ export const useReportStore = create<ReportState>((set, get) => ({
         createdAt: data.createdAt,
         updatedAt: data.updatedAt,
         deletedAt: data.deletedAt,
+        fileUrl: data.outputFileUrl,
       };
       set((s) => ({
         reports: [r, ...s.reports.filter((x) => x.id !== r.id)],
@@ -158,7 +162,7 @@ export const useReportStore = create<ReportState>((set, get) => ({
       return { ok: true };
     } catch (e) {
       set({ busy: false });
-      return { ok: false, error: describeError(e) };
+      return { ok: false, error: describeError(e), code: errorCode(e) ?? undefined };
     }
   },
 
@@ -222,6 +226,7 @@ export const useReportStore = create<ReportState>((set, get) => ({
         createdAt: new Date().toISOString(),
         updatedAt: null,
         deletedAt: null,
+        fileUrl: data.outputFileUrl ?? data.fileUrl ?? data.downloadUrl ?? null,
       };
       set((s) => ({
         reports: [r, ...s.reports.filter((x) => x.id !== r.id)],

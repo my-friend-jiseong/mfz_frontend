@@ -17,6 +17,14 @@ export type {
   OptimizeNavigationBody,
   OptimizeNavigationResponse,
   OptimizedOrderItem,
+  GeofenceRegisterBody,
+  GeofenceRegisterResponse,
+  GeofenceArrivalBody,
+  GeofenceArrivalResponse,
+  NavigationDeepLinksResponse,
+  StateHistoryItem,
+  StateHistoryResponse,
+  OfficialNoticeBody,
 } from './endpoints/trips';
 
 export { visits } from './endpoints/visits';
@@ -28,12 +36,14 @@ export type {
   FieldListResponse,
   FieldDetailResponse,
   FieldDirectAttachment,
+  RecentVisitItem,
   CreateFieldBody,
   CreateFieldResponse,
   UpdateFieldBody,
   PatchStatusResponse,
   FieldTextMemoResponse,
   AddressSearchResponse,
+  AddressSearchItem,
   ListMineParams,
 } from './endpoints/fields';
 
@@ -49,7 +59,8 @@ export type {
   ShareReportData,
   DisableShareData,
   ReportGenerateData,
+  ReportAnalysis,
 } from './endpoints/reports';
 export { map } from './endpoints/map';
 export { system } from './endpoints/system';
-export type { SessionPolicy } from './endpoints/system';
+export type { SessionPolicy, SessionActivityResponse } from './endpoints/system';
