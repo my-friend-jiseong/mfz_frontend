@@ -7,9 +7,11 @@ import type {
   ListMineParams,
   FieldDirectAttachment,
 } from '@/api';
+import type { DuplicateAddressDetails, HasRelatedVisitsDetails } from '@/api/errors';
 
 type CreateResult =
   | { ok: true; field: Field }
+  | { ok: false; needsConfirm: true; message: string; duplicateCount: number }
   | { ok: false; error: string };
 
 type GenericResult =
@@ -99,6 +101,17 @@ export const useFieldStore = create<FieldState>((set, get) => ({
       return { ok: true, field: f };
     } catch (e) {
       set({ busy: false });
+      // Phase 7 — 중복 주소 confirm 패턴: details.duplicateCount 로 사용자에게 안내 후
+      // 호출처가 forceCreateWithDuplicate=true 로 재호출하도록 needsConfirm 노출.
+      if (e instanceof ApiError && e.code === 'duplicate_address_warning_required') {
+        const d = (e.details ?? {}) as Partial<DuplicateAddressDetails>;
+        return {
+          ok: false,
+          needsConfirm: true,
+          message: e.message,
+          duplicateCount: typeof d.duplicateCount === 'number' ? d.duplicateCount : 0,
+        };
+      }
       return { ok: false, error: describeError(e) };
     }
   },
@@ -155,9 +168,15 @@ export const useFieldStore = create<FieldState>((set, get) => ({
       return { ok: true };
     } catch (e) {
       set({ busy: false });
-      if (e instanceof ApiError && e.status === 409) {
-        // HAS_RELATED_VISITS — 본 서비스는 단일 Actor 라 강제 삭제 없음, 안내만.
-        return { ok: false, needsConfirm: true, message: e.message };
+      // Phase 7 — has_related_visits (snake_case). 본 서비스는 단일 Actor 라 force 미사용,
+      // details.visitCount 를 메시지에 끼워 안내만 노출.
+      if (e instanceof ApiError && e.code === 'has_related_visits') {
+        const d = (e.details ?? {}) as Partial<HasRelatedVisitsDetails>;
+        const count = typeof d.visitCount === 'number' ? d.visitCount : 0;
+        const message = count > 0
+          ? `방문 기록이 ${count}건 있어 삭제할 수 없습니다`
+          : e.message;
+        return { ok: false, needsConfirm: true, message };
       }
       return { ok: false, error: describeError(e) };
     }

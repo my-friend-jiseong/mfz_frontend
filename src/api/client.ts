@@ -90,13 +90,19 @@ async function rawRequest<T>(path: string, init: RequestInit_, accessToken: stri
   }
 
   if (!res.ok) {
+    // Phase 7 통일 shape: { code, message, fields?, details? }
     const errBody = body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
-    throw new ApiError({
-      status: res.status,
-      message: typeof errBody.error === 'string' ? errBody.error : `HTTP ${res.status}`,
-      code: typeof errBody.code === 'string' ? errBody.code : undefined,
-      body,
-    });
+    const code = typeof errBody.code === 'string' ? errBody.code : 'internal_server_error';
+    const message = typeof errBody.message === 'string' && errBody.message.trim()
+      ? errBody.message
+      : `HTTP ${res.status}`;
+    const fields = errBody.fields && typeof errBody.fields === 'object'
+      ? (errBody.fields as Record<string, string>)
+      : undefined;
+    const details = errBody.details && typeof errBody.details === 'object'
+      ? (errBody.details as Record<string, unknown>)
+      : undefined;
+    throw new ApiError({ status: res.status, message, code, fields, details, body });
   }
 
   return body as T;

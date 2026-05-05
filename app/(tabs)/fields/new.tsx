@@ -55,8 +55,7 @@ export default function NewField() {
 
   const handleCreate = async () => {
     if (!user || !selected) return;
-    setSubmitting(true);
-    const result = await createField({
+    const baseBody = {
       name: selected.address,
       status,
       roadAddress: selected.address,
@@ -64,13 +63,47 @@ export default function NewField() {
       detailAddress: detail,
       lat: selected.lat,
       lng: selected.lng,
-    });
+    };
+
+    setSubmitting(true);
+    const result = await createField(baseBody);
     setSubmitting(false);
+
     if (result.ok) {
       router.replace(`/(tabs)/fields/${result.field.id}` as never);
-    } else {
-      Alert.alert('등록 실패', result.error);
+      return;
     }
+
+    if ('needsConfirm' in result) {
+      // Phase 7 duplicate_address_warning_required — confirm 후 forceCreateWithDuplicate 로 재호출
+      const proceed = (yes: boolean) => {
+        if (!yes) return;
+        void (async () => {
+          setSubmitting(true);
+          const forced = await createField({ ...baseBody, forceCreateWithDuplicate: true });
+          setSubmitting(false);
+          if (forced.ok) {
+            router.replace(`/(tabs)/fields/${forced.field.id}` as never);
+          } else if (!('needsConfirm' in forced)) {
+            Alert.alert('등록 실패', forced.error);
+          }
+        })();
+      };
+      const msg = result.duplicateCount > 0
+        ? `같은 주소의 기존 현장이 ${result.duplicateCount}건 있습니다.\n계속 진행할까요?`
+        : `${result.message}\n계속 진행할까요?`;
+      if (Platform.OS === 'web') {
+        if (confirm(msg)) proceed(true);
+      } else {
+        Alert.alert('중복 주소 확인', msg, [
+          { text: '취소', style: 'cancel' },
+          { text: '그래도 등록', onPress: () => proceed(true) },
+        ]);
+      }
+      return;
+    }
+
+    Alert.alert('등록 실패', result.error);
   };
 
   return (
