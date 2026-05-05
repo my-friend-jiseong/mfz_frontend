@@ -191,6 +191,7 @@ type VisitStatus =
   - `stateHistory` → `StateHistoryResponse` (typed `StateHistoryItem`)
 - `active.tsx` 의 deep-link 처리 단순화: typed 응답 직접 사용 + 카카오/네이버/구글 라벨 표시.
 - `trips/[id].tsx` 의 로컬 `StateHistoryItem` 인터페이스 제거 → `@/api` export 사용. `EVENT_LABEL` 한국어 매핑 추가 (started → "외근 시작" 등).
+- **자동화 UI 통합 완료**: 활성 외근 화면에서 expo-location foreground 권한 + watchPositionAsync 로 도착 감지 (반경 150m, 1현장 1회). 외근 시작 직후 모든 방문 현장에 geofence register 호출 (best-effort). 도착 시 사용자에게 "지금 체크인 / 나중에" Alert.
 
 ### 프론트엔드가 정한 contract
 

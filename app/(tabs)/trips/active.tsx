@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import { useRouter } from 'expo-router';
@@ -10,6 +10,12 @@ import { MapSheetLayout } from '@/components/MapSheetLayout';
 import { openKakaoRouteTo } from '@/utils/kakaoMap';
 import { trips as tripsApi, localizeError } from '@/api';
 import { nearestNeighborOrder } from '@/utils/routeOptimize';
+import {
+  registerGeofencesForTrip,
+  startArrivalWatcher,
+  type ArrivalTarget,
+  type ArrivalEvent,
+} from '@/utils/geofence';
 import * as Linking from 'expo-linking';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
@@ -51,6 +57,62 @@ export default function ActiveTrip() {
       .filter((d) => d.tripId === activeTripId)
       .sort((a, b) => a.order - b.order);
   }, [allDestinations, activeTripId]);
+
+  // 외근 시작 시 geofence 등록 (한 번만, best-effort 백엔드 보고).
+  const registeredRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (activeTripId === null || destinations.length === 0) return;
+    if (registeredRef.current === activeTripId) return;
+    registeredRef.current = activeTripId;
+    const fields = destinations
+      .map((d) => getField(d.fieldId))
+      .filter((f): f is NonNullable<typeof f> => !!f && Number.isFinite(f.latitude) && Number.isFinite(f.longitude))
+      .map((f) => ({ id: f.id, latitude: f.latitude, longitude: f.longitude }));
+    if (fields.length === 0) return;
+    void registerGeofencesForTrip(activeTripId, fields);
+  }, [activeTripId, destinations, getField]);
+
+  // 도착 자동 감지 watcher — pending destination 만 타겟. 외근 변경/언마운트 시 정지.
+  useEffect(() => {
+    if (activeTripId === null) return;
+    const targets: ArrivalTarget[] = destinations
+      .filter((d) => d.status === 'pending')
+      .map((d) => {
+        const f = getField(d.fieldId);
+        if (!f || !Number.isFinite(f.latitude) || !Number.isFinite(f.longitude)) return null;
+        return { fieldId: f.id, fieldName: f.address, lat: f.latitude, lng: f.longitude };
+      })
+      .filter((t): t is ArrivalTarget => t !== null);
+    if (targets.length === 0) return;
+
+    let stop: (() => void) | null = null;
+    let cancelled = false;
+    void (async () => {
+      const fn = await startArrivalWatcher(activeTripId, targets, (event: ArrivalEvent) => {
+        Alert.alert(
+          '현장 도착 감지',
+          `${event.fieldName} (약 ${Math.round(event.distanceMeters)}m). 지금 체크인할까요?`,
+          [
+            { text: '나중에', style: 'cancel' },
+            {
+              text: '지금 체크인',
+              onPress: () =>
+                router.push(`/(tabs)/fields/${event.fieldId}/checkin` as never),
+            },
+          ],
+        );
+      });
+      if (cancelled) {
+        fn();
+      } else {
+        stop = fn;
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (stop) stop();
+    };
+  }, [activeTripId, destinations, getField, router]);
 
   const currentDest = useMemo(
     () => destinations.find((d) => d.status === 'pending'),
