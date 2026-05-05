@@ -9,7 +9,11 @@ import { SessionGuardModal } from '@/components/SessionGuardModal';
 import { OfflineBadge } from '@/components/OfflineBadge';
 import { startSessionActivity, stopSessionActivity } from '@/stores/sessionActivity';
 import { startNetworkWatcher, stopNetworkWatcher } from '@/api/network';
+import { initSentry } from '@/utils/sentry';
 import { colors } from '@/theme/colors';
+
+// 모듈 로드 시 초기화 (DSN 환경변수 없으면 no-op)
+initSentry();
 
 export default function RootLayout() {
   useEffect(() => {

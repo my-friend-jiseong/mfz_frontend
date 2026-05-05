@@ -31,7 +31,15 @@
     },
     "web": {
       "bundler": "metro",
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "name": "내친지",
+      "shortName": "내친지",
+      "description": "외근·현장 관리",
+      "themeColor": "#ffffff",
+      "backgroundColor": "#ffffff",
+      "display": "standalone",
+      "lang": "ko",
+      "startUrl": "/"
     },
     "plugins": [
       "expo-router",
@@ -49,7 +57,8 @@
         {
           "microphonePermission": "방문 기록에 음성 메모를 첨부하기 위해 마이크를 사용합니다."
         }
-      ]
+      ],
+      "@sentry/react-native"
     ],
     "experiments": {
       "typedRoutes": true

@@ -102,7 +102,15 @@ async function rawRequest<T>(path: string, init: RequestInit_, accessToken: stri
     const details = errBody.details && typeof errBody.details === 'object'
       ? (errBody.details as Record<string, unknown>)
       : undefined;
-    throw new ApiError({ status: res.status, message, code, fields, details, body });
+    const err = new ApiError({ status: res.status, message, code, fields, details, body });
+    // 5xx 는 Sentry 캡처 (있을 때만, code 로 fingerprint). 4xx 는 정상 분기라 패스.
+    if (res.status >= 500) {
+      // 동적 import 로 순환 의존 회피 + Sentry DSN 미설정 시 비용 0
+      void import('@/utils/sentry').then(({ captureApiError }) =>
+        captureApiError(err, { path, method: init.method ?? 'GET' }),
+      );
+    }
+    throw err;
   }
 
   return body as T;
