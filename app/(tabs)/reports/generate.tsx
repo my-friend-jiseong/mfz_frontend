@@ -17,7 +17,7 @@ import { useTripStore } from '@/stores/tripStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useVisitStore } from '@/stores/visitStore';
 import { useFieldStore } from '@/stores/fieldStore';
-import { pickPhoto, promptPhotoSource, type UploadFile } from '@/utils/media';
+import { pickPhoto, promptPhotoSource, downloadToUploadFile, type UploadFile } from '@/utils/media';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
 
@@ -51,6 +51,7 @@ export default function GenerateReport() {
   const userId = useAuthStore((s) => s.user?.id);
   const visitsByTrip = useVisitStore((s) => s.byTrip);
   const allTextMemos = useVisitStore((s) => s.textMemos);
+  const allPhotos = useVisitStore((s) => s.photos);
   const allFields = useFieldStore((s) => s.fields);
 
   const [tripId, setTripId] = useState<string | null>(params.tripId ?? null);
@@ -93,6 +94,40 @@ export default function GenerateReport() {
     () => importableBlocks.reduce((sum, b) => sum + b.memos.length, 0),
     [importableBlocks],
   );
+
+  // 외근의 visit 들에 첨부된 사진 — before/after 슬롯에 import 가능.
+  const importablePhotos = useMemo(() => {
+    if (!tripId) return [];
+    const visits = visitsByTrip(tripId);
+    const visitIds = new Set(visits.map((v) => v.id));
+    return allPhotos
+      .filter((p) => p.visitId && visitIds.has(p.visitId))
+      .filter((p) => p.fileUrl && /^https?:\/\//.test(p.fileUrl))
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  }, [tripId, visitsByTrip, allPhotos]);
+
+  const [importingPhoto, setImportingPhoto] = useState<string | null>(null);
+
+  const importPhotoToSlot = async (photoUrl: string, slot: 'before' | 'after') => {
+    setImportingPhoto(photoUrl);
+    const file = await downloadToUploadFile(photoUrl);
+    if (!mountedRef.current) return;
+    setImportingPhoto(null);
+    if (!file) {
+      Alert.alert('사진 가져오기 실패', '사진을 다운로드할 수 없습니다. 네트워크를 확인해주세요.');
+      return;
+    }
+    if (slot === 'before') setBeforePhoto(file);
+    else setAfterPhoto(file);
+  };
+
+  const handleImportPhotoTap = (photoUrl: string) => {
+    Alert.alert('사진 위치 선택', '어느 슬롯에 넣을까요?', [
+      { text: '취소', style: 'cancel' },
+      { text: '조치 전', onPress: () => void importPhotoToSlot(photoUrl, 'before') },
+      { text: '조치 후', onPress: () => void importPhotoToSlot(photoUrl, 'after') },
+    ]);
+  };
 
   const buildImportText = () => {
     const blocks = importableBlocks
@@ -318,6 +353,40 @@ export default function GenerateReport() {
           placeholder="예: 부산광역시 해운대구 우동 123"
         />
 
+        {tripId && importablePhotos.length > 0 ? (
+          <View>
+            <Text style={styles.label}>외근 사진 가져오기 ({importablePhotos.length}장)</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.galleryRow}
+            >
+              {importablePhotos.map((p) => {
+                const isLoading = importingPhoto === p.fileUrl;
+                return (
+                  <Pressable
+                    key={p.id}
+                    onPress={() => handleImportPhotoTap(p.fileUrl)}
+                    disabled={isLoading}
+                    style={({ pressed }) => [
+                      styles.galleryThumbBox,
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <Image source={{ uri: p.fileUrl }} style={styles.galleryThumb} />
+                    {isLoading ? (
+                      <View style={styles.galleryThumbOverlay}>
+                        <Text style={styles.galleryThumbOverlayText}>가져오는 중...</Text>
+                      </View>
+                    ) : null}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+            <Text style={styles.hint}>썸네일을 누르면 조치 전·후 슬롯에 배치합니다.</Text>
+          </View>
+        ) : null}
+
         <Text style={styles.label}>조치 전 사진 (선택)</Text>
         <View style={styles.photoBox}>
           {beforePhoto ? (
@@ -519,6 +588,29 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   multilineSmall: { minHeight: 80, textAlignVertical: 'top' },
+  galleryRow: { gap: spacing.sm, paddingVertical: spacing.xs },
+  galleryThumbBox: {
+    width: 88,
+    height: 88,
+    borderRadius: radius.md,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  galleryThumb: { width: '100%', height: '100%' },
+  galleryThumbOverlay: {
+    position: 'absolute',
+    inset: 0,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  galleryThumbOverlayText: {
+    color: '#fff',
+    fontSize: fontSize.xs,
+    fontWeight: '700',
+  },
   photoBox: { gap: spacing.sm },
   photoPreview: {
     width: '100%',
