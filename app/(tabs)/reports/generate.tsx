@@ -15,6 +15,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useReportStore } from '@/stores/reportStore';
 import { useTripStore } from '@/stores/tripStore';
 import { useAuthStore } from '@/stores/authStore';
+import { useVisitStore } from '@/stores/visitStore';
+import { useFieldStore } from '@/stores/fieldStore';
 import { pickPhoto, promptPhotoSource, type UploadFile } from '@/utils/media';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
@@ -28,6 +30,12 @@ function fmtDate(iso: string) {
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
 }
 
+function fmtDateTime(iso: string) {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 export default function GenerateReport() {
   const router = useRouter();
   const params = useLocalSearchParams<{ tripId?: string }>();
@@ -35,6 +43,9 @@ export default function GenerateReport() {
   const generate = useReportStore((s) => s.generate);
   const allTrips = useTripStore((s) => s.trips);
   const userId = useAuthStore((s) => s.user?.id);
+  const visitsByTrip = useVisitStore((s) => s.byTrip);
+  const allTextMemos = useVisitStore((s) => s.textMemos);
+  const allFields = useFieldStore((s) => s.fields);
 
   const [tripId, setTripId] = useState<string | null>(params.tripId ?? null);
   const [title, setTitle] = useState('');
@@ -60,6 +71,60 @@ export default function GenerateReport() {
       .filter((t) => t.workerId === userId)
       .sort((a, b) => b.startedAt.localeCompare(a.startedAt));
   }, [allTrips, userId]);
+
+  // 선택한 외근의 visit 들에 첨부된 글자 메모 — 자동 import 대상.
+  const importableBlocks = useMemo(() => {
+    if (!tripId) return [];
+    const visits = visitsByTrip(tripId);
+    return visits.map((v) => {
+      const field = allFields.find((f) => f.id === v.fieldId);
+      const memos = allTextMemos.filter((m) => m.visitId === v.id);
+      return { visit: v, field, memos };
+    });
+  }, [tripId, visitsByTrip, allTextMemos, allFields]);
+
+  const importableMemoCount = useMemo(
+    () => importableBlocks.reduce((sum, b) => sum + b.memos.length, 0),
+    [importableBlocks],
+  );
+
+  const buildImportText = () => {
+    const blocks = importableBlocks
+      .filter((b) => b.memos.length > 0)
+      .map((b) => {
+        const time = fmtDateTime(b.visit.visitedAt);
+        const where = b.field?.address ?? '알 수 없는 현장';
+        const lines = b.memos.map((m) => `- ${m.content}`).join('\n');
+        return `[${time} · ${where}]\n${lines}`;
+      });
+    return blocks.join('\n\n');
+  };
+
+  const handleImportFromTrip = () => {
+    if (importableMemoCount === 0) return;
+    const compiled = buildImportText();
+    if (!compiled) return;
+    if (notes.trim().length === 0) {
+      setNotes(compiled);
+      return;
+    }
+    Alert.alert(
+      '외근 메모 가져오기',
+      `${importableMemoCount}건의 외근 메모를 어떻게 처리할까요?`,
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '이어 붙이기',
+          onPress: () => setNotes((prev) => `${prev}\n\n${compiled}`),
+        },
+        {
+          text: '교체',
+          style: 'destructive',
+          onPress: () => setNotes(compiled),
+        },
+      ],
+    );
+  };
 
   const pickBefore = () =>
     promptPhotoSource(async (src) => {
@@ -143,7 +208,19 @@ export default function GenerateReport() {
           maxLength={100}
         />
 
-        <Text style={styles.label}>현장 메모 *</Text>
+        <View style={styles.notesHeader}>
+          <Text style={[styles.label, styles.labelInline]}>현장 메모 *</Text>
+          {tripId && importableMemoCount > 0 ? (
+            <Pressable
+              onPress={handleImportFromTrip}
+              style={({ pressed }) => [styles.importBtn, pressed && styles.pressed]}
+            >
+              <Text style={styles.importBtnText}>
+                📎 외근 메모 {importableMemoCount}건 가져오기
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
         <TextInput
           value={notes}
           onChangeText={setNotes}
@@ -269,6 +346,27 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   multiline: { minHeight: 140, textAlignVertical: 'top' },
+  notesHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
+  },
+  labelInline: { marginTop: 0, marginBottom: 0 },
+  importBtn: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.primary + '15',
+  },
+  importBtnText: {
+    fontSize: fontSize.xs,
+    color: colors.primary,
+    fontWeight: '700',
+  },
   multilineSmall: { minHeight: 80, textAlignVertical: 'top' },
   photoBox: { gap: spacing.sm },
   photoPreview: {
