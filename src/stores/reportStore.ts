@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Report } from '@/types/entities';
-import { reports as reportsApi, localizeError } from '@/api';
+import { reports as reportsApi, localizeError, errorCode } from '@/api';
 import type {
   ReportListItem,
   ReportDetailResponse,
@@ -16,7 +16,9 @@ type CreateResult =
   | { ok: true; report: Report }
   | { ok: false; error: string };
 
-type GenericResult = { ok: true } | { ok: false; error: string };
+type GenericResult =
+  | { ok: true }
+  | { ok: false; error: string; code?: string };
 
 type ShareResult =
   | { ok: true; share: ShareReportData }
@@ -160,7 +162,7 @@ export const useReportStore = create<ReportState>((set, get) => ({
       return { ok: true };
     } catch (e) {
       set({ busy: false });
-      return { ok: false, error: describeError(e) };
+      return { ok: false, error: describeError(e), code: errorCode(e) ?? undefined };
     }
   },
 

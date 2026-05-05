@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -23,6 +23,13 @@ const STATUS_LABEL: Record<FieldStatus, string> = {
   done: '완료',
 };
 
+const DETAIL_MAX = 100;
+
+interface FieldErrors {
+  detailAddress?: string;
+  status?: string;
+}
+
 export default function EditField() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const fieldId = id ?? '';
@@ -32,8 +39,21 @@ export default function EditField() {
   const update = useFieldStore((s) => s.update);
   const remove = useFieldStore((s) => s.remove);
 
-  const [addressDetail, setAddressDetail] = useState(field?.addressDetail ?? '');
-  const [status, setStatus] = useState<FieldStatus>(field?.status ?? 'pending');
+  // Hooks must be called unconditionally — early return 후로 옮기지 않고 옵셔널 처리.
+  const initial = useMemo(
+    () => ({
+      addressDetail: field?.addressDetail ?? '',
+      status: field?.status ?? ('pending' as FieldStatus),
+    }),
+    [field?.addressDetail, field?.status],
+  );
+  const initialRef = useRef(initial);
+
+  const [addressDetail, setAddressDetail] = useState(initial.addressDetail);
+  const [status, setStatus] = useState<FieldStatus>(initial.status);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [globalError, setGlobalError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   if (!field) {
     return (
@@ -43,24 +63,46 @@ export default function EditField() {
     );
   }
 
-  const [submitting, setSubmitting] = useState(false);
+  const detailTrim = addressDetail.trim();
+  const hasChanges =
+    detailTrim !== initialRef.current.addressDetail.trim() ||
+    status !== initialRef.current.status;
+
+  const clearFieldErr = (k: keyof FieldErrors) =>
+    setFieldErrors((p) => ({ ...p, [k]: undefined }));
 
   const handleSave = async () => {
+    setGlobalError(null);
+    const errs: FieldErrors = {};
+    if (detailTrim.length > DETAIL_MAX)
+      errs.detailAddress = `상세 주소는 ${DETAIL_MAX}자 이하여야 합니다`;
+    setFieldErrors(errs);
+    if (Object.keys(errs).length > 0) return;
+
     setSubmitting(true);
-    const updateRes = await update(fieldId, { detailAddress: addressDetail });
-    if (!updateRes.ok) {
-      setSubmitting(false);
-      Alert.alert('수정 실패', updateRes.error);
-      return;
-    }
-    if (status !== field.status) {
-      const statusRes = await useFieldStore.getState().patchStatus(fieldId, status);
-      if (!statusRes.ok) {
+
+    // 변경된 항목만 호출 — 빈 PATCH 방지.
+    const detailChanged = detailTrim !== initialRef.current.addressDetail.trim();
+    const statusChanged = status !== initialRef.current.status;
+
+    if (detailChanged) {
+      const updateRes = await update(fieldId, { detailAddress: detailTrim });
+      if (!updateRes.ok) {
         setSubmitting(false);
-        Alert.alert('상태 변경 실패', statusRes.error);
+        setFieldErrors({ detailAddress: updateRes.error });
         return;
       }
     }
+
+    if (statusChanged) {
+      const statusRes = await useFieldStore.getState().patchStatus(fieldId, status);
+      if (!statusRes.ok) {
+        setSubmitting(false);
+        setFieldErrors({ status: statusRes.error });
+        return;
+      }
+    }
+
     setSubmitting(false);
     router.back();
   };
@@ -72,7 +114,7 @@ export default function EditField() {
       return;
     }
     if ('needsConfirm' in r) {
-      // 본 서비스는 단일 Actor — 강제 삭제(force=true) 흐름 없음. 사용자에게 안내만.
+      // 단일 Actor 정책 — 강제 삭제 미지원, 안내만.
       Alert.alert(
         '삭제할 수 없습니다',
         r.message + '\n\n방문 기록이 남아 있는 현장은 삭제할 수 없습니다.',
@@ -95,6 +137,17 @@ export default function EditField() {
     }
   };
 
+  const handleCancel = () => {
+    if (!hasChanges) {
+      router.back();
+      return;
+    }
+    Alert.alert('수정 취소', '저장하지 않은 변경 사항이 있습니다. 계속 취소할까요?', [
+      { text: '계속 작성', style: 'cancel' },
+      { text: '버리고 나가기', style: 'destructive', onPress: () => router.back() },
+    ]);
+  };
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -106,13 +159,26 @@ export default function EditField() {
           <Text style={styles.readonlyText}>{field.address}</Text>
         </View>
 
-        <Text style={styles.label}>상세 주소</Text>
+        <View style={styles.labelRow}>
+          <Text style={styles.label}>상세 주소</Text>
+          <Text style={styles.counter}>
+            {addressDetail.length} / {DETAIL_MAX}
+          </Text>
+        </View>
         <TextInput
           value={addressDetail}
-          onChangeText={setAddressDetail}
-          style={styles.input}
+          onChangeText={(v) => {
+            setAddressDetail(v);
+            if (fieldErrors.detailAddress) clearFieldErr('detailAddress');
+          }}
+          editable={!submitting}
+          maxLength={DETAIL_MAX}
+          style={[styles.input, fieldErrors.detailAddress && styles.inputError]}
           placeholder="예: 101동 1203호"
         />
+        {fieldErrors.detailAddress ? (
+          <Text style={styles.fieldError}>{fieldErrors.detailAddress}</Text>
+        ) : null}
 
         <Text style={styles.label}>상태</Text>
         <View style={styles.statusRow}>
@@ -122,7 +188,11 @@ export default function EditField() {
             return (
               <Pressable
                 key={s}
-                onPress={() => setStatus(s)}
+                onPress={() => {
+                  setStatus(s);
+                  if (fieldErrors.status) clearFieldErr('status');
+                }}
+                disabled={submitting}
                 style={[
                   styles.statusChip,
                   active && { backgroundColor: c + '22', borderColor: c },
@@ -140,13 +210,33 @@ export default function EditField() {
             );
           })}
         </View>
+        {fieldErrors.status ? (
+          <Text style={styles.fieldError}>{fieldErrors.status}</Text>
+        ) : null}
+
+        {globalError ? <Text style={styles.error}>{globalError}</Text> : null}
 
         <Pressable
           onPress={handleSave}
-          disabled={submitting}
-          style={({ pressed }) => [styles.btn, (pressed || submitting) && styles.pressed]}
+          disabled={submitting || !hasChanges}
+          style={({ pressed }) => [
+            styles.btn,
+            (!hasChanges || submitting) && styles.btnDisabled,
+            pressed && styles.pressed,
+          ]}
         >
-          <Text style={styles.btnText}>{submitting ? '저장 중...' : '저장'}</Text>
+          <Text
+            style={[
+              styles.btnText,
+              (!hasChanges || submitting) && styles.btnTextDisabled,
+            ]}
+          >
+            {submitting ? '저장 중...' : hasChanges ? '저장' : '변경 사항 없음'}
+          </Text>
+        </Pressable>
+
+        <Pressable onPress={handleCancel} style={styles.cancel}>
+          <Text style={styles.cancelText}>취소</Text>
         </Pressable>
 
         <Pressable
@@ -163,12 +253,24 @@ export default function EditField() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   scroll: { padding: spacing.xl },
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing.md,
+    marginBottom: spacing.xs,
+  },
   label: {
     fontSize: fontSize.sm,
     color: colors.textMuted,
     fontWeight: '600',
     marginTop: spacing.md,
     marginBottom: spacing.xs,
+  },
+  counter: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    fontWeight: '600',
   },
   readonly: {
     backgroundColor: colors.background,
@@ -188,6 +290,14 @@ const styles = StyleSheet.create({
     fontSize: fontSize.base,
     color: colors.text,
   },
+  inputError: { borderColor: colors.danger },
+  fieldError: {
+    color: colors.danger,
+    fontSize: fontSize.xs,
+    marginTop: 4,
+    marginLeft: 4,
+  },
+  error: { color: colors.danger, fontSize: fontSize.sm, marginTop: spacing.md },
   statusRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
   statusChip: {
     paddingHorizontal: spacing.md,
@@ -205,7 +315,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: spacing.xl,
   },
+  btnDisabled: { backgroundColor: colors.border },
   btnText: { color: '#fff', fontSize: fontSize.base, fontWeight: '700' },
+  btnTextDisabled: { color: colors.textMuted },
+  cancel: { alignItems: 'center', paddingVertical: spacing.md },
+  cancelText: { color: colors.textMuted, fontSize: fontSize.sm },
   dangerBtn: {
     paddingVertical: spacing.md,
     alignItems: 'center',
