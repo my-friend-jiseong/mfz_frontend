@@ -40,7 +40,7 @@ export default function Login() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <Text style={styles.title}>내친지</Text>
+        <Text style={styles.title}>일가요</Text>
         <Text style={styles.subtitle}>현장 방문 업무를 함께합니다</Text>
 
         <View style={styles.form}>

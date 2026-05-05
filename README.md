@@ -1,4 +1,4 @@
-# mfz_frontend (내친지)
+# mfz_frontend (일가요)
 
 현장 방문 업무자를 위한 모바일 앱 프로토타입 (Expo + React Native + TypeScript).
 

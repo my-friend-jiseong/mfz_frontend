@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "내친지",
+    "name": "일가요",
     "slug": "mfz-frontend",
     "version": "0.1.0",
     "orientation": "portrait",
@@ -32,8 +32,8 @@
     "web": {
       "bundler": "metro",
       "favicon": "./assets/favicon.png",
-      "name": "내친지",
-      "shortName": "내친지",
+      "name": "일가요",
+      "shortName": "일가요",
       "description": "외근·현장 관리",
       "themeColor": "#ffffff",
       "backgroundColor": "#ffffff",
