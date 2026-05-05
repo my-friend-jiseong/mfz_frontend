@@ -76,25 +76,25 @@ export default function ActiveTrip() {
     const field = getField(currentDest.fieldId);
     if (!field) return;
 
-    // 백엔드 deep-links 응답을 시도 — 다중 provider URL 묶음 (응답 shape 미명세)
+    // 백엔드 deep-links 응답 — { kakao?, naver?, google? } 평탄 URL 묶음 (handoff §6b).
+    // 응답 받기 실패 시 카카오맵 직링크로 폴백.
     if (activeTripId) {
       try {
-        const res = (await tripsApi.navigationDeepLinks(activeTripId, {
+        const res = await tripsApi.navigationDeepLinks(activeTripId, {
           fieldId: field.id,
           lat: field.latitude,
           lng: field.longitude,
-        })) as Record<string, unknown>;
-        // 응답이 { kakao: url, google: url, naver: url } 형태로 추정 — 확인되는 것만 모달
-        const entries: Array<{ provider: string; url: string }> = [];
-        for (const [k, v] of Object.entries(res ?? {})) {
-          if (typeof v === 'string' && v.startsWith('http')) {
-            entries.push({ provider: k, url: v });
-          } else if (
-            v &&
-            typeof v === 'object' &&
-            typeof (v as { url?: unknown }).url === 'string'
-          ) {
-            entries.push({ provider: k, url: (v as { url: string }).url });
+        });
+        const PROVIDERS = [
+          { key: 'kakao', label: '카카오맵' },
+          { key: 'naver', label: '네이버 지도' },
+          { key: 'google', label: '구글 지도' },
+        ] as const;
+        const entries: Array<{ label: string; url: string }> = [];
+        for (const p of PROVIDERS) {
+          const url = res[p.key];
+          if (typeof url === 'string' && url.startsWith('http')) {
+            entries.push({ label: p.label, url });
           }
         }
         if (entries.length === 1) {
@@ -105,14 +105,14 @@ export default function ActiveTrip() {
           Alert.alert('길찾기 — 지도 앱 선택', undefined, [
             { text: '취소', style: 'cancel' },
             ...entries.map((e) => ({
-              text: e.provider,
+              text: e.label,
               onPress: () => void Linking.openURL(e.url),
             })),
           ]);
           return;
         }
       } catch {
-        // 백엔드 미응답 시 카카오맵 직링크로 폴백
+        // fallthrough — 카카오맵 직링크
       }
     }
     void openKakaoRouteTo(field.address, field.latitude, field.longitude);

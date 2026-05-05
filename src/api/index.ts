@@ -17,6 +17,14 @@ export type {
   OptimizeNavigationBody,
   OptimizeNavigationResponse,
   OptimizedOrderItem,
+  GeofenceRegisterBody,
+  GeofenceRegisterResponse,
+  GeofenceArrivalBody,
+  GeofenceArrivalResponse,
+  NavigationDeepLinksResponse,
+  StateHistoryItem,
+  StateHistoryResponse,
+  OfficialNoticeBody,
 } from './endpoints/trips';
 
 export { visits } from './endpoints/visits';

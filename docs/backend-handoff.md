@@ -16,7 +16,7 @@
 | 3 | `refresh_token_superseded` / `all_sessions_revoked` 발화 시점 | 정책 문서화 | 🟡 중간 | PR #5 PR-A |
 | 4 | `error.fields` 발화 (옵션) | validation 라우트에 `fields` 채우기 | 🟢 낮음 | PR #5 PR-E (`6bbee71`) |
 | 5 | 방문 status enum (영문 정합화) | 영문 enum 합의 | 🔴 critical | 진행 중 (프론트 영문화 완료) |
-| 6 | Geofence / Navigation deep-link / state-history 응답 shape | shape 명세 | 🟡 중간 (다음 작업) | 미시작 |
+| 6 | Geofence / Navigation deep-link / state-history 응답 shape | shape 명세 | 🟡 중간 | 진행 중 (프론트 typed 정렬 완료) |
 
 ---
 
@@ -181,13 +181,18 @@ type VisitStatus =
 
 ---
 
-## 6. 🟡 외근 자동화 응답 shape (다음 작업 — 곧 시작)
+## 6. 🟡 외근 자동화 응답 shape (프론트 typed 정렬 완료)
 
-### 프론트엔드 상태
-- API 함수 선언은 있음 ([`src/api/endpoints/trips.ts:151-213`](../src/api/endpoints/trips.ts#L151-L213)).
-- 응답은 모두 `request<unknown>` — UI 에서 못 씀.
+### 프론트엔드 상태 — 2026-05-06
+- [`src/api/endpoints/trips.ts`](../src/api/endpoints/trips.ts) 의 자동화 endpoint 들이 typed 응답으로 갱신됨:
+  - `registerGeofence` → `GeofenceRegisterResponse`
+  - `notifyGeofenceArrival` → `GeofenceArrivalResponse`
+  - `navigationDeepLinks` → `NavigationDeepLinksResponse` (kakao/naver/google 평탄)
+  - `stateHistory` → `StateHistoryResponse` (typed `StateHistoryItem`)
+- `active.tsx` 의 deep-link 처리 단순화: typed 응답 직접 사용 + 카카오/네이버/구글 라벨 표시.
+- `trips/[id].tsx` 의 로컬 `StateHistoryItem` 인터페이스 제거 → `@/api` export 사용. `EVENT_LABEL` 한국어 매핑 추가 (started → "외근 시작" 등).
 
-### 프론트엔드가 정할 contract (다음 작업에서 도입 예정)
+### 프론트엔드가 정한 contract
 
 #### 6a. Geofence 등록 / 도착
 ```ts
