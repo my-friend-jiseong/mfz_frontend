@@ -133,6 +133,26 @@ export const useVisitStore = create<VisitState>((set, get) => ({
       set((s) => ({ textMemos: [...s.textMemos, memo] }));
       return { ok: true };
     } catch (e) {
+      // 네트워크 끊김이면 큐잉 + optimistic 메모 (서버 동기화 후 attachment id 는
+      // 다음 방문 상세 새로고침 시 갱신됨).
+      if (e instanceof NetworkError) {
+        await useOfflineQueueStore.getState().enqueue({
+          kind: 'visitTextMemo',
+          path: `/api/visits/${visitId}/memos/text`,
+          body: { text: content },
+        });
+        const optimistic: TextMemo = {
+          id: `pending-${Date.now()}`,
+          visitId,
+          fieldId: visit.fieldId,
+          content,
+          latitude: 0,
+          longitude: 0,
+          createdAt: new Date().toISOString(),
+        };
+        set((s) => ({ textMemos: [...s.textMemos, optimistic] }));
+        return { ok: true };
+      }
       return { ok: false, error: describeError(e) };
     }
   },

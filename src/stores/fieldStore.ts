@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Field, FieldStatus } from '@/types/entities';
-import { fields as fieldsApi, ApiError, localizeError } from '@/api';
+import { fields as fieldsApi, ApiError, NetworkError, localizeError } from '@/api';
 import type {
   CreateFieldBody,
   UpdateFieldBody,
@@ -8,6 +8,7 @@ import type {
   FieldDirectAttachment,
 } from '@/api';
 import type { DuplicateAddressDetails, HasRelatedVisitsDetails } from '@/api/errors';
+import { useOfflineQueueStore } from './offlineQueueStore';
 
 type CreateResult =
   | { ok: true; field: Field }
@@ -156,6 +157,19 @@ export const useFieldStore = create<FieldState>((set, get) => ({
       }));
       return { ok: true };
     } catch (e) {
+      // 네트워크 끊김이면 큐잉 + optimistic 상태 변경.
+      if (e instanceof NetworkError) {
+        await useOfflineQueueStore.getState().enqueue({
+          kind: 'fieldStatus',
+          path: `/api/fields/${id}/status`,
+          method: 'PATCH',
+          body: { status },
+        });
+        set((s) => ({
+          fields: s.fields.map((f) => (f.id === id ? { ...f, status } : f)),
+        }));
+        return { ok: true };
+      }
       return { ok: false, error: describeError(e) };
     }
   },

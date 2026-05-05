@@ -35,7 +35,19 @@ export type QueuedOp =
       path: string;
       body: { status: string; statusReason?: string };
       enqueuedAt: string;
+    }
+  | {
+      id: string;
+      kind: 'fieldStatus';
+      path: string;
+      method: 'PATCH';
+      body: { status: string };
+      enqueuedAt: string;
     };
+
+// Discriminated union 의 Omit 은 멤버별 분배가 필요 (단순 Omit<U, K> 은 멤버 고유 필드 손실).
+type DistributiveOmit<T, K extends keyof T> = T extends T ? Omit<T, K> : never;
+type EnqueueArg = DistributiveOmit<QueuedOp, 'id' | 'enqueuedAt'>;
 
 interface OfflineQueueState {
   queue: QueuedOp[];
@@ -43,7 +55,7 @@ interface OfflineQueueState {
   hydrated: boolean;
 
   hydrate: () => Promise<void>;
-  enqueue: (op: Omit<QueuedOp, 'id' | 'enqueuedAt'>) => Promise<string>;
+  enqueue: (op: EnqueueArg) => Promise<string>;
   flushAll: () => Promise<{ ok: number; fail: number }>;
   clear: () => Promise<void>;
 }
@@ -102,7 +114,8 @@ export const useOfflineQueueStore = create<OfflineQueueState>((set, get) => ({
 
     for (const op of queue) {
       try {
-        await request<unknown>(op.path, { method: 'POST', body: op.body });
+        const method = 'method' in op ? op.method : 'POST';
+        await request<unknown>(op.path, { method, body: op.body });
         ok++;
       } catch (e) {
         // 네트워크 오류 → 다시 큐에 남김. 그 외 에러(인증/검증)는 폐기.
