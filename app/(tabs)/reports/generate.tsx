@@ -323,14 +323,28 @@ export default function GenerateReport() {
           {beforePhoto ? (
             <Image source={{ uri: beforePhoto.uri }} style={styles.photoPreview} />
           ) : null}
-          <Pressable
-            onPress={pickBefore}
-            style={({ pressed }) => [styles.photoBtn, pressed && styles.pressed]}
-          >
-            <Text style={styles.photoBtnText}>
-              {beforePhoto ? '다시 선택' : '+ 사진 첨부'}
-            </Text>
-          </Pressable>
+          <View style={styles.photoActions}>
+            <Pressable
+              onPress={pickBefore}
+              style={({ pressed }) => [
+                styles.photoBtn,
+                styles.photoBtnPrimary,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={styles.photoBtnText}>
+                {beforePhoto ? '다시 선택' : '+ 사진 첨부'}
+              </Text>
+            </Pressable>
+            {beforePhoto ? (
+              <Pressable
+                onPress={() => setBeforePhoto(null)}
+                style={({ pressed }) => [styles.photoBtn, styles.photoBtnGhost, pressed && styles.pressed]}
+              >
+                <Text style={styles.photoBtnGhostText}>제거</Text>
+              </Pressable>
+            ) : null}
+          </View>
         </View>
 
         <Text style={styles.label}>조치 후 사진 (선택)</Text>
@@ -338,14 +352,28 @@ export default function GenerateReport() {
           {afterPhoto ? (
             <Image source={{ uri: afterPhoto.uri }} style={styles.photoPreview} />
           ) : null}
-          <Pressable
-            onPress={pickAfter}
-            style={({ pressed }) => [styles.photoBtn, pressed && styles.pressed]}
-          >
-            <Text style={styles.photoBtnText}>
-              {afterPhoto ? '다시 선택' : '+ 사진 첨부'}
-            </Text>
-          </Pressable>
+          <View style={styles.photoActions}>
+            <Pressable
+              onPress={pickAfter}
+              style={({ pressed }) => [
+                styles.photoBtn,
+                styles.photoBtnPrimary,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={styles.photoBtnText}>
+                {afterPhoto ? '다시 선택' : '+ 사진 첨부'}
+              </Text>
+            </Pressable>
+            {afterPhoto ? (
+              <Pressable
+                onPress={() => setAfterPhoto(null)}
+                style={({ pressed }) => [styles.photoBtn, styles.photoBtnGhost, pressed && styles.pressed]}
+              >
+                <Text style={styles.photoBtnGhostText}>제거</Text>
+              </Pressable>
+            ) : null}
+          </View>
         </View>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -498,15 +526,23 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     backgroundColor: colors.surface,
   },
+  photoActions: { flexDirection: 'row', gap: spacing.sm },
   photoBtn: {
     paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
     borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
     alignItems: 'center',
   },
+  photoBtnPrimary: { flex: 1 },
+  photoBtnGhost: {
+    borderColor: colors.danger,
+    backgroundColor: colors.surface,
+  },
   photoBtnText: { fontSize: fontSize.sm, color: colors.text, fontWeight: '600' },
+  photoBtnGhostText: { fontSize: fontSize.sm, color: colors.danger, fontWeight: '700' },
   error: { color: colors.danger, fontSize: fontSize.sm, marginTop: spacing.md },
   progressBox: {
     marginTop: spacing.md,
