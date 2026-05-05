@@ -138,8 +138,12 @@ export default function GenerateReport() {
       if (f && mountedRef.current) setAfterPhoto(f);
     });
 
+  // 마지막 시도 결과 — 실패 시 재시도 노출 / 성공 시 즉시 라우팅이라 무관.
+  const [lastAttemptFailed, setLastAttemptFailed] = useState(false);
+
   const handleGenerate = async () => {
     setError(null);
+    setLastAttemptFailed(false);
     if (!notes.trim()) {
       setError('현장 메모(notes)를 입력해주세요');
       return;
@@ -159,7 +163,8 @@ export default function GenerateReport() {
     if (r.ok) {
       router.replace(`/(tabs)/reports/${r.data.id}` as never);
     } else {
-      Alert.alert('AI 보고서 생성 실패', r.error);
+      setError(r.error);
+      setLastAttemptFailed(true);
     }
   };
 
@@ -199,7 +204,10 @@ export default function GenerateReport() {
           </View>
         )}
 
-        <Text style={styles.label}>제목 (선택 — 미입력 시 AI 제안)</Text>
+        <View style={styles.notesHeader}>
+          <Text style={[styles.label, styles.labelInline]}>제목 (선택 — 미입력 시 AI 제안)</Text>
+          <Text style={styles.counter}>{title.length} / 100</Text>
+        </View>
         <TextInput
           value={title}
           onChangeText={setTitle}
@@ -209,7 +217,10 @@ export default function GenerateReport() {
         />
 
         <View style={styles.notesHeader}>
-          <Text style={[styles.label, styles.labelInline]}>현장 메모 *</Text>
+          <View style={styles.notesHeaderLeft}>
+            <Text style={[styles.label, styles.labelInline]}>현장 메모 *</Text>
+            <Text style={styles.counter}>{notes.length} / 5000</Text>
+          </View>
           {tripId && importableMemoCount > 0 ? (
             <Pressable
               onPress={handleImportFromTrip}
@@ -230,7 +241,10 @@ export default function GenerateReport() {
           maxLength={5000}
         />
 
-        <Text style={styles.label}>추가 메모 (선택)</Text>
+        <View style={styles.notesHeader}>
+          <Text style={[styles.label, styles.labelInline]}>추가 메모 (선택)</Text>
+          <Text style={styles.counter}>{extraNotes.length} / 2000</Text>
+        </View>
         <TextInput
           value={extraNotes}
           onChangeText={setExtraNotes}
@@ -286,7 +300,11 @@ export default function GenerateReport() {
           style={({ pressed }) => [styles.btn, (pressed || busy) && styles.pressed]}
         >
           <Text style={styles.btnText}>
-            {busy ? 'AI 생성 중... (5~30초)' : 'AI 보고서 생성'}
+            {busy
+              ? 'AI 생성 중... (5~30초)'
+              : lastAttemptFailed
+                ? '↻ 다시 시도'
+                : 'AI 보고서 생성'}
           </Text>
         </Pressable>
 
@@ -353,7 +371,17 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
     marginBottom: spacing.sm,
   },
+  notesHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
   labelInline: { marginTop: 0, marginBottom: 0 },
+  counter: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    fontWeight: '600',
+  },
   importBtn: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
