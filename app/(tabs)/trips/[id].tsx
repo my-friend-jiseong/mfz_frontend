@@ -19,7 +19,7 @@ import { MapSheetLayout } from '@/components/MapSheetLayout';
 import { trips as tripsApi } from '@/api';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
-import type { Visit } from '@/types/entities';
+import { VISIT_STATUS_LABEL, type Visit } from '@/types/entities';
 
 interface StateHistoryItem {
   changedAt?: string;
@@ -171,7 +171,7 @@ export default function TripDetail() {
           <Text style={styles.visitTime}>{fmtTime(item.visitedAt)}</Text>
           <View style={[styles.statusChip, { backgroundColor: statusColor + '22' }]}>
             <Text style={[styles.statusText, { color: statusColor }]}>
-              {item.status}
+              {VISIT_STATUS_LABEL[item.status]}
             </Text>
           </View>
         </View>

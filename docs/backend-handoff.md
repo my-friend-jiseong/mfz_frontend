@@ -15,7 +15,7 @@
 | 2 | `/api/system/session/activity` 동작 확인 | 응답 shape 명세 + 동작 확인 | 🟡 중간 | PR #5 PR-A (`d441852`) |
 | 3 | `refresh_token_superseded` / `all_sessions_revoked` 발화 시점 | 정책 문서화 | 🟡 중간 | PR #5 PR-A |
 | 4 | `error.fields` 발화 (옵션) | validation 라우트에 `fields` 채우기 | 🟢 낮음 | PR #5 PR-E (`6bbee71`) |
-| 5 | 방문 status enum (영문 정합화) | 영문 enum 합의 | 🔴 critical (다음 작업) | 미시작 |
+| 5 | 방문 status enum (영문 정합화) | 영문 enum 합의 | 🔴 critical | 진행 중 (프론트 영문화 완료) |
 | 6 | Geofence / Navigation deep-link / state-history 응답 shape | shape 명세 | 🟡 중간 (다음 작업) | 미시작 |
 
 ---
@@ -149,15 +149,16 @@ PR #5 PR-A (`d441852`) — refresh single-flight 와 hydrate 양쪽에서 다음
 
 ---
 
-## 5. 🔴 방문 status / 메모 enum 정합 (다음 작업 — 곧 시작)
+## 5. 🔴 방문 status / 메모 enum 정합 (프론트 영문화 완료)
 
-### 프론트엔드 현재 상태
-- [`src/api/endpoints/visits.ts:3-5`](../src/api/endpoints/visits.ts#L3-L5) 에 한글 enum 으로 시도 중. 백엔드가 거부할 가능성 있는 구조.
-- 메모 body 필드명은 smoke 검증된 `text` 로 확정.
+### 프론트엔드 상태 — 2026-05-06 영문 enum 으로 전환 완료
+- [`src/types/entities.ts`](../src/types/entities.ts) 의 `VisitStatus` 가 영문 enum 으로 재정의됨.
+- 사용자 표시용 한국어는 `VISIT_STATUS_LABEL` 매핑으로 분리.
+- `colors.visitStatus` 키도 영문으로 갱신.
+- 모든 사용처 (`checkin.tsx`, `trips/[id].tsx`, `visit.tsx`, `visitStore`) 영문 값 송수신.
+- `setStatus` 호출 시 영문 enum 전송.
 
-### 프론트엔드가 정할 contract (다음 작업에서 도입 예정)
-**영문 enum** 으로 표준화 + 클라 측 한국어 라벨 매핑 분리:
-
+### 프론트엔드가 정한 contract
 ```ts
 type VisitStatus =
   | 'normal'             // 완료
@@ -169,10 +170,14 @@ type VisitStatus =
 ```
 
 ### 백엔드가 해야 할 것
-1. 위 영문 enum 합의 (또는 다른 영문 값을 제안 — 어느 쪽이든 영문 권장).
-2. PATCH `/api/visits/:id/status` 가 영문 값을 받도록 정합화.
-3. 응답의 `resultStatus` (영문) / `status` (한글 표시값) 분리 유지 (현재 그대로).
-4. `code: visit_status_invalid`, `code: visit_status_reason_required` (10자 미만) 는 Phase 7 에 이미 포함됨.
+1. **`PATCH /api/visits/:id/status` 가 위 6개 영문 값을 받도록 정합화** (즉시 critical — 현재 한국어 받고 있다면 영문으로 전환).
+2. 응답의 `resultStatus` (영문) / `status` (한국어 표시값) 분리 유지 (현재 contract 그대로).
+3. 체크인 직후 visit 의 초기 `resultStatus` 는 `"normal"` (백엔드에서 자동 설정).
+4. `code: visit_status_invalid` (영문 외 값 거부), `code: visit_status_reason_required` (`other` 선택 시 statusReason < 10자) 는 Phase 7 에 이미 포함됨.
+5. 메모 body 필드명 `{ text }` 그대로 유지.
+
+### 백엔드가 다른 영문 enum 값을 선호하는 경우
+프론트가 빠르게 매핑 갱신 가능. 단, 위 6개로 합의하는 것이 가장 단순 (사용자 노출은 한국어 라벨이라 enum 명은 백엔드 내부 호환에만 영향).
 
 ---
 

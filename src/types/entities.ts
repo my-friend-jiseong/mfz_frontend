@@ -8,7 +8,14 @@
 //   - 외래키도 동일 string
 
 export type FieldStatus = 'pending' | 'in_progress' | 'done';
-export type VisitStatus = '완료' | '부재' | '수취거절' | '주소불명' | '재방문필요' | '기타';
+// 백엔드와 주고받는 enum 은 영문 (안정성·국제화). 사용자 표시는 VISIT_STATUS_LABEL 매핑.
+export type VisitStatus =
+  | 'normal'             // 완료
+  | 'absent'             // 부재
+  | 'refused'            // 수취거절
+  | 'unknown_address'    // 주소불명
+  | 'revisit_required'   // 재방문필요
+  | 'other';             // 기타 (statusReason 10자 이상 필수)
 export type DestinationStatus = 'pending' | 'arrived' | 'skipped';
 
 export interface User {
@@ -102,13 +109,23 @@ export interface Report {
 }
 
 export const VISIT_STATUS_VALUES: VisitStatus[] = [
-  '완료',
-  '부재',
-  '수취거절',
-  '주소불명',
-  '재방문필요',
-  '기타',
+  'normal',
+  'absent',
+  'refused',
+  'unknown_address',
+  'revisit_required',
+  'other',
 ];
+
+// 사용자 표시용 한국어 라벨 — 코드 식별자(영문) ↔ 표시값(한국어) 분리.
+export const VISIT_STATUS_LABEL: Record<VisitStatus, string> = {
+  normal: '완료',
+  absent: '부재',
+  refused: '수취거절',
+  unknown_address: '주소불명',
+  revisit_required: '재방문필요',
+  other: '기타',
+};
 
 export const FIELD_STATUS_VALUES: FieldStatus[] = ['pending', 'in_progress', 'done'];
 

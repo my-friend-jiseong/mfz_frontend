@@ -88,8 +88,9 @@ export default function VisitDetail() {
       durationSec: a.durationSec ?? a.durationSeconds,
       createdAt: a.createdAt,
     }));
+  // resultStatus 는 영문 enum, status 는 한국어 표시값 — 색은 영문으로 조회.
   const statusColor =
-    colors.visitStatus[data.status as keyof typeof colors.visitStatus] ?? colors.text;
+    colors.visitStatus[data.resultStatus as keyof typeof colors.visitStatus] ?? colors.text;
 
   return (
     <MapSheetLayout title="방문 상세" onBack={() => router.back()} initialIndex={2}>
