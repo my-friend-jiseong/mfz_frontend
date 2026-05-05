@@ -34,6 +34,7 @@ export type {
   PatchStatusResponse,
   FieldTextMemoResponse,
   AddressSearchResponse,
+  AddressSearchItem,
   ListMineParams,
 } from './endpoints/fields';
 

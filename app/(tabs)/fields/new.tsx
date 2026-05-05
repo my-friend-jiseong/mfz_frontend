@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -13,25 +14,56 @@ import {
 import { useRouter } from 'expo-router';
 import { useFieldStore } from '@/stores/fieldStore';
 import { useAuthStore } from '@/stores/authStore';
+import { fields as fieldsApi, errorCode, localizeError } from '@/api';
+import type { AddressSearchItem } from '@/api';
 import type { FieldStatus } from '@/types/entities';
 import { FIELD_STATUS_VALUES } from '@/types/entities';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
-
-// 주소 검색 mock — 실제로는 Daum 우편번호 서비스 WebView 팝업 사용
-const MOCK_ADDRESSES = [
-  { address: '부산광역시 해운대구 우동', lat: 35.1587, lng: 129.1603 },
-  { address: '부산광역시 서면 부전동', lat: 35.1577, lng: 129.0593 },
-  { address: '부산광역시 중구 광복동', lat: 35.1006, lng: 129.0348 },
-  { address: '대구광역시 중구 동성로', lat: 35.8696, lng: 128.5953 },
-  { address: '대구광역시 수성구 두산동', lat: 35.8276, lng: 128.6222 },
-];
 
 const STATUS_LABEL: Record<FieldStatus, string> = {
   pending: '대기',
   in_progress: '진행중',
   done: '완료',
 };
+
+// 사용자 선택 결과 통합 타입 — 카카오 Geocoder 응답 또는 수동 입력 fallback.
+interface SelectedAddress {
+  roadAddress: string;
+  jibunAddress: string;
+  buildingName: string | null;
+  sido?: string;
+  sigungu?: string;
+  lat: number;
+  lng: number;
+  // 표시용 라벨 (카드/배지)
+  display: string;
+}
+
+function itemToSelected(item: AddressSearchItem): SelectedAddress {
+  const display = item.buildingName
+    ? `${item.roadAddress} (${item.buildingName})`
+    : item.roadAddress || item.jibunAddress;
+  return {
+    roadAddress: item.roadAddress,
+    jibunAddress: item.jibunAddress,
+    buildingName: item.buildingName,
+    sido: item.sido,
+    sigungu: item.sigungu,
+    lat: item.lat,
+    lng: item.lng,
+    display,
+  };
+}
+
+const SEARCH_DEBOUNCE_MS = 300;
+const MIN_KEYWORD_LEN = 2;
+
+// 한국 영역 사전 경고 (백엔드 검증과 동일 범위 — 사용자 즉각 피드백)
+const KR_LAT = { min: 33, max: 43 };
+const KR_LNG = { min: 124, max: 132 };
+const isInKorea = (lat: number, lng: number) =>
+  lat >= KR_LAT.min && lat <= KR_LAT.max && lng >= KR_LNG.min && lng <= KR_LNG.max;
 
 export default function NewField() {
   const router = useRouter();
@@ -40,29 +72,114 @@ export default function NewField() {
 
   const [step, setStep] = useState<1 | 2>(1);
   const [query, setQuery] = useState('');
-  const [selected, setSelected] = useState<typeof MOCK_ADDRESSES[number] | null>(null);
+  const [results, setResults] = useState<AddressSearchItem[]>([]);
+  const [emptyMessage, setEmptyMessage] = useState<string | null>(null);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [providerUnavailable, setProviderUnavailable] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [manualMode, setManualMode] = useState(false);
+
+  // 수동 좌표 입력 폼 (provider unavailable / manual fallback 일 때만 노출)
+  const [manualRoad, setManualRoad] = useState('');
+  const [manualJibun, setManualJibun] = useState('');
+  const [manualLatStr, setManualLatStr] = useState('');
+  const [manualLngStr, setManualLngStr] = useState('');
+
+  const [selected, setSelected] = useState<SelectedAddress | null>(null);
   const [detail, setDetail] = useState('');
   const [status, setStatus] = useState<FieldStatus>('pending');
-
-  const results =
-    query.length < 2
-      ? []
-      : MOCK_ADDRESSES.filter(
-          (a) => a.address.includes(query) || query.includes(a.address.slice(0, 4)),
-        );
-
   const [submitting, setSubmitting] = useState(false);
+
+  // 디바운스 검색 — 키워드 변경 시 SEARCH_DEBOUNCE_MS 후 호출.
+  // 호출 도중 입력이 또 바뀌면 기존 결과는 폐기 (latest-wins).
+  const reqIdRef = useRef(0);
+  useEffect(() => {
+    const k = query.trim();
+    if (k.length < MIN_KEYWORD_LEN) {
+      setResults([]);
+      setEmptyMessage(null);
+      setSearchError(null);
+      setProviderUnavailable(false);
+      setSearching(false);
+      return;
+    }
+    const myReqId = ++reqIdRef.current;
+    setSearching(true);
+    setSearchError(null);
+    const handle = setTimeout(async () => {
+      try {
+        const res = await fieldsApi.addressSearch(k);
+        if (myReqId !== reqIdRef.current) return;
+        setResults(res.items);
+        setEmptyMessage(res.emptyMessage);
+        setProviderUnavailable(false);
+        // provider.manualCoordinateFallback === true 면 빈 결과 시 수동 입력 진입점 노출
+        // (검색 자체는 성공했지만 결과가 0건일 때)
+        setSearchError(null);
+      } catch (e) {
+        if (myReqId !== reqIdRef.current) return;
+        if (errorCode(e) === 'kakao_provider_unavailable') {
+          setProviderUnavailable(true);
+          setResults([]);
+          setEmptyMessage(null);
+          setSearchError(null);
+        } else {
+          setSearchError(localizeError(e));
+          setResults([]);
+        }
+      } finally {
+        if (myReqId === reqIdRef.current) setSearching(false);
+      }
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(handle);
+  }, [query]);
+
+  const handleSelectItem = (item: AddressSearchItem) => {
+    setSelected(itemToSelected(item));
+    setStep(2);
+  };
+
+  const handleManualSubmit = () => {
+    const lat = Number(manualLatStr);
+    const lng = Number(manualLngStr);
+    if (!manualRoad.trim() && !manualJibun.trim()) {
+      Alert.alert('주소 입력 필요', '도로명 주소 또는 지번 주소 중 하나는 입력해주세요.');
+      return;
+    }
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      Alert.alert('좌표 형식 오류', '위도·경도를 숫자로 입력해주세요.');
+      return;
+    }
+    if (!isInKorea(lat, lng)) {
+      Alert.alert(
+        '대한민국 영역 외 좌표',
+        `위도는 ${KR_LAT.min}~${KR_LAT.max}, 경도는 ${KR_LNG.min}~${KR_LNG.max} 범위여야 합니다.`,
+      );
+      return;
+    }
+    setSelected({
+      roadAddress: manualRoad.trim() || manualJibun.trim(),
+      jibunAddress: manualJibun.trim() || manualRoad.trim(),
+      buildingName: null,
+      lat,
+      lng,
+      display: manualRoad.trim() || manualJibun.trim(),
+    });
+    setStep(2);
+  };
 
   const handleCreate = async () => {
     if (!user || !selected) return;
     const baseBody = {
-      name: selected.address,
+      name: selected.display,
       status,
-      roadAddress: selected.address,
-      jibunAddress: selected.address,
+      roadAddress: selected.roadAddress,
+      jibunAddress: selected.jibunAddress,
       detailAddress: detail,
       lat: selected.lat,
       lng: selected.lng,
+      ...(selected.sido ? { sido: selected.sido } : {}),
+      ...(selected.sigungu ? { sigungu: selected.sigungu } : {}),
     };
 
     setSubmitting(true);
@@ -106,6 +223,15 @@ export default function NewField() {
     Alert.alert('등록 실패', result.error);
   };
 
+  const showManualEntry = providerUnavailable || manualMode;
+  const trimmedQuery = query.trim();
+  const showEmptyHint =
+    !searching &&
+    !providerUnavailable &&
+    !searchError &&
+    trimmedQuery.length >= MIN_KEYWORD_LEN &&
+    results.length === 0;
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -123,32 +249,120 @@ export default function NewField() {
               value={query}
               onChangeText={setQuery}
               style={styles.input}
-              placeholder="예: 해운대, 동성로"
+              placeholder="예: 해운대 우동, 동성로"
               autoFocus
+              autoCapitalize="none"
+              returnKeyType="search"
             />
-            <Text style={styles.hint}>
-              프로토타입: 목업 주소 목록에서 검색됩니다 (실제 배포에선 Daum 우편번호 서비스 연동)
-            </Text>
+
+            {searching ? (
+              <View style={styles.loadingRow}>
+                <ActivityIndicator color={colors.primary} size="small" />
+                <Text style={styles.loadingText}>검색 중...</Text>
+              </View>
+            ) : null}
+
+            {searchError ? (
+              <Text style={styles.errorText}>{searchError}</Text>
+            ) : null}
+
+            {providerUnavailable ? (
+              <View style={styles.warnBox}>
+                <Text style={styles.warnTitle}>주소 검색 일시 장애</Text>
+                <Text style={styles.warnBody}>
+                  카카오 주소 서비스가 일시적으로 응답하지 않습니다. 잠시 후 다시 시도하거나 좌표를 직접 입력하세요.
+                </Text>
+              </View>
+            ) : null}
+
+            {showEmptyHint ? (
+              <Text style={styles.hint}>{emptyMessage ?? '검색 결과가 없습니다'}</Text>
+            ) : null}
+
             <View style={{ marginTop: spacing.md }}>
-              {results.map((r) => (
-                <Pressable
-                  key={r.address}
-                  onPress={() => {
-                    setSelected(r);
-                    setStep(2);
-                  }}
-                  style={({ pressed }) => [styles.addrItem, pressed && styles.pressed]}
-                >
-                  <Text style={styles.addrText}>{r.address}</Text>
-                  <Text style={styles.addrCoord}>
-                    {r.lat.toFixed(4)}, {r.lng.toFixed(4)}
-                  </Text>
-                </Pressable>
-              ))}
-              {query.length >= 2 && results.length === 0 ? (
-                <Text style={styles.hint}>검색 결과가 없습니다</Text>
-              ) : null}
+              {results.map((r, idx) => {
+                const key = `${r.roadAddress}|${r.jibunAddress}|${idx}`;
+                const sub = [r.sido, r.sigungu].filter(Boolean).join(' ');
+                return (
+                  <Pressable
+                    key={key}
+                    onPress={() => handleSelectItem(r)}
+                    style={({ pressed }) => [styles.addrItem, pressed && styles.pressed]}
+                  >
+                    <Text style={styles.addrText}>
+                      {r.roadAddress || r.jibunAddress}
+                      {r.buildingName ? ` (${r.buildingName})` : ''}
+                    </Text>
+                    {r.roadAddress && r.jibunAddress && r.roadAddress !== r.jibunAddress ? (
+                      <Text style={styles.addrJibun}>지번: {r.jibunAddress}</Text>
+                    ) : null}
+                    <Text style={styles.addrCoord}>
+                      {sub ? `${sub} · ` : ''}
+                      {r.lat.toFixed(4)}, {r.lng.toFixed(4)}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
+
+            {/* 수동 좌표 입력 fallback — provider unavailable 또는 사용자 명시 진입 */}
+            {showManualEntry ? (
+              <View style={styles.manualBox}>
+                <Text style={styles.manualTitle}>좌표 직접 입력</Text>
+                <Text style={styles.label}>도로명 주소</Text>
+                <TextInput
+                  value={manualRoad}
+                  onChangeText={setManualRoad}
+                  style={styles.input}
+                  placeholder="예: 부산광역시 해운대구 해운대해변로 264"
+                />
+                <Text style={styles.label}>지번 주소</Text>
+                <TextInput
+                  value={manualJibun}
+                  onChangeText={setManualJibun}
+                  style={styles.input}
+                  placeholder="예: 부산광역시 해운대구 우동 1411"
+                />
+                <View style={styles.coordRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.label}>위도 (lat)</Text>
+                    <TextInput
+                      value={manualLatStr}
+                      onChangeText={setManualLatStr}
+                      style={styles.input}
+                      keyboardType="numeric"
+                      placeholder="33~43"
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.label}>경도 (lng)</Text>
+                    <TextInput
+                      value={manualLngStr}
+                      onChangeText={setManualLngStr}
+                      style={styles.input}
+                      keyboardType="numeric"
+                      placeholder="124~132"
+                    />
+                  </View>
+                </View>
+                <Pressable
+                  onPress={handleManualSubmit}
+                  style={({ pressed }) => [styles.btn, pressed && styles.pressed]}
+                >
+                  <Text style={styles.btnText}>이 좌표로 진행</Text>
+                </Pressable>
+              </View>
+            ) : null}
+
+            {/* 검색 결과 0건 시 수동 입력 진입점 — provider 가 manualCoordinateFallback 옵션을 두었을 때 의미 있음 */}
+            {showEmptyHint && !manualMode ? (
+              <Pressable
+                onPress={() => setManualMode(true)}
+                style={({ pressed }) => [styles.manualLink, pressed && styles.pressed]}
+              >
+                <Text style={styles.manualLinkText}>좌표 직접 입력으로 진행 →</Text>
+              </Pressable>
+            ) : null}
           </>
         ) : (
           <>
@@ -158,7 +372,12 @@ export default function NewField() {
 
             <View style={styles.selectedBox}>
               <Text style={styles.selectedLabel}>선택한 주소</Text>
-              <Text style={styles.selectedAddr}>{selected?.address}</Text>
+              <Text style={styles.selectedAddr}>{selected?.display}</Text>
+              {selected ? (
+                <Text style={styles.selectedCoord}>
+                  {selected.lat.toFixed(4)}, {selected.lng.toFixed(4)}
+                </Text>
+              ) : null}
             </View>
 
             <Text style={styles.label}>상세 주소 (동/호수 등)</Text>
@@ -236,7 +455,25 @@ const styles = StyleSheet.create({
     fontSize: fontSize.base,
     color: colors.text,
   },
-  hint: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: spacing.xs },
+  hint: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: spacing.sm },
+  loadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  loadingText: { fontSize: fontSize.xs, color: colors.textMuted },
+  errorText: { fontSize: fontSize.xs, color: colors.danger ?? '#d23', marginTop: spacing.sm },
+  warnBox: {
+    backgroundColor: '#fff7e6',
+    borderColor: '#f0ad4e',
+    borderWidth: 1,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginTop: spacing.sm,
+  },
+  warnTitle: { fontSize: fontSize.sm, fontWeight: '700', color: colors.text },
+  warnBody: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: 4 },
   addrItem: {
     backgroundColor: colors.surface,
     borderWidth: 1,
@@ -247,7 +484,30 @@ const styles = StyleSheet.create({
   },
   pressed: { opacity: 0.7 },
   addrText: { fontSize: fontSize.base, color: colors.text, fontWeight: '600' },
+  addrJibun: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: 2 },
   addrCoord: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: 2 },
+  manualBox: {
+    marginTop: spacing.lg,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  manualTitle: {
+    fontSize: fontSize.base,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  manualLink: {
+    marginTop: spacing.md,
+    alignSelf: 'flex-start',
+  },
+  manualLinkText: {
+    fontSize: fontSize.sm,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  coordRow: { flexDirection: 'row', gap: spacing.sm },
   backLink: {
     fontSize: fontSize.sm,
     color: colors.primary,
@@ -262,6 +522,7 @@ const styles = StyleSheet.create({
   },
   selectedLabel: { fontSize: fontSize.xs, color: colors.primary, fontWeight: '600' },
   selectedAddr: { fontSize: fontSize.base, color: colors.text, marginTop: 2 },
+  selectedCoord: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: 4 },
   statusRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
   statusChip: {
     paddingHorizontal: spacing.md,
