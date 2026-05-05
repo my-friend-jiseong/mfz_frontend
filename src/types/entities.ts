@@ -106,6 +106,7 @@ export interface Report {
   createdAt: string;
   updatedAt: string | null;
   deletedAt: string | null;
+  fileUrl?: string | null;
 }
 
 export const VISIT_STATUS_VALUES: VisitStatus[] = [

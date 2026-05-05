@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  Linking,
   Platform,
   Pressable,
   StyleSheet,
@@ -82,22 +83,17 @@ export default function ReportDetail() {
         return;
       }
       setDeleting(false);
-      // 친절한 메시지 분기
-      const raw = r.error || '';
-      let msg = '보고서를 삭제하지 못했습니다. 잠시 후 다시 시도해주세요.';
-      if (/not_found|404/i.test(raw)) {
-        msg = '이미 삭제되었거나 찾을 수 없는 보고서입니다.';
-        // 이미 없는 보고서면 그냥 목록으로
+      // remove store 의 error 는 localizeError 결과 (한국어 메시지) — 그대로 노출.
+      // report_not_found 는 already-deleted 의 의미라 목록으로 자동 이동.
+      const raw = r.error ?? '';
+      if (/이미 삭제|찾을 수 없는/.test(raw)) {
         router.replace('/(tabs)/reports' as never);
         return;
-      } else if (/forbidden|403/i.test(raw)) {
-        msg = '본인 작성 보고서만 삭제할 수 있습니다.';
-      } else if (/network|연결/i.test(raw)) {
-        msg = '네트워크 연결을 확인해주세요.';
-      } else if (raw && !/^\s*$/.test(raw)) {
-        msg = `보고서를 삭제하지 못했습니다.\n${raw}`;
       }
-      Alert.alert('보고서 삭제 실패', msg);
+      Alert.alert(
+        '보고서 삭제 실패',
+        raw || '보고서를 삭제하지 못했습니다. 잠시 후 다시 시도해주세요.',
+      );
     };
     if (Platform.OS === 'web') {
       if (confirm('이 보고서를 삭제할까요?')) void doDelete();
@@ -172,6 +168,20 @@ export default function ReportDetail() {
         <View style={styles.contentBox}>
           <Text style={styles.content}>{report.content}</Text>
         </View>
+
+        {report.fileUrl ? (
+          <Pressable
+            onPress={() => {
+              const url = report.fileUrl!.startsWith('http')
+                ? report.fileUrl!
+                : `${API_BASE_URL}${report.fileUrl!}`;
+              void Linking.openURL(url);
+            }}
+            style={({ pressed }) => [styles.downloadBtn, pressed && styles.pressed]}
+          >
+            <Text style={styles.downloadBtnText}>📄 Word 파일 다운로드</Text>
+          </Pressable>
+        ) : null}
 
         {isOwner ? (
           <>
@@ -287,6 +297,20 @@ const styles = StyleSheet.create({
   dangerBtn: { borderColor: colors.danger + '40' },
   dangerText: { color: colors.danger },
   pressed: { opacity: 0.85 },
+  downloadBtn: {
+    marginTop: spacing.md,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.primary + '10',
+    alignItems: 'center',
+  },
+  downloadBtnText: {
+    fontSize: fontSize.sm,
+    color: colors.primary,
+    fontWeight: '700',
+  },
   shareUrlBox: {
     marginTop: spacing.md,
     backgroundColor: colors.primary + '10',

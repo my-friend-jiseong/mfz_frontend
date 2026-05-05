@@ -81,6 +81,7 @@ function detailToReport(d: ReportDetailResponse): Report {
     createdAt: d.createdAt,
     updatedAt: d.updatedAt,
     deletedAt: null,
+    fileUrl: d.fileUrl,
   };
 }
 
@@ -132,6 +133,7 @@ export const useReportStore = create<ReportState>((set, get) => ({
         createdAt: data.createdAt,
         updatedAt: data.updatedAt,
         deletedAt: data.deletedAt,
+        fileUrl: data.outputFileUrl,
       };
       set((s) => ({
         reports: [r, ...s.reports.filter((x) => x.id !== r.id)],
@@ -222,6 +224,7 @@ export const useReportStore = create<ReportState>((set, get) => ({
         createdAt: new Date().toISOString(),
         updatedAt: null,
         deletedAt: null,
+        fileUrl: data.outputFileUrl ?? data.fileUrl ?? data.downloadUrl ?? null,
       };
       set((s) => ({
         reports: [r, ...s.reports.filter((x) => x.id !== r.id)],
