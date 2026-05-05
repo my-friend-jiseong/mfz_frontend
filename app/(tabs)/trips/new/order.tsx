@@ -98,6 +98,19 @@ export default function NewTripOrder() {
     setOptimized(false);
   };
 
+  const removeAt = (idx: number) => {
+    setList((prev) => prev.filter((_, i) => i !== idx));
+    setOptimized(false);
+  };
+
+  // 추천 적용된 결과의 총 거리·ETA — 수동 조정 시에도 직전 추천 값으로 표시
+  const totalDistanceKm = optimized
+    ? list.reduce((a, x) => a + (x.distanceFromPrevKm ?? 0), 0)
+    : null;
+  const totalEtaMin = optimized
+    ? list.reduce((a, x) => a + (x.etaMinutes ?? 0), 0)
+    : null;
+
   const handleConfirm = async () => {
     if (!userId || list.length === 0 || submitting) return;
     setSubmitting(true);
@@ -170,6 +183,17 @@ export default function NewTripOrder() {
         >
           <Text style={styles.ctrlText}>▼</Text>
         </Pressable>
+        <Pressable
+          onPress={() =>
+            Alert.alert('이 현장 빼기', `${item.address} 를 외근에서 제외할까요?`, [
+              { text: '취소', style: 'cancel' },
+              { text: '빼기', style: 'destructive', onPress: () => removeAt(index) },
+            ])
+          }
+          style={({ pressed }) => [styles.ctrlBtn, styles.ctrlDanger, pressed && styles.pressed]}
+        >
+          <Text style={styles.ctrlDangerText}>×</Text>
+        </Pressable>
       </View>
     </View>
   );
@@ -178,7 +202,7 @@ export default function NewTripOrder() {
     <MapSheetLayout title="방문 순서 확인" onBack={() => router.back()}>
       <View style={styles.head}>
         <Text style={styles.headTitle}>위에서부터 순서대로 방문합니다</Text>
-        <Text style={styles.headMeta}>▲▼ 버튼으로 순서를 조정하세요</Text>
+        <Text style={styles.headMeta}>▲▼ 로 순서, × 로 제외할 수 있습니다</Text>
         <Pressable
           onPress={handleOptimize}
           style={({ pressed }) => [
@@ -196,6 +220,24 @@ export default function NewTripOrder() {
             {optimized ? '✓ 최적 순서 적용됨 · 다시 추천' : '✨ 최적 순서 추천'}
           </Text>
         </Pressable>
+        {totalDistanceKm !== null && totalEtaMin !== null ? (
+          <View style={styles.summaryCard}>
+            <View style={styles.summaryItem}>
+              <Text style={styles.summaryLabel}>총 거리</Text>
+              <Text style={styles.summaryValue}>{totalDistanceKm.toFixed(1)} km</Text>
+            </View>
+            <View style={styles.summaryDivider} />
+            <View style={styles.summaryItem}>
+              <Text style={styles.summaryLabel}>예상 ETA</Text>
+              <Text style={styles.summaryValue}>{totalEtaMin}분</Text>
+            </View>
+            <View style={styles.summaryDivider} />
+            <View style={styles.summaryItem}>
+              <Text style={styles.summaryLabel}>방문 현장</Text>
+              <Text style={styles.summaryValue}>{list.length}곳</Text>
+            </View>
+          </View>
+        ) : null}
       </View>
       <BottomSheetFlatList
         data={list}
@@ -286,6 +328,28 @@ const styles = StyleSheet.create({
   },
   ctrlDisabled: { opacity: 0.35 },
   ctrlText: { fontSize: 12, color: colors.text, fontWeight: '700' },
+  ctrlDanger: { borderColor: colors.danger + '55', backgroundColor: colors.danger + '08' },
+  ctrlDangerText: { fontSize: 16, color: colors.danger, fontWeight: '700' },
+  summaryCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.success + '40',
+    backgroundColor: colors.success + '0a',
+  },
+  summaryItem: { flex: 1, alignItems: 'center' },
+  summaryLabel: { fontSize: fontSize.xs, color: colors.textMuted, fontWeight: '600' },
+  summaryValue: {
+    fontSize: fontSize.base,
+    color: colors.text,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  summaryDivider: { width: 1, height: 28, backgroundColor: colors.border },
   pressed: { opacity: 0.7 },
   fab: {
     position: 'absolute',

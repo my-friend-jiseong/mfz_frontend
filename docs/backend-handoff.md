@@ -16,7 +16,9 @@
 | 3 | `refresh_token_superseded` / `all_sessions_revoked` 발화 시점 | 정책 문서화 | 🟡 중간 | PR #5 PR-A |
 | 4 | `error.fields` 발화 (옵션) | validation 라우트에 `fields` 채우기 | 🟢 낮음 | PR #5 PR-E (`6bbee71`) |
 | 5 | 방문 status enum (영문 정합화) | 영문 enum 합의 | 🔴 critical | 진행 중 (프론트 영문화 완료) |
-| 6 | Geofence / Navigation deep-link / state-history 응답 shape | shape 명세 | 🟡 중간 | 진행 중 (프론트 typed 정렬 완료) |
+| 6 | Geofence / Navigation deep-link / state-history 응답 shape | shape 명세 | 🟡 중간 | 진행 중 (프론트 typed + UI 통합 완료) |
+| 8 | 공유 보고서 응답에 첨부 사진/메모 포함 | `ReportCreateData` 또는 별도 응답에 attachments 추가 | 🟢 낮음 | 미시작 |
+| 9 | 외근 시작 시 destinations 전송 + 외근 시작 전 동선 최적화 | `POST /api/trips/start` body 확장 + pre-trip optimize endpoint 신규 | 🟡 중간 | 미시작 |
 
 ---
 
@@ -255,7 +257,7 @@ GET /api/trips/state-history?tripId=...
 
 ---
 
-## 8. 환경변수 요약
+## 10. 환경변수 요약
 
 프론트:
 - `EXPO_PUBLIC_API_BASE_URL` — 기본 `https://ilgayo.co.kr`
@@ -268,7 +270,83 @@ GET /api/trips/state-history?tripId=...
 
 ---
 
-## 9. Phase 7 응답 shape 재확인
+## 9. 🟡 외근 시작 흐름 — destinations 전송 + 외근 시작 전 동선 최적화
+
+### 프론트엔드 상태
+- 외근 시작 흐름 화면 (`trips/new/select` → `trips/new/order`) 의 **destination(방문할 현장 목록) 은 클라이언트 측 zustand store 만으로 관리** (`src/stores/destinationStore.ts`).
+- `POST /api/trips/start` 호출 시 body 가 `startLocation` 만 포함 — 백엔드는 어느 현장이 방문 예정인지 모름.
+- 외근 시작 *전* 단계의 동선 최적화는 클라이언트 nearest-neighbor 폴백 사용 (`src/utils/routeOptimize.ts`).
+- 백엔드 `POST /api/trips/{tripId}/navigation/optimize` 는 `tripId` path param 필수 — 외근 시작 후에만 호출 가능 (활성 외근 화면의 재최적화에서만 사용 중).
+
+### 백엔드가 해야 할 것
+
+#### 9a. `POST /api/trips/start` body 확장
+```ts
+POST /api/trips/start
+body: {
+  startLocation?: { lat, lng },
+  plannedFields?: Array<{
+    fieldId: string;
+    order: number;     // 0-based 방문 순서
+  }>;
+}
+→ 200: {
+  tripId,
+  startedAt,
+  destinations?: Array<{        // 백엔드가 발급한 destinationId
+    destinationId: string;
+    fieldId: string;
+    order: number;
+    status: 'pending';
+  }>,
+  banner, toast
+}
+```
+
+이렇게 하면:
+- 클라이언트 destinationStore 가 백엔드 발급 ID 사용 (현재는 클라가 발급).
+- state-history 의 `visit_added` 이벤트가 외근 시작 시점부터 정확히 기록됨.
+- 외근 종료 후 보고서 작성 시 백엔드가 외근의 방문 현장들을 정확히 알아 메모/사진 자동 import 백엔드 측 처리도 가능.
+
+#### 9b. 외근 시작 전 동선 최적화 endpoint (신규)
+```ts
+POST /api/trips/optimize-preview
+body: {
+  startLat: number;
+  startLng: number;
+  fields: Array<{ fieldId, name?, lat, lng }>;
+}
+→ 200: OptimizeNavigationResponse  // 기존과 동일 shape (tripId 만 빠짐)
+```
+
+또는 기존 `POST /api/trips/{tripId}/navigation/optimize` 를 확장해 tripId 가 빈 경우 (예: `_pre_`) 받도록 하는 방법도 가능. 별도 endpoint 가 contract 단순.
+
+이렇게 하면 클라이언트가 외근 시작 *전* 에 백엔드 측 알고리즘 (Kakao 거리 기반 등)을 사용 — nearest-neighbor 폴백보다 정확한 ETA / 거리 제공.
+
+### 우선순위
+- **9a 는 중요** — destinations 가 백엔드에 없으면 외근 종료 후 자동 보고서 / state-history / 통계가 부정확.
+- **9b 는 nice-to-have** — 클라 폴백으로 1차 출시 가능, 정확도 향상은 후속.
+
+---
+
+## 8. 🟢 공유 보고서 페이지에 첨부 노출 (백엔드 보충 대기)
+
+### 프론트엔드 상태
+- [`app/shared/[token].tsx`](../app/shared/[token].tsx) 가 `reports.getShared(token)` 호출 → `ReportCreateData` 응답.
+- 현재 응답에 첨부 (사진/메모) 필드 없음 → 공유받은 사용자에게 텍스트만 노출됨.
+
+### 백엔드가 해야 할 것
+1. `ReportCreateData` 응답에 옵셔널 `attachments?: Array<{ id, type: 'photo'|'audio'|'text', fileUrl?, text?, createdAt }>` 추가 (또는 별도 endpoint `GET /api/reports/shared/:token/attachments`).
+2. 비인증 접근이라 시각·민감 정보가 노출 가능 — 첨부 metadata 도 만료 토큰 검증 후에만.
+
+### 프론트엔드가 할 일 (백엔드 준비 후)
+- shared/[token] 화면에 갤러리·텍스트 메모 섹션 추가.
+- 사진은 lightbox / 갤러리 컴포넌트.
+- ~150 LOC, 0.5일.
+
+---
+
+## 11. Phase 7 응답 shape 재확인
 
 이 모든 항목의 에러 응답은 다음 단일 shape 를 따름:
 
