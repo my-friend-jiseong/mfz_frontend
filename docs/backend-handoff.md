@@ -19,6 +19,7 @@
 | 6 | Geofence / Navigation deep-link / state-history 응답 shape | shape 명세 | 🟡 중간 | 진행 중 (프론트 typed + UI 통합 완료) |
 | 8 | 공유 보고서 응답에 첨부 사진/메모 포함 | `ReportCreateData` 또는 별도 응답에 attachments 추가 | 🟢 낮음 | 미시작 |
 | 9 | 외근 시작 시 destinations 전송 + 외근 시작 전 동선 최적화 | `POST /api/trips/start` body 확장 + pre-trip optimize endpoint 신규 | 🟡 중간 | 미시작 |
+| 12 | 비밀번호 재설정 흐름 (forgot password) | endpoint 신규 (이메일 발송 등) | 🟡 중간 | 미시작 |
 
 ---
 
@@ -343,6 +344,26 @@ body: {
 - shared/[token] 화면에 갤러리·텍스트 메모 섹션 추가.
 - 사진은 lightbox / 갤러리 컴포넌트.
 - ~150 LOC, 0.5일.
+
+---
+
+## 12. 🟡 비밀번호 재설정 흐름 (forgot password)
+
+### 프론트엔드 상태
+- [`app/(auth)/login.tsx`](../app/\(auth\)/login.tsx) 에 "비밀번호를 잊으셨나요?" 링크 추가됨.
+- 현재는 Alert 안내만 노출: "관리자에게 요청해주세요" — 백엔드 endpoint 가 없어 1차 임시 처리.
+
+### 백엔드가 해야 할 것 (활성화 시점에)
+1. `POST /auth/password/reset-request` body: `{ email }` → 200: `{ ok: true }` (이메일 발송 여부와 무관 응답 통일 — 이메일 enumeration 방지).
+2. 이메일에 임시 토큰 또는 임시 비밀번호 발송.
+3. (선택) `POST /auth/password/reset-confirm` body: `{ token, newPassword }` → 200 (사용자가 토큰 받아 새 비밀번호 설정).
+4. Phase 7 표준 에러 (`invalid_email` / `password_too_short` 등).
+
+### 프론트엔드가 할 일 (백엔드 준비 후)
+- 로그인 화면 링크 → 별도 화면 `/(auth)/forgot-password` 진입.
+- 이메일 입력 → reset-request 호출 → "이메일을 확인하세요" 안내.
+- (선택) 토큰 입력 + 새 비밀번호 설정 화면.
+- ~120 LOC, 0.3일.
 
 ---
 

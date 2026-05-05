@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -143,6 +144,18 @@ export default function Login() {
           <Pressable onPress={() => router.push('/(auth)/signup')} style={styles.link}>
             <Text style={styles.linkText}>처음 사용하시나요? 회원가입</Text>
           </Pressable>
+
+          <Pressable
+            onPress={() =>
+              Alert.alert(
+                '비밀번호 찾기',
+                '비밀번호 재설정은 현재 관리자에게 요청해주세요. 이메일로 임시 비밀번호를 발급해드립니다.',
+              )
+            }
+            style={styles.link}
+          >
+            <Text style={styles.linkSubtle}>비밀번호를 잊으셨나요?</Text>
+          </Pressable>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -226,5 +239,10 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontSize: fontSize.sm,
     fontWeight: '600',
+  },
+  linkSubtle: {
+    color: colors.textMuted,
+    fontSize: fontSize.xs,
+    fontWeight: '500',
   },
 });
