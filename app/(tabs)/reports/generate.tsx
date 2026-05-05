@@ -36,6 +36,12 @@ function fmtDateTime(iso: string) {
   return `${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+function fmtTime(iso: string) {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 export default function GenerateReport() {
   const router = useRouter();
   const params = useLocalSearchParams<{ tripId?: string }>();
@@ -98,6 +104,20 @@ export default function GenerateReport() {
         return `[${time} · ${where}]\n${lines}`;
       });
     return blocks.join('\n\n');
+  };
+
+  // 외근 선택 토글 + 위치 자동 prefill (사용자가 직접 입력하지 않은 상태에서만).
+  const handleSelectTrip = (newTripId: string | null) => {
+    setTripId(newTripId);
+    if (!newTripId) return;
+    if (location.trim().length > 0) return; // 사용자 입력 보존
+    const visits = visitsByTrip(newTripId);
+    if (visits.length === 0) return;
+    // 첫 방문 현장 주소 우선, 없으면 마지막 방문 — 다수 visit 의 일반화된 라벨로 사용.
+    const firstField = allFields.find((f) => f.id === visits[0].fieldId);
+    const lastField = allFields.find((f) => f.id === visits[visits.length - 1].fieldId);
+    const candidate = firstField?.address ?? lastField?.address;
+    if (candidate) setLocation(candidate);
   };
 
   const handleImportFromTrip = () => {
@@ -187,16 +207,22 @@ export default function GenerateReport() {
           <Text style={styles.hint}>등록된 외근이 없습니다.</Text>
         ) : (
           <View style={styles.tripList}>
-            {myTrips.slice(0, 8).map((t) => {
+            {myTrips.map((t) => {
               const active = t.id === tripId;
+              const visitCount = visitsByTrip(t.id).length;
               return (
                 <Pressable
                   key={t.id}
-                  onPress={() => setTripId(active ? null : t.id)}
+                  onPress={() => handleSelectTrip(active ? null : t.id)}
                   style={[styles.tripItem, active && styles.tripItemActive]}
                 >
-                  <Text style={[styles.tripItemText, active && styles.tripItemTextActive]}>
-                    {fmtDate(t.startedAt)} · #{t.id}
+                  <Text style={[styles.tripItemDate, active && styles.tripItemTextActive]}>
+                    {fmtDate(t.startedAt)}
+                  </Text>
+                  <Text style={[styles.tripItemMeta, active && styles.tripItemMetaActive]}>
+                    {fmtTime(t.startedAt)}
+                    {t.endedAt ? `–${fmtTime(t.endedAt)}` : ' · 진행 중'}
+                    {visitCount > 0 ? ` · 방문 ${visitCount}건` : ' · 방문 없음'}
                   </Text>
                 </Pressable>
               );
@@ -351,7 +377,9 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
     backgroundColor: colors.primary + '10',
   },
-  tripItemText: { fontSize: fontSize.sm, color: colors.text },
+  tripItemDate: { fontSize: fontSize.sm, color: colors.text, fontWeight: '600' },
+  tripItemMeta: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: 2 },
+  tripItemMetaActive: { color: colors.primary },
   tripItemTextActive: { color: colors.primary, fontWeight: '700' },
   input: {
     backgroundColor: colors.surface,
