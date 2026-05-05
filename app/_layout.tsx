@@ -1,12 +1,20 @@
+import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 import { View, StyleSheet } from 'react-native';
 import { TripStatusBanner } from '@/components/TripStatusBanner';
+import { SessionGuardModal } from '@/components/SessionGuardModal';
+import { startSessionActivity, stopSessionActivity } from '@/stores/sessionActivity';
 import { colors } from '@/theme/colors';
 
 export default function RootLayout() {
+  useEffect(() => {
+    startSessionActivity();
+    return () => stopSessionActivity();
+  }, []);
+
   return (
     <GestureHandlerRootView style={styles.root}>
       <SafeAreaProvider>
@@ -20,6 +28,7 @@ export default function RootLayout() {
               <Stack.Screen name="shared/[token]" />
             </Stack>
           </View>
+          <SessionGuardModal />
           <StatusBar style="dark" />
         </SafeAreaView>
       </SafeAreaProvider>

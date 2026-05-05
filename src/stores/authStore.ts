@@ -1,11 +1,12 @@
 import { create } from 'zustand';
 import type { User } from '@/types/entities';
-import { auth, configureAuth, localizeError, errorCode } from '@/api';
+import { auth, configureAuth, localizeError, errorCode, ApiError } from '@/api';
 import {
   saveRefreshToken,
   loadRefreshToken,
   clearRefreshToken,
 } from '@/api/storage';
+import { useSessionGuardStore } from './sessionGuardStore';
 
 type Result<T = void> =
   | { ok: true; value?: T }
@@ -72,8 +73,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         isAuthenticated: true,
         isHydrating: false,
       });
-    } catch {
-      // refresh 무효 → 저장된 토큰 폐기 후 비로그인 상태로 진입
+    } catch (e) {
+      // refresh 무효 → 저장된 토큰 폐기 후 비로그인 상태로 진입.
+      // Phase 7 보안 코드는 모달 안내 (사용자가 왜 로그아웃됐는지 알 수 있도록).
+      if (e instanceof ApiError && (e.code === 'all_sessions_revoked' || e.code === 'refresh_token_superseded')) {
+        useSessionGuardStore.getState().show(
+          e.code === 'all_sessions_revoked' ? 'revoked' : 'superseded',
+          e.message,
+        );
+      }
       await clearRefreshToken();
       set({
         user: null,
@@ -179,6 +187,51 @@ async function refreshAccessSingleFlight(): Promise<string | null> {
       if (__DEV__) console.log('[auth] _refreshAccess SUCCESS');
       return session.accessToken;
     } catch (e) {
+      // Phase 7 — refresh_token_superseded: 다른 곳에서 이미 새로 refresh 된 상태.
+      // 로컬 storage 의 refresh 가 우리가 시도한 것과 다르면(다른 앱 인스턴스가 갱신함),
+      // 그 토큰으로 한 번만 더 시도. 그래도 실패하면 강제 로그아웃 + 안내.
+      if (e instanceof ApiError && e.code === 'refresh_token_superseded') {
+        const stored = await loadRefreshToken();
+        if (stored && stored !== rt) {
+          try {
+            const session = await auth.refresh(stored);
+            if (isValidSession(session)) {
+              await saveRefreshToken(session.refreshToken);
+              useAuthStore.setState({
+                user: session.user,
+                accessToken: session.accessToken,
+                refreshToken: session.refreshToken,
+                isAuthenticated: true,
+              });
+              if (__DEV__) console.log('[auth] superseded → recovered with stored refresh');
+              return session.accessToken;
+            }
+          } catch {
+            /* fallthrough — 안내 후 강제 로그아웃 */
+          }
+        }
+        useSessionGuardStore.getState().show('superseded', e.message);
+        await clearRefreshToken();
+        useAuthStore.setState({
+          user: null,
+          accessToken: null,
+          refreshToken: null,
+          isAuthenticated: false,
+        });
+        return null;
+      }
+      // Phase 7 — all_sessions_revoked: 보안상 전체 세션 종료. 강제 로그아웃 + 보안 경고 모달.
+      if (e instanceof ApiError && e.code === 'all_sessions_revoked') {
+        useSessionGuardStore.getState().show('revoked', e.message);
+        await clearRefreshToken();
+        useAuthStore.setState({
+          user: null,
+          accessToken: null,
+          refreshToken: null,
+          isAuthenticated: false,
+        });
+        return null;
+      }
       if (__DEV__) console.error('[auth] _refreshAccess FAILED — store cleared', e);
       await clearRefreshToken();
       useAuthStore.setState({
