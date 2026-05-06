@@ -80,6 +80,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   refresh_token_invalid: '세션이 만료되었습니다. 다시 로그인해주세요',
   refresh_token_superseded: '다른 기기에서 새로 로그인되었습니다',
   all_sessions_revoked: '보안상의 이유로 모든 세션이 종료되었습니다',
+  session_id_missing: '세션 정보가 없습니다. 다시 로그인해주세요',
   user_not_found: '계정을 찾을 수 없습니다',
   // 외근 (Trip)
   already_active_trip: '이미 진행 중인 외근이 있습니다',

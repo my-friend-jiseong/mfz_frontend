@@ -73,56 +73,133 @@ export interface TripDetailResponse {
 }
 
 // 외근 자동화 — geofence / navigation / offline / official-notice / state-history.
-// docs/backend-handoff.md §6 contract 정렬. 백엔드 명세 합의 시 반영됨.
+// 백엔드 handoff-response §6 의 실제 contract 정렬 (이전 typed 가정과 다름).
 
+// §6a — Geofence 등록은 한 번에 여러 현장 batch 등록.
 export interface GeofenceRegisterBody {
-  fieldId: string;
-  lat: number;
-  lng: number;
-  radiusMeters?: number; // 기본 150m 권장
+  platform: 'android' | 'ios';
+  fields: Array<{
+    fieldId: string;
+    name?: string;
+    lat: number;
+    lng: number;
+  }>;
+  radiusMeters?: number; // 150~200, 기본 180
 }
 
 export interface GeofenceRegisterResponse {
-  geofenceId: string;
-  registeredAt: string; // ISO8601
+  subscriptionId: string;
+  tripId: string;
+  platform: 'android' | 'ios';
+  geofenceCount: number;
+  radiusMeters: number;
+  policy: {
+    recommendedRange: [number, number];
+    enterOnlyHighAccuracyBoost: boolean;
+  };
 }
 
+// §6b — body 의 arrivedAt 이 아니라 detectedAt. 응답에 notification + action.
 export interface GeofenceArrivalBody {
   fieldId: string;
-  arrivedAt?: string; // ISO8601 (생략 시 서버 시각)
+  detectedAt?: string; // ISO8601 (생략 시 서버 시각)
 }
 
 export interface GeofenceArrivalResponse {
-  acknowledged: boolean;
-  suggestCheckIn: boolean;
+  tripId: string;
+  fieldId: string;
+  detectedAt: string;
+  notification: {
+    title: string;
+    message: string;
+  };
+  action: {
+    type: 'open_checkin' | string;
+    url: string;
+  };
 }
 
-// 외부 지도 앱 길찾기 deep-link — 카카오/네이버/구글 3종 평탄 URL 묶음.
+// §6c — body 에 destinationLat/Lng 필수, 응답은 providers 객체로 wrap.
+export interface NavigationDeepLinksBody {
+  fieldId?: string;
+  destinationName?: string;
+  destinationLat: number;
+  destinationLng: number;
+}
+
 export interface NavigationDeepLinksResponse {
-  kakao?: string;
-  naver?: string;
-  google?: string;
-  // 향후 provider 추가 대비 — 필수 키는 위 3개로 typed.
-  [provider: string]: string | undefined;
+  tripId: string;
+  fieldId: string | null;
+  destinationName: string;
+  providers: {
+    kakao: string;
+    google: string;
+    naver: string;
+  };
 }
 
 export interface OfficialNoticeBody {
   reason?: string; // 변경 사유 (선택)
 }
 
-// 외근 상태 전환 이력 (감사용).
-// eventType: 'started' | 'ended' | 'paused' | 'resumed' | 'visit_added' | 그 외 미래 확장.
-export interface StateHistoryItem {
+// §6d — state-history 응답은 data.items wrap, items[i].timeline 이 transition 단위.
+// pagination 미구현 (백엔드 lookback 30일 default).
+export interface TripStateTransition {
+  id: string;
   tripId: string;
-  eventType: string;
-  occurredAt: string;     // ISO8601
+  userId: string;
+  fromStatus: string | null;
+  toStatus: string;
+  changedAt: string;
   reason: string | null;
-  changedBy: string;      // userId
+}
+
+export interface TripStateHistoryListItem {
+  tripId: string;
+  tripDate: string; // YYYY-MM-DD
+  startedAt: string;
+  endedAt: string | null;
+  durationMinutes: number;
+  visitCount: number;
+  siteCount: number;
+  status: 'normal' | 'abnormal' | string;
+  lifecycleStatus: 'active' | 'abnormal_open' | 'ended' | string;
+  abnormalTag: string | null;
+  needsOfficialReportNotice: boolean;
+  timeline: TripStateTransition[];
+  adminExtra: { totalDistanceKm: number; visitCount: number } | null;
 }
 
 export interface StateHistoryResponse {
-  items: StateHistoryItem[];
-  pagination?: { page: number; limit: number; total: number; hasNext: boolean };
+  data: {
+    items: TripStateHistoryListItem[];
+    retentionPolicy: {
+      minimumYears: number;
+      sensitiveInfoYears: number;
+      note: string;
+    };
+  };
+}
+
+// §9b — 외근 시작 전 동선 최적화 신규 endpoint. tripId 불필요.
+export interface OptimizePreviewBody {
+  startLat: number;
+  startLng: number;
+  fields: Array<{
+    fieldId: string;
+    name?: string;
+    lat: number;
+    lng: number;
+  }>;
+}
+
+export interface OptimizePreviewResponse {
+  optimizedOrder: OptimizedOrderItem[];
+  summary: {
+    algorithm: string;
+    totalDistanceKm: number;
+    totalEtaMinutes: number;
+  };
 }
 
 // 다중 경로 최적화 — POST /api/trips/{tripId}/navigation/optimize
@@ -179,7 +256,7 @@ export const trips = {
 
   // ----- 외근 자동화 endpoint (handoff §6 contract) -----
 
-  /** 현장 도착 감지를 위한 geofence 등록 — 외근 시작 시 각 방문 현장에 자동 등록 */
+  /** 현장 도착 감지를 위한 geofence 등록 — tripId 별 fields[] 배치 (handoff §6a) */
   registerGeofence: (tripId: string, body: GeofenceRegisterBody) =>
     request<GeofenceRegisterResponse>(`/api/trips/${tripId}/geofences/register`, {
       method: 'POST',
@@ -193,17 +270,24 @@ export const trips = {
       body,
     }),
 
-  /** 외부 지도 앱 길안내 딥링크 응답 — 다중 provider URL 묶음 */
+  /** 외부 지도 앱 길안내 딥링크 응답 — providers wrap 객체로 옴 (handoff §6c) */
   navigationDeepLinks: (
     tripId: string,
-    body: { fieldId: string; lat?: number; lng?: number },
+    body: NavigationDeepLinksBody,
   ) =>
     request<NavigationDeepLinksResponse>(
       `/api/trips/${tripId}/navigation/deep-links`,
       { method: 'POST', body },
     ),
 
-  /** 다중 현장 동선 최적 순서 제안 (nearest neighbor 등) */
+  /** 외근 시작 전 동선 최적화 — tripId 불필요, 후보 현장만으로 호출 (handoff §9b) */
+  optimizePreview: (body: OptimizePreviewBody) =>
+    request<OptimizePreviewResponse>('/api/trips/navigation/optimize-preview', {
+      method: 'POST',
+      body,
+    }),
+
+  /** 다중 현장 동선 최적 순서 제안 — 외근 시작 후 (nearest neighbor 등) */
   optimizeNavigation: (
     tripId: string,
     body: OptimizeNavigationBody,

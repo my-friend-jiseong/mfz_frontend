@@ -8,13 +8,14 @@
 //   - 외래키도 동일 string
 
 export type FieldStatus = 'pending' | 'in_progress' | 'done';
-// 백엔드와 주고받는 enum 은 영문 (안정성·국제화). 사용자 표시는 VISIT_STATUS_LABEL 매핑.
+// 백엔드 canonical (handoff §5 응답 기준 — Phase 6 contract).
+// 'completed' 와 별개의 'resultStatus' (normal | abnormal) 가 응답에 따로 있음.
 export type VisitStatus =
-  | 'normal'             // 완료
+  | 'completed'          // 완료 (resultStatus 자동 'normal')
   | 'absent'             // 부재
   | 'refused'            // 수취거절
   | 'unknown_address'    // 주소불명
-  | 'revisit_required'   // 재방문필요
+  | 'revisit_needed'     // 재방문 필요
   | 'other';             // 기타 (statusReason 10자 이상 필수)
 export type DestinationStatus = 'pending' | 'arrived' | 'skipped';
 
@@ -110,44 +111,48 @@ export interface Report {
 }
 
 export const VISIT_STATUS_VALUES: VisitStatus[] = [
-  'normal',
+  'completed',
   'absent',
   'refused',
   'unknown_address',
-  'revisit_required',
+  'revisit_needed',
   'other',
 ];
 
 // 사용자 표시용 한국어 라벨 — 코드 식별자(영문) ↔ 표시값(한국어) 분리.
 export const VISIT_STATUS_LABEL: Record<VisitStatus, string> = {
-  normal: '완료',
+  completed: '완료',
   absent: '부재',
   refused: '수취거절',
   unknown_address: '주소불명',
-  revisit_required: '재방문필요',
+  revisit_needed: '재방문필요',
   other: '기타',
 };
 
-// 백엔드가 과거 한글 enum 으로 응답할 가능성에 대한 양방향 매핑 — 호환 안전망.
-// 백엔드가 영문 정합되면 자연스럽게 무시됨.
-const KOREAN_TO_VISIT_STATUS: Record<string, VisitStatus> = {
-  '완료': 'normal',
+// 호환 안전망 — 백엔드가 한글 enum 또는 옛 영문값 ('normal' / 'revisit_required') 으로
+// 응답할 가능성. 'normal' 은 visit.status 의 옛 값 또는 resultStatus 와 충돌 가능 — 문맥상
+// status 자리에선 'completed' 로 정규화.
+const VISIT_STATUS_ALIAS: Record<string, VisitStatus> = {
+  '완료': 'completed',
   '부재': 'absent',
   '수취거절': 'refused',
   '주소불명': 'unknown_address',
-  '재방문필요': 'revisit_required',
+  '재방문필요': 'revisit_needed',
   '기타': 'other',
+  // 옛 프론트 영문값 (잘못된 가정) — 백엔드 정정 후 들어와도 흡수.
+  normal: 'completed',
+  revisit_required: 'revisit_needed',
 };
 
 /**
- * 어떤 형태(영문/한글/미지정)의 status 를 받아도 안전하게 영문 enum 으로 정규화.
- * 매핑 실패 시 'normal' 폴백 (체크인 직후 기본값).
+ * 어떤 형태의 visit status 를 받아도 안전하게 영문 enum 으로 정규화.
+ * 매핑 실패 시 'completed' 폴백 (체크인 직후 백엔드 기본값).
  */
 export function normalizeVisitStatus(raw: unknown): VisitStatus {
-  if (typeof raw !== 'string') return 'normal';
+  if (typeof raw !== 'string') return 'completed';
   if ((VISIT_STATUS_VALUES as string[]).includes(raw)) return raw as VisitStatus;
-  if (raw in KOREAN_TO_VISIT_STATUS) return KOREAN_TO_VISIT_STATUS[raw];
-  return 'normal';
+  if (raw in VISIT_STATUS_ALIAS) return VISIT_STATUS_ALIAS[raw];
+  return 'completed';
 }
 
 export const FIELD_STATUS_VALUES: FieldStatus[] = ['pending', 'in_progress', 'done'];

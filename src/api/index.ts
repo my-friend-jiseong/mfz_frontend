@@ -21,9 +21,13 @@ export type {
   GeofenceRegisterResponse,
   GeofenceArrivalBody,
   GeofenceArrivalResponse,
+  NavigationDeepLinksBody,
   NavigationDeepLinksResponse,
-  StateHistoryItem,
+  TripStateTransition,
+  TripStateHistoryListItem,
   StateHistoryResponse,
+  OptimizePreviewBody,
+  OptimizePreviewResponse,
   OfficialNoticeBody,
 } from './endpoints/trips';
 

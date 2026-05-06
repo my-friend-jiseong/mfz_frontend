@@ -111,7 +111,7 @@ export default function NewField() {
         const res = await fieldsApi.addressSearch(k);
         if (myReqId !== reqIdRef.current) return;
         setResults(res.items);
-        setEmptyMessage(res.emptyMessage);
+        setEmptyMessage(res.emptyMessage ?? null);
         setProviderUnavailable(false);
         // provider.manualCoordinateFallback === true 면 빈 결과 시 수동 입력 진입점 노출
         // (검색 자체는 성공했지만 결과가 0건일 때)

@@ -4,13 +4,14 @@ import { visits as visitsApi, localizeError, NetworkError } from '@/api';
 import { useFieldStore } from './fieldStore';
 import { useOfflineQueueStore } from './offlineQueueStore';
 
-// 백엔드 contract:
+// 백엔드 contract (handoff §5):
 //   - 메모 body 필드명: { text } 확정
-//   - status enum: 영문 (normal/absent/refused/unknown_address/revisit_required/other) — VisitStatus 그대로.
-//     사용자 표시용 한국어는 VISIT_STATUS_LABEL ([src/types/entities.ts]) 매핑.
-//   - check-in 직후 초기 status: 'normal' (완료) — 백엔드가 자동 설정.
+//   - status enum: 'completed' / 'absent' / 'refused' / 'unknown_address' /
+//     'revisit_needed' / 'other'. 사용자 표시용 한국어는 VISIT_STATUS_LABEL 매핑.
+//   - check-in 직후 초기 status: 'completed' — 백엔드가 자동 설정.
+//   - resultStatus (별도 필드): 'normal' | 'abnormal' (status='completed' 면 자동 'normal').
 //   - memo 응답: { visitId, attachment: { id, type, text, createdAt, latitude, longitude, locationConsent } }
-//   - status 응답: { visitId, resultStatus(영문), status(한국어 표시), statusReason, statusLogs[] }
+//   - status 응답: { visitId, resultStatus, status, statusReason, statusLogs[] }
 //   - "other" 선택 시 statusReason 10자 이상 필수 (백엔드 visit_status_reason_required).
 
 type CheckInResult =
@@ -66,7 +67,7 @@ export const useVisitStore = create<VisitState>((set, get) => ({
       });
       const v: Visit = {
         id: res.visitId,
-        status: 'normal', // 백엔드 초기값 (체크인 직후)
+        status: 'completed', // 백엔드 초기값 (체크인 직후)
         tripId: res.tripId,
         fieldId: res.fieldId,
         visitedAt: res.visitedAt,

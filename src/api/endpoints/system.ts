@@ -19,11 +19,12 @@ export interface SessionPolicy {
   };
 }
 
-// /api/system/session/activity 응답 — 보통 204 No Content (빈 본문).
-// 백엔드가 이행 정보를 줄 수도 있어 옵셔널 필드로 받음.
+// /api/system/session/activity 응답 (handoff §2 확정 contract).
+// 200 으로 { ok: true, lastActivityAt } 반환. 토큰 검증 실패 시 401, 미인증 호출 시
+// 400 session_id_missing.
 export interface SessionActivityResponse {
-  ok?: boolean;
-  refreshedUntil?: string; // ISO8601 — 이번 ping 으로 idle timer 가 연장된 시각
+  ok: boolean;
+  lastActivityAt: string; // ISO8601
 }
 
 export const system = {
@@ -31,7 +32,7 @@ export const system = {
   sessionPolicy: () =>
     request<SessionPolicy>('/api/system/session/policy', { skipAuth: true }),
   sessionActivity: () =>
-    request<SessionActivityResponse | null>('/api/system/session/activity', {
+    request<SessionActivityResponse>('/api/system/session/activity', {
       method: 'POST',
     }),
 };
