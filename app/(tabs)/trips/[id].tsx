@@ -86,8 +86,7 @@ export default function TripDetail() {
     void (async () => {
       try {
         const res = await tripsApi.stateHistory({ tripId });
-        const entry = res.data?.items?.find((it) => it.tripId === tripId)
-          ?? res.data?.items?.[0];
+        const entry = res.data?.items?.find((it) => it.tripId === tripId);
         setStateHistory(entry?.timeline ?? []);
       } catch {
         setStateHistory([]);

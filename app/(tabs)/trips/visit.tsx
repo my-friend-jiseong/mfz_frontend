@@ -78,9 +78,10 @@ export default function VisitDetail() {
       durationSec: a.durationSec ?? a.durationSeconds,
       createdAt: a.createdAt,
     }));
-  // resultStatus 는 영문 enum, status 는 한국어 표시값 — 색은 영문으로 조회.
+  // colors.visitStatus 는 visit.status (completed/absent/...) 키 — resultStatus
+  // (normal/abnormal) 와 다름. status 로 조회.
   const statusColor =
-    colors.visitStatus[data.resultStatus as keyof typeof colors.visitStatus] ?? colors.text;
+    colors.visitStatus[data.status as keyof typeof colors.visitStatus] ?? colors.text;
   // 활성 외근의 visit 일 때만 "추가 첨부" CTA 노출 (이미 종료된 외근은 view-only).
   const canAddMore =
     activeTripId !== null && data.tripId === activeTripId && !!visitInStore;

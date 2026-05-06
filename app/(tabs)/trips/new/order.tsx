@@ -69,7 +69,6 @@ export default function NewTripOrder() {
     }
     const start = { lat: list[0].lat, lng: list[0].lng };
     let ordered: OrderedField[];
-    let summaryAlgorithm = 'nearest_neighbor';
     let totalKm: number;
     let totalEta: number;
     try {
@@ -95,7 +94,6 @@ export default function NewTripOrder() {
         });
       }
       ordered = mapped;
-      summaryAlgorithm = res.summary.algorithm;
       totalKm = res.summary.totalDistanceKm;
       totalEta = res.summary.totalEtaMinutes;
     } catch {
@@ -107,7 +105,7 @@ export default function NewTripOrder() {
     setOptimized(true);
     Alert.alert(
       '✨ 최적 순서 적용됨',
-      `${summaryAlgorithm} · 총 ${totalKm.toFixed(1)}km · 예상 ${totalEta}분\n\n수동으로 더 조정하셔도 됩니다.`,
+      `총 ${totalKm.toFixed(1)}km · 예상 ${totalEta}분\n\n수동으로 더 조정하셔도 됩니다.`,
     );
   };
 
