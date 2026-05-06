@@ -225,15 +225,24 @@ export default function FieldDetail() {
   const canCheckIn = activeTripId !== null;
 
   // 상태 변경 — chip tap 시 3개 상태 중 선택. patchStatus 즉시 호출.
+  // 빠른 연속 탭 race 방지를 위해 in-flight ref 가드.
+  const statusBusyRef = useRef(false);
   const handleStatusTap = () => {
+    if (statusBusyRef.current) return;
     const others = FIELD_STATUS_VALUES.filter((s) => s !== field.status);
     Alert.alert('상태 변경', `현재: ${FIELD_STATUS_LABEL[field.status]}`, [
       { text: '취소', style: 'cancel' },
       ...others.map((s) => ({
         text: FIELD_STATUS_LABEL[s],
         onPress: async () => {
-          const r = await patchFieldStatus(field.id, s);
-          if (!r.ok) Alert.alert('상태 변경 실패', r.error);
+          if (statusBusyRef.current) return;
+          statusBusyRef.current = true;
+          try {
+            const r = await patchFieldStatus(field.id, s);
+            if (!r.ok) Alert.alert('상태 변경 실패', r.error);
+          } finally {
+            statusBusyRef.current = false;
+          }
         },
       })),
     ]);

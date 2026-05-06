@@ -46,16 +46,19 @@ export default function EditReport() {
   const update = useReportStore((s) => s.update);
   const userId = useAuthStore((s) => s.user?.id);
 
-  // 진입 시 detail 페치 (목록은 contentPreview 만 가짐)
+  // 진입 시 detail 페치 — detailCache 가 풀 본문 source of truth.
+  // 목록의 contentPreview 는 짧게 잘려 있어 form 초기값으로 부적합.
   useEffect(() => {
     if (reportId && !detailCache[reportId]) void loadDetail(reportId);
   }, [reportId, detailCache, loadDetail]);
 
-  const report = useMemo(
+  // detailCache 만 source — 페치 완료 전엔 폼을 띄우지 않음.
+  const report = detailCache[reportId];
+  // 권한 체크용 — list 응답에서도 creatorId 확인 가능.
+  const summary = useMemo(
     () =>
-      detailCache[reportId] ??
-      allReports.find((r) => r.id === reportId && r.deletedAt === null),
-    [detailCache, allReports, reportId],
+      report ?? allReports.find((r) => r.id === reportId && r.deletedAt === null),
+    [allReports, report, reportId],
   );
 
   const [title, setTitle] = useState('');
@@ -64,18 +67,21 @@ export default function EditReport() {
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // initial 값 보존 — 변경 감지 / 뒤로 가기 confirm 용.
+  // initial 값 보존 — 변경 감지 / 뒤로 가기 confirm 용. detail 도착 시 한 번만 set.
   const initialRef = useRef<{ title: string; content: string } | null>(null);
+  const userTouchedRef = useRef(false);
 
-  // detail 페치 완료 시 입력 필드를 풀 본문으로 채움 — 한 번만 (사용자 입력 보존).
+  // detail 도착 후 form 초기화 — 사용자 입력 안 한 상태에서만.
   useEffect(() => {
     if (!report || initialRef.current) return;
-    setTitle(report.title);
-    setContent(report.content);
+    if (!userTouchedRef.current) {
+      setTitle(report.title);
+      setContent(report.content);
+    }
     initialRef.current = { title: report.title, content: report.content };
   }, [report]);
 
-  if (!report) {
+  if (!summary) {
     return (
       <View style={styles.container}>
         <EmptyState title="보고서를 찾을 수 없습니다" />
@@ -83,13 +89,22 @@ export default function EditReport() {
     );
   }
 
-  if (userId !== report.creatorId) {
+  if (userId !== summary.creatorId) {
     return (
       <View style={styles.container}>
         <EmptyState
           title="수정 권한이 없습니다"
           description="작성자 본인만 수정 가능합니다"
         />
+      </View>
+    );
+  }
+
+  // detail 페치 중 — form 미노출 (contentPreview 잘림 회귀 방지).
+  if (!report) {
+    return (
+      <View style={styles.container}>
+        <EmptyState title="불러오는 중..." />
       </View>
     );
   }
@@ -167,6 +182,7 @@ export default function EditReport() {
         <TextInput
           value={title}
           onChangeText={(v) => {
+            userTouchedRef.current = true;
             setTitle(v);
             if (fieldErrors.title) clearFieldErr('title');
           }}
@@ -187,6 +203,7 @@ export default function EditReport() {
         <TextInput
           value={content}
           onChangeText={(v) => {
+            userTouchedRef.current = true;
             setContent(v);
             if (fieldErrors.content) clearFieldErr('content');
           }}

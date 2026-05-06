@@ -225,23 +225,31 @@ export default function GenerateReport() {
     }
     setBusy(true);
     startTickerRef.current?.(true);
-    const r = await generate({
-      notes: notes.trim(),
-      title: title.trim() || undefined,
-      extraNotes: extraNotes.trim() || undefined,
-      tripId: tripId ?? undefined,
-      location: location.trim() || undefined,
-      beforePhoto: beforePhoto ?? undefined,
-      afterPhoto: afterPhoto ?? undefined,
-    });
-    if (!mountedRef.current) return;
-    setBusy(false);
-    stopTicker();
-    if (r.ok) {
-      router.replace(`/(tabs)/reports/${r.data.id}` as never);
-    } else {
-      setError(r.error);
-      setLastAttemptFailed(true);
+    try {
+      const r = await generate({
+        notes: notes.trim(),
+        title: title.trim() || undefined,
+        extraNotes: extraNotes.trim() || undefined,
+        tripId: tripId ?? undefined,
+        location: location.trim() || undefined,
+        beforePhoto: beforePhoto ?? undefined,
+        afterPhoto: afterPhoto ?? undefined,
+      });
+      if (!mountedRef.current) return;
+      if (r.ok) {
+        router.replace(`/(tabs)/reports/${r.data.id}` as never);
+      } else {
+        setError(r.error);
+        setLastAttemptFailed(true);
+      }
+    } finally {
+      // generate 가 throw 하든 정상 종료하든 ticker / busy 정리.
+      if (mountedRef.current) {
+        setBusy(false);
+        stopTicker();
+      } else {
+        stopTicker();
+      }
     }
   };
 

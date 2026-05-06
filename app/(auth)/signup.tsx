@@ -28,8 +28,12 @@ const PASSWORD_HINT =
   '10자 이상 · 영대/영소/숫자/특수문자 중 3종 이상 조합';
 
 // 백엔드 정책: 10자 이상 + 영대/영소/숫자/특수문자 중 3종 이상.
+// 한글은 4종 어디에도 매칭되지 않음 — 백엔드가 거부할 가능성 높아 명시적 안내.
 function checkPasswordPolicy(pw: string): string | null {
   if (pw.length < 10) return '비밀번호는 10자 이상이어야 합니다';
+  if (/[가-힯ᄀ-ᇿ㄰-㆏]/.test(pw)) {
+    return '비밀번호에 한글은 사용할 수 없습니다';
+  }
   let kinds = 0;
   if (/[A-Z]/.test(pw)) kinds++;
   if (/[a-z]/.test(pw)) kinds++;

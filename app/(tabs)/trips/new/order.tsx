@@ -247,15 +247,19 @@ export default function NewTripOrder() {
       />
       <Pressable
         onPress={handleConfirm}
-        disabled={submitting}
+        disabled={submitting || list.length === 0}
         style={({ pressed }) => [
           styles.fab,
-          submitting && styles.fabDisabled,
+          (submitting || list.length === 0) && styles.fabDisabled,
           pressed && styles.pressed,
         ]}
       >
         <Text style={styles.fabText}>
-          {submitting ? '외근 시작 중...' : `외근 시작 확정 (${list.length}곳)`}
+          {submitting
+            ? '외근 시작 중...'
+            : list.length === 0
+              ? '방문할 현장 없음'
+              : `외근 시작 확정 (${list.length}곳)`}
         </Text>
       </Pressable>
     </MapSheetLayout>
