@@ -118,7 +118,7 @@ export default function ActiveTrip() {
     const fields = destinations
       .map((d) => getField(d.fieldId))
       .filter((f): f is NonNullable<typeof f> => !!f && Number.isFinite(f.latitude) && Number.isFinite(f.longitude))
-      .map((f) => ({ id: f.id, latitude: f.latitude, longitude: f.longitude }));
+      .map((f) => ({ id: f.id, name: f.address, latitude: f.latitude, longitude: f.longitude }));
     if (fields.length === 0) return;
     void registerGeofencesForTrip(activeTripId, fields);
   }, [activeTripId, destinations, getField]);
@@ -189,14 +189,15 @@ export default function ActiveTrip() {
     const field = getField(currentDest.fieldId);
     if (!field) return;
 
-    // 백엔드 deep-links 응답 — { kakao?, naver?, google? } 평탄 URL 묶음 (handoff §6b).
+    // 백엔드 deep-links 응답 — providers 객체로 wrap (handoff §6c).
     // 응답 받기 실패 시 카카오맵 직링크로 폴백.
     if (activeTripId) {
       try {
         const res = await tripsApi.navigationDeepLinks(activeTripId, {
           fieldId: field.id,
-          lat: field.latitude,
-          lng: field.longitude,
+          destinationName: field.address,
+          destinationLat: field.latitude,
+          destinationLng: field.longitude,
         });
         const PROVIDERS = [
           { key: 'kakao', label: '카카오맵' },
@@ -205,7 +206,7 @@ export default function ActiveTrip() {
         ] as const;
         const entries: Array<{ label: string; url: string }> = [];
         for (const p of PROVIDERS) {
-          const url = res[p.key];
+          const url = res.providers?.[p.key];
           if (typeof url === 'string' && url.startsWith('http')) {
             entries.push({ label: p.label, url });
           }

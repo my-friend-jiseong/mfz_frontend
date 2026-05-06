@@ -50,7 +50,7 @@ export default function FieldCheckin() {
 
   const [visitId, setVisitId] = useState<string | null>(null);
   const [memoText, setMemoText] = useState('');
-  const [status, setStatus] = useState<VisitStatus>('normal');
+  const [status, setStatus] = useState<VisitStatus>('completed');
   const [etcReason, setEtcReason] = useState('');
   const [photoBusy, setPhotoBusy] = useState(false);
   const [recording, setRecording] = useState(false);

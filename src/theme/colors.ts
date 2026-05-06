@@ -18,12 +18,13 @@ export const colors = {
   },
 
   // visit.status별 (KWCAG 3중 인코딩 준수 — 색 + 형상 + 라벨 전제). 키는 영문 enum.
+  // handoff §5: completed / revisit_needed 가 백엔드 canonical.
   visitStatus: {
-    normal: '#16a34a',
+    completed: '#16a34a',
     absent: '#64748b',
     refused: '#dc2626',
     unknown_address: '#a855f7',
-    revisit_required: '#d97706',
+    revisit_needed: '#d97706',
     other: '#475569',
   },
 

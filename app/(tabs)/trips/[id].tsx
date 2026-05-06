@@ -16,21 +16,17 @@ import { useFieldStore } from '@/stores/fieldStore';
 import { useDestinationStore } from '@/stores/destinationStore';
 import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
-import { trips as tripsApi, type StateHistoryItem } from '@/api';
+import { trips as tripsApi, type TripStateTransition } from '@/api';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
 import { VISIT_STATUS_LABEL, type Visit } from '@/types/entities';
 
-// 외근 상태 전환 이벤트의 한국어 라벨 (백엔드 영문 eventType 매핑).
-// 알 수 없는 eventType 은 그대로 노출 (미래 확장 안전).
-const EVENT_LABEL: Record<string, string> = {
-  started: '외근 시작',
-  ended: '외근 종료',
-  paused: '일시 중지',
-  resumed: '재개',
-  visit_added: '방문 추가',
-  visit_removed: '방문 제거',
-  reordered: '경로 재정렬',
+// 외근 lifecycle status 전환의 한국어 라벨 (handoff §6d — toStatus 매핑).
+// 알 수 없는 status 는 그대로 노출 (미래 확장 안전).
+const STATUS_LABEL: Record<string, string> = {
+  active: '진행 중',
+  abnormal_open: '미종료 처리',
+  ended: '종료',
 };
 
 function fmtDateTime(iso?: string) {
@@ -82,14 +78,17 @@ export default function TripDetail() {
   const photoCountByVisit = (visitId: string) =>
     allPhotos.filter((p) => p.visitId === visitId).length;
 
-  // 상태 전환 이력 (감사용) — 백엔드 typed contract (handoff §6c).
-  const [stateHistory, setStateHistory] = useState<StateHistoryItem[]>([]);
+  // 상태 전환 이력 (감사용) — 백엔드 typed contract (handoff §6d).
+  // 응답: { data: { items: [{ tripId, ..., timeline: TripStateTransition[] }] } }
+  const [stateHistory, setStateHistory] = useState<TripStateTransition[]>([]);
   useEffect(() => {
     if (!tripId) return;
     void (async () => {
       try {
         const res = await tripsApi.stateHistory({ tripId });
-        setStateHistory(res.items);
+        const entry = res.data?.items?.find((it) => it.tripId === tripId)
+          ?? res.data?.items?.[0];
+        setStateHistory(entry?.timeline ?? []);
       } catch {
         setStateHistory([]);
       }
@@ -256,15 +255,19 @@ export default function TripDetail() {
       {stateHistory.length > 0 ? (
         <View style={styles.historyBox}>
           <Text style={styles.historyTitle}>상태 전환 이력</Text>
-          {stateHistory.map((h, idx) => (
-            <View key={`${h.occurredAt}-${idx}`} style={styles.historyRow}>
-              <Text style={styles.historyTime}>{fmtDateTime(h.occurredAt)}</Text>
-              <Text style={styles.historyText}>
-                {EVENT_LABEL[h.eventType] ?? h.eventType}
-                {h.reason ? ` · ${h.reason}` : ''}
-              </Text>
-            </View>
-          ))}
+          {stateHistory.map((h, idx) => {
+            const fromLabel = h.fromStatus ? (STATUS_LABEL[h.fromStatus] ?? h.fromStatus) : '시작';
+            const toLabel = STATUS_LABEL[h.toStatus] ?? h.toStatus;
+            return (
+              <View key={`${h.id}-${idx}`} style={styles.historyRow}>
+                <Text style={styles.historyTime}>{fmtDateTime(h.changedAt)}</Text>
+                <Text style={styles.historyText}>
+                  {`${fromLabel} → ${toLabel}`}
+                  {h.reason ? ` · ${h.reason}` : ''}
+                </Text>
+              </View>
+            );
+          })}
         </View>
       ) : null}
     </View>

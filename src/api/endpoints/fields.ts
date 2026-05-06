@@ -135,11 +135,18 @@ export interface AddressSearchItem {
   lng: number;
 }
 
+// handoff-response §1: 백엔드 응답에는 provider.primary 와 manualCoordinateFallback 만 있음.
+// secondary/retryOnFailure/emptyMessage 는 프론트 가정 — 미사용이면 옵셔널 유지.
 export interface AddressSearchResponse {
   query: string;
-  provider: { primary: string; secondary: string; retryOnFailure: number; manualCoordinateFallback: boolean };
+  provider: {
+    primary: string;
+    manualCoordinateFallback?: boolean;
+    secondary?: string;
+    retryOnFailure?: number;
+  };
   items: AddressSearchItem[];
-  emptyMessage: string | null;
+  emptyMessage?: string | null;
 }
 
 export interface ListMineParams {

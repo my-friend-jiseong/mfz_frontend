@@ -1,4 +1,5 @@
 import * as Location from 'expo-location';
+import { Platform } from 'react-native';
 import { trips as tripsApi } from '@/api';
 
 // 외근 자동화 — 도착 자동 감지 (foreground only).
@@ -31,27 +32,29 @@ export function haversineMeters(
 }
 
 /**
- * 외근 시작 시 각 방문 현장에 geofence 등록 (best-effort).
- * 백엔드 endpoint 가 비활성이거나 4xx/5xx 면 silent skip.
+ * 외근 시작 시 각 방문 현장에 geofence 등록 (best-effort, batch 1회).
+ * 백엔드 contract: handoff §6a — fields[] 한 번에 + platform 필수.
  */
 export async function registerGeofencesForTrip(
   tripId: string,
-  fields: Array<{ id: string; latitude: number; longitude: number }>,
+  fields: Array<{ id: string; name?: string; latitude: number; longitude: number }>,
 ): Promise<void> {
-  await Promise.all(
-    fields.map(async (f) => {
-      try {
-        await tripsApi.registerGeofence(tripId, {
-          fieldId: f.id,
-          lat: f.latitude,
-          lng: f.longitude,
-          radiusMeters: ARRIVAL_RADIUS_M,
-        });
-      } catch {
-        // best-effort — 백엔드 미작동·권한 등 문제 시 silent
-      }
-    }),
-  );
+  if (fields.length === 0) return;
+  const platform: 'ios' | 'android' = Platform.OS === 'ios' ? 'ios' : 'android';
+  try {
+    await tripsApi.registerGeofence(tripId, {
+      platform,
+      radiusMeters: ARRIVAL_RADIUS_M,
+      fields: fields.map((f) => ({
+        fieldId: f.id,
+        name: f.name,
+        lat: f.latitude,
+        lng: f.longitude,
+      })),
+    });
+  } catch {
+    // best-effort — 백엔드 미작동·권한 등 문제 시 silent
+  }
 }
 
 export interface ArrivalTarget {
@@ -109,9 +112,9 @@ export async function startArrivalWatcher(
           if (d <= ARRIVAL_RADIUS_M) {
             announced.add(t.fieldId);
             const arrivedAt = new Date().toISOString();
-            // best-effort 백엔드 보고 (무시)
+            // best-effort 백엔드 보고 (무시) — handoff §6b: detectedAt
             void tripsApi
-              .notifyGeofenceArrival(tripId, { fieldId: t.fieldId, arrivedAt })
+              .notifyGeofenceArrival(tripId, { fieldId: t.fieldId, detectedAt: arrivedAt })
               .catch(() => {});
             onArrival({ fieldId: t.fieldId, fieldName: t.fieldName, distanceMeters: d, arrivedAt });
           }

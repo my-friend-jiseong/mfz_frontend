@@ -248,14 +248,14 @@ GET /api/trips/state-history?tripId=...
 |---|---|---|
 | `Report.analysis` ([reports.ts](../src/api/endpoints/reports.ts)) | `unknown` | ✅ `ReportAnalysis` (summary, keypoints, recommendations, sentiment, raw + free-form 흡수) |
 | `FieldDetail.recentVisits` ([fields.ts](../src/api/endpoints/fields.ts)) | `unknown[]` | ✅ `RecentVisitItem[]` (visitId, tripId, visitedAt, resultStatus, status, statusReason, memoPreview, attachmentCounts) |
-| `system.sessionActivity` ([system.ts](../src/api/endpoints/system.ts)) | `unknown` | ✅ `SessionActivityResponse \| null` (ok, refreshedUntil — 옵셔널) |
+| `system.sessionActivity` ([system.ts](../src/api/endpoints/system.ts)) | `unknown` | ✅ `SessionActivityResponse` (ok, lastActivityAt — handoff-response §2 확정) |
 | `FieldList.appliedFilter` ([fields.ts](../src/api/endpoints/fields.ts)) | `unknown` | ⏳ 백엔드 명세 받은 후 정렬 (현재 frontend 미사용) |
 | `Trips.offlineQueue/flush` ([trips.ts](../src/api/endpoints/trips.ts)) | `unknown` | ⏳ frontend 가 endpoint 직접 사용 안 함 — 우선순위 낮음 |
 
 ### 백엔드가 해야 할 것
 - 위 ✅ 항목의 응답이 typed contract 와 정렬되는지 확인.
 - `Report.analysis` 의 실제 모델 출력 필드 목록 명세 (현재 free-form 흡수로 미래 안전).
-- `system.sessionActivity` 가 실제로 `refreshedUntil` 같은 정보를 보내는지 또는 204 No Content 인지.
+- `system.sessionActivity`: handoff-response §2 에서 `{ ok, lastActivityAt }` 확정 — typed.
 
 ---
 

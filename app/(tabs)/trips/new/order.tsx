@@ -9,6 +9,7 @@ import { useDestinationStore } from '@/stores/destinationStore';
 import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
 import { nearestNeighborOrder } from '@/utils/routeOptimize';
+import { trips as tripsApi } from '@/api';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
 
@@ -52,9 +53,9 @@ export default function NewTripOrder() {
   const [submitting, setSubmitting] = useState(false);
   const [optimized, setOptimized] = useState(false);
 
-  // 클라이언트 측 nearest neighbor 추천. 출발지: 첫 번째 field 좌표 (현재 위치 권한
-  // 없이도 동작하도록). expo-location 통합은 후속 PR 에서 보강 가능.
-  const handleOptimize = () => {
+  // 동선 최적화 — handoff §9b 의 신규 pre-trip endpoint 우선, 실패 시 클라이언트
+  // nearest neighbor 폴백. 출발지는 list[0] 좌표 (현재 위치 권한 없이 동작).
+  const handleOptimize = async () => {
     if (list.length < 2) {
       Alert.alert('최적 순서 추천', '최소 2개 이상의 현장이 필요합니다.');
       return;
@@ -67,14 +68,46 @@ export default function NewTripOrder() {
       );
     }
     const start = { lat: list[0].lat, lng: list[0].lng };
-    const ordered = nearestNeighborOrder(start, list);
+    let ordered: OrderedField[];
+    let summaryAlgorithm = 'nearest_neighbor';
+    let totalKm: number;
+    let totalEta: number;
+    try {
+      const res = await tripsApi.optimizePreview({
+        startLat: start.lat,
+        startLng: start.lng,
+        fields: list.map((f) => ({
+          fieldId: f.id,
+          name: f.address,
+          lat: f.lat,
+          lng: f.lng,
+        })),
+      });
+      const byId = new Map(list.map((f) => [f.id, f]));
+      const mapped: OrderedField[] = [];
+      for (const o of res.optimizedOrder) {
+        const base = byId.get(o.fieldId);
+        if (!base) continue;
+        mapped.push({
+          ...base,
+          distanceFromPrevKm: o.distanceFromPrevKm,
+          etaMinutes: o.etaMinutes,
+        });
+      }
+      ordered = mapped;
+      summaryAlgorithm = res.summary.algorithm;
+      totalKm = res.summary.totalDistanceKm;
+      totalEta = res.summary.totalEtaMinutes;
+    } catch {
+      ordered = nearestNeighborOrder(start, list);
+      totalKm = ordered.reduce((a, x) => a + (x.distanceFromPrevKm ?? 0), 0);
+      totalEta = ordered.reduce((a, x) => a + (x.etaMinutes ?? 0), 0);
+    }
     setList(ordered);
     setOptimized(true);
-    const total = ordered.reduce((a, x) => a + (x.distanceFromPrevKm ?? 0), 0);
-    const eta = ordered.reduce((a, x) => a + (x.etaMinutes ?? 0), 0);
     Alert.alert(
       '✨ 최적 순서 적용됨',
-      `총 ${total.toFixed(1)}km · 예상 ${eta}분\n\n수동으로 더 조정하셔도 됩니다.`,
+      `${summaryAlgorithm} · 총 ${totalKm.toFixed(1)}km · 예상 ${totalEta}분\n\n수동으로 더 조정하셔도 됩니다.`,
     );
   };
 
@@ -204,7 +237,7 @@ export default function NewTripOrder() {
         <Text style={styles.headTitle}>위에서부터 순서대로 방문합니다</Text>
         <Text style={styles.headMeta}>▲▼ 로 순서, × 로 제외할 수 있습니다</Text>
         <Pressable
-          onPress={handleOptimize}
+          onPress={() => void handleOptimize()}
           style={({ pressed }) => [
             styles.optimizeBtn,
             optimized && styles.optimizeBtnActive,
