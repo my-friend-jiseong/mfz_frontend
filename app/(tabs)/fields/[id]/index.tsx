@@ -248,7 +248,10 @@ export default function FieldDetail() {
     ]);
   };
 
-  const ListHeader = () => (
+  // ListHeaderComponent 에 함수 컴포넌트 ref 를 매번 새로 넘기면 BottomSheetFlatList 가
+  // 헤더를 매 render 마다 unmount/remount → 헤더 안 TextInput 의 포커스가 한 글자
+  // 입력마다 사라지는 회귀가 발생. element 인스턴스 (View) 로 전달하면 type 안정 유지.
+  const headerElement = (
     <View style={styles.summary}>
       <Pressable
         onPress={handleStatusTap}
@@ -409,7 +412,7 @@ export default function FieldDetail() {
         data={visits}
         keyExtractor={(v) => String(v.id)}
         renderItem={renderVisit}
-        ListHeaderComponent={ListHeader}
+        ListHeaderComponent={headerElement}
         contentContainerStyle={styles.list}
         ListEmptyComponent={<EmptyState title="방문 이력이 없습니다" />}
       />

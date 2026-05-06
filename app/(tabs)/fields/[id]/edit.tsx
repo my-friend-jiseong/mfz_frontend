@@ -89,7 +89,12 @@ export default function EditField() {
       const updateRes = await update(fieldId, { detailAddress: detailTrim });
       if (!updateRes.ok) {
         setSubmitting(false);
-        setFieldErrors({ detailAddress: updateRes.error });
+        // 5xx 등 서버 에러는 inline 부적합 (사용자 입력 문제 아님). 전역 표시.
+        if (/일시적인 오류|일시적|서버/.test(updateRes.error)) {
+          setGlobalError(updateRes.error);
+        } else {
+          setFieldErrors({ detailAddress: updateRes.error });
+        }
         return;
       }
     }
@@ -98,7 +103,11 @@ export default function EditField() {
       const statusRes = await useFieldStore.getState().patchStatus(fieldId, status);
       if (!statusRes.ok) {
         setSubmitting(false);
-        setFieldErrors({ status: statusRes.error });
+        if (/일시적인 오류|일시적|서버/.test(statusRes.error)) {
+          setGlobalError(statusRes.error);
+        } else {
+          setFieldErrors({ status: statusRes.error });
+        }
         return;
       }
     }
@@ -118,6 +127,11 @@ export default function EditField() {
       Alert.alert(
         '삭제할 수 없습니다',
         r.message + '\n\n방문 기록이 남아 있는 현장은 삭제할 수 없습니다.',
+      );
+    } else if (/일시적인 오류|일시적|서버/.test(r.error)) {
+      Alert.alert(
+        '서버 오류',
+        '현재 서버에서 삭제를 처리하지 못하고 있습니다.\n잠시 후 다시 시도해주세요.',
       );
     } else {
       Alert.alert('삭제 실패', r.error);

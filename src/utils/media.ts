@@ -96,8 +96,18 @@ export async function downloadToUploadFile(
   }
 }
 
-/** 사용자에게 카메라 vs 라이브러리 선택을 묻는 Alert. */
+/**
+ * 사용자에게 카메라 vs 라이브러리 선택을 묻는 Alert.
+ *
+ * Web: react-native-web 의 Alert.alert 는 multi-button 선택을 제대로 처리하지
+ * 않아 onPress 콜백이 호출되지 않음 → 사용자에게 무반응으로 보임.
+ * Web 에서는 곧장 갤러리 선택으로 진행 (브라우저 file input).
+ */
 export function promptPhotoSource(onPick: (src: 'camera' | 'library') => void) {
+  if (Platform.OS === 'web') {
+    onPick('library');
+    return;
+  }
   Alert.alert('사진 첨부', '어떻게 첨부할까요?', [
     { text: '취소', style: 'cancel' },
     { text: '카메라', onPress: () => onPick('camera') },
