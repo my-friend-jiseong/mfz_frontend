@@ -225,21 +225,33 @@ export default function FieldDetail() {
   const canCheckIn = activeTripId !== null;
 
   // 상태 변경 — chip tap 시 3개 상태 중 선택. patchStatus 즉시 호출.
+  // 빠른 연속 탭 race 방지를 위해 in-flight ref 가드.
+  const statusBusyRef = useRef(false);
   const handleStatusTap = () => {
+    if (statusBusyRef.current) return;
     const others = FIELD_STATUS_VALUES.filter((s) => s !== field.status);
     Alert.alert('상태 변경', `현재: ${FIELD_STATUS_LABEL[field.status]}`, [
       { text: '취소', style: 'cancel' },
       ...others.map((s) => ({
         text: FIELD_STATUS_LABEL[s],
         onPress: async () => {
-          const r = await patchFieldStatus(field.id, s);
-          if (!r.ok) Alert.alert('상태 변경 실패', r.error);
+          if (statusBusyRef.current) return;
+          statusBusyRef.current = true;
+          try {
+            const r = await patchFieldStatus(field.id, s);
+            if (!r.ok) Alert.alert('상태 변경 실패', r.error);
+          } finally {
+            statusBusyRef.current = false;
+          }
         },
       })),
     ]);
   };
 
-  const ListHeader = () => (
+  // ListHeaderComponent 에 함수 컴포넌트 ref 를 매번 새로 넘기면 BottomSheetFlatList 가
+  // 헤더를 매 render 마다 unmount/remount → 헤더 안 TextInput 의 포커스가 한 글자
+  // 입력마다 사라지는 회귀가 발생. element 인스턴스 (View) 로 전달하면 type 안정 유지.
+  const headerElement = (
     <View style={styles.summary}>
       <Pressable
         onPress={handleStatusTap}
@@ -400,7 +412,7 @@ export default function FieldDetail() {
         data={visits}
         keyExtractor={(v) => String(v.id)}
         renderItem={renderVisit}
-        ListHeaderComponent={ListHeader}
+        ListHeaderComponent={headerElement}
         contentContainerStyle={styles.list}
         ListEmptyComponent={<EmptyState title="방문 이력이 없습니다" />}
       />

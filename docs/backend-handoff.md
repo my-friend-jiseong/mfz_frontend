@@ -20,6 +20,7 @@
 | 8 | 공유 보고서 응답에 첨부 사진/메모 포함 | `ReportCreateData` 또는 별도 응답에 attachments 추가 | 🟢 낮음 | 미시작 |
 | 9 | 외근 시작 시 destinations 전송 + 외근 시작 전 동선 최적화 | `POST /api/trips/start` body 확장 + pre-trip optimize endpoint 신규 | 🟡 중간 | 미시작 |
 | 12 | 비밀번호 재설정 흐름 (forgot password) | endpoint 신규 (이메일 발송 등) | 🟡 중간 | 미시작 |
+| 13 | `PATCH /api/fields/:id` / `DELETE /api/fields/:id` 5xx | endpoint 디버그·복구 | 🔴 critical | 발견 (2026-05-06) |
 
 ---
 
@@ -364,6 +365,44 @@ body: {
 - 이메일 입력 → reset-request 호출 → "이메일을 확인하세요" 안내.
 - (선택) 토큰 입력 + 새 비밀번호 설정 화면.
 - ~120 LOC, 0.3일.
+
+---
+
+## 13. 🔴 현장 PATCH / DELETE 500 회귀 (운영 환경 발견)
+
+### 발견 시점
+2026-05-06, 운영 환경(`https://ilgayo.co.kr`) 직접 호출 시 재현됨.
+
+### 재현
+```bash
+# 사용자 토큰으로 본인 소유 field 에 detailAddress 만 PATCH
+curl -X PATCH "https://ilgayo.co.kr/api/fields/{fieldId}" \
+  -H "Authorization: Bearer ..." \
+  -H "Content-Type: application/json" \
+  -d '{"detailAddress":"테스트"}'
+
+# → 500 internal_server_error
+{"code":"internal_server_error","message":"일시적인 오류가 발생했습니다"}
+```
+
+body 변경 (name 추가 등)에 무관하게 500. endpoint 자체 버그로 추정.
+
+### DELETE 부분 재현
+- 새로 만든 단순 현장 (visit/첨부 0) 삭제는 204 정상.
+- 사용자 보고: 특정 현장(방문 기록·첨부 있는?)에 대해 500.
+- 백엔드 측 has_related_visits 분기에 회귀 가능성?
+
+### 프론트엔드 임시 조치
+- `app/(tabs)/fields/[id]/edit.tsx`: 500 메시지 inline error 부적합 → 전역 표시 + 사용자 친화 안내.
+- 사용자가 "주소가 잘못됐나?" 혼란 안 겪도록 분리.
+
+### 백엔드가 해야 할 것
+1. `PATCH /api/fields/:id` 의 500 원인 파악 (서버 로그). update validator / persistence 단계 확인.
+2. `DELETE /api/fields/:id` 의 has_related_visits 분기 회귀 확인.
+3. 영향 범위 (얼마나 많은 사용자 / 어떤 조건) 파악 후 hotfix.
+
+### 우선순위
+🔴 **critical** — 사용자가 현장 정보 수정·삭제 자체를 못 하는 핵심 흐름 차단.
 
 ---
 

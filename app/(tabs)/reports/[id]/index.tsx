@@ -169,12 +169,11 @@ export default function ReportDetail() {
           <Text style={styles.content}>{report.content}</Text>
         </View>
 
-        {report.fileUrl ? (
+        {report.fileUrl && report.fileUrl.trim() ? (
           <Pressable
             onPress={() => {
-              const url = report.fileUrl!.startsWith('http')
-                ? report.fileUrl!
-                : `${API_BASE_URL}${report.fileUrl!}`;
+              const raw = report.fileUrl!.trim();
+              const url = raw.startsWith('http') ? raw : `${API_BASE_URL}${raw}`;
               void Linking.openURL(url);
             }}
             style={({ pressed }) => [styles.downloadBtn, pressed && styles.pressed]}

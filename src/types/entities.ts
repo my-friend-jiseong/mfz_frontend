@@ -128,6 +128,28 @@ export const VISIT_STATUS_LABEL: Record<VisitStatus, string> = {
   other: '기타',
 };
 
+// 백엔드가 과거 한글 enum 으로 응답할 가능성에 대한 양방향 매핑 — 호환 안전망.
+// 백엔드가 영문 정합되면 자연스럽게 무시됨.
+const KOREAN_TO_VISIT_STATUS: Record<string, VisitStatus> = {
+  '완료': 'normal',
+  '부재': 'absent',
+  '수취거절': 'refused',
+  '주소불명': 'unknown_address',
+  '재방문필요': 'revisit_required',
+  '기타': 'other',
+};
+
+/**
+ * 어떤 형태(영문/한글/미지정)의 status 를 받아도 안전하게 영문 enum 으로 정규화.
+ * 매핑 실패 시 'normal' 폴백 (체크인 직후 기본값).
+ */
+export function normalizeVisitStatus(raw: unknown): VisitStatus {
+  if (typeof raw !== 'string') return 'normal';
+  if ((VISIT_STATUS_VALUES as string[]).includes(raw)) return raw as VisitStatus;
+  if (raw in KOREAN_TO_VISIT_STATUS) return KOREAN_TO_VISIT_STATUS[raw];
+  return 'normal';
+}
+
 export const FIELD_STATUS_VALUES: FieldStatus[] = ['pending', 'in_progress', 'done'];
 
 export const DESTINATION_STATUS_VALUES: DestinationStatus[] = [
