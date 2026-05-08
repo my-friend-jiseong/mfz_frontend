@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import { useRouter } from 'expo-router';
 import { useTripStore } from '@/stores/tripStore';
@@ -379,24 +379,36 @@ export default function ActiveTrip() {
       return;
     }
     if ('needsConfirm' in r) {
-      Alert.alert('외근 종료 확인', r.message, [
-        { text: '취소', style: 'cancel' },
-        {
-          text: '종료',
-          style: 'destructive',
-          onPress: async () => {
-            const force = await endTrip(true);
-            if (force.ok) {
-              finalizeEnd(force.trip.id, tripId);
-            } else if (!('needsConfirm' in force)) {
-              Alert.alert('오류', force.error);
-            }
-          },
-        },
-      ]);
+      // react-native-web 의 Alert.alert 다중 버튼 분기가 불안정 — web 은 window.confirm 사용.
+      const confirmEnd = async () => {
+        const force = await endTrip(true);
+        if (force.ok) {
+          finalizeEnd(force.trip.id, tripId);
+        } else if (!('needsConfirm' in force)) {
+          if (Platform.OS === 'web') {
+            window.alert(`오류: ${force.error}`);
+          } else {
+            Alert.alert('오류', force.error);
+          }
+        }
+      };
+      if (Platform.OS === 'web') {
+        if (window.confirm(r.message)) {
+          void confirmEnd();
+        }
+      } else {
+        Alert.alert('외근 종료 확인', r.message, [
+          { text: '취소', style: 'cancel' },
+          { text: '종료', style: 'destructive', onPress: () => void confirmEnd() },
+        ]);
+      }
       return;
     }
-    Alert.alert('오류', r.error);
+    if (Platform.OS === 'web') {
+      window.alert(`오류: ${r.error}`);
+    } else {
+      Alert.alert('오류', r.error);
+    }
   };
 
   const renderItem = ({ item }: { item: Destination }) => {
