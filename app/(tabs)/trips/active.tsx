@@ -39,6 +39,7 @@ export default function ActiveTrip() {
 
   const activeTripId = useTripStore((s) => s.activeTripId);
   const endTrip = useTripStore((s) => s.end);
+  const tripBusy = useTripStore((s) => s.busy);
   const officialNotice = useTripStore((s) => s.officialNotice);
   const ackOfficialNotice = useTripStore((s) => s.ackOfficialNotice);
 
@@ -367,6 +368,12 @@ export default function ActiveTrip() {
   };
 
   const handleEnd = async () => {
+    if (tripBusy) {
+      // 종료 진행 중 중복 클릭 방지 — 매 클릭마다 endTrip() 가 새로 발화돼 백엔드에
+      // confirm_required 를 연속으로 받는 회로 차단.
+      console.warn('[trips/end] busy — ignoring click');
+      return;
+    }
     const tripId = activeTripId;
     const r = await endTrip();
     if (r.ok) {
@@ -376,15 +383,31 @@ export default function ActiveTrip() {
     if ('needsConfirm' in r) {
       // react-native-web 의 Alert.alert 다중 버튼 분기가 불안정 — web 은 window.confirm 사용.
       const confirmEnd = async () => {
+        if (__DEV__) console.log('[trips/end] confirmEnd → endTrip(true)');
         const force = await endTrip(true);
+        if (__DEV__) console.log('[trips/end] confirmEnd result', force);
         if (force.ok) {
           finalizeEnd(force.trip.id, tripId);
-        } else if (!('needsConfirm' in force)) {
+          return;
+        }
+        // force=true 호출이 또 needsConfirm 을 받았다 = 백엔드가 forceEndWithoutVisit:true 를
+        // 못 받았거나 인식 안 하고 있음. 침묵하지 않고 사용자에게 명시.
+        if ('needsConfirm' in force) {
+          const msg =
+            '외근 종료가 처리되지 않았습니다. (forceEndWithoutVisit 가 적용 안 됨)\n' +
+            '잠시 후 다시 시도하거나 페이지를 새로고침해주세요.';
+          console.error('[trips/end] force=true 호출이 confirm_required 반환', force);
           if (Platform.OS === 'web') {
-            window.alert(`오류: ${force.error}`);
+            window.alert(msg);
           } else {
-            Alert.alert('오류', force.error);
+            Alert.alert('외근 종료 실패', msg);
           }
+          return;
+        }
+        if (Platform.OS === 'web') {
+          window.alert(`오류: ${force.error}`);
+        } else {
+          Alert.alert('오류', force.error);
         }
       };
       if (Platform.OS === 'web') {
@@ -602,14 +625,19 @@ export default function ActiveTrip() {
           가로채는 케이스가 있어 onPress 가 안 도는 회로를 차단. */}
       <Pressable
         onPress={handleEnd}
+        disabled={tripBusy}
         style={({ pressed }) => [
           styles.endBtn,
-          { backgroundColor: colors.danger },
+          { backgroundColor: tripBusy ? colors.border : colors.danger },
           pressed && styles.pressed,
         ]}
       >
         <Text style={styles.endText}>
-          {allDone ? '외근 종료' : '외근 종료 (미완료 목적지 있음)'}
+          {tripBusy
+            ? '처리 중...'
+            : allDone
+              ? '외근 종료'
+              : '외근 종료 (미완료 목적지 있음)'}
         </Text>
       </Pressable>
     </View>
