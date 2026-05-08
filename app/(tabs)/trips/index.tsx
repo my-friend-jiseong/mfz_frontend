@@ -52,13 +52,14 @@ export default function TripsList() {
   const renderItem = ({ item }: { item: Trip }) => {
     const visitCount = allVisits.filter((v) => v.tripId === item.id).length;
     const isActive = item.id === activeTripId;
+    const dateText = fmtDate(item.startedAt);
     return (
       <Pressable
         onPress={() => router.push(`/(tabs)/trips/${item.id}` as never)}
         style={({ pressed }) => [styles.card, pressed && styles.pressed]}
       >
         <View style={styles.row}>
-          <Text style={styles.date}>{fmtDate(item.startedAt)}</Text>
+          <Text style={styles.date}>{item.title || dateText}</Text>
           {isActive ? (
             <View style={styles.activeBadge}>
               <Text style={styles.activeBadgeText}>진행 중</Text>
@@ -66,6 +67,7 @@ export default function TripsList() {
           ) : null}
         </View>
         <Text style={styles.meta}>
+          {item.title ? `${dateText} · ` : ''}
           {fmtDuration(item.startedAt, item.endedAt)} · 방문 {visitCount}건
         </Text>
       </Pressable>

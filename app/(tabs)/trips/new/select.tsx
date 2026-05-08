@@ -107,7 +107,10 @@ export default function NewTripSelect() {
           {checked ? <Text style={styles.checkMark}>✓</Text> : null}
         </View>
         <View style={styles.rowText}>
-          <Text style={styles.address}>{item.address}</Text>
+          <Text style={styles.address}>{item.title || item.address}</Text>
+          {item.title ? (
+            <Text style={styles.detail}>{item.address}</Text>
+          ) : null}
           {item.addressDetail ? (
             <Text style={styles.detail}>{item.addressDetail}</Text>
           ) : null}

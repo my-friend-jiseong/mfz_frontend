@@ -24,8 +24,10 @@ const STATUS_LABEL: Record<FieldStatus, string> = {
 };
 
 const DETAIL_MAX = 100;
+const TITLE_MAX = 50;
 
 interface FieldErrors {
+  title?: string;
   detailAddress?: string;
   status?: string;
 }
@@ -42,13 +44,15 @@ export default function EditField() {
   // Hooks must be called unconditionally — early return 후로 옮기지 않고 옵셔널 처리.
   const initial = useMemo(
     () => ({
+      title: field?.title ?? '',
       addressDetail: field?.addressDetail ?? '',
       status: field?.status ?? ('pending' as FieldStatus),
     }),
-    [field?.addressDetail, field?.status],
+    [field?.title, field?.addressDetail, field?.status],
   );
   const initialRef = useRef(initial);
 
+  const [title, setTitle] = useState(initial.title);
   const [addressDetail, setAddressDetail] = useState(initial.addressDetail);
   const [status, setStatus] = useState<FieldStatus>(initial.status);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -63,8 +67,10 @@ export default function EditField() {
     );
   }
 
+  const titleTrim = title.trim();
   const detailTrim = addressDetail.trim();
   const hasChanges =
+    titleTrim !== initialRef.current.title.trim() ||
     detailTrim !== initialRef.current.addressDetail.trim() ||
     status !== initialRef.current.status;
 
@@ -74,6 +80,8 @@ export default function EditField() {
   const handleSave = async () => {
     setGlobalError(null);
     const errs: FieldErrors = {};
+    if (titleTrim.length > TITLE_MAX)
+      errs.title = `제목은 ${TITLE_MAX}자 이하여야 합니다`;
     if (detailTrim.length > DETAIL_MAX)
       errs.detailAddress = `상세 주소는 ${DETAIL_MAX}자 이하여야 합니다`;
     setFieldErrors(errs);
@@ -82,14 +90,17 @@ export default function EditField() {
     setSubmitting(true);
 
     // 변경된 항목만 호출 — 빈 PATCH 방지.
+    const titleChanged = titleTrim !== initialRef.current.title.trim();
     const detailChanged = detailTrim !== initialRef.current.addressDetail.trim();
     const statusChanged = status !== initialRef.current.status;
 
-    if (detailChanged) {
-      const updateRes = await update(fieldId, { detailAddress: detailTrim });
+    if (titleChanged || detailChanged) {
+      const body: { title?: string; detailAddress?: string } = {};
+      if (titleChanged) body.title = titleTrim;
+      if (detailChanged) body.detailAddress = detailTrim;
+      const updateRes = await update(fieldId, body);
       if (!updateRes.ok) {
         setSubmitting(false);
-        // 5xx 등 서버 에러는 inline 부적합 (사용자 입력 문제 아님). 전역 표시.
         if (/일시적인 오류|일시적|서버/.test(updateRes.error)) {
           setGlobalError(updateRes.error);
         } else {
@@ -172,6 +183,27 @@ export default function EditField() {
         <View style={styles.readonly}>
           <Text style={styles.readonlyText}>{field.address}</Text>
         </View>
+
+        <View style={styles.labelRow}>
+          <Text style={styles.label}>제목</Text>
+          <Text style={styles.counter}>
+            {title.length} / {TITLE_MAX}
+          </Text>
+        </View>
+        <TextInput
+          value={title}
+          onChangeText={(v) => {
+            setTitle(v);
+            if (fieldErrors.title) clearFieldErr('title');
+          }}
+          editable={!submitting}
+          maxLength={TITLE_MAX}
+          style={[styles.input, fieldErrors.title && styles.inputError]}
+          placeholder="예: 1번 가로수, A동 정문"
+        />
+        {fieldErrors.title ? (
+          <Text style={styles.fieldError}>{fieldErrors.title}</Text>
+        ) : null}
 
         <View style={styles.labelRow}>
           <Text style={styles.label}>상세 주소</Text>

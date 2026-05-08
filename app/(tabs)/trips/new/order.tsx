@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFieldStore } from '@/stores/fieldStore';
@@ -15,6 +15,7 @@ import { spacing, radius, fontSize } from '@/theme/spacing';
 
 interface OrderedField {
   id: string;
+  title?: string;
   address: string;
   addressDetail: string;
   lat: number;
@@ -42,6 +43,7 @@ export default function NewTripOrder() {
       .filter((f): f is NonNullable<ReturnType<typeof getField>> => Boolean(f))
       .map((f) => ({
         id: f.id,
+        title: f.title,
         address: f.address,
         addressDetail: f.addressDetail,
         lat: f.latitude,
@@ -50,6 +52,7 @@ export default function NewTripOrder() {
   }, [params.fieldIds, getField]);
 
   const [list, setList] = useState<OrderedField[]>(initialList);
+  const [title, setTitle] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [optimized, setOptimized] = useState(false);
 
@@ -145,7 +148,7 @@ export default function NewTripOrder() {
   const handleConfirm = async () => {
     if (!userId || list.length === 0 || submitting) return;
     setSubmitting(true);
-    const r = await startTrip();
+    const r = await startTrip(title);
     setSubmitting(false);
     if (!r.ok) {
       Alert.alert('외근 시작 실패', r.error);
@@ -181,7 +184,10 @@ export default function NewTripOrder() {
         <Text style={styles.orderText}>{index + 1}</Text>
       </View>
       <View style={styles.rowText}>
-        <Text style={styles.address}>{item.address}</Text>
+        <Text style={styles.address}>{item.title || item.address}</Text>
+        {item.title ? (
+          <Text style={styles.detail}>{item.address}</Text>
+        ) : null}
         {item.addressDetail ? (
           <Text style={styles.detail}>{item.addressDetail}</Text>
         ) : null}
@@ -216,10 +222,14 @@ export default function NewTripOrder() {
         </Pressable>
         <Pressable
           onPress={() =>
-            Alert.alert('이 현장 빼기', `${item.address} 를 외근에서 제외할까요?`, [
-              { text: '취소', style: 'cancel' },
-              { text: '빼기', style: 'destructive', onPress: () => removeAt(index) },
-            ])
+            Alert.alert(
+              '이 현장 빼기',
+              `${item.title || item.address} 를 외근에서 제외할까요?`,
+              [
+                { text: '취소', style: 'cancel' },
+                { text: '빼기', style: 'destructive', onPress: () => removeAt(index) },
+              ],
+            )
           }
           style={({ pressed }) => [styles.ctrlBtn, styles.ctrlDanger, pressed && styles.pressed]}
         >
@@ -232,6 +242,14 @@ export default function NewTripOrder() {
   return (
     <MapSheetLayout title="방문 순서 확인" onBack={() => router.back()}>
       <View style={styles.head}>
+        <Text style={styles.titleLabel}>외근 제목 (선택)</Text>
+        <TextInput
+          value={title}
+          onChangeText={setTitle}
+          style={styles.titleInput}
+          placeholder="예: 가로수 보수 공사, 동구 일상 점검"
+          maxLength={50}
+        />
         <Text style={styles.headTitle}>위에서부터 순서대로 방문합니다</Text>
         <Text style={styles.headMeta}>▲▼ 로 순서, × 로 제외할 수 있습니다</Text>
         <Pressable
@@ -305,6 +323,23 @@ const styles = StyleSheet.create({
   },
   headTitle: { fontSize: fontSize.base, color: colors.text, fontWeight: '600' },
   headMeta: { fontSize: fontSize.sm, color: colors.textMuted, marginTop: 2 },
+  titleLabel: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  titleInput: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    fontSize: fontSize.base,
+    color: colors.text,
+    marginBottom: spacing.md,
+  },
   list: { paddingHorizontal: spacing.lg, paddingBottom: 120 },
   row: {
     flexDirection: 'row',

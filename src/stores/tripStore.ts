@@ -30,7 +30,7 @@ interface TripState {
   hydrate: () => Promise<void>;
   refreshActive: () => Promise<void>;
   refreshList: () => Promise<void>;
-  start: () => Promise<StartResult>;
+  start: (title?: string) => Promise<StartResult>;
   end: (force?: boolean) => Promise<EndResult>;
   ackOfficialNotice: () => Promise<{ ok: true } | { ok: false; error: string }>;
 
@@ -79,6 +79,7 @@ export const useTripStore = create<TripState>((set, get) => ({
         workerId: userId,
         startedAt: t.startedAt,
         endedAt: t.endedAt,
+        title: t.title,
       }));
       set({ trips: items });
     } catch {
@@ -86,15 +87,18 @@ export const useTripStore = create<TripState>((set, get) => ({
     }
   },
 
-  start: async () => {
+  start: async (title) => {
     set({ busy: true });
     try {
-      const res = await tripsApi.start();
+      const trimmed = title?.trim();
+      const res = await tripsApi.start(trimmed ? { title: trimmed } : undefined);
       const trip: Trip = {
         id: res.tripId,
         workerId: currentUserId(),
         startedAt: res.startedAt,
         endedAt: null,
+        // 백엔드가 echo 하지 않아도 사용자가 입력한 제목을 로컬에 보존.
+        title: res.title ?? trimmed,
       };
       set((s) => ({
         trips: [trip, ...s.trips.filter((t) => t.id !== trip.id)],

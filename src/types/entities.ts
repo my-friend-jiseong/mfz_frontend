@@ -34,6 +34,9 @@ export interface Trip {
   workerId: string;
   startedAt: string;
   endedAt: string | null;
+  // 사용자 입력 제목 (예: "가로수 보수 공사", "동구 일상 점검").
+  // 백엔드 미구현 단계에선 undefined — UI 는 시작 날짜로 fallback.
+  title?: string;
 }
 
 export interface Field {
@@ -47,6 +50,9 @@ export interface Field {
   tags?: string[];
   recentVisitedAt?: string | null;
   updatedAt?: string;
+  // 사용자 입력 제목 (예: "1번 가로수", "A동 정문").
+  // 백엔드 미구현 단계에선 undefined — UI 는 주소로 fallback.
+  title?: string;
 }
 
 export interface Visit {

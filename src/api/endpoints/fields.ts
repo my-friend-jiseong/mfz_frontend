@@ -7,6 +7,8 @@ import type { FieldStatus } from '@/types/entities';
 interface FieldCore {
   fieldId: string;
   name: string;
+  // 사용자 입력 제목 — 프론트가 선행 도입. 백엔드 미구현 단계에선 응답에 없음.
+  title?: string;
   address: string;          // 합쳐진 표시용 string
   roadAddress?: string;
   jibunAddress?: string;
@@ -78,6 +80,8 @@ export interface FieldDetailResponse extends FieldCore {
 
 export interface CreateFieldBody {
   name: string;
+  // 사용자 입력 제목 — 프론트 선행. 백엔드 미구현이면 무시되어도 안전.
+  title?: string;
   status: FieldStatus;
   roadAddress: string;
   jibunAddress: string;
@@ -100,6 +104,7 @@ export interface CreateFieldResponse {
 
 export interface UpdateFieldBody {
   name?: string;
+  title?: string;
   roadAddress?: string;
   jibunAddress?: string;
   detailAddress?: string;

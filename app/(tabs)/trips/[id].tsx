@@ -176,7 +176,7 @@ export default function TripDetail() {
           </View>
         </View>
         <Text style={styles.fieldAddr}>
-          {field?.address ?? '알 수 없는 현장'}
+          {field?.title || field?.address || '알 수 없는 현장'}
         </Text>
         <Text style={styles.meta}>
           텍스트 메모 {memoCount}건 · 사진 {photoCount}건
@@ -187,6 +187,9 @@ export default function TripDetail() {
 
   const ListHeader = () => (
     <View style={styles.summary}>
+      {trip.title ? (
+        <Text style={styles.tripTitle}>{trip.title}</Text>
+      ) : null}
       <Text style={styles.summaryLine}>
         {new Date(trip.startedAt).toLocaleString('ko-KR')} ~{' '}
         {trip.endedAt
@@ -205,7 +208,7 @@ export default function TripDetail() {
               <View key={d.id} style={styles.planRow}>
                 <Text style={styles.planOrder}>{d.order}.</Text>
                 <Text style={styles.planAddr} numberOfLines={1}>
-                  {f?.address ?? '알 수 없는 현장'}
+                  {f?.title || f?.address || '알 수 없는 현장'}
                 </Text>
                 <Text
                   style={[
@@ -296,6 +299,12 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
     paddingBottom: spacing.lg,
     gap: spacing.xs,
+  },
+  tripTitle: {
+    fontSize: fontSize.lg,
+    color: colors.text,
+    fontWeight: '700',
+    marginBottom: 4,
   },
   summaryLine: {
     fontSize: fontSize.sm,

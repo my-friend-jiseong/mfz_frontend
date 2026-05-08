@@ -273,7 +273,10 @@ export default function FieldDetail() {
           {FIELD_STATUS_LABEL[field.status]} ▾
         </Text>
       </Pressable>
-      <Text style={styles.addr}>{field.address}</Text>
+      <Text style={styles.addr}>{field.title || field.address}</Text>
+      {field.title ? (
+        <Text style={styles.detail}>{field.address}</Text>
+      ) : null}
       {field.addressDetail ? (
         <Text style={styles.detail}>{field.addressDetail}</Text>
       ) : null}

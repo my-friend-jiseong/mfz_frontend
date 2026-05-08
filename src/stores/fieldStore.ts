@@ -78,6 +78,7 @@ export const useFieldStore = create<FieldState>((set, get) => ({
         tags: it.tags,
         recentVisitedAt: it.recentVisitedAt,
         updatedAt: it.updatedAt,
+        title: it.title,
       }));
       set({ fields: items });
     } catch (e) {
@@ -97,6 +98,8 @@ export const useFieldStore = create<FieldState>((set, get) => ({
         addressDetail: res.field.detailAddress ?? '',
         latitude: res.field.lat,
         longitude: res.field.lng,
+        // 백엔드가 echo 하지 않아도 사용자가 입력한 제목을 로컬에 보존.
+        title: res.field.title ?? body.title?.trim() ?? undefined,
       };
       set((s) => ({
         fields: [f, ...s.fields.filter((x) => x.id !== f.id)],
@@ -128,6 +131,7 @@ export const useFieldStore = create<FieldState>((set, get) => ({
         fields: s.fields.map((f) =>
           f.id === id
             ? {
+                ...f,
                 id: res.fieldId,
                 userId: res.assigneeUserId,
                 status: res.status,
@@ -135,6 +139,8 @@ export const useFieldStore = create<FieldState>((set, get) => ({
                 addressDetail: res.detailAddress ?? '',
                 latitude: res.lat,
                 longitude: res.lng,
+                // 응답에 title 있으면 그 값, 없으면 사용자가 보낸 값으로 로컬 보존.
+                title: res.title ?? body.title?.trim() ?? f.title,
               }
             : f,
         ),
@@ -206,6 +212,7 @@ export const useFieldStore = create<FieldState>((set, get) => ({
         fields: s.fields.map((f) =>
           f.id === id
             ? {
+                ...f,
                 id: res.fieldId,
                 userId: res.assigneeUserId,
                 status: res.status,
@@ -213,6 +220,7 @@ export const useFieldStore = create<FieldState>((set, get) => ({
                 addressDetail: res.detailAddress ?? '',
                 latitude: res.lat,
                 longitude: res.lng,
+                title: res.title ?? f.title,
               }
             : f,
         ),

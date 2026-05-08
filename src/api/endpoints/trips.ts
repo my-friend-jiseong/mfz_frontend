@@ -9,9 +9,17 @@ export interface TripBanner {
   message: string | null;
 }
 
+export interface TripStartBody {
+  startLocation?: { lat: number; lng: number };
+  // 사용자 입력 제목 — 프론트 선행. 백엔드 미구현이면 무시되어도 안전.
+  title?: string;
+}
+
 export interface TripStartResponse {
   tripId: string;
   startedAt: string;
+  // 백엔드가 구현하면 응답에도 echo. 미구현 단계에선 undefined.
+  title?: string;
   banner: TripBanner;
   toast: string;
 }
@@ -35,6 +43,8 @@ export interface TripListItem {
   tripDate: string;
   startedAt: string;
   endedAt: string | null;
+  // 사용자 입력 제목 — 백엔드 미구현 단계에선 응답에 없음.
+  title?: string;
   durationHHMM: string;
   visitCount: number;
   siteCount: number;
@@ -63,6 +73,7 @@ export interface TripDetailResponse {
   userId: string;
   startedAt: string;
   endedAt: string | null;
+  title?: string;
   durationHHMM: string;
   visitCount: number;
   approximateDistanceKm: number;
@@ -234,10 +245,10 @@ export interface OptimizeNavigationResponse {
 }
 
 export const trips = {
-  start: (startLocation?: { lat: number; lng: number }) =>
+  start: (body?: TripStartBody) =>
     request<TripStartResponse>('/api/trips/start', {
       method: 'POST',
-      body: startLocation ? { startLocation } : {},
+      body: body ?? {},
     }),
 
   // forceEndWithoutVisit: 방문 0건 종료 확인 (409 confirm_required_zero_visits 받은 후 재호출 시)

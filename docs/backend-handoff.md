@@ -21,6 +21,7 @@
 | 9 | 외근 시작 시 destinations 전송 + 외근 시작 전 동선 최적화 | `POST /api/trips/start` body 확장 + pre-trip optimize endpoint 신규 | 🟡 중간 | 미시작 |
 | 12 | 비밀번호 재설정 흐름 (forgot password) | endpoint 신규 (이메일 발송 등) | 🟡 중간 | 미시작 |
 | 13 | `PATCH /api/fields/:id` / `DELETE /api/fields/:id` 5xx | endpoint 디버그·복구 | 🔴 critical | 발견 (2026-05-06) |
+| 14 | `Trip.title` / `Field.title` 컬럼 추가 | 스키마 + create/update body 반영 + 응답 echo | 🟡 중간 | 프론트 선행 (2026-05-07) |
 
 ---
 
@@ -406,6 +407,43 @@ body 변경 (name 추가 등)에 무관하게 500. endpoint 자체 버그로 추
 
 ---
 
+## 14. 🟡 `Trip.title` / `Field.title` 컬럼 추가 (프론트 선행)
+
+### 배경
+외근·현장 카드의 제목이 "시작 날짜" / "주소" 로 자동 결정돼 사람이 의미 단위로 식별하기 어려웠음 — 같은 주소에 가로수가 여러 그루 있거나, 같은 날 외근 종류가 달라도 카드만 보고 구분 불가. 사용자 입력 제목(예: "1번 가로수", "가로수 보수 공사") 을 받아 카드 헤더에 노출.
+
+### 프론트엔드 상태 (2026-05-07 머지 예정)
+- `src/types/entities.ts`: `Trip.title?: string`, `Field.title?: string` 추가.
+- `src/api/endpoints/trips.ts`: `TripStartBody.title?`, `TripStartResponse.title?`, `TripListItem.title?`, `TripDetailResponse.title?`.
+- `src/api/endpoints/fields.ts`: `FieldCore.title?`, `CreateFieldBody.title?`, `UpdateFieldBody.title?`.
+- 외근 시작 폼 ([`app/(tabs)/trips/new/order.tsx`](../app/\(tabs\)/trips/new/order.tsx)) — 제목 입력 추가 (선택, 50자).
+- 현장 등록 폼 ([`app/(tabs)/fields/new.tsx`](../app/\(tabs\)/fields/new.tsx)) — 제목 입력 추가 (선택, 50자).
+- 현장 수정 폼 ([`app/(tabs)/fields/[id]/edit.tsx`](../app/\(tabs\)/fields/\[id\]/edit.tsx)) — 제목 수정 가능.
+- 카드·상세 화면 — `title` 있으면 큰 글자, 없으면 기존 fallback (Trip=날짜, Field=주소).
+- 스토어 매핑 — 응답에 title 없으면 사용자가 보낸 값을 로컬에 보존 (백엔드 미구현 단계에서도 UX 동작).
+
+### 백엔드가 해야 할 것
+1. **스키마**: `trips.title VARCHAR(50) NULL` / `fields.title VARCHAR(50) NULL` 추가 (마이그레이션).
+2. **`POST /api/trips/start`** body 에 `title?: string` 받아 저장. 응답에 echo.
+3. **`POST /api/fields`** body 에 `title?: string` 받아 저장. 응답의 `field` 객체에 echo.
+4. **`PATCH /api/fields/:id`** body 에 `title?: string` 받아 갱신.
+5. **`GET /api/trips`** / **`GET /api/trips/:id`** 응답에 `title` 포함.
+6. **`GET /api/fields/mine`** / **`GET /api/fields/:id`** 응답의 각 field 에 `title` 포함.
+
+### 검증 케이스
+- title 미입력 (빈 문자열 또는 누락) → null 저장, 응답에 omit 또는 null.
+- title trimming — 양쪽 공백 제거.
+- 50자 초과는 백엔드에서 400 으로 거부 (프론트도 maxLength 50 가드).
+- 기존 데이터(title 없는 외근/현장) 는 영향 없음 — null 그대로.
+
+### 우선순위
+🟡 중간 — 프론트가 사용자 입력을 받고 있고 로컬 보존도 하므로 UX 는 이미 동작. 백엔드 영속화는 다중 디바이스 동기화·새로고침 후 유지에 필요.
+
+### 참고
+`Field.name` 은 기존대로 자동 표시 라벨(`roadAddress (buildingName)`) 로 유지 — `title` 과 별도. `name` 은 geofence 알림 등 시스템 라벨용, `title` 은 사용자 식별용.
+
+---
+
 ## 11. Phase 7 응답 shape 재확인
 
 이 모든 항목의 에러 응답은 다음 단일 shape 를 따름:
@@ -427,3 +465,4 @@ body 변경 (name 추가 등)에 무관하게 500. endpoint 자체 버그로 추
 ## 변경 이력
 
 - **2026-05-06**: 최초 작성. 오늘 머지된 PR #4·#5·#6 / 진행 중 작업 / 다음 작업 (방문 enum / geofence) 정리.
+- **2026-05-07**: §14 추가 — `Trip.title` / `Field.title` 사용자 입력 제목 (프론트 선행 머지).

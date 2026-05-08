@@ -86,6 +86,7 @@ export default function NewField() {
   const [manualLngStr, setManualLngStr] = useState('');
 
   const [selected, setSelected] = useState<SelectedAddress | null>(null);
+  const [title, setTitle] = useState('');
   const [detail, setDetail] = useState('');
   const [status, setStatus] = useState<FieldStatus>('pending');
   const [submitting, setSubmitting] = useState(false);
@@ -170,8 +171,10 @@ export default function NewField() {
 
   const handleCreate = async () => {
     if (!user || !selected) return;
+    const trimmedTitle = title.trim();
     const baseBody = {
       name: selected.display,
+      ...(trimmedTitle ? { title: trimmedTitle } : {}),
       status,
       roadAddress: selected.roadAddress,
       jibunAddress: selected.jibunAddress,
@@ -379,6 +382,15 @@ export default function NewField() {
                 </Text>
               ) : null}
             </View>
+
+            <Text style={styles.label}>제목 (선택)</Text>
+            <TextInput
+              value={title}
+              onChangeText={setTitle}
+              style={styles.input}
+              placeholder="예: 1번 가로수, A동 정문"
+              maxLength={50}
+            />
 
             <Text style={styles.label}>상세 주소 (동/호수 등)</Text>
             <TextInput
