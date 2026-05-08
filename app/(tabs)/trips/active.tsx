@@ -352,13 +352,13 @@ export default function ActiveTrip() {
     if (originalTripId !== null) {
       removeByTrip(originalTripId);
     }
-    // 종료 직후 AI 보고서 작성 진입 옵션 — IA cross-link X2
+    // 즉시 외근 탭 메인으로 이동 — Alert prompt 응답 여부와 무관하게 /trips/active 에서
+    // 확실히 빠져나오도록. (이전엔 prompt onPress 안에서만 navigation 해서 dismiss·web
+    // 환경 차이 등으로 /trips/active 에 잡히는 케이스 발생.)
+    router.replace('/(tabs)/trips' as never);
+    // AI 보고서 prompt — 지금 작성 시 generate 로 추가 이동, 나중에 면 /trips 에 머무름.
     Alert.alert('외근 종료', '외근이 종료되었습니다. 지금 AI 보고서를 작성할까요?', [
-      {
-        text: '나중에',
-        style: 'cancel',
-        onPress: () => router.replace(`/(tabs)/trips/${endedTripId}` as never),
-      },
+      { text: '나중에', style: 'cancel' },
       {
         text: '지금 작성',
         onPress: () => router.replace(`/(tabs)/reports/generate?tripId=${endedTripId}` as never),
