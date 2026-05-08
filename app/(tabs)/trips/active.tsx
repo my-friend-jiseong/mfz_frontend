@@ -576,18 +576,23 @@ export default function ActiveTrip() {
   );
 
   return (
-    <MapSheetLayout
-      title="진행 중인 외근"
-      onBack={() => router.back()}
-      initialIndex={2}
-    >
-      <BottomSheetFlatList
-        data={destinations}
-        keyExtractor={(d) => String(d.id)}
-        renderItem={renderItem}
-        ListHeaderComponent={ListHeader}
-        contentContainerStyle={styles.list}
-      />
+    <View style={styles.screenRoot}>
+      <MapSheetLayout
+        title="진행 중인 외근"
+        onBack={() => router.back()}
+        initialIndex={2}
+      >
+        <BottomSheetFlatList
+          data={destinations}
+          keyExtractor={(d) => String(d.id)}
+          renderItem={renderItem}
+          ListHeaderComponent={ListHeader}
+          contentContainerStyle={styles.list}
+        />
+      </MapSheetLayout>
+      {/* 종료 버튼은 BottomSheet 외부(스크린 루트) 에 둔다 — 시트 내부에 두면
+          @gorhom/bottom-sheet 의 pan 제스처 핸들러가 absolute 자식의 터치를
+          가로채는 케이스가 있어 onPress 가 안 도는 회로를 차단. */}
       <Pressable
         onPress={handleEnd}
         style={({ pressed }) => [
@@ -600,11 +605,12 @@ export default function ActiveTrip() {
           {allDone ? '외근 종료' : '외근 종료 (미완료 목적지 있음)'}
         </Text>
       </Pressable>
-    </MapSheetLayout>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  screenRoot: { flex: 1 },
   list: { paddingHorizontal: spacing.lg, paddingBottom: 120 },
   header: { paddingTop: spacing.md, gap: spacing.sm },
   summaryCard: {

@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
-import { useRouter } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import { useTripStore } from '@/stores/tripStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useVisitStore } from '@/stores/visitStore';
@@ -40,6 +40,12 @@ export default function TripsList() {
         : [],
     [allTrips, userId],
   );
+
+  // 진행 중인 외근이 있으면 외근 탭은 그 외근의 방문 현장 화면(active)으로 직행.
+  // 사용자가 외근 탭을 누를 때 "지금 무슨 현장 가는 거였지" 즉시 확인할 수 있도록.
+  if (activeTripId !== null) {
+    return <Redirect href="/(tabs)/trips/active" />;
+  }
 
   const handlePrimaryAction = () => {
     if (activeTripId !== null) {
