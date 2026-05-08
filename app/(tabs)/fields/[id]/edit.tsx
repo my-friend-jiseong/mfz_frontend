@@ -1,5 +1,6 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -13,6 +14,17 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFieldStore } from '@/stores/fieldStore';
 import { FIELD_STATUS_VALUES, type FieldStatus } from '@/types/entities';
+import { fields as fieldsApi, errorCode, localizeError } from '@/api';
+import type { AddressSearchItem } from '@/api';
+import {
+  itemToSelected,
+  isInKorea,
+  KR_LAT,
+  KR_LNG,
+  SEARCH_DEBOUNCE_MS,
+  MIN_KEYWORD_LEN,
+  type SelectedAddress,
+} from '@/utils/addressSearch';
 import { EmptyState } from '@/components/EmptyState';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
@@ -30,6 +42,7 @@ interface FieldErrors {
   title?: string;
   detailAddress?: string;
   status?: string;
+  address?: string;
 }
 
 export default function EditField() {
@@ -59,6 +72,121 @@ export default function EditField() {
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  // 주소 수정 — 기본은 readonly, "수정" 버튼 누르면 카카오 Geocoder 검색 UI 노출.
+  // newAddress 가 null 이 아니면 사용자가 새 주소를 선택한 상태 (저장 시 PATCH 에 포함).
+  const [editingAddress, setEditingAddress] = useState(false);
+  const [newAddress, setNewAddress] = useState<SelectedAddress | null>(null);
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<AddressSearchItem[]>([]);
+  const [emptyMessage, setEmptyMessage] = useState<string | null>(null);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [providerUnavailable, setProviderUnavailable] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [manualMode, setManualMode] = useState(false);
+  const [manualRoad, setManualRoad] = useState('');
+  const [manualJibun, setManualJibun] = useState('');
+  const [manualLatStr, setManualLatStr] = useState('');
+  const [manualLngStr, setManualLngStr] = useState('');
+
+  // 디바운스 검색 — fields/new.tsx 와 동일한 패턴 (latest-wins).
+  const reqIdRef = useRef(0);
+  useEffect(() => {
+    if (!editingAddress) return;
+    const k = query.trim();
+    if (k.length < MIN_KEYWORD_LEN) {
+      setResults([]);
+      setEmptyMessage(null);
+      setSearchError(null);
+      setProviderUnavailable(false);
+      setSearching(false);
+      return;
+    }
+    const myReqId = ++reqIdRef.current;
+    setSearching(true);
+    setSearchError(null);
+    const handle = setTimeout(async () => {
+      try {
+        const res = await fieldsApi.addressSearch(k);
+        if (myReqId !== reqIdRef.current) return;
+        setResults(res.items);
+        setEmptyMessage(res.emptyMessage ?? null);
+        setProviderUnavailable(false);
+        setSearchError(null);
+      } catch (e) {
+        if (myReqId !== reqIdRef.current) return;
+        if (errorCode(e) === 'kakao_provider_unavailable') {
+          setProviderUnavailable(true);
+          setResults([]);
+          setEmptyMessage(null);
+          setSearchError(null);
+        } else {
+          setSearchError(localizeError(e));
+          setResults([]);
+        }
+      } finally {
+        if (myReqId === reqIdRef.current) setSearching(false);
+      }
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(handle);
+  }, [query, editingAddress]);
+
+  const handleStartAddressEdit = () => {
+    setEditingAddress(true);
+    setQuery('');
+    setResults([]);
+  };
+
+  const handleCancelAddressEdit = () => {
+    setEditingAddress(false);
+    setNewAddress(null);
+    setQuery('');
+    setResults([]);
+    setManualMode(false);
+    setProviderUnavailable(false);
+    setSearchError(null);
+    if (fieldErrors.address) clearFieldErr('address');
+  };
+
+  const handleSelectItem = (item: AddressSearchItem) => {
+    setNewAddress(itemToSelected(item));
+    setEditingAddress(false);
+    if (fieldErrors.address) clearFieldErr('address');
+  };
+
+  const handleManualSubmit = () => {
+    const lat = Number(manualLatStr);
+    const lng = Number(manualLngStr);
+    if (!manualRoad.trim() && !manualJibun.trim()) {
+      Alert.alert('주소 입력 필요', '도로명 주소 또는 지번 주소 중 하나는 입력해주세요.');
+      return;
+    }
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      Alert.alert('좌표 형식 오류', '위도·경도를 숫자로 입력해주세요.');
+      return;
+    }
+    if (!isInKorea(lat, lng)) {
+      Alert.alert(
+        '대한민국 영역 외 좌표',
+        `위도는 ${KR_LAT.min}~${KR_LAT.max}, 경도는 ${KR_LNG.min}~${KR_LNG.max} 범위여야 합니다.`,
+      );
+      return;
+    }
+    setNewAddress({
+      roadAddress: manualRoad.trim() || manualJibun.trim(),
+      jibunAddress: manualJibun.trim() || manualRoad.trim(),
+      buildingName: null,
+      lat,
+      lng,
+      display: manualRoad.trim() || manualJibun.trim(),
+    });
+    setEditingAddress(false);
+    setManualMode(false);
+  };
+
+  const handleRevertAddress = () => {
+    setNewAddress(null);
+  };
+
   if (!field) {
     return (
       <View style={styles.container}>
@@ -72,7 +200,8 @@ export default function EditField() {
   const hasChanges =
     titleTrim !== initialRef.current.title.trim() ||
     detailTrim !== initialRef.current.addressDetail.trim() ||
-    status !== initialRef.current.status;
+    status !== initialRef.current.status ||
+    newAddress !== null;
 
   const clearFieldErr = (k: keyof FieldErrors) =>
     setFieldErrors((p) => ({ ...p, [k]: undefined }));
@@ -93,16 +222,36 @@ export default function EditField() {
     const titleChanged = titleTrim !== initialRef.current.title.trim();
     const detailChanged = detailTrim !== initialRef.current.addressDetail.trim();
     const statusChanged = status !== initialRef.current.status;
+    const addressChanged = newAddress !== null;
 
-    if (titleChanged || detailChanged) {
-      const body: { title?: string; detailAddress?: string } = {};
+    if (titleChanged || detailChanged || addressChanged) {
+      const body: {
+        title?: string;
+        detailAddress?: string;
+        roadAddress?: string;
+        jibunAddress?: string;
+        sido?: string;
+        sigungu?: string;
+        lat?: number;
+        lng?: number;
+      } = {};
       if (titleChanged) body.title = titleTrim;
       if (detailChanged) body.detailAddress = detailTrim;
+      if (addressChanged && newAddress) {
+        body.roadAddress = newAddress.roadAddress;
+        body.jibunAddress = newAddress.jibunAddress;
+        body.lat = newAddress.lat;
+        body.lng = newAddress.lng;
+        if (newAddress.sido) body.sido = newAddress.sido;
+        if (newAddress.sigungu) body.sigungu = newAddress.sigungu;
+      }
       const updateRes = await update(fieldId, body);
       if (!updateRes.ok) {
         setSubmitting(false);
         if (/일시적인 오류|일시적|서버/.test(updateRes.error)) {
           setGlobalError(updateRes.error);
+        } else if (addressChanged) {
+          setFieldErrors({ address: updateRes.error });
         } else {
           setFieldErrors({ detailAddress: updateRes.error });
         }
@@ -178,11 +327,181 @@ export default function EditField() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <Text style={styles.label}>주소 (수정 불가)</Text>
-        <View style={styles.readonly}>
-          <Text style={styles.readonlyText}>{field.address}</Text>
+      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        <View style={styles.labelRow}>
+          <Text style={styles.label}>주소</Text>
+          {!editingAddress && !newAddress ? (
+            <Pressable
+              onPress={handleStartAddressEdit}
+              disabled={submitting}
+              style={({ pressed }) => [
+                styles.addrEditBtn,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={styles.addrEditBtnText}>수정</Text>
+            </Pressable>
+          ) : null}
+          {newAddress ? (
+            <Pressable
+              onPress={handleRevertAddress}
+              disabled={submitting}
+              style={({ pressed }) => [
+                styles.addrEditBtn,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={styles.addrEditBtnText}>되돌리기</Text>
+            </Pressable>
+          ) : null}
         </View>
+        <View
+          style={[
+            styles.readonly,
+            newAddress && styles.readonlyChanged,
+          ]}
+        >
+          <Text style={styles.readonlyText}>
+            {newAddress ? newAddress.display : field.address}
+          </Text>
+          {newAddress ? (
+            <Text style={styles.changedHint}>
+              변경 예정 — 저장 시 적용 (좌표 {newAddress.lat.toFixed(4)}, {newAddress.lng.toFixed(4)})
+            </Text>
+          ) : null}
+        </View>
+
+        {editingAddress ? (
+          <View style={styles.addrSearchBox}>
+            <View style={styles.searchHead}>
+              <Text style={styles.label}>새 주소 검색</Text>
+              <Pressable onPress={handleCancelAddressEdit} disabled={submitting}>
+                <Text style={styles.cancelLink}>취소</Text>
+              </Pressable>
+            </View>
+            <TextInput
+              value={query}
+              onChangeText={setQuery}
+              style={styles.input}
+              placeholder="예: 해운대 우동, 동성로"
+              autoCapitalize="none"
+              returnKeyType="search"
+              autoFocus
+            />
+            {searching ? (
+              <View style={styles.loadingRow}>
+                <ActivityIndicator color={colors.primary} size="small" />
+                <Text style={styles.loadingText}>검색 중...</Text>
+              </View>
+            ) : null}
+            {searchError ? <Text style={styles.fieldError}>{searchError}</Text> : null}
+            {providerUnavailable ? (
+              <View style={styles.warnBox}>
+                <Text style={styles.warnTitle}>주소 검색 일시 장애</Text>
+                <Text style={styles.warnBody}>
+                  카카오 주소 서비스가 일시적으로 응답하지 않습니다. 잠시 후 다시 시도하거나 좌표를 직접 입력하세요.
+                </Text>
+              </View>
+            ) : null}
+            {!searching &&
+            !providerUnavailable &&
+            !searchError &&
+            query.trim().length >= MIN_KEYWORD_LEN &&
+            results.length === 0 ? (
+              <Text style={styles.hint}>{emptyMessage ?? '검색 결과가 없습니다'}</Text>
+            ) : null}
+            <View style={{ marginTop: spacing.sm }}>
+              {results.map((r, idx) => {
+                const key = `${r.roadAddress}|${r.jibunAddress}|${idx}`;
+                const sub = [r.sido, r.sigungu].filter(Boolean).join(' ');
+                return (
+                  <Pressable
+                    key={key}
+                    onPress={() => handleSelectItem(r)}
+                    style={({ pressed }) => [styles.addrItem, pressed && styles.pressed]}
+                  >
+                    <Text style={styles.addrText}>
+                      {r.roadAddress || r.jibunAddress}
+                      {r.buildingName ? ` (${r.buildingName})` : ''}
+                    </Text>
+                    {r.roadAddress &&
+                    r.jibunAddress &&
+                    r.roadAddress !== r.jibunAddress ? (
+                      <Text style={styles.addrJibun}>지번: {r.jibunAddress}</Text>
+                    ) : null}
+                    <Text style={styles.addrCoord}>
+                      {sub ? `${sub} · ` : ''}
+                      {r.lat.toFixed(4)}, {r.lng.toFixed(4)}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            {(providerUnavailable || manualMode) ? (
+              <View style={styles.manualBox}>
+                <Text style={styles.manualTitle}>좌표 직접 입력</Text>
+                <Text style={styles.label}>도로명 주소</Text>
+                <TextInput
+                  value={manualRoad}
+                  onChangeText={setManualRoad}
+                  style={styles.input}
+                  placeholder="예: 부산광역시 해운대구 해운대해변로 264"
+                />
+                <Text style={styles.label}>지번 주소</Text>
+                <TextInput
+                  value={manualJibun}
+                  onChangeText={setManualJibun}
+                  style={styles.input}
+                  placeholder="예: 부산광역시 해운대구 우동 1411"
+                />
+                <View style={styles.coordRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.label}>위도 (lat)</Text>
+                    <TextInput
+                      value={manualLatStr}
+                      onChangeText={setManualLatStr}
+                      style={styles.input}
+                      keyboardType="numeric"
+                      placeholder="33~43"
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.label}>경도 (lng)</Text>
+                    <TextInput
+                      value={manualLngStr}
+                      onChangeText={setManualLngStr}
+                      style={styles.input}
+                      keyboardType="numeric"
+                      placeholder="124~132"
+                    />
+                  </View>
+                </View>
+                <Pressable
+                  onPress={handleManualSubmit}
+                  style={({ pressed }) => [styles.btn, pressed && styles.pressed]}
+                >
+                  <Text style={styles.btnText}>이 좌표로 적용</Text>
+                </Pressable>
+              </View>
+            ) : null}
+            {!manualMode &&
+            !providerUnavailable &&
+            !searching &&
+            query.trim().length >= MIN_KEYWORD_LEN &&
+            results.length === 0 ? (
+              <Pressable
+                onPress={() => setManualMode(true)}
+                style={({ pressed }) => [styles.manualLink, pressed && styles.pressed]}
+              >
+                <Text style={styles.manualLinkText}>좌표 직접 입력으로 진행 →</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
+
+        {fieldErrors.address ? (
+          <Text style={styles.fieldError}>{fieldErrors.address}</Text>
+        ) : null}
 
         <View style={styles.labelRow}>
           <Text style={styles.label}>제목</Text>
@@ -373,4 +692,99 @@ const styles = StyleSheet.create({
   },
   dangerText: { color: colors.danger, fontSize: fontSize.sm, fontWeight: '700' },
   pressed: { opacity: 0.85 },
+  // 주소 수정 토글·검색 관련
+  addrEditBtn: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.surface,
+  },
+  addrEditBtnText: {
+    fontSize: fontSize.xs,
+    color: colors.primary,
+    fontWeight: '700',
+  },
+  readonlyChanged: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primary + '08',
+  },
+  changedHint: {
+    fontSize: fontSize.xs,
+    color: colors.primary,
+    marginTop: spacing.xs,
+    fontWeight: '600',
+  },
+  addrSearchBox: {
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  searchHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  cancelLink: {
+    fontSize: fontSize.sm,
+    color: colors.textMuted,
+    fontWeight: '600',
+  },
+  loadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  loadingText: { fontSize: fontSize.xs, color: colors.textMuted },
+  warnBox: {
+    backgroundColor: '#fff7e6',
+    borderColor: '#f0ad4e',
+    borderWidth: 1,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginTop: spacing.sm,
+  },
+  warnTitle: { fontSize: fontSize.sm, fontWeight: '700', color: colors.text },
+  warnBody: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: 4 },
+  hint: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: spacing.sm },
+  addrItem: {
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  addrText: { fontSize: fontSize.base, color: colors.text, fontWeight: '600' },
+  addrJibun: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: 2 },
+  addrCoord: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: 2 },
+  manualBox: {
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  manualTitle: {
+    fontSize: fontSize.base,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  manualLink: {
+    marginTop: spacing.md,
+    alignSelf: 'flex-start',
+  },
+  manualLinkText: {
+    fontSize: fontSize.sm,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  coordRow: { flexDirection: 'row', gap: spacing.sm },
 });

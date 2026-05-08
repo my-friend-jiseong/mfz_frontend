@@ -18,6 +18,15 @@ import { fields as fieldsApi, errorCode, localizeError } from '@/api';
 import type { AddressSearchItem } from '@/api';
 import type { FieldStatus } from '@/types/entities';
 import { FIELD_STATUS_VALUES } from '@/types/entities';
+import {
+  itemToSelected,
+  isInKorea,
+  KR_LAT,
+  KR_LNG,
+  SEARCH_DEBOUNCE_MS,
+  MIN_KEYWORD_LEN,
+  type SelectedAddress,
+} from '@/utils/addressSearch';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
 
@@ -26,44 +35,6 @@ const STATUS_LABEL: Record<FieldStatus, string> = {
   in_progress: '진행중',
   done: '완료',
 };
-
-// 사용자 선택 결과 통합 타입 — 카카오 Geocoder 응답 또는 수동 입력 fallback.
-interface SelectedAddress {
-  roadAddress: string;
-  jibunAddress: string;
-  buildingName: string | null;
-  sido?: string;
-  sigungu?: string;
-  lat: number;
-  lng: number;
-  // 표시용 라벨 (카드/배지)
-  display: string;
-}
-
-function itemToSelected(item: AddressSearchItem): SelectedAddress {
-  const display = item.buildingName
-    ? `${item.roadAddress} (${item.buildingName})`
-    : item.roadAddress || item.jibunAddress;
-  return {
-    roadAddress: item.roadAddress,
-    jibunAddress: item.jibunAddress,
-    buildingName: item.buildingName,
-    sido: item.sido,
-    sigungu: item.sigungu,
-    lat: item.lat,
-    lng: item.lng,
-    display,
-  };
-}
-
-const SEARCH_DEBOUNCE_MS = 300;
-const MIN_KEYWORD_LEN = 2;
-
-// 한국 영역 사전 경고 (백엔드 검증과 동일 범위 — 사용자 즉각 피드백)
-const KR_LAT = { min: 33, max: 43 };
-const KR_LNG = { min: 124, max: 132 };
-const isInKorea = (lat: number, lng: number) =>
-  lat >= KR_LAT.min && lat <= KR_LAT.max && lng >= KR_LNG.min && lng <= KR_LNG.max;
 
 export default function NewField() {
   const router = useRouter();
