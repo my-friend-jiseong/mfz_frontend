@@ -57,41 +57,49 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   isHydrating: true,
 
   hydrate: async () => {
-    set({ isHydrating: true });
-    try {
-      const refresh = await loadRefreshToken();
-      if (!refresh) {
-        set({ isHydrating: false });
-        return;
+    // 중복 호출 가드 — 동시 hydrate 가 refresh 토큰을 두 번 회전시키면
+    // 두 번째가 refresh_token_superseded 로 실패함.
+    if (hydrateInflight) return hydrateInflight;
+    hydrateInflight = (async () => {
+      set({ isHydrating: true });
+      try {
+        const refresh = await loadRefreshToken();
+        if (!refresh) {
+          set({ isHydrating: false });
+          return;
+        }
+        const session = await auth.refresh(refresh);
+        if (!isValidSession(session)) throw new Error('세션 응답이 비어있습니다');
+        await saveRefreshToken(session.refreshToken);
+        set({
+          user: session.user,
+          accessToken: session.accessToken,
+          refreshToken: session.refreshToken,
+          isAuthenticated: true,
+          isHydrating: false,
+        });
+      } catch (e) {
+        // refresh 무효 → 저장된 토큰 폐기 후 비로그인 상태로 진입.
+        // Phase 7 보안 코드는 모달 안내 (사용자가 왜 로그아웃됐는지 알 수 있도록).
+        if (e instanceof ApiError && (e.code === 'all_sessions_revoked' || e.code === 'refresh_token_superseded')) {
+          useSessionGuardStore.getState().show(
+            e.code === 'all_sessions_revoked' ? 'revoked' : 'superseded',
+            e.message,
+          );
+        }
+        await clearRefreshToken();
+        set({
+          user: null,
+          accessToken: null,
+          refreshToken: null,
+          isAuthenticated: false,
+          isHydrating: false,
+        });
+      } finally {
+        hydrateInflight = null;
       }
-      const session = await auth.refresh(refresh);
-      if (!isValidSession(session)) throw new Error('세션 응답이 비어있습니다');
-      await saveRefreshToken(session.refreshToken);
-      set({
-        user: session.user,
-        accessToken: session.accessToken,
-        refreshToken: session.refreshToken,
-        isAuthenticated: true,
-        isHydrating: false,
-      });
-    } catch (e) {
-      // refresh 무효 → 저장된 토큰 폐기 후 비로그인 상태로 진입.
-      // Phase 7 보안 코드는 모달 안내 (사용자가 왜 로그아웃됐는지 알 수 있도록).
-      if (e instanceof ApiError && (e.code === 'all_sessions_revoked' || e.code === 'refresh_token_superseded')) {
-        useSessionGuardStore.getState().show(
-          e.code === 'all_sessions_revoked' ? 'revoked' : 'superseded',
-          e.message,
-        );
-      }
-      await clearRefreshToken();
-      set({
-        user: null,
-        accessToken: null,
-        refreshToken: null,
-        isAuthenticated: false,
-        isHydrating: false,
-      });
-    }
+    })();
+    return hydrateInflight;
   },
 
   login: async (email, password) => {
@@ -164,6 +172,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     return refreshAccessSingleFlight();
   },
 }));
+
+// hydrate single-flight — 루트 레이아웃과 다른 진입점에서 동시에 hydrate 가
+// 호출돼도 refresh 회전이 한 번만 일어나도록.
+let hydrateInflight: Promise<void> | null = null;
 
 // Single-flight refresh — 동시 401 다중 발생 시 refresh 가 여러 번 호출되어
 // 백엔드의 "refresh rotation/재사용 감지" 정책에 걸려 전체 세션이 강제 로그아웃되는
