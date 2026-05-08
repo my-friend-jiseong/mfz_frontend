@@ -62,14 +62,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (hydrateInflight) return hydrateInflight;
     hydrateInflight = (async () => {
       set({ isHydrating: true });
+      let refresh: string | null = null;
       try {
-        const refresh = await loadRefreshToken();
+        refresh = await loadRefreshToken();
         if (!refresh) {
           set({ isHydrating: false });
           return;
         }
         const session = await auth.refresh(refresh);
-        if (!isValidSession(session)) throw new Error('세션 응답이 비어있습니다');
+        if (!isValidSession(session)) {
+          // 응답 shape 이상은 서버 일시 문제로 간주 — 토큰 보존, 비로그인 상태로 진입.
+          if (__DEV__) console.warn('[auth.hydrate] 세션 응답 shape 이상, 토큰 보존', session);
+          set({ isHydrating: false });
+          return;
+        }
         await saveRefreshToken(session.refreshToken);
         set({
           user: session.user,
@@ -79,22 +85,61 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           isHydrating: false,
         });
       } catch (e) {
-        // refresh 무효 → 저장된 토큰 폐기 후 비로그인 상태로 진입.
-        // Phase 7 보안 코드는 모달 안내 (사용자가 왜 로그아웃됐는지 알 수 있도록).
-        if (e instanceof ApiError && (e.code === 'all_sessions_revoked' || e.code === 'refresh_token_superseded')) {
-          useSessionGuardStore.getState().show(
-            e.code === 'all_sessions_revoked' ? 'revoked' : 'superseded',
-            e.message,
-          );
+        // 정책: 토큰 폐기는 "서버가 명시적으로 거부한 경우" 에만.
+        // - all_sessions_revoked / refresh_token_superseded: 보안 코드 → 폐기 + 안내
+        // - 401 (그 외 코드): 토큰 무효 → 폐기
+        // - refresh_token_superseded: 다른 탭이 회전했을 가능성 → 저장소 최신값으로 1회 재시도
+        // - 네트워크 에러 / 5xx / 그 외: 일시적 장애 → 토큰 보존, 사용자 재시도 가능
+        const isApi = e instanceof ApiError;
+        const code = isApi ? (e as ApiError).code : null;
+        const status = isApi ? (e as ApiError).status : null;
+
+        // multi-tab race 복구 — _refreshAccess 와 동일한 패턴
+        if (isApi && code === 'refresh_token_superseded') {
+          const stored = await loadRefreshToken();
+          if (stored && stored !== refresh) {
+            try {
+              const session = await auth.refresh(stored);
+              if (isValidSession(session)) {
+                await saveRefreshToken(session.refreshToken);
+                set({
+                  user: session.user,
+                  accessToken: session.accessToken,
+                  refreshToken: session.refreshToken,
+                  isAuthenticated: true,
+                  isHydrating: false,
+                });
+                if (__DEV__) console.log('[auth.hydrate] superseded → recovered with stored refresh');
+                return;
+              }
+            } catch {
+              /* fallthrough — 안내 후 폐기 */
+            }
+          }
+          useSessionGuardStore.getState().show('superseded', (e as ApiError).message);
+          await clearRefreshToken();
+          set({ user: null, accessToken: null, refreshToken: null, isAuthenticated: false, isHydrating: false });
+          return;
         }
-        await clearRefreshToken();
-        set({
-          user: null,
-          accessToken: null,
-          refreshToken: null,
-          isAuthenticated: false,
-          isHydrating: false,
-        });
+
+        if (isApi && code === 'all_sessions_revoked') {
+          useSessionGuardStore.getState().show('revoked', (e as ApiError).message);
+          await clearRefreshToken();
+          set({ user: null, accessToken: null, refreshToken: null, isAuthenticated: false, isHydrating: false });
+          return;
+        }
+
+        // 그 외 401: 토큰 진짜 무효 → 폐기
+        if (isApi && status === 401) {
+          if (__DEV__) console.warn('[auth.hydrate] refresh 401, 토큰 폐기', code);
+          await clearRefreshToken();
+          set({ user: null, accessToken: null, refreshToken: null, isAuthenticated: false, isHydrating: false });
+          return;
+        }
+
+        // 네트워크 / 5xx / 기타 일시적 장애: 토큰 보존, 비로그인 상태로 진입 (사용자가 재시도 가능)
+        if (__DEV__) console.warn('[auth.hydrate] 일시적 장애, 토큰 보존', e instanceof Error ? e.message : e);
+        set({ user: null, accessToken: null, refreshToken: null, isAuthenticated: false, isHydrating: false });
       } finally {
         hydrateInflight = null;
       }
