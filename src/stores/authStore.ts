@@ -206,7 +206,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
     await clearRefreshToken();
     await useOfflineQueueStore.getState().clear();
-    useDestinationStore.getState().clearAll();
+    await useDestinationStore.getState().clearAll();
     set({
       user: null,
       accessToken: null,

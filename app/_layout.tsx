@@ -11,6 +11,7 @@ import { startSessionActivity, stopSessionActivity } from '@/stores/sessionActiv
 import { startNetworkWatcher, stopNetworkWatcher } from '@/api/network';
 import { initSentry } from '@/utils/sentry';
 import { useAuthStore } from '@/stores/authStore';
+import { useDestinationStore } from '@/stores/destinationStore';
 import { colors } from '@/theme/colors';
 
 // 모듈 로드 시 초기화 (DSN 환경변수 없으면 no-op)
@@ -25,6 +26,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     void hydrate();
+    void useDestinationStore.getState().hydrate();
     startSessionActivity();
     startNetworkWatcher();
     return () => {

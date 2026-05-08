@@ -1,11 +1,21 @@
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Destination } from '@/types/entities';
 
+// 백엔드가 destinations 를 영속화하지 않는 동안(handoff §9a) 프론트가 AsyncStorage 에
+// 로컬 영속화. 페이지 새로고침·앱 재기동 시 활성 외근의 목적지가 살아남아야 사용자가
+// "방금 3곳 선택했는데 0곳" 같은 상태를 보지 않는다.
+//
+// offlineQueueStore 와 동일한 manual persist 패턴 — zustand persist 미들웨어는
+// 일부 환경에서 모듈 초기화 단계 충돌이 보고된 적 있어 단순 패턴으로 통일.
+
+const STORAGE_KEY = 'mfz.destinations.v1';
+
 interface DestinationState {
   destinations: Destination[];
+  hydrated: boolean;
 
+  hydrate: () => Promise<void>;
   bulkCreate: (tripId: string, fieldIds: string[]) => Destination[];
   byTrip: (tripId: string) => Destination[];
   current: (tripId: string) => Destination | undefined;
@@ -19,7 +29,7 @@ interface DestinationState {
   removeByTrip: (tripId: string) => void;
   isAllResolved: (tripId: string) => boolean;
   // 로그아웃 시 호출 — 다른 사용자가 같은 디바이스에서 로그인했을 때 잔존하지 않도록.
-  clearAll: () => void;
+  clearAll: () => Promise<void>;
 }
 
 let nextSeq = 1;
@@ -27,81 +37,108 @@ function nextDestId(): string {
   return `dest-${Date.now().toString(36)}-${nextSeq++}`;
 }
 
-// 백엔드가 destinations 를 영속화하지 않는 동안(handoff §9a) 프론트가 AsyncStorage 에
-// 로컬 영속화. 페이지 새로고침·앱 재기동 시 활성 외근의 목적지가 살아남아야 사용자가
-// "방금 3곳 선택했는데 0곳" 같은 상태를 보지 않는다.
-export const useDestinationStore = create<DestinationState>()(
-  persist(
-    (set, get) => ({
-      destinations: [],
+async function persist(destinations: Destination[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(destinations));
+  } catch {
+    // 저장 실패해도 앱 동작은 계속 — 다음 부팅 시 메모리 상태로만 유지됨.
+  }
+}
 
-      bulkCreate: (tripId, fieldIds) => {
-        const created: Destination[] = fieldIds.map((fieldId, idx) => ({
-          id: nextDestId(),
-          tripId,
-          fieldId,
-          order: idx + 1,
-          status: 'pending',
-        }));
-        set((state) => ({ destinations: [...state.destinations, ...created] }));
-        return created;
-      },
+export const useDestinationStore = create<DestinationState>((set, get) => ({
+  destinations: [],
+  hydrated: false,
 
-      byTrip: (tripId) =>
-        get()
-          .destinations.filter((d) => d.tripId === tripId)
-          .sort((a, b) => a.order - b.order),
+  hydrate: async () => {
+    if (get().hydrated) return;
+    try {
+      const raw = await AsyncStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as Destination[];
+        if (Array.isArray(parsed)) {
+          set({ destinations: parsed });
+        }
+      }
+    } catch {
+      /* ignore */
+    } finally {
+      set({ hydrated: true });
+    }
+  },
 
-      current: (tripId) =>
-        get()
-          .destinations.filter((d) => d.tripId === tripId && d.status === 'pending')
-          .sort((a, b) => a.order - b.order)[0],
+  bulkCreate: (tripId, fieldIds) => {
+    const created: Destination[] = fieldIds.map((fieldId, idx) => ({
+      id: nextDestId(),
+      tripId,
+      fieldId,
+      order: idx + 1,
+      status: 'pending',
+    }));
+    const next = [...get().destinations, ...created];
+    set({ destinations: next });
+    void persist(next);
+    return created;
+  },
 
-      findByTripField: (tripId, fieldId) =>
-        get().destinations.find(
-          (d) => d.tripId === tripId && d.fieldId === fieldId,
-        ),
+  byTrip: (tripId) =>
+    get()
+      .destinations.filter((d) => d.tripId === tripId)
+      .sort((a, b) => a.order - b.order),
 
-      markArrived: (id) =>
-        set((state) => ({
-          destinations: state.destinations.map((d) =>
-            d.id === id ? { ...d, status: 'arrived' } : d,
-          ),
-        })),
+  current: (tripId) =>
+    get()
+      .destinations.filter((d) => d.tripId === tripId && d.status === 'pending')
+      .sort((a, b) => a.order - b.order)[0],
 
-      markSkipped: (id) =>
-        set((state) => ({
-          destinations: state.destinations.map((d) =>
-            d.id === id ? { ...d, status: 'skipped' } : d,
-          ),
-        })),
+  findByTripField: (tripId, fieldId) =>
+    get().destinations.find(
+      (d) => d.tripId === tripId && d.fieldId === fieldId,
+    ),
 
-      reorder: (tripId, orderedIds) =>
-        set((state) => ({
-          destinations: state.destinations.map((d) => {
-            if (d.tripId !== tripId) return d;
-            const idx = orderedIds.indexOf(d.id);
-            return idx >= 0 ? { ...d, order: idx + 1 } : d;
-          }),
-        })),
+  markArrived: (id) => {
+    const next = get().destinations.map((d) =>
+      d.id === id ? { ...d, status: 'arrived' as const } : d,
+    );
+    set({ destinations: next });
+    void persist(next);
+  },
 
-      removeByTrip: (tripId) =>
-        set((state) => ({
-          destinations: state.destinations.filter((d) => d.tripId !== tripId),
-        })),
+  markSkipped: (id) => {
+    const next = get().destinations.map((d) =>
+      d.id === id ? { ...d, status: 'skipped' as const } : d,
+    );
+    set({ destinations: next });
+    void persist(next);
+  },
 
-      isAllResolved: (tripId) => {
-        const list = get().destinations.filter((d) => d.tripId === tripId);
-        if (list.length === 0) return false;
-        return list.every((d) => d.status !== 'pending');
-      },
+  reorder: (tripId, orderedIds) => {
+    const next = get().destinations.map((d) => {
+      if (d.tripId !== tripId) return d;
+      const idx = orderedIds.indexOf(d.id);
+      return idx >= 0 ? { ...d, order: idx + 1 } : d;
+    });
+    set({ destinations: next });
+    void persist(next);
+  },
 
-      clearAll: () => set({ destinations: [] }),
-    }),
-    {
-      name: 'mfz.destinations.v1',
-      storage: createJSONStorage(() => AsyncStorage),
-      partialize: (state) => ({ destinations: state.destinations }),
-    },
-  ),
-);
+  removeByTrip: (tripId) => {
+    const next = get().destinations.filter((d) => d.tripId !== tripId);
+    set({ destinations: next });
+    void persist(next);
+  },
+
+  isAllResolved: (tripId) => {
+    const list = get().destinations.filter((d) => d.tripId === tripId);
+    if (list.length === 0) return false;
+    return list.every((d) => d.status !== 'pending');
+  },
+
+  clearAll: async () => {
+    set({ destinations: [] });
+    try {
+      await AsyncStorage.removeItem(STORAGE_KEY);
+    } catch {
+      /* ignore */
+    }
+  },
+}));
