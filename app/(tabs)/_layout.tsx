@@ -1,8 +1,9 @@
 import { useEffect } from 'react';
-import { Tabs, router } from 'expo-router';
+import { Redirect, Tabs, router } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/theme/colors';
+import { useAuthStore } from '@/stores/authStore';
 import { useTripStore } from '@/stores/tripStore';
 import { useFieldStore } from '@/stores/fieldStore';
 
@@ -28,15 +29,24 @@ function TabItem({
 }
 
 export default function TabsLayout() {
+  // deep-link 새로고침 시 hydrate 가 실패한 케이스 (refresh 토큰 만료·무효 등) 에서
+  // (tabs) 가 토큰 없이 hydrateTrips/Fields 를 호출해 401 을 흘리는 회로 차단.
+  // index.tsx 의 redirect 는 / 진입에서만 동작하므로 여기 별도 게이트가 필요.
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const hydrateTrips = useTripStore((s) => s.hydrate);
   const hydrateFields = useFieldStore((s) => s.hydrate);
 
   // 인증 후 진입 시 외근/현장 초기 페치 — trips 탭이 첫 화면이라도 지도(MapDashboard)에
   // 마커가 즉시 그려지도록 fields 도 함께 hydrate. fields 탭의 filter 기반 refresh 는 그대로.
   useEffect(() => {
+    if (!isAuthenticated) return;
     void hydrateTrips();
     void hydrateFields();
-  }, [hydrateTrips, hydrateFields]);
+  }, [isAuthenticated, hydrateTrips, hydrateFields]);
+
+  if (!isAuthenticated) {
+    return <Redirect href="/(auth)/login" />;
+  }
 
   return (
     <Tabs
