@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
-import { useRouter } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import { useTripStore } from '@/stores/tripStore';
 import { useDestinationStore } from '@/stores/destinationStore';
 import { useFieldStore } from '@/stores/fieldStore';
 import { useVisitStore } from '@/stores/visitStore';
-import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
 import { openKakaoRouteTo } from '@/utils/kakaoMap';
 import { trips as tripsApi, localizeError } from '@/api';
@@ -173,15 +172,11 @@ export default function ActiveTrip() {
   const allDone =
     activeTripId !== null && destinations.length > 0 && !currentDest;
 
+  // 활성 외근이 없으면 이 화면에 머물 이유가 없음 — 외근 탭 메인으로 즉시 redirect.
+  // 외근 종료 직후 finalizeEnd 의 router.replace 가 어떤 이유로든 발화 못해도
+  // 사용자가 /trips/active 에 잡혀 있는 일을 막는 안전망.
   if (activeTripId === null) {
-    return (
-      <MapSheetLayout title="진행 중인 외근" onBack={() => router.back()}>
-        <EmptyState
-          title="진행 중인 외근이 없습니다"
-          description="외근 탭에서 외근을 시작해주세요"
-        />
-      </MapSheetLayout>
-    );
+    return <Redirect href="/(tabs)/trips" />;
   }
 
   const handleNavigate = async () => {
