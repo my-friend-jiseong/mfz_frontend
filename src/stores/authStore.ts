@@ -8,6 +8,7 @@ import {
 } from '@/api/storage';
 import { useSessionGuardStore } from './sessionGuardStore';
 import { useOfflineQueueStore } from './offlineQueueStore';
+import { useDestinationStore } from './destinationStore';
 
 type Result<T = void> =
   | { ok: true; value?: T }
@@ -205,6 +206,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
     await clearRefreshToken();
     await useOfflineQueueStore.getState().clear();
+    useDestinationStore.getState().clearAll();
     set({
       user: null,
       accessToken: null,
