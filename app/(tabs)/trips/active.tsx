@@ -353,11 +353,15 @@ export default function ActiveTrip() {
     if (originalTripId !== null) {
       removeByTrip(originalTripId);
     }
-    // 즉시 외근 탭 메인으로 이동 — Alert prompt 응답 여부와 무관하게 /trips/active 에서
-    // 확실히 빠져나오도록. (이전엔 prompt onPress 안에서만 navigation 해서 dismiss·web
-    // 환경 차이 등으로 /trips/active 에 잡히는 케이스 발생.)
+    // web 에선 expo-router 의 router.replace('/(tabs)/trips') 가 같은 trips Stack 안의
+    // active 화면을 떠나지 못하는 케이스가 관찰됨 (사용자 보고: 종료 성공 후에도 URL 이
+    // /trips/active). 브라우저 직접 navigation 으로 우회 — page 가 새로 로드되며 모든
+    // in-memory state 가 초기화되고 새 hydrate 에서 activeTripId=null 로 깨끗이 시작.
+    if (Platform.OS === 'web') {
+      window.location.assign('/trips');
+      return;
+    }
     router.replace('/(tabs)/trips' as never);
-    // AI 보고서 prompt — 지금 작성 시 generate 로 추가 이동, 나중에 면 /trips 에 머무름.
     Alert.alert('외근 종료', '외근이 종료되었습니다. 지금 AI 보고서를 작성할까요?', [
       { text: '나중에', style: 'cancel' },
       {
