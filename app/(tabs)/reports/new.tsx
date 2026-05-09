@@ -3,6 +3,7 @@ import {
   Alert,
   Image,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -69,6 +70,7 @@ export default function ComposeReport() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<'ai' | 'manual' | null>(null);
   const [lastAiFailed, setLastAiFailed] = useState(false);
+  const [tripPickerOpen, setTripPickerOpen] = useState(false);
 
   const mountedRef = useRef(true);
   useEffect(() => {
@@ -83,6 +85,21 @@ export default function ComposeReport() {
       .filter((t) => t.workerId === userId)
       .sort((a, b) => b.startedAt.localeCompare(a.startedAt));
   }, [allTrips, userId]);
+
+  const selectedTrip = useMemo(
+    () => (tripId ? (myTrips.find((t) => t.id === tripId) ?? null) : null),
+    [myTrips, tripId],
+  );
+
+  const tripLabel = (t: { startedAt: string; endedAt: string | null; title?: string | null; id: string }) => {
+    const head = `${fmtDate(t.startedAt)}${t.title ? ` · ${t.title}` : ''}`;
+    const visitCount = visitsByTrip(t.id).length;
+    const meta =
+      `${fmtTime(t.startedAt)}` +
+      (t.endedAt ? `–${fmtTime(t.endedAt)}` : ' · 진행 중') +
+      (visitCount > 0 ? ` · 방문 ${visitCount}건` : ' · 방문 없음');
+    return { head, meta };
+  };
 
   const importableBlocks = useMemo(() => {
     if (!tripId) return [];
@@ -292,6 +309,7 @@ export default function ComposeReport() {
   const isBusy = busy !== null;
 
   return (
+    <>
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -308,30 +326,42 @@ export default function ComposeReport() {
         <Text style={styles.label}>연결할 외근 (선택)</Text>
         {myTrips.length === 0 ? (
           <Text style={styles.hint}>등록된 외근이 없습니다.</Text>
-        ) : (
-          <View style={styles.tripList}>
-            {myTrips.map((t) => {
-              const active = t.id === tripId;
-              const visitCount = visitsByTrip(t.id).length;
-              return (
-                <Pressable
-                  key={t.id}
-                  onPress={() => handleSelectTrip(active ? null : t.id)}
-                  style={[styles.tripItem, active && styles.tripItemActive]}
-                >
-                  <Text style={[styles.tripItemDate, active && styles.tripItemTextActive]}>
-                    {fmtDate(t.startedAt)}
-                    {t.title ? ` · ${t.title}` : ''}
-                  </Text>
-                  <Text style={[styles.tripItemMeta, active && styles.tripItemMetaActive]}>
-                    {fmtTime(t.startedAt)}
-                    {t.endedAt ? `–${fmtTime(t.endedAt)}` : ' · 진행 중'}
-                    {visitCount > 0 ? ` · 방문 ${visitCount}건` : ' · 방문 없음'}
-                  </Text>
-                </Pressable>
-              );
-            })}
+        ) : selectedTrip ? (
+          <View style={styles.tripCardSelected}>
+            <View style={styles.tripCardBody}>
+              <Text style={[styles.tripItemDate, styles.tripItemTextActive]}>
+                {tripLabel(selectedTrip).head}
+              </Text>
+              <Text style={[styles.tripItemMeta, styles.tripItemMetaActive]}>
+                {tripLabel(selectedTrip).meta}
+              </Text>
+            </View>
+            <View style={styles.tripCardActions}>
+              <Pressable
+                onPress={() => setTripPickerOpen(true)}
+                style={({ pressed }) => [styles.tripCardBtn, pressed && styles.pressed]}
+              >
+                <Text style={styles.tripCardBtnText}>변경</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => handleSelectTrip(null)}
+                style={({ pressed }) => [
+                  styles.tripCardBtn,
+                  styles.tripCardBtnGhost,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={styles.tripCardBtnGhostText}>해제</Text>
+              </Pressable>
+            </View>
           </View>
+        ) : (
+          <Pressable
+            onPress={() => setTripPickerOpen(true)}
+            style={({ pressed }) => [styles.tripPickerBtn, pressed && styles.pressed]}
+          >
+            <Text style={styles.tripPickerBtnText}>+ 외근 선택</Text>
+          </Pressable>
         )}
 
         <View style={styles.notesHeader}>
@@ -590,6 +620,48 @@ export default function ComposeReport() {
         ) : null}
       </ScrollView>
     </KeyboardAvoidingView>
+    <Modal
+      visible={tripPickerOpen}
+      animationType="fade"
+      transparent
+      onRequestClose={() => setTripPickerOpen(false)}
+    >
+      <Pressable style={styles.pickerBackdrop} onPress={() => setTripPickerOpen(false)}>
+        <Pressable style={styles.pickerCard} onPress={() => undefined}>
+          <Text style={styles.pickerTitle}>외근 선택</Text>
+          <ScrollView style={styles.pickerList} contentContainerStyle={styles.pickerListContent}>
+            {myTrips.map((t) => {
+              const active = t.id === tripId;
+              const { head, meta } = tripLabel(t);
+              return (
+                <Pressable
+                  key={t.id}
+                  onPress={() => {
+                    handleSelectTrip(active ? null : t.id);
+                    setTripPickerOpen(false);
+                  }}
+                  style={[styles.tripItem, active && styles.tripItemActive]}
+                >
+                  <Text style={[styles.tripItemDate, active && styles.tripItemTextActive]}>
+                    {head}
+                  </Text>
+                  <Text style={[styles.tripItemMeta, active && styles.tripItemMetaActive]}>
+                    {meta}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+          <Pressable
+            onPress={() => setTripPickerOpen(false)}
+            style={({ pressed }) => [styles.pickerCancel, pressed && styles.pressed]}
+          >
+            <Text style={styles.pickerCancelText}>취소</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
+    </>
   );
 }
 
@@ -612,7 +684,6 @@ const styles = StyleSheet.create({
   },
   hint: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: spacing.xs },
   warn: { color: colors.warning, fontSize: fontSize.sm, marginTop: spacing.xs },
-  tripList: { gap: spacing.xs },
   tripItem: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
@@ -625,6 +696,80 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
     backgroundColor: colors.primary + '10',
   },
+  tripCardSelected: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.primary + '10',
+  },
+  tripCardBody: { flex: 1, gap: 2 },
+  tripCardActions: { flexDirection: 'row', gap: spacing.xs },
+  tripCardBtn: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.surface,
+  },
+  tripCardBtnText: {
+    fontSize: fontSize.xs,
+    color: colors.primary,
+    fontWeight: '700',
+  },
+  tripCardBtnGhost: {
+    borderColor: colors.border,
+  },
+  tripCardBtnGhostText: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    fontWeight: '700',
+  },
+  tripPickerBtn: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+  },
+  tripPickerBtnText: {
+    fontSize: fontSize.sm,
+    color: colors.textMuted,
+    fontWeight: '700',
+  },
+  pickerBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.lg,
+  },
+  pickerCard: {
+    width: '100%',
+    maxWidth: 420,
+    maxHeight: '80%',
+    backgroundColor: colors.background,
+    borderRadius: radius.lg,
+    padding: spacing.xl,
+    gap: spacing.md,
+  },
+  pickerTitle: { fontSize: fontSize.lg, fontWeight: '700', color: colors.text },
+  pickerList: { flexGrow: 0 },
+  pickerListContent: { gap: spacing.xs, paddingVertical: spacing.xs },
+  pickerCancel: {
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    marginTop: spacing.xs,
+  },
+  pickerCancelText: { fontSize: fontSize.sm, color: colors.textMuted, fontWeight: '600' },
   tripItemDate: { fontSize: fontSize.sm, color: colors.text, fontWeight: '600' },
   tripItemMeta: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: 2 },
   tripItemMetaActive: { color: colors.primary },
