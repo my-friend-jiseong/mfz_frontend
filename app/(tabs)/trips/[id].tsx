@@ -291,7 +291,7 @@ export default function TripDetail() {
 
   return (
     <MapSheetLayout
-      title={`외근 #${trip.id}`}
+      title={trip.title || '외근 상세'}
       onBack={() => router.back()}
       initialIndex={2}
       mapFieldIds={tripFieldIds}
