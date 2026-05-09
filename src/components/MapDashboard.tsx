@@ -15,7 +15,14 @@ import {
 import type { FieldStatus } from '@/types/entities';
 import { colors } from '@/theme/colors';
 
-export function MapDashboard() {
+interface MapDashboardProps {
+  // 화면별 현장 화이트리스트. undefined = 내 현장 전체.
+  // 예: 외근 화면에선 그 외근에 속한 destinations 의 fieldId 만 통과시켜
+  // 지도/필터/마커가 다른 현장으로 흐려지지 않도록.
+  scopeFieldIds?: string[];
+}
+
+export function MapDashboard({ scopeFieldIds }: MapDashboardProps = {}) {
   const router = useRouter();
   const userId = useAuthStore((s) => s.user?.id);
   const allFields = useFieldStore((s) => s.fields);
@@ -41,15 +48,23 @@ export function MapDashboard() {
     [allFields, userId],
   );
 
-  // 가용 태그 — 내 현장에 등록된 태그 합집합 (정렬)
+  // scopeFieldIds 가 주어진 화면(외근 상세/진행 중)에선 그 외근의 현장만 통과.
+  // undefined 면 전체 노출, 빈 배열이면 0개 (목적지 없는 외근의 의도적 빈 상태).
+  const scopedFields = useMemo(() => {
+    if (!scopeFieldIds) return myFields;
+    const allow = new Set(scopeFieldIds);
+    return myFields.filter((f) => allow.has(f.id));
+  }, [myFields, scopeFieldIds]);
+
+  // 가용 태그 — 스코프된 현장에 등록된 태그 합집합 (정렬)
   const availableTags = useMemo(() => {
     const set = new Set<string>();
-    myFields.forEach((f) => f.tags?.forEach((t) => set.add(t)));
+    scopedFields.forEach((f) => f.tags?.forEach((t) => set.add(t)));
     return Array.from(set).sort();
-  }, [myFields]);
+  }, [scopedFields]);
 
   const visibleFields = useMemo(() => {
-    let list = myFields;
+    let list = scopedFields;
     if (selectedStatuses.length > 0) {
       list = list.filter((f) => selectedStatuses.includes(f.status));
     }
@@ -69,7 +84,7 @@ export function MapDashboard() {
       );
     }
     return list;
-  }, [myFields, selectedStatuses, rangePreset, selectedTags]);
+  }, [scopedFields, selectedStatuses, rangePreset, selectedTags]);
 
   const attachmentPresenceByField = useMemo(() => {
     const map = new Map<

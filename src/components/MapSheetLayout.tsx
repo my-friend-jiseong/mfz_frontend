@@ -12,6 +12,9 @@ interface Props {
   title: string;
   onBack?: () => void;
   initialIndex?: number; // 주면 마운트 시 이 index로 고정 시작. 미지정 시 탭 간 공유 인덱스 사용
+  // 지도 배경에 노출할 현장 화이트리스트. 외근 상세/진행 중 화면에서
+  // 해당 외근의 destinations.fieldId 만 넘기면 다른 현장이 흐려지지 않음.
+  mapFieldIds?: string[];
   children: ReactNode;
 }
 
@@ -24,6 +27,7 @@ export function MapSheetLayout({
   title,
   onBack,
   initialIndex,
+  mapFieldIds,
   children,
 }: Props) {
   const snapPoints = useMemo(() => ['18%', '55%', '92%'], []);
@@ -50,7 +54,7 @@ export function MapSheetLayout({
 
   return (
     <View style={styles.root}>
-      <MapDashboard />
+      <MapDashboard scopeFieldIds={mapFieldIds} />
       <BottomSheet
         ref={sheetRef}
         index={startIndex}

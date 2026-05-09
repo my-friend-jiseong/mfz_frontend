@@ -75,6 +75,12 @@ export default function ActiveTrip() {
       .sort((a, b) => a.order - b.order);
   }, [allDestinations, activeTripId]);
 
+  // 지도 배경엔 진행 중 외근의 현장만. 다른 현장은 흐림.
+  const tripFieldIds = useMemo(
+    () => destinations.map((d) => d.fieldId),
+    [destinations],
+  );
+
   // 진행률 통계 — arrived + skipped 가 처리됨, pending 만 남음.
   const progress = useMemo(() => {
     const total = destinations.length;
@@ -615,6 +621,7 @@ export default function ActiveTrip() {
         title="진행 중인 외근"
         onBack={() => router.back()}
         initialIndex={2}
+        mapFieldIds={tripFieldIds}
       >
         <BottomSheetFlatList
           data={destinations}

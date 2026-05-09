@@ -62,6 +62,12 @@ export default function TripDetail() {
     [allDestinations, tripId],
   );
 
+  // 지도 배경엔 이 외근의 현장만 노출.
+  const tripFieldIds = useMemo(
+    () => destinations.map((d) => d.fieldId),
+    [destinations],
+  );
+
   const trip = useMemo(
     () => allTrips.find((t) => t.id === tripId),
     [allTrips, tripId],
@@ -288,6 +294,7 @@ export default function TripDetail() {
       title={`외근 #${trip.id}`}
       onBack={() => router.back()}
       initialIndex={2}
+      mapFieldIds={tripFieldIds}
     >
       <BottomSheetFlatList
         data={visits}
