@@ -117,18 +117,18 @@ export default function TripDetail() {
   };
 
   const promptReportAfterEnd = (endedTripId: string) => {
-    // IA cross-link X2 — 외근 종료 → AI 보고서 작성 진입.
+    // IA cross-link X2 — 외근 종료 → 통합 보고서 작성(/reports/new) 진입.
     // react-native-web 의 Alert.alert 다중 버튼 분기가 불안정 — web 은 window.confirm 사용.
-    const goGenerate = () =>
-      router.replace(`/(tabs)/reports/generate?tripId=${endedTripId}` as never);
+    const goCompose = () =>
+      router.replace(`/(tabs)/reports/new?tripId=${endedTripId}` as never);
     if (Platform.OS === 'web') {
-      if (window.confirm('외근이 정상 종료되었습니다. 지금 AI 보고서를 작성할까요?')) {
-        goGenerate();
+      if (window.confirm('외근이 정상 종료되었습니다. 지금 보고서를 작성할까요?')) {
+        goCompose();
       }
     } else {
-      Alert.alert('외근 종료', '외근이 정상 종료되었습니다. 지금 AI 보고서를 작성할까요?', [
+      Alert.alert('외근 종료', '외근이 정상 종료되었습니다. 지금 보고서를 작성할까요?', [
         { text: '나중에', style: 'cancel' },
-        { text: '지금 작성', onPress: goGenerate },
+        { text: '지금 작성', onPress: goCompose },
       ]);
     }
   };
@@ -250,24 +250,14 @@ export default function TripDetail() {
           <Text style={styles.endBtnText}>외근 종료</Text>
         </Pressable>
       ) : null}
-      <View style={styles.ctaRow}>
-        <Pressable
-          onPress={() =>
-            router.push(`/(tabs)/reports/generate?tripId=${trip.id}` as never)
-          }
-          style={({ pressed }) => [styles.cta, styles.ctaAi, pressed && styles.pressed]}
-        >
-          <Text style={styles.ctaText}>✨ AI 보고서 생성</Text>
-        </Pressable>
-        <Pressable
-          onPress={() =>
-            router.push(`/(tabs)/reports/new?tripId=${trip.id}` as never)
-          }
-          style={({ pressed }) => [styles.cta, pressed && styles.pressed]}
-        >
-          <Text style={styles.ctaText}>수동 작성</Text>
-        </Pressable>
-      </View>
+      <Pressable
+        onPress={() =>
+          router.push(`/(tabs)/reports/new?tripId=${trip.id}` as never)
+        }
+        style={({ pressed }) => [styles.composeBtn, pressed && styles.pressed]}
+      >
+        <Text style={styles.composeBtnText}>📝 보고서 작성</Text>
+      </Pressable>
       {stateHistory.length > 0 ? (
         <View style={styles.historyBox}>
           <Text style={styles.historyTitle}>상태 전환 이력</Text>
@@ -350,20 +340,14 @@ const styles = StyleSheet.create({
   statusText: { fontSize: fontSize.xs, fontWeight: '700' },
   fieldAddr: { fontSize: fontSize.base, color: colors.text, fontWeight: '600' },
   meta: { fontSize: fontSize.sm, color: colors.textMuted, marginTop: 2 },
-  ctaRow: {
+  composeBtn: {
     marginTop: spacing.md,
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  cta: {
-    flex: 1,
     backgroundColor: colors.primary,
     paddingVertical: spacing.md,
     borderRadius: radius.pill,
     alignItems: 'center',
   },
-  ctaAi: { backgroundColor: colors.success },
-  ctaText: { color: '#fff', fontSize: fontSize.sm, fontWeight: '700' },
+  composeBtnText: { color: '#fff', fontSize: fontSize.base, fontWeight: '700' },
   endBtn: {
     marginTop: spacing.md,
     backgroundColor: colors.danger,
