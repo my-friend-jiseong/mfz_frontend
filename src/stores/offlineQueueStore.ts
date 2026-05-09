@@ -106,6 +106,17 @@ export const useOfflineQueueStore = create<OfflineQueueState>((set, get) => ({
   flushAll: async () => {
     const { queue, flushing } = get();
     if (flushing || queue.length === 0) return { ok: 0, fail: 0 };
+
+    // 인증 확정 전 flush 차단 — 인증 없이 보낸 요청이 401 → _refreshAccess →
+    // refresh 토큰 race 로 세션 강제 로그아웃 회로를 만들 수 있음. 부팅 시점에는
+    // hydrate 가 아직 진행 중이라 isAuthenticated=false 일 수 있고, 그 사이
+    // flushAll 이 발화되면 위 회로 발생. 인증 후 별도 호출자가 다시 flushAll 호출.
+    // 동적 import 로 authStore 와의 순환 참조 회피.
+    const authStoreModule = await import('./authStore');
+    if (!authStoreModule.useAuthStore.getState().isAuthenticated) {
+      return { ok: 0, fail: 0 };
+    }
+
     set({ flushing: true });
 
     let ok = 0;

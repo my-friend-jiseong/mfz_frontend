@@ -85,6 +85,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           isAuthenticated: true,
           isHydrating: false,
         });
+        // 인증 확정 후 큐 flush — 부팅 시점엔 isAuthenticated=false 라 큐가 skip 됐고,
+        // 여기서 한 번 시도. 인증 없는 요청이 _refreshAccess 와 race 일으키는 회로 차단.
+        void useOfflineQueueStore.getState().flushAll();
       } catch (e) {
         // 정책: 토큰 폐기는 "서버가 명시적으로 거부한 경우" 에만.
         // - all_sessions_revoked / refresh_token_superseded: 보안 코드 → 폐기 + 안내
@@ -162,6 +165,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         refreshToken: session.refreshToken,
         isAuthenticated: true,
       });
+      // 인증 확정 직후 큐 flush — 인증 안 된 채로 남은 큐가 인증 후 처리되도록.
+      void useOfflineQueueStore.getState().flushAll();
       return { ok: true };
     } catch (e) {
       return { ok: false, error: describeError(e), code: errorCode(e) ?? undefined };
@@ -188,6 +193,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         refreshToken: session.refreshToken,
         isAuthenticated: true,
       });
+      // 인증 확정 직후 큐 flush — 인증 안 된 채로 남은 큐가 인증 후 처리되도록.
+      void useOfflineQueueStore.getState().flushAll();
       return { ok: true };
     } catch (e) {
       return { ok: false, error: describeError(e), code: errorCode(e) ?? undefined };
