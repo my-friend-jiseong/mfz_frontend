@@ -39,14 +39,18 @@ interface AuthState {
 const describeError = localizeError;
 
 // 백엔드 응답이 비어 있거나 필수 필드 누락 시 안전 가드.
-// 정상 응답: { user, accessToken, refreshToken, ... } (smoke test 캡처)
-function isValidSession(s: unknown): s is { user: User; accessToken: string; refreshToken: string } {
+// 정상 응답:
+// - login/signup: { user, accessToken, refreshToken, ... }
+// - refresh:      { accessToken, refreshToken, tokenType, sessionId }  ← user 없음 (백엔드 contract)
+// 그래서 user 는 옵셔널. 호출처에서 필요하면 별도 /api/me 로 fetch.
+function isValidSession(
+  s: unknown,
+): s is { accessToken: string; refreshToken: string; user?: User } {
   return (
     !!s &&
     typeof s === 'object' &&
     typeof (s as { accessToken?: unknown }).accessToken === 'string' &&
-    typeof (s as { refreshToken?: unknown }).refreshToken === 'string' &&
-    !!(s as { user?: unknown }).user
+    typeof (s as { refreshToken?: unknown }).refreshToken === 'string'
   );
 }
 
@@ -78,8 +82,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           return;
         }
         await saveRefreshToken(session.refreshToken);
+        // hydrate 는 페이지 부팅 직후라 메모리 user 가 null. session.user 가 있으면 사용,
+        // 없으면 일단 null 로 두고 아래 /api/me 백그라운드 fetch 로 채움.
         set({
-          user: session.user,
+          user: session.user ?? null,
           accessToken: session.accessToken,
           refreshToken: session.refreshToken,
           isAuthenticated: true,
@@ -88,6 +94,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         // 인증 확정 후 큐 flush — 부팅 시점엔 isAuthenticated=false 라 큐가 skip 됐고,
         // 여기서 한 번 시도. 인증 없는 요청이 _refreshAccess 와 race 일으키는 회로 차단.
         void useOfflineQueueStore.getState().flushAll();
+        // refresh 응답엔 user 가 없는 게 백엔드 contract — 별도 /api/me 로 백그라운드 fetch.
+        // isAuthenticated=true 는 이미 set 했으므로 (tabs) 진입은 정상 진행.
+        if (!session.user) {
+          void auth
+            .me()
+            .then((u) => {
+              if (u) set({ user: u });
+            })
+            .catch(() => {
+              if (__DEV__) console.warn('[auth.hydrate] /api/me 호출 실패, user 없이 진행');
+            });
+        }
       } catch (e) {
         // 정책: 토큰 폐기는 "서버가 명시적으로 거부한 경우" 에만.
         // - all_sessions_revoked / refresh_token_superseded: 보안 코드 → 폐기 + 안내
@@ -246,8 +264,9 @@ async function refreshAccessSingleFlight(): Promise<string | null> {
       const session = await auth.refresh(rt);
       if (!isValidSession(session)) throw new Error('refresh 응답이 비어있습니다');
       await saveRefreshToken(session.refreshToken);
+      // refresh 응답엔 user 가 없는 게 백엔드 contract — 기존 store.user 보존.
       useAuthStore.setState({
-        user: session.user,
+        ...(session.user ? { user: session.user } : {}),
         accessToken: session.accessToken,
         refreshToken: session.refreshToken,
         isAuthenticated: true,
@@ -266,7 +285,7 @@ async function refreshAccessSingleFlight(): Promise<string | null> {
             if (isValidSession(session)) {
               await saveRefreshToken(session.refreshToken);
               useAuthStore.setState({
-                user: session.user,
+                ...(session.user ? { user: session.user } : {}),
                 accessToken: session.accessToken,
                 refreshToken: session.refreshToken,
                 isAuthenticated: true,
