@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import type { Field } from '@/types/entities';
+import { FIELD_STATUS_LABEL, type Field } from '@/types/entities';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
 
@@ -7,12 +7,6 @@ interface Props {
   field: Field;
   onPress?: () => void;
 }
-
-const STATUS_LABEL: Record<Field['status'], string> = {
-  pending: '대기',
-  in_progress: '진행중',
-  done: '완료',
-};
 
 const STATUS_SHAPE: Record<Field['status'], string> = {
   pending: '●',
@@ -30,7 +24,7 @@ export function FieldCard({ field, onPress }: Props) {
             {STATUS_SHAPE[field.status]}
           </Text>
           <Text style={[styles.statusText, { color: statusColor }]}>
-            {STATUS_LABEL[field.status]}
+            {FIELD_STATUS_LABEL[field.status]}
           </Text>
         </View>
       </View>

@@ -17,7 +17,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { fields as fieldsApi, errorCode, localizeError } from '@/api';
 import type { AddressSearchItem } from '@/api';
 import type { FieldStatus } from '@/types/entities';
-import { FIELD_STATUS_VALUES } from '@/types/entities';
+import { FIELD_STATUS_VALUES, FIELD_STATUS_LABEL } from '@/types/entities';
 import {
   itemToSelected,
   isInKorea,
@@ -29,12 +29,6 @@ import {
 } from '@/utils/addressSearch';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
-
-const STATUS_LABEL: Record<FieldStatus, string> = {
-  pending: '대기',
-  in_progress: '진행중',
-  done: '완료',
-};
 
 export default function NewField() {
   const router = useRouter();
@@ -391,7 +385,7 @@ export default function NewField() {
                         active && { color: c, fontWeight: '700' },
                       ]}
                     >
-                      {STATUS_LABEL[s]}
+                      {FIELD_STATUS_LABEL[s]}
                     </Text>
                   </Pressable>
                 );

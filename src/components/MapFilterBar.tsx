@@ -3,7 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
-import type { FieldStatus } from '@/types/entities';
+import { FIELD_STATUS_LABEL, type FieldStatus } from '@/types/entities';
 
 export type DisplayMode = 'markers' | 'heatmap' | 'choropleth';
 export type AttachmentKind = 'text' | 'voice' | 'photo';
@@ -41,9 +41,9 @@ const RANGE_LABEL: Record<RangePreset, string> = {
 };
 
 const STATUS_CHIPS: { value: FieldStatus; label: string }[] = [
-  { value: 'pending', label: '대기' },
-  { value: 'in_progress', label: '진행중' },
-  { value: 'done', label: '완료' },
+  { value: 'pending', label: FIELD_STATUS_LABEL.pending },
+  { value: 'in_progress', label: FIELD_STATUS_LABEL.in_progress },
+  { value: 'done', label: FIELD_STATUS_LABEL.done },
 ];
 
 const ATTACHMENT_CHIPS: { kind: AttachmentKind; label: string }[] = [

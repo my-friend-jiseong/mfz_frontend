@@ -28,15 +28,10 @@ import { spacing, radius, fontSize } from '@/theme/spacing';
 import {
   FIELD_STATUS_VALUES,
   VISIT_STATUS_LABEL,
+  FIELD_STATUS_LABEL,
   type FieldStatus,
   type Visit,
 } from '@/types/entities';
-
-const FIELD_STATUS_LABEL = {
-  pending: '대기',
-  in_progress: '진행중',
-  done: '완료',
-};
 
 function fmtDateTime(iso: string) {
   return new Date(iso).toLocaleString('ko-KR');

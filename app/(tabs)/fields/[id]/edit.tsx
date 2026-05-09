@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFieldStore } from '@/stores/fieldStore';
-import { FIELD_STATUS_VALUES, type FieldStatus } from '@/types/entities';
+import { FIELD_STATUS_VALUES, FIELD_STATUS_LABEL, type FieldStatus } from '@/types/entities';
 import { fields as fieldsApi, errorCode, localizeError } from '@/api';
 import type { AddressSearchItem } from '@/api';
 import {
@@ -28,12 +28,6 @@ import {
 import { EmptyState } from '@/components/EmptyState';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
-
-const STATUS_LABEL: Record<FieldStatus, string> = {
-  pending: '대기',
-  in_progress: '진행중',
-  done: '완료',
-};
 
 const DETAIL_MAX = 100;
 const TITLE_MAX = 50;
@@ -569,7 +563,7 @@ export default function EditField() {
                     active && { color: c, fontWeight: '700' },
                   ]}
                 >
-                  {STATUS_LABEL[s]}
+                  {FIELD_STATUS_LABEL[s]}
                 </Text>
               </Pressable>
             );

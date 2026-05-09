@@ -3,6 +3,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { WebView } from 'react-native-webview';
 import { buildKakaoMapHtml, type MapDisplayMode } from '@/assets/kakaoMapHtml';
 import type { Field, FieldStatus } from '@/types/entities';
+import { FIELD_STATUS_LABEL } from '@/types/entities';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
 import { groupSameLocationMarkers } from '@/utils/groupSameLocationMarkers';
@@ -16,11 +17,7 @@ const STATUS_TO_SHAPE: Record<FieldStatus, MarkerShape> = {
   done: 'check',
 };
 
-const STATUS_TO_BADGE: Record<FieldStatus, string> = {
-  pending: '대기',
-  in_progress: '진행',
-  done: '완료',
-};
+const STATUS_TO_BADGE: Record<FieldStatus, string> = FIELD_STATUS_LABEL;
 
 export interface KakaoMapMarker {
   id: string;

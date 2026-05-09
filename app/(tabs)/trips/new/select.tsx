@@ -9,13 +9,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
-import { FIELD_STATUS_VALUES, type Field, type FieldStatus } from '@/types/entities';
-
-const STATUS_LABEL: Record<FieldStatus, string> = {
-  pending: '대기',
-  in_progress: '진행중',
-  done: '완료',
-};
+import { FIELD_STATUS_VALUES, FIELD_STATUS_LABEL, type Field, type FieldStatus } from '@/types/entities';
 
 export default function NewTripSelect() {
   const router = useRouter();
@@ -155,7 +149,7 @@ export default function NewTripSelect() {
                     active && { color: c, fontWeight: '700' },
                   ]}
                 >
-                  {STATUS_LABEL[s]}
+                  {FIELD_STATUS_LABEL[s]}
                 </Text>
               </Pressable>
             );

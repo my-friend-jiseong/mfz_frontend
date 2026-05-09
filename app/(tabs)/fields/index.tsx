@@ -7,15 +7,9 @@ import { useAuthStore } from '@/stores/authStore';
 import { FieldCard } from '@/components/FieldCard';
 import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
-import { FIELD_STATUS_VALUES, type FieldStatus } from '@/types/entities';
+import { FIELD_STATUS_VALUES, FIELD_STATUS_LABEL, type FieldStatus } from '@/types/entities';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
-
-const STATUS_LABEL: Record<FieldStatus, string> = {
-  pending: '대기',
-  in_progress: '진행중',
-  done: '완료',
-};
 
 // 노션 "데이터 필터" — 기간 프리셋 (시작일·종료일 직접 입력은 후속).
 // 'default_30d' 는 백엔드 기본값(visit 기준 최근 30일).
@@ -111,7 +105,7 @@ export default function FieldsList() {
                     active && { color: c, fontWeight: '700' },
                   ]}
                 >
-                  {STATUS_LABEL[s]}
+                  {FIELD_STATUS_LABEL[s]}
                 </Text>
               </Pressable>
             );

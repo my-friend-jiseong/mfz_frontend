@@ -163,6 +163,14 @@ export function normalizeVisitStatus(raw: unknown): VisitStatus {
 
 export const FIELD_STATUS_VALUES: FieldStatus[] = ['pending', 'in_progress', 'done'];
 
+// 사용자 표시용 한국어 라벨 — 코드 식별자(영문) ↔ 표시값(한국어) 분리.
+// "조치" 도메인 어휘로 통일 (이전: 대기/진행중/완료).
+export const FIELD_STATUS_LABEL: Record<FieldStatus, string> = {
+  pending: '조치 전',
+  in_progress: '조치 중',
+  done: '조치 완료',
+};
+
 export const DESTINATION_STATUS_VALUES: DestinationStatus[] = [
   'pending',
   'arrived',

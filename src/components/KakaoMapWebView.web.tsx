@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { Field, FieldStatus } from '@/types/entities';
+import { FIELD_STATUS_LABEL } from '@/types/entities';
 import type { MapDisplayMode } from '@/assets/kakaoMapHtml';
 import {
   loadSigunguGeoJson,
@@ -27,11 +28,7 @@ const STATUS_TO_SHAPE: Record<FieldStatus, 'triangle' | 'circle' | 'check'> = {
   in_progress: 'circle',
   done: 'check',
 };
-const STATUS_TO_BADGE: Record<FieldStatus, string> = {
-  pending: '대기',
-  in_progress: '진행',
-  done: '완료',
-};
+const STATUS_TO_BADGE: Record<FieldStatus, string> = FIELD_STATUS_LABEL;
 
 function buildMarkerHtml(m: KakaoMapMarker, count = 1): string {
   const color = m.color || '#2563eb';
