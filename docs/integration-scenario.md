@@ -1,10 +1,10 @@
 # 통합 테스트 시나리오 — 회원가입부터 보고서까지 전 범위
 
-> 작성일: 2026-05-09 (마지막 갱신: 2026-05-11 — 보고서 통합·모달 picker·safeBack·외근 탭 자동 로드 차단 반영)
-> 대상 빌드: 일가요(mfz) 프론트엔드 main 브랜치 (HEAD: `102a6c2` 시점 기준)
+> 작성일: 2026-05-09 (마지막 갱신: 2026-05-11 — 보고서 통합·모달 picker·safeBack 반영. 외근 탭 자동 로드 차단·mapFieldIds 화이트리스트는 PR 102a6c2 / e039d97 revert 로 되돌림.)
+> 대상 빌드: 일가요(mfz) 프론트엔드 main 브랜치 (HEAD: `9221bd8` 시점 기준)
 > 진행 환경: web (`npm run web`) — 모바일 전용 기능(geofence, 카메라/마이크 네이티브, expo-secure-store) 은 web fallback 으로 평가
 >
-> 기록은 [`qa-log-2026-05-09.md`](qa-log-2026-05-09.md) 에 누적. 이 문서는 "무엇을 어떻게 시도하는가" 만 정의하고, 발견되는 문제·모호점·환경 제약은 모두 QA 로그로 빼서 통합 테스트 종료 후 일괄 처리.
+> 이 문서는 "무엇을 어떻게 시도하는가" 만 정의. 발견되는 문제·모호점·환경 제약은 별도 QA 로그로 빼서 통합 테스트 종료 후 일괄 처리.
 
 ---
 
@@ -44,7 +44,6 @@
    - 약관 미동의 → 제출 비활성/에러
    - 정상 입력 후 제출 → `POST /auth/signup` 성공
 3. 기대: 자동 로그인 (refresh/access 토큰 저장) → `/(tabs)` 진입 + 첫 화면(외근 탭) 렌더.
-   - **자동 로드 차단 검증 (PR `102a6c2`)**: 외근 탭이 첫 화면이지만 fields 전체 페치는 일어나지 않아야 함. 네트워크 탭에서 `GET /api/fields` 미발화 확인. fields 는 (a) 현장 탭 진입 시, (b) 외근 시작 흐름 `trips/new/select` 진입 시에만 페치.
 4. 동일 이메일로 재가입 시도 → `email_already_exists` Alert 처리.
 
 ### S3. 로그아웃 후 재로그인
@@ -81,7 +80,6 @@
 ### S7. 외근 시작 (현장 2곳 선택)
 
 1. 외근 탭 → "외근 시작" → `/(tabs)/trips/new/select`.
-   - **fields refresh 트리거 검증 (PR `102a6c2`)**: 이 진입 시점에 `fieldStore.refresh()` 가 호출되어 fields 가 채워지는지. 외근 탭 첫 진입에선 자동 로드를 차단했으므로, 외근 시작 흐름이 명시 트리거 역할.
 2. 검색·상태 필터 toggle 동작 확인.
 3. 위에서 만든 2개 현장 체크 → "다음" → `/(tabs)/trips/new/order`.
 4. 순서 최적화:
@@ -93,7 +91,6 @@
 
 `/(tabs)/trips/active` 에서:
 
-0. **deep-link 직진 진입 (PR `102a6c2`)**: 페이지 새로고침 또는 URL 직접 입력으로 `/trips/active` 에 들어왔을 때 — destinations 의 fieldId 중 store 에 없는 항목만 `loadDetail` 로 ensure-load. 모든 현장을 페치하는 게 아니라 외근 소속 현장만 채워지는지 확인. `fieldId` 키 의존성으로 무한 루프 없이 1회만 호출되는지.
 1. **지도 scope** 검증: 배경 지도에 이 외근의 현장만 마커로 보여야 함 (직전 PR `08bc06c` 대상).
 2. **길찾기**: "현재 목적지" 카드의 "길찾기" → `POST /api/trips/{tripId}/navigation/deep-links` → 카카오맵 web URL 단독 또는 다이얼로그.
    - web 환경: `kakaomap://`·`nmap://` 스킴은 가드로 제외 → 카카오 web URL 만 남는 경로 검증.
@@ -208,12 +205,11 @@
 
 - [ ] 부팅 후 비로그인 → /(auth)/login 으로 진입
 - [ ] 회원가입 정책 검증 (이메일·비밀번호·약관·비밀번호 확인·중복 이메일)
-- [ ] 로그인 후 외근 탭 첫 진입 시 fields 자동 페치 차단 (PR `102a6c2`)
 - [ ] 로그인 실패 시 invalid_credentials 처리
 - [ ] 현장 추가 — 주소 검색·중복 경고·강제 추가
 - [ ] 현장 상태 변경 — 빠른 연속 탭 가드 / web 인라인 선택 (B-3 회귀)
-- [ ] 외근 시작 — `trips/new/select` 진입 시 fields refresh 트리거 / 다중 선택 / 순서 최적화 / start
-- [ ] 외근 진행 — deep-link 진입 시 외근 소속 fields 만 ensure-load / 지도 scope·길찾기·체크인·건너뛰기·재최적화
+- [ ] 외근 시작 — 다중 선택 / 순서 최적화 / start
+- [ ] 외근 진행 — 지도 scope·길찾기·체크인·건너뛰기·재최적화
 - [ ] 체크인 — 결과·메모·사진·음성 / 기타 사유 10자
 - [ ] 외근 종료 — 정상·zero_visits force
 - [ ] 외근 상세 — 헤더 라벨·timeline·보고서 CTA (단일 "📝 보고서 작성")
@@ -225,4 +221,4 @@
 - [ ] 토큰 회전 — refresh 401·user 없는 응답
 - [ ] 흰화면 fallback — deep-link 진입 후 safeBack → `/(tabs)/trips` / +not-found 라우트
 
-검증 결과는 [`qa-log-2026-05-09.md`](qa-log-2026-05-09.md) 의 카테고리별 섹션으로 누적.
+검증 결과는 별도 QA 로그로 누적 (이전 `qa-log-2026-05-09.md` 는 102a6c2 revert 와 함께 폐기).
