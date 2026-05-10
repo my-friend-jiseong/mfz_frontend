@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { visits as visitsApi, localizeError } from '@/api';
+import { safeBack } from '@/utils/backNavigation';
 import type { VisitDetailResponse } from '@/api';
 import { useTripStore } from '@/stores/tripStore';
 import { useVisitStore } from '@/stores/visitStore';
@@ -49,7 +50,7 @@ export default function VisitDetail() {
 
   if (loading) {
     return (
-      <MapSheetLayout title="방문 상세" onBack={() => router.back()}>
+      <MapSheetLayout title="방문 상세" onBack={() => safeBack(router)}>
         <View style={styles.center}>
           <ActivityIndicator color={colors.primary} />
         </View>
@@ -59,7 +60,7 @@ export default function VisitDetail() {
 
   if (error || !data) {
     return (
-      <MapSheetLayout title="방문 상세" onBack={() => router.back()}>
+      <MapSheetLayout title="방문 상세" onBack={() => safeBack(router)}>
         <EmptyState title="방문을 찾을 수 없습니다" description={error ?? undefined} />
       </MapSheetLayout>
     );
@@ -88,7 +89,7 @@ export default function VisitDetail() {
   const fieldIdForCheckin = visitInStore?.fieldId ?? null;
 
   return (
-    <MapSheetLayout title="방문 상세" onBack={() => router.back()} initialIndex={2}>
+    <MapSheetLayout title="방문 상세" onBack={() => safeBack(router)} initialIndex={2}>
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.site}>{data.siteName}</Text>
         <View style={[styles.statusChip, { backgroundColor: statusColor + '22' }]}>

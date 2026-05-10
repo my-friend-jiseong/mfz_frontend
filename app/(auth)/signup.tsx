@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '@/stores/authStore';
+import { safeBack } from '@/utils/backNavigation';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
 
@@ -256,7 +257,7 @@ export default function Signup() {
             <Text style={styles.btnText}>{submitting ? '가입 중...' : '가입하고 시작하기'}</Text>
           </Pressable>
 
-          <Pressable onPress={() => router.back()} style={styles.link}>
+          <Pressable onPress={() => safeBack(router)} style={styles.link}>
             <Text style={styles.linkText}>이미 계정이 있어요</Text>
           </Pressable>
         </View>

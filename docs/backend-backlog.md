@@ -1,0 +1,375 @@
+# 백엔드 백로그 — 일가요(mfz) 프론트엔드 요청 누적
+
+> 프론트에서 발견·합의한 백엔드 작업 항목을 누적. 사이클 시작 시점에 우선순위
+> 정해 작업으로 빼는 방식. 활발히 진행 중인 항목은 backend-handoff.md (있을 때)
+> 가 1차 소스, 본 문서는 그 위에 쌓이는 큐.
+>
+> **응답 contract 표준**: 모든 4xx/5xx 는 Phase 7 단일 shape `{ code, message, fields?, details? }`.
+>
+> **지도 정책**: 일가요는 카카오 지도/길찾기만 사용. 구글·네이버 옵션은 노출하지 않음.
+
+---
+
+## 1. 🟡 길찾기 deep-links — 카카오 web URL 만 단독 반환
+
+### 배경
+`POST /api/trips/:tripId/navigation/deep-links` 응답이 현재 카카오·구글·네이버 3종을 모두 반환:
+
+```js
+providers: {
+  kakao:  "kakaomap://route?ep=lat,lng&by=CAR",   // 모바일 앱 스킴
+  google: "https://www.google.com/maps/dir/...",  // HTTPS web URL
+  naver:  "nmap://route/car?...",                 // 모바일 앱 스킴
+}
+```
+
+웹 브라우저에서 `kakaomap://`·`nmap://` 앱 스킴은 처리 불가. 프론트의 안전 가드(`url.startsWith('http')`) 가 둘을 걸러내면 구글만 남아 **선택 다이얼로그 없이 곧장 구글맵으로 진입** — 카카오 정책에 어긋남.
+
+### 백엔드가 해야 할 것
+서비스 정책상 **카카오만 사용**. 응답 단순화:
+
+```js
+providers: {
+  kakao: "https://map.kakao.com/link/to/이름,lat,lng"   // web/mobile 모두 처리 가능한 단일 URL
+}
+```
+
+또는 모바일 앱 우선·웹 fallback 둘 다 노출:
+```js
+providers: {
+  kakaoApp: "kakaomap://route?ep=lat,lng&by=CAR",
+  kakaoWeb: "https://map.kakao.com/link/to/이름,lat,lng"
+}
+```
+
+`google`·`naver` 키는 응답에서 제거.
+
+### 프론트엔드 영향
+- `active.tsx` 의 `handleNavigate` — provider 선택 다이얼로그 로직 제거, 카카오 한 종만 열도록 단순화
+- 응답 typing (`NavigationDeepLinksResponse`) 도 `providers: { kakao: string }` 으로 좁힘
+
+### 우선순위
+🟡 중간 — 현 상태에서 web 사용자가 카카오로 보내야 할 자리에 구글로 가고 있음.
+
+### 발견 시점
+2026-05-08 (외근 시작 → 길찾기 클릭 → 의도 없이 구글맵 단독 진입 보고)
+
+### 관련 코드
+- 프론트 [`app/(tabs)/trips/active.tsx:187-233`](../app/\(tabs\)/trips/active.tsx) `handleNavigate`
+- 백엔드 [`mfz_backend/src/fieldwork/tripsService.js:1274-1312`](../../mfz_backend/src/fieldwork/tripsService.js) `buildMapDeepLink` / `createNavigationDeepLinks`
+
+---
+
+## 2. 🟡 `PATCH /api/trips/:tripId` / `DELETE /api/trips/:tripId` 신설
+
+### 배경
+Trip 자원에 Update·Delete 엔드포인트가 없음. Field 는 `PATCH /api/fields/:fieldId` / `DELETE /api/fields/:fieldId` 가 있어 [`fields/[id]/edit.tsx`](../app/\(tabs\)/fields/\[id\]/edit.tsx) 에서 사용 중인데 Trip 만 비대칭. 프론트의 외근 상세 화면 ([`trips/[id].tsx`](../app/\(tabs\)/trips/\[id\].tsx)) 에 수정·삭제 UI 가 들어갈 자리가 없음.
+
+### 백엔드가 해야 할 것
+
+**(A) `PATCH /api/trips/:tripId` — 부분 갱신**
+```ts
+PATCH /api/trips/:tripId
+body: {
+  title?: string;        // 사용자 입력 제목 (50자 이하)
+  startedAt?: ISO8601;   // 시작 시각 보정 (시작 깜빡한 경우)
+  endedAt?: ISO8601;     // 종료 시각 보정 (종료 깜빡한 경우)
+}
+→ 200: TripDetailResponse
+```
+
+검증:
+- 본인 trip 만 수정 가능 (`requesterId === trip.userId`)
+- `startedAt > endedAt` 케이스는 400
+- 활성 외근(`endedAt = null`) 의 `endedAt` 갱신은 종료 처리로 위임 (별도 endpoint 와 충돌 방지) — 또는 허용하면 lifecycle 정합 정책 명시
+- title trim, 50자 초과 거부
+
+**(B) `DELETE /api/trips/:tripId` — soft delete 권장**
+```ts
+DELETE /api/trips/:tripId
+→ 204
+```
+
+검증·정책:
+- visit·report 가 연결된 trip 삭제 시 cascade 정책 정의 — Field 의 `has_related_visits` 코드와 같은 패턴 권장 (관련 데이터 있으면 차단·확인 요청)
+- soft delete (deletedAt 컬럼) 권장 — 통계·이력 보존 목적
+- 활성 외근 삭제는 차단 (먼저 종료해야 함)
+
+### 프론트엔드가 할 일 (백엔드 준비 후)
+- `tripStore.update(tripId, body)` / `tripStore.remove(tripId)` 추가
+- `tripsApi.update` / `tripsApi.remove` 추가
+- 외근 상세 ([`trips/[id].tsx`](../app/\(tabs\)/trips/\[id\].tsx)) 에 "수정 / 삭제" CTA 추가, 또는 별도 edit 화면 (`trips/[id]/edit.tsx`) 구성 — Field 패턴 그대로
+- 활성 외근일 땐 삭제 버튼 비활성
+
+### 우선순위
+🟡 중간 — 종료된 외근의 제목 오기·시간 오기 보정 + 잘못 시작한 외근 삭제 모두 실사용에서 흔한 시나리오.
+
+### 발견 시점
+2026-05-08 — 외근 상세 화면 점검 중 CRUD 비대칭 발견.
+
+---
+
+## 3. 🔴 카카오 Local 주소 검색이 모든 키워드에서 결과 0건
+
+### 배경
+`POST/GET /api/fields/address/search?keyword=...` 가 **어떤 키워드든** 항상 다음 응답:
+
+```json
+{
+  "query": "...",
+  "provider": { "primary": "kakao_local_rest", "manualCoordinateFallback": true },
+  "items": []
+}
+```
+
+검증된 키워드: `동아대학교 부민캠퍼스`, `부산광역시청`, `해운대해수욕장` — 모두 0건.
+HTTP status 는 200 정상이라 클라이언트 catch 분기도 안 탐. `manualCoordinateFallback: true` 라 사용자에게 "좌표 직접 입력으로 진행 →" 우회 경로는 노출되지만, **시나리오의 핵심 진입점 (주소 검색 → 좌표 자동 채움) 이 사실상 차단** 된 상태.
+
+### 백엔드가 해야 할 것
+- 카카오 Local REST API 키가 만료/권한 문제인지 확인 (REST API 키 vs JavaScript 키 혼용 가능성, 도메인 화이트리스트 누락 가능성)
+- 백엔드 ↔ 카카오 사이 호출 자체가 실패하고 있는지 로그 확인
+- 응답 정상화 — 정상 키워드에 대해 items 가 실제로 채워지도록
+
+### 프론트엔드 영향
+- `fields/new.tsx` 의 검색 흐름이 항상 0건 분기 → manual 좌표 입력으로만 등록 가능
+- 사용자가 "왜 검색이 안 되지?" 하는 혼란 — 본 백엔드 fix 후 자연 해결
+- Playwright 통합 자동화에서도 검색 단계를 매번 manual 우회로 처리 중
+
+### 우선순위
+🔴 높음 — 핵심 사용자 흐름 차단. 시나리오 S4·S5 가 manual 우회로만 동작.
+
+### 발견 시점
+2026-05-09 (Playwright 통합 자동화 재실행 중 캡처)
+
+### 관련 코드
+- 프론트 호출 [`src/api/endpoints/fields.ts:192`](../src/api/endpoints/fields.ts#L192) `addressSearch`
+- 프론트 사용 [`app/(tabs)/fields/new.tsx:75-100`](../app/\(tabs\)/fields/new.tsx#L75) 디바운스 + 카카오 호출
+
+---
+
+## 4. 🟡 `detailAddress` 정책 정합 — 백엔드는 필수, 프론트는 선택
+
+### 배경
+`POST /api/fields` 가 `detailAddress` 빠진 요청에 대해 400 응답:
+
+```json
+{ "code": "detail_address_required", "message": "상세 주소를 입력해주세요" }
+```
+
+그런데 클라이언트 [`fields/new.tsx`](../app/\(tabs\)/fields/new.tsx) 의 "상세 주소 (동/호수 등)" 입력은 placeholder 만 있고 강제 입력 없음. 사용자가 빈 채로 "현장 등록" 누르면 백엔드가 거부 → 일반 Alert (`등록 실패`) 로 떨어짐. `detail_address_required` 코드는 클라이언트 ERROR_MESSAGES 표에도 누락이라 코드 분기로 인라인 필드 에러도 못 띄움.
+
+### 결정 필요 — 두 방향 중 하나로 정합
+- **(A) 백엔드 측에서 optional 로 완화**: detailAddress 가 없는 경우 빈 문자열로 저장. 이유: 모든 현장이 동·호수 단위로 식별 가능한 건 아님 (예: 가로수, 광장).
+- **(B) 백엔드 정책 유지 + 프론트 측 강제**: 클라이언트가 사전 차단. 이유: 데이터 품질을 백엔드 단계에서 보장.
+
+### 프론트엔드가 할 일 (둘 다 공통)
+- `detail_address_required` 를 `src/api/errors.ts` ERROR_MESSAGES 에 추가
+- (B) 채택 시 필드 라벨에 별표(*) + submit 직전 `if (!detail.trim()) errs.detail = '...'` 가드 + `inputError` 스타일 매핑
+
+### 우선순위
+🟡 중간 — 사용자가 첫 현장 등록에서 알 수 없는 이유로 차단됨. 새 사용자 첫 인상 관련.
+
+### 발견 시점
+2026-05-09 (Playwright 자동화 spec 의 빈 detail 등록 시도에서 캡처)
+
+### 관련 코드
+- 프론트 [`app/(tabs)/fields/new.tsx:360-366`](../app/\(tabs\)/fields/new.tsx#L360) detail 입력
+- 프론트 [`src/api/errors.ts`](../src/api/errors.ts) ERROR_MESSAGES (코드 누락)
+
+---
+
+## 5. 🟢 `POST /api/trips/navigation/optimize-preview` 백엔드 404
+
+### 배경
+"✨ 최적 순서 추천" 누를 때 호출하는 endpoint 가 백엔드에서 404. 클라이언트 [`trips/new/order.tsx`](../app/\(tabs\)/trips/new/order.tsx#L78) 가 try/catch 로 잡아 nearest-neighbor fallback 으로 자동 회복 — 사용자 흐름은 무영향.
+
+### 백엔드가 해야 할 것
+다음 중 하나:
+- **(A) endpoint 배포** — 시나리오 문서·핸드오프에서 가정한 contract 대로 구현
+- **(B) contract 정정** — 백엔드가 이 endpoint 를 제공할 의향이 없으면 시나리오·handoff 문서에서 "클라이언트 nearest-neighbor 만 사용" 으로 명시. 클라이언트 호출 자체를 제거 가능.
+
+### 우선순위
+🟢 낮음 — fallback 작동으로 사용자 흐름 무영향. 다만 매 외근 시작마다 404 가 콘솔에 누적되는 점은 모니터링 시 노이즈.
+
+### 발견 시점
+2026-05-09 (Playwright 통합 자동화 캡처)
+
+### 관련 코드
+- 프론트 [`app/(tabs)/trips/new/order.tsx:78-87`](../app/\(tabs\)/trips/new/order.tsx#L78) 호출
+- 프론트 [`src/utils/routeOptimize.ts`](../src/utils/routeOptimize.ts) fallback 알고리즘
+
+---
+
+## 6. 🟠 현장 삭제 — 방문 기록 있어도 cascade 로 삭제 허용
+
+### 배경
+현재 `DELETE /api/fields/:fieldId` 가 방문 기록(`visits`) 이 연결돼 있으면 `has_related_visits` 코드로 차단. 프론트의 [`fields/[id]/edit.tsx:281-293`](../app/\(tabs\)/fields/\[id\]/edit.tsx) 가 그 코드를 받아 "방문 기록이 남아 있는 현장은 삭제할 수 없습니다" 안내만 띄움. 단일 Actor 가 본인 현장을 정리하려 해도 막혀 있어 운용 시 자기 데이터를 못 지움.
+
+### 백엔드가 해야 할 것
+**(A) 가드 제거 + cascade 삭제** (정책 권장)
+- `DELETE /api/fields/:fieldId` 가 방문 유무와 무관하게 진행.
+- 같은 트랜잭션에서 cascade:
+  - `visits` (해당 fieldId)
+  - `text_memos` / `voice_memos` / `photos` (visitId 또는 fieldId 직접 첨부 양쪽)
+  - `destinations` (해당 fieldId — 진행 중 외근의 destination 까지 포함할지 별도 정책 결정. 진행 중 외근은 차단 또는 destination 만 정리)
+- 구현 방식 권장: `deletedAt` 컬럼 도입한 soft-delete + 통계·이력 보존. 단, 프론트는 `deletedAt !== null` 인 row 를 hide 처리하도록 응답 필터.
+
+**(B) confirm 우회 코드 추가** (대안)
+- `DELETE /api/fields/:fieldId?force=true` 또는 body `{ force: true }` 로 cascade 동의.
+- 응답: 삭제된 visit·attachment 카운트 echo (사용자 알림용).
+
+### 프론트엔드 영향
+- `fieldStore.remove` 의 결과 분기에서 `needsConfirm` 처리 변경 — confirm 다이얼로그 후 force 옵션으로 재호출.
+- [`fields/[id]/edit.tsx:283`](../app/\(tabs\)/fields/\[id\]/edit.tsx) 의 안내 문구 재작성 — "삭제할 수 없습니다" → "방문 N건과 첨부물도 함께 삭제됩니다. 계속할까요?".
+- `src/api/errors.ts` 의 `has_related_visits` 메시지 갱신 또는 코드 자체 deprecate.
+
+### 우선순위
+🟠 중상 — 사용자가 본인의 잘못 등록된 현장을 정리할 수 있어야 함. 운용 시 1순위로 마주치는 막힘.
+
+### 발견 시점
+2026-05-10 (요구사항 정리 #1)
+
+### 관련 코드
+- 프론트 [`fieldStore.remove`](../src/stores/fieldStore.ts) — `needsConfirm` 분기
+- 프론트 [`fields/[id]/edit.tsx:273-306`](../app/\(tabs\)/fields/\[id\]/edit.tsx) `performDelete`/`handleDelete`
+- 프론트 [`src/api/errors.ts:95`](../src/api/errors.ts#L95) `has_related_visits` 매핑
+
+---
+
+## 7. 🟠 보고서 본문(content) 검증 완화 + 직접 저장 분기에 사진 첨부 허용
+
+### 배경
+운용 시나리오: 작업자가 "조치 전/후 사진 + 제목" 만으로 짧게 보고서 남기고 싶음 (예: 길거리 단순 정비, 가로수 한 그루 점검). 현재 막힘 두 군데:
+
+1. `POST /api/reports` (직접 저장) — `content` **10~50,000자** 강제. 본문 없이 진행 불가.
+2. `POST /api/reports` (직접 저장) — body 가 JSON only. **사진 첨부 contract 없음**. AI 분기 (`POST /api/reports/generate`, multipart) 만 사진 받음.
+
+→ 결과: 사진만 + 제목만 으로는 직접 저장 불가. 사용자는 의미 없는 더미 본문(예: ".") 로 padding 해야 함.
+
+### 백엔드가 해야 할 것
+
+**(A) `content` min 가드 완화**
+- 10 → 0 (또는 옵셔널). max 50,000 유지.
+- 정책: **제목 1자 이상 + (본문 1자 이상 OR 사진 1장 이상)** 중 하나는 강제. 진짜 빈 보고서 차단.
+
+**(B) 직접 저장도 multipart 수용**
+- `POST /api/reports` 가 `Content-Type: application/json` 외 `multipart/form-data` 도 받도록.
+- multipart 필드: `title`, `content`, `summary?`, `tripId?`, `before_photo?`, `after_photo?`.
+- 응답 `outputFileUrl` 또는 attachment 배열에 첨부 사진 echo (직접 저장 보고서도 공유 시 사진 노출 가능해야 함).
+
+**(C) 또는 별도 attachment endpoint 분리**
+- `POST /api/reports/:reportId/attachments` 신설 — 보고서 생성 후 사진 별도 업로드.
+- 이 방식이면 보고서 lifecycle 단순. 다만 클라이언트는 2-step.
+
+### 프론트엔드 영향 (백엔드 결정 후)
+- **(B) 채택**: [`reportStore.create`](../src/stores/reportStore.ts) 에 사진 인자 추가 → multipart 빌더 사용. [`reports/new.tsx`](../app/\(tabs\)/reports/new.tsx) `handleManualSave` 본문 가드 풀고 "제목 + (본문 OR 사진)" 로 재작성.
+- **(C) 채택**: `handleManualSave` 가 create → attach 2-step. 실패 시 보고서 롤백 정책 필요.
+
+### 우선순위
+🟠 중상 — 사용자 요구사항 #2. 운용 시 자주 마주칠 시나리오. 현재 더미 텍스트 우회로만 가능.
+
+### 발견 시점
+2026-05-10 (요구사항 정리 #2)
+
+### 관련 코드
+- 프론트 [`app/(tabs)/reports/new.tsx:274-301`](../app/\(tabs\)/reports/new.tsx#L274) `handleManualSave`
+- 프론트 [`src/api/endpoints/reports.ts:56-61`](../src/api/endpoints/reports.ts#L56) `CreateReportBody`
+- 프론트 [`src/stores/reportStore.ts:125-150`](../src/stores/reportStore.ts#L125) `create`
+- 백엔드 `POST /api/reports` body schema
+
+---
+
+## 8. ✅ 자동 체크인 — 현 반자동 정책 유지 (변경 없음)
+
+### 배경
+요구사항 #6 — "자동 체크인 기능 개발 완료 됐는지?" 사용자 검토 결과, **현 반자동(arrival → Alert → 사용자 탭 → checkIn) 흐름이 의도된 동작**. 사용자 confirm 안전망을 유지. 백엔드/프론트 변경 없음.
+
+### 현재 동작
+1. 위치 폴링이 destination 좌표 < N m 진입 검출
+2. `POST /api/trips/:tripId/geofences/arrival` 로 백엔드 알림
+3. 클라이언트가 Alert ("지금 체크인할까요?") 노출 → 사용자가 누르면 checkin 화면으로 이동
+
+### 결정
+- 자동 visit 생성 endpoint 확장(과거 안 (A))·클라이언트 자동 호출(과거 안 (B)) 모두 **보류**.
+- 추후 사용자 풀(현장 작업자) 피드백에서 "확인 클릭이 번거롭다" 신호가 누적되면 그때 재개.
+
+### 발견 시점
+2026-05-10 (요구사항 정리 #6, 같은 날 정책 결정으로 클로즈)
+
+---
+
+## 9. 🟠 visit 단계 모델(phase: 조치 전/중/후) 도입
+
+### 배경
+요구사항 #9 — "현장 정보는 [조치 전 / 조치 중 / 조치 후] 세 분류로 나뉘어야 한다." 사용자(현장 청취) 워크플로우:
+
+> 체크인 → **조치 전** 사진/설명 → 조치 및 **조치 중** 사진/설명 → 조치 완료 → **조치 후** 사진/설명
+
+각 phase 별 사진+짧은 설명이 결국 보고서에 그대로 들어감. 현재 데이터 모델은 visit 하위 attachment 가 평면적(`text`/`photo`/`audio`) 이라 phase 구분이 없음. 결과: 사용자가 보고서 작성 시 어떤 사진이 "조치 전" 인지 매번 다시 분류해야 함 (현재 [`reports/new.tsx:156-162`](../app/\(tabs\)/reports/new.tsx#L156) 의 promptChoice 로 사용자가 직접 슬롯 지정).
+
+### 백엔드가 해야 할 것
+**(A) attachment 에 phase 필드 추가**
+- 컬럼 또는 JSON meta: `phase: 'before' | 'during' | 'after' | null`
+- `POST /api/visits/:visitId/attachments/photo|audio|text` body 에 `phase?` 추가.
+- 응답에도 echo. 기존 데이터는 `null` 로 유지(소급 변환 X).
+
+**(B) visit 에 phase progress 필드(파생)**
+- 응답 contract: `visit.phaseProgress: 'before' | 'during' | 'after' | 'done'`
+- 어떤 phase 의 attachment 가 1건 이상 있는지 기준으로 derive.
+
+**(C) 보고서 generate 시 phase 자동 매핑**
+- `POST /api/reports/generate` 가 visit phase 별 사진을 자동으로 `before_photo` / `after_photo` 슬롯에 매핑.
+- 사용자가 일일이 다시 선택 안 해도 되도록.
+
+### 프론트엔드가 해야 할 것 (별도 사이클)
+- 체크인 화면 (`fields/[id]/checkin.tsx`) 에 phase 선택 chip 도입 (기본 'before').
+- visit 상세 (`trips/visit.tsx`) 에 phase 별 섹션 분리.
+- 체크인 시 fieldStatus pending → in_progress 자동 전환, after phase 첫 attachment 추가 시 in_progress → done 제안.
+- 보고서 작성 (`reports/new.tsx`) — phase 별 importablePhotos 자동 슬롯 매핑.
+
+### 우선순위
+🟠 중상 — UX/도메인 핵심. 사용자가 보고서마다 사진을 다시 분류하는 번거로움이 누적. 다만 구조적 변경이 커서 별도 사이클 권장.
+
+### 발견 시점
+2026-05-10 (요구사항 정리 #9 — 현장 워크플로우 청취 결과 반영)
+
+### 관련 코드
+- 프론트 [`app/(tabs)/fields/[id]/checkin.tsx`](../app/\(tabs\)/fields/\[id\]/checkin.tsx)
+- 프론트 [`app/(tabs)/trips/visit.tsx`](../app/\(tabs\)/trips/visit.tsx)
+- 프론트 [`app/(tabs)/reports/new.tsx:142-162`](../app/\(tabs\)/reports/new.tsx#L142) `handleImportPhotoTap`
+- 프론트 [`src/types/entities.ts`](../src/types/entities.ts) attachment 타입
+
+---
+
+## 10. 🟢 파일 저장 인프라 — MinIO 도입 + 보고서 < 20MB 압축
+
+### 배경
+현재 `photos`/`voiceMemos` 의 `fileUrl` 이 정확히 어디 저장되고 어떻게 호스팅되는지 프론트에서 추적 불가. 운용 단계로 가려면:
+- 객체 저장소(MinIO) 표준화 — 파일 lifecycle/권한/감사 로그 일관.
+- 보고서 패키지(첨부 포함) 의 송신 크기 < 20MB — 사진 압축·리샘플 + 음성 비트레이트 다운.
+
+### 백엔드가 해야 할 것
+- MinIO 도입 — bucket 정책(visit-attachments, report-bundle 분리), presigned upload URL endpoint, lifecycle.
+- 사진 업로드 시 서버측 리샘플 (예: long edge 1920px, JPEG q=72).
+- 음성 업로드 시 비트레이트 정규화 (예: opus 32kbps mono).
+- 보고서 export(공유 URL/다운로드) 시 zip 패키지 < 20MB 보장 (초과 시 추가 압축 라운드 또는 분할).
+
+### 프론트엔드 영향
+- 업로드 응답이 presigned URL 흐름으로 바뀌면 [`src/utils/media.ts`](../src/utils/media.ts) 의 업로드 회로 재작성 필요.
+- 클라이언트도 사전 리샘플 1라운드 두면 백엔드 부하 감소 (대개 sharp/canvas — `expo-image-manipulator` 사용 가능).
+
+### 우선순위
+🟢 낮음(인프라) — 즉시 막힘은 없으나 사용량 증가 시 빠르게 진입할 워크. 별도 사이클로 분리 권장.
+
+### 발견 시점
+2026-05-10 (요구사항 정리 #10)
+
+---
+
+## 변경 이력
+
+- **2026-05-08**: 백로그 신설. §1 길찾기 카카오-only 정책 반영. (이전 §1 title 은 백엔드 처리 완료로 제거)
+- **2026-05-08**: §2 추가 — Trip PATCH/DELETE 신설 요청 (Field 와 비대칭 해소).
+- **2026-05-09**: §3·§4·§5 추가 — 통합 자동화 재실행 중 발견. §3 카카오 Local 검색 0건 (high), §4 detailAddress 정책 정합 (medium), §5 optimize-preview 404 (low).
+- **2026-05-10**: §6·§7·§8·§9·§10 추가 — 사용자 요구사항 정리 라운드. §6 현장 삭제 cascade(중상), §7 보고서 본문 검증 완화 + multipart(중상), §8 자동 체크인 정합(닫힘), §9 visit phase 모델(중상·별도 사이클), §10 MinIO/압축 인프라(낮·별도 사이클).
+- **2026-05-10**: §8 클로즈 — 사용자 검토 결과 현 반자동(Alert confirm) 흐름이 의도. 백엔드/프론트 변경 보류.

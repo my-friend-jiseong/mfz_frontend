@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFieldStore } from '@/stores/fieldStore';
+import { safeBack } from '@/utils/backNavigation';
 import { FIELD_STATUS_VALUES, FIELD_STATUS_LABEL, type FieldStatus } from '@/types/entities';
 import { fields as fieldsApi, errorCode, localizeError } from '@/api';
 import type { AddressSearchItem } from '@/api';
@@ -267,7 +268,7 @@ export default function EditField() {
     }
 
     setSubmitting(false);
-    router.back();
+    safeBack(router);
   };
 
   const performDelete = async () => {
@@ -307,12 +308,12 @@ export default function EditField() {
 
   const handleCancel = () => {
     if (!hasChanges) {
-      router.back();
+      safeBack(router);
       return;
     }
     Alert.alert('수정 취소', '저장하지 않은 변경 사항이 있습니다. 계속 취소할까요?', [
       { text: '계속 작성', style: 'cancel' },
-      { text: '버리고 나가기', style: 'destructive', onPress: () => router.back() },
+      { text: '버리고 나가기', style: 'destructive', onPress: () => safeBack(router) },
     ]);
   };
 

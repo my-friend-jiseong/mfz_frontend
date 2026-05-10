@@ -13,6 +13,7 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useReportStore } from '@/stores/reportStore';
 import { useAuthStore } from '@/stores/authStore';
+import { safeBack } from '@/utils/backNavigation';
 import { EmptyState } from '@/components/EmptyState';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
@@ -138,7 +139,7 @@ export default function EditReport() {
     const r = await update(report.id, { title: titleTrim, content: contentTrim });
     setSubmitting(false);
     if (r.ok) {
-      router.back();
+      safeBack(router);
       return;
     }
     // 백엔드 코드 → 필드 매핑.
@@ -155,12 +156,12 @@ export default function EditReport() {
 
   const handleCancel = () => {
     if (!hasChanges) {
-      router.back();
+      safeBack(router);
       return;
     }
     Alert.alert('수정 취소', '저장하지 않은 변경 사항이 있습니다. 계속 취소할까요?', [
       { text: '계속 작성', style: 'cancel' },
-      { text: '버리고 나가기', style: 'destructive', onPress: () => router.back() },
+      { text: '버리고 나가기', style: 'destructive', onPress: () => safeBack(router) },
     ]);
   };
 

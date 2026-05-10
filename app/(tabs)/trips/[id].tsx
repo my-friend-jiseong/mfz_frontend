@@ -17,6 +17,7 @@ import { useDestinationStore } from '@/stores/destinationStore';
 import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
 import { trips as tripsApi, type TripStateTransition } from '@/api';
+import { safeBack } from '@/utils/backNavigation';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
 import { VISIT_STATUS_LABEL, type Visit } from '@/types/entities';
@@ -102,7 +103,7 @@ export default function TripDetail() {
 
   if (!trip) {
     return (
-      <MapSheetLayout title="외근 상세" onBack={() => router.back()}>
+      <MapSheetLayout title="외근 상세" onBack={() => safeBack(router)}>
         <EmptyState title="외근을 찾을 수 없습니다" />
       </MapSheetLayout>
     );
@@ -282,7 +283,7 @@ export default function TripDetail() {
   return (
     <MapSheetLayout
       title={trip.title || '외근 상세'}
-      onBack={() => router.back()}
+      onBack={() => safeBack(router)}
       initialIndex={2}
       mapFieldIds={tripFieldIds}
     >

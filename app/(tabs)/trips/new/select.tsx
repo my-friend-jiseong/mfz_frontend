@@ -7,6 +7,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useTripStore } from '@/stores/tripStore';
 import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
+import { safeBack } from '@/utils/backNavigation';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
 import { FIELD_STATUS_VALUES, FIELD_STATUS_LABEL, type Field, type FieldStatus } from '@/types/entities';
@@ -75,7 +76,7 @@ export default function NewTripSelect() {
 
   if (activeTripId !== null) {
     return (
-      <MapSheetLayout title="외근 시작" onBack={() => router.back()}>
+      <MapSheetLayout title="외근 시작" onBack={() => safeBack(router)}>
         <EmptyState
           title="이미 진행 중인 외근이 있습니다"
           description="현재 외근을 종료한 뒤 새 외근을 시작해주세요"
@@ -114,7 +115,7 @@ export default function NewTripSelect() {
   };
 
   return (
-    <MapSheetLayout title="방문할 현장 선택" onBack={() => router.back()}>
+    <MapSheetLayout title="방문할 현장 선택" onBack={() => safeBack(router)}>
       <View style={styles.head}>
         <View style={styles.headRow}>
           <Text style={styles.headTitle}>방문할 현장 선택</Text>

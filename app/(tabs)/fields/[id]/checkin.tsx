@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFieldStore } from '@/stores/fieldStore';
+import { safeBack } from '@/utils/backNavigation';
 import { useTripStore } from '@/stores/tripStore';
 import { useVisitStore } from '@/stores/visitStore';
 import { useDestinationStore } from '@/stores/destinationStore';
@@ -231,7 +232,7 @@ export default function FieldCheckin() {
         markDestinationArrived(dest.id);
       }
     }
-    router.back();
+    safeBack(router);
   };
 
   return (

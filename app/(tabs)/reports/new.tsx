@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useReportStore } from '@/stores/reportStore';
+import { safeBack } from '@/utils/backNavigation';
 import { useTripStore } from '@/stores/tripStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useVisitStore } from '@/stores/visitStore';
@@ -609,7 +610,7 @@ export default function ComposeReport() {
           </Pressable>
         </View>
 
-        <Pressable onPress={() => router.back()} style={styles.cancel}>
+        <Pressable onPress={() => safeBack(router)} style={styles.cancel}>
           <Text style={styles.cancelText}>취소</Text>
         </Pressable>
 

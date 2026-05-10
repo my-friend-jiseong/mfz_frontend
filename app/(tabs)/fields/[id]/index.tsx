@@ -10,10 +10,12 @@ import {
 } from 'react-native';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import { useFieldStore } from '@/stores/fieldStore';
+import { safeBack } from '@/utils/backNavigation';
 import { useVisitStore } from '@/stores/visitStore';
 import { useTripStore } from '@/stores/tripStore';
 import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
+import { promptChoice } from '@/components/WebChoiceModal';
 import {
   pickPhoto,
   promptPhotoSource,
@@ -168,7 +170,7 @@ export default function FieldDetail() {
 
   if (!field) {
     return (
-      <MapSheetLayout title="현장 상세" onBack={() => router.back()}>
+      <MapSheetLayout title="현장 상세" onBack={() => safeBack(router)}>
         <EmptyState title="현장을 찾을 수 없습니다" />
       </MapSheetLayout>
     );
@@ -225,10 +227,11 @@ export default function FieldDetail() {
   const handleStatusTap = () => {
     if (statusBusyRef.current) return;
     const others = FIELD_STATUS_VALUES.filter((s) => s !== field.status);
-    Alert.alert('상태 변경', `현재: ${FIELD_STATUS_LABEL[field.status]}`, [
-      { text: '취소', style: 'cancel' },
+    // promptChoice — web 에선 WebChoiceModal 로 의미 있는 라벨 직접 선택.
+    // (Alert.alert 는 webAlertPatch 가 OK/Cancel 양분 → 첫 후보 강제 호출 회로)
+    promptChoice('상태 변경', `현재: ${FIELD_STATUS_LABEL[field.status]}`, [
       ...others.map((s) => ({
-        text: FIELD_STATUS_LABEL[s],
+        label: FIELD_STATUS_LABEL[s],
         onPress: async () => {
           if (statusBusyRef.current) return;
           statusBusyRef.current = true;
@@ -240,6 +243,7 @@ export default function FieldDetail() {
           }
         },
       })),
+      { label: '취소', style: 'cancel' as const },
     ]);
   };
 
@@ -403,7 +407,7 @@ export default function FieldDetail() {
   return (
     <MapSheetLayout
       title="현장 상세"
-      onBack={() => router.back()}
+      onBack={() => safeBack(router)}
       initialIndex={2}
     >
       <BottomSheetFlatList

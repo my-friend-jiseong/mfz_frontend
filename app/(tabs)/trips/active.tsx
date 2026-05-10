@@ -18,6 +18,7 @@ import {
   type ArrivalEvent,
 } from '@/utils/geofence';
 import * as Linking from 'expo-linking';
+import { safeBack } from '@/utils/backNavigation';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
 import type { Destination } from '@/types/entities';
@@ -619,7 +620,7 @@ export default function ActiveTrip() {
     <View style={styles.screenRoot}>
       <MapSheetLayout
         title="진행 중인 외근"
-        onBack={() => router.back()}
+        onBack={() => safeBack(router)}
         initialIndex={2}
         mapFieldIds={tripFieldIds}
       >

@@ -10,6 +10,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
 import { nearestNeighborOrder } from '@/utils/routeOptimize';
 import { trips as tripsApi } from '@/api';
+import { safeBack } from '@/utils/backNavigation';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
 
@@ -80,7 +81,7 @@ export default function NewTripOrder() {
         startLng: start.lng,
         fields: list.map((f) => ({
           fieldId: f.id,
-          name: f.address,
+          name: f.title || f.address,
           lat: f.lat,
           lng: f.lng,
         })),
@@ -163,7 +164,7 @@ export default function NewTripOrder() {
 
   if (list.length === 0) {
     return (
-      <MapSheetLayout title="방문 순서 확인" onBack={() => router.back()}>
+      <MapSheetLayout title="방문 순서 확인" onBack={() => safeBack(router)}>
         <EmptyState
           title="선택된 현장이 없습니다"
           description="이전 화면으로 돌아가 현장을 선택해주세요"
@@ -240,7 +241,11 @@ export default function NewTripOrder() {
   );
 
   return (
-    <MapSheetLayout title="방문 순서 확인" onBack={() => router.back()}>
+    <MapSheetLayout
+      title="방문 순서 확인"
+      onBack={() => safeBack(router)}
+      mapFieldIds={list.map((f) => f.id)}
+    >
       <View style={styles.head}>
         <Text style={styles.titleLabel}>외근 제목 (선택)</Text>
         <TextInput

@@ -15,6 +15,7 @@ import { useReportStore } from '@/stores/reportStore';
 import { useTripStore } from '@/stores/tripStore';
 import { useAuthStore } from '@/stores/authStore';
 import { API_BASE_URL } from '@/api';
+import { safeBack } from '@/utils/backNavigation';
 import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
 import { colors } from '@/theme/colors';
@@ -63,7 +64,7 @@ export default function ReportDetail() {
 
   if (!report) {
     return (
-      <MapSheetLayout title="보고서 상세" onBack={() => router.back()}>
+      <MapSheetLayout title="보고서 상세" onBack={() => safeBack(router)}>
         <EmptyState
           title={deleting ? '보고서를 삭제 중입니다...' : '보고서를 찾을 수 없습니다'}
         />
@@ -143,7 +144,7 @@ export default function ReportDetail() {
   return (
     <MapSheetLayout
       title="보고서 상세"
-      onBack={() => router.back()}
+      onBack={() => safeBack(router)}
       initialIndex={2}
     >
       <BottomSheetScrollView contentContainerStyle={styles.scroll}>

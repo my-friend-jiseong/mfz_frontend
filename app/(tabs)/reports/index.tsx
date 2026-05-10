@@ -79,13 +79,13 @@ export default function ReportsIndex() {
         keyExtractor={(g) => String(g.trip.id)}
         renderItem={({ item }) => (
           <View style={styles.group}>
-            <View style={styles.tripHeaderRow}>
-              <Pressable
-                onPress={() =>
-                  router.push(`/(tabs)/trips/${item.trip.id}` as never)
-                }
-                style={styles.tripHeaderTextWrap}
-              >
+            <Pressable
+              onPress={() =>
+                router.push(`/(tabs)/trips/${item.trip.id}` as never)
+              }
+              style={styles.tripHeaderRow}
+            >
+              <View style={styles.tripHeaderTextWrap}>
                 <Text style={styles.tripHeader}>
                   외근 · {fmtDate(item.trip.startedAt)}
                 </Text>
@@ -95,16 +95,8 @@ export default function ReportsIndex() {
                   {' · 방문 '}
                   {visitsByTrip(item.trip.id).length}건
                 </Text>
-              </Pressable>
-              <Pressable
-                onPress={() =>
-                  router.push(`/(tabs)/reports/new?tripId=${item.trip.id}` as never)
-                }
-                style={({ pressed }) => [styles.addReportBtn, pressed && styles.pressed]}
-              >
-                <Text style={styles.addReportBtnText}>+ 추가</Text>
-              </Pressable>
-            </View>
+              </View>
+            </Pressable>
             {item.reports.map((r) => (
               <Pressable
                 key={r.id}
@@ -168,19 +160,6 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     color: colors.textMuted,
     marginTop: 2,
-  },
-  addReportBtn: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    backgroundColor: colors.surface,
-  },
-  addReportBtnText: {
-    fontSize: fontSize.xs,
-    color: colors.primary,
-    fontWeight: '700',
   },
   reportCard: {
     backgroundColor: colors.surface,
