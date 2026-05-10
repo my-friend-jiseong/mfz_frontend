@@ -48,9 +48,13 @@ export default function VisitDetail() {
     };
   }, [tripId, visitId]);
 
+  // 방문 상세는 해당 visit 의 현장 1개만 지도 마커로 노출. fieldId 가 store 에서
+  // 조회 가능할 때만 채우고, 그 외엔 빈 배열로 두어 다른 현장 마커가 새지 않게.
+  const mapFieldIds = visitInStore?.fieldId ? [visitInStore.fieldId] : [];
+
   if (loading) {
     return (
-      <MapSheetLayout title="방문 상세" onBack={() => safeBack(router)}>
+      <MapSheetLayout title="방문 상세" onBack={() => safeBack(router)} mapFieldIds={mapFieldIds}>
         <View style={styles.center}>
           <ActivityIndicator color={colors.primary} />
         </View>
@@ -60,7 +64,7 @@ export default function VisitDetail() {
 
   if (error || !data) {
     return (
-      <MapSheetLayout title="방문 상세" onBack={() => safeBack(router)}>
+      <MapSheetLayout title="방문 상세" onBack={() => safeBack(router)} mapFieldIds={mapFieldIds}>
         <EmptyState title="방문을 찾을 수 없습니다" description={error ?? undefined} />
       </MapSheetLayout>
     );
@@ -89,7 +93,7 @@ export default function VisitDetail() {
   const fieldIdForCheckin = visitInStore?.fieldId ?? null;
 
   return (
-    <MapSheetLayout title="방문 상세" onBack={() => safeBack(router)} initialIndex={2}>
+    <MapSheetLayout title="방문 상세" onBack={() => safeBack(router)} initialIndex={2} mapFieldIds={mapFieldIds}>
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.site}>{data.siteName}</Text>
         <View style={[styles.statusChip, { backgroundColor: statusColor + '22' }]}>

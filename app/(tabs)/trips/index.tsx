@@ -81,7 +81,10 @@ export default function TripsList() {
   };
 
   return (
-    <MapSheetLayout title="외근 내역">
+    // 외근 목록 화면은 "선택한 외근" 이 없는 상태이므로 지도 배경에 마커 0개.
+    // mapFieldIds 를 안 넘기면 MapDashboard 가 fieldStore.fields 전체를 노출 —
+    // 현장 탭을 다녀온 직후 외근 탭에 모든 현장이 비컨으로 그대로 남던 회로.
+    <MapSheetLayout title="외근 내역" mapFieldIds={[]}>
       <BottomSheetFlatList
         data={trips}
         keyExtractor={(t) => String(t.id)}

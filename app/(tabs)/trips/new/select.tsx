@@ -83,7 +83,7 @@ export default function NewTripSelect() {
 
   if (activeTripId !== null) {
     return (
-      <MapSheetLayout title="외근 시작" onBack={() => safeBack(router)}>
+      <MapSheetLayout title="외근 시작" onBack={() => safeBack(router)} mapFieldIds={[]}>
         <EmptyState
           title="이미 진행 중인 외근이 있습니다"
           description="현재 외근을 종료한 뒤 새 외근을 시작해주세요"
@@ -122,7 +122,8 @@ export default function NewTripSelect() {
   };
 
   return (
-    <MapSheetLayout title="방문할 현장 선택" onBack={() => safeBack(router)}>
+    // 사용자가 체크한 현장만 지도 마커로 노출 — 외근 컨텍스트 일관성. 0개여도 [] 명시.
+    <MapSheetLayout title="방문할 현장 선택" onBack={() => safeBack(router)} mapFieldIds={selectedIds}>
       <View style={styles.head}>
         <View style={styles.headRow}>
           <Text style={styles.headTitle}>방문할 현장 선택</Text>
