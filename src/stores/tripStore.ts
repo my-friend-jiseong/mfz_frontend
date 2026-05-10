@@ -74,12 +74,18 @@ export const useTripStore = create<TripState>((set, get) => ({
     try {
       const res = await tripsApi.list({ limit: 50 });
       const userId = currentUserId();
+      // 백엔드 contract: GET /api/trips/list 는 본인 외근만 반환 (단일 Actor 정책).
+      // 응답에 workerId 필드가 별도로 오지 않으므로 현재 사용자 id 로 채움.
+      // 만약 admin/멀티 사용자 응답이 들어오기 시작하면 응답 자체에 workerId 가
+      // 포함되어야 하며, 여기서 일률적으로 현재 user 로 덮는 코드도 함께 수정 필요.
       const items: Trip[] = res.items.map((t) => ({
         id: t.tripId,
         workerId: userId,
         startedAt: t.startedAt,
         endedAt: t.endedAt,
         title: t.title,
+        siteCount: t.siteCount,
+        visitCount: t.visitCount,
       }));
       set({ trips: items });
     } catch {
@@ -133,7 +139,19 @@ export const useTripStore = create<TripState>((set, get) => ({
       if (!endedTrip) {
         await get().refreshList();
       }
-      return { ok: true, trip: endedTrip ?? { id: res.tripId, workerId: currentUserId(), startedAt: '', endedAt: res.endedAt } };
+      // fallback: 응답에 없는 경우라도 startedAt 을 빈 문자열로 두면 new Date('') → Invalid Date.
+      // endedAt 으로 임시 채워두고, refreshList 가 실제 값으로 덮어쓰도록.
+      return {
+        ok: true,
+        trip:
+          endedTrip ??
+          {
+            id: res.tripId,
+            workerId: currentUserId(),
+            startedAt: res.endedAt,
+            endedAt: res.endedAt,
+          },
+      };
     } catch (e) {
       set({ busy: false });
       if (e instanceof ApiError && e.code === 'confirm_required_zero_visits') {

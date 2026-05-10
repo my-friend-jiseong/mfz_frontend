@@ -212,7 +212,14 @@ export default function TripDetail() {
           : '진행 중'}
       </Text>
       <Text style={styles.meta}>
-        계획 {destinations.length}곳 · 실제 방문 {visits.length}건
+        {/*
+         * destinationStore/visitStore 는 로컬 전용(handoff §9a — 백엔드 destinations
+         * 영속화 미진행). 다른 디바이스·세션에서 시작한 외근을 조회하면 로컬엔
+         * 0곳·0건으로 들어와 사용자가 "분명 3곳 골랐는데 0곳" 을 본다.
+         * 서버 list 응답의 siteCount/visitCount 가 있으면 그걸 우선 — backlog §11
+         * destinations endpoint 가 들어오면 fallback 도 제거.
+         */}
+        계획 {trip.siteCount ?? destinations.length}곳 · 실제 방문 {trip.visitCount ?? visits.length}건
       </Text>
       {destinations.length > 0 ? (
         <View style={styles.planBox}>

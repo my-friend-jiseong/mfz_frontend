@@ -37,6 +37,12 @@ export interface Trip {
   // 사용자 입력 제목 (예: "가로수 보수 공사", "동구 일상 점검").
   // 백엔드 미구현 단계에선 undefined — UI 는 시작 날짜로 fallback.
   title?: string;
+  // 백엔드 GET /api/trips/list 가 돌려주는 카운트. 로컬 destination/visit store 가
+  // 비어있을 때(다른 디바이스·세션) 트립 상세 카운트 라인이 "0곳/0건" 으로 빠지는
+  // 회로를 server-truth 로 메우는 경로. backlog §11 destinations 영속화가 들어오면
+  // 단일 진실값으로 격상.
+  siteCount?: number;
+  visitCount?: number;
 }
 
 export interface Field {

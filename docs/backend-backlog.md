@@ -366,6 +366,83 @@ HTTP status 는 200 정상이라 클라이언트 catch 분기도 안 탐. `manua
 
 ---
 
+## 11. 🟠 외근 destinations 영속화 + GET endpoint — 다른 디바이스·세션에서 "계획 0곳" 회로 차단
+
+### 배경
+프론트의 `destinationStore` ([`src/stores/destinationStore.ts`](../src/stores/destinationStore.ts)) 는 **로컬 + AsyncStorage 전용**. 사용자가 외근을 시작할 때 `bulkCreate(tripId, fieldIds[])` 로 로컬에만 적재되고, 백엔드엔 destinations 데이터가 보내지지 않음. 그래서 다음 회로가 깨짐:
+
+- 사용자 A 가 디바이스 1 에서 외근 시작 (현장 3곳) → destinations 로컬 적재.
+- 같은 사용자 A 가 디바이스 2 (또는 새 브라우저) 에서 같은 외근 조회 → trip 자체는 `GET /api/trips/list` 응답에 들어 있지만 destinations 가 로컬에 없으므로 **"계획 0곳 · 실제 방문 0건"** 으로 표시. 사용자는 "분명 3곳 골랐는데" 로 혼란.
+- 같은 디바이스라도 로그아웃 (`useDestinationStore.clearAll()` 호출됨) 후 재로그인 → 로컬 비어 있음 → 같은 증상.
+- AsyncStorage 손상·정리 케이스도 동일.
+
+부수적으로:
+- 트립 상세 화면의 "계획된 목적지" 섹션 ([`trips/[id].tsx`](../app/\(tabs\)/trips/\[id\].tsx) `planBox`) 도 로컬 destinations 없으면 비노출.
+- 진행 중 외근의 다음 목적지 / 순서 변경 / 건너뛰기 / 도착 마크 같은 lifecycle 도 사용자가 시작한 디바이스에서만 일관성 보장.
+
+### 백엔드가 해야 할 것
+
+**(A) Trip 시작 시 destinations 영속화**
+```ts
+POST /api/trips/start
+body: {
+  startLocation?: { lat, lng };
+  title?: string;
+  destinations: Array<{ fieldId: string; order: number }>;   // ← 신규
+}
+→ 200: TripStartResponse & { destinations: Destination[] }
+```
+
+destinations 미전달 시 호환성 위해 빈 배열로 처리 (legacy 클라이언트 그대로 동작).
+
+**(B) Destinations 조회**
+```ts
+GET /api/trips/:tripId/destinations
+→ 200: {
+  items: Array<{
+    destinationId: string;
+    fieldId: string;
+    order: number;
+    status: 'pending' | 'arrived' | 'skipped';
+    siteName?: string;
+    siteAddress?: string;
+  }>;
+}
+```
+
+**(C) Destination 상태 업데이트**
+```ts
+PATCH /api/trips/:tripId/destinations/:destinationId
+body: { status?: 'arrived' | 'skipped'; order?: number; }
+→ 200: Destination
+```
+체크인이 자동으로 destination 상태도 갱신할지(`POST /api/visits/check-in` 의 부수효과) 백엔드에서 정책 결정. 결정에 따라 (C) 가 선택적 호출이 됨.
+
+**(D) Trip 상세에 destinations 포함 (옵션)**
+`TripDetailResponse` 에 `destinations: Destination[]` 추가하면 (B) 별도 호출 없이 트립 상세 한 번으로 끝.
+
+### 프론트엔드 영향
+
+- `destinationStore` 를 server-source 로 전환:
+  - hydrate 가 AsyncStorage 가 아니라 trip 별 GET 으로 (또는 (D) 적용 시 trip 상세 로드 시점 부수효과).
+  - bulkCreate 가 로컬 임시 적재 → API 응답 결과로 교체 (server id 로 키 정렬).
+  - markArrived/markSkipped/reorder 는 (C) PATCH 호출 후 응답 반영. 오프라인 큐 지원.
+- 트립 상세 [`trips/[id].tsx:215`](../app/\(tabs\)/trips/\[id\].tsx#L215) 의 "계획 N곳 · 실제 방문 M건" 라인 — 본 사이클에서 `trip.siteCount` (`TripListItem.siteCount`) 우선 사용으로 1차 회피 적용. 백엔드 destinations endpoint 가 들어오면 server-truth 단일화.
+
+### 우선순위
+🟠 중상 — 사용자 외근 lifecycle 의 핵심 데이터가 다른 디바이스에서 새는 회로. 단일 사용자/단일 디바이스 시나리오에선 막힘 없으나, 모바일·웹 동시 사용 / 디바이스 교체 / 캐시 정리 후 재진입 시 즉시 노출.
+
+### 발견 시점
+2026-05-11 (사용자 보고: "외근 생성할 땐 3곳 골랐는데 트립 상세에 계획 0곳·실제 방문 0건 으로 나옴")
+
+### 관련 코드
+- 프론트 [`src/stores/destinationStore.ts`](../src/stores/destinationStore.ts) — 현 로컬 전용 구현
+- 프론트 [`app/(tabs)/trips/new/order.tsx:158`](../app/\(tabs\)/trips/new/order.tsx#L158) — `bulkCreate` 호출 지점 (server-side 로 옮길 자리)
+- 프론트 [`app/(tabs)/trips/[id].tsx:215`](../app/\(tabs\)/trips/\[id\].tsx#L215) — 카운트 라인 (siteCount fallback 1차 적용 지점)
+- 백엔드 trips/destinations 라우트 신설 — 위 (A)~(C) (선택적으로 (D))
+
+---
+
 ## 변경 이력
 
 - **2026-05-08**: 백로그 신설. §1 길찾기 카카오-only 정책 반영. (이전 §1 title 은 백엔드 처리 완료로 제거)
@@ -373,3 +450,4 @@ HTTP status 는 200 정상이라 클라이언트 catch 분기도 안 탐. `manua
 - **2026-05-09**: §3·§4·§5 추가 — 통합 자동화 재실행 중 발견. §3 카카오 Local 검색 0건 (high), §4 detailAddress 정책 정합 (medium), §5 optimize-preview 404 (low).
 - **2026-05-10**: §6·§7·§8·§9·§10 추가 — 사용자 요구사항 정리 라운드. §6 현장 삭제 cascade(중상), §7 보고서 본문 검증 완화 + multipart(중상), §8 자동 체크인 정합(닫힘), §9 visit phase 모델(중상·별도 사이클), §10 MinIO/압축 인프라(낮·별도 사이클).
 - **2026-05-10**: §8 클로즈 — 사용자 검토 결과 현 반자동(Alert confirm) 흐름이 의도. 백엔드/프론트 변경 보류.
+- **2026-05-11**: §11 추가 — destinations 영속화 + GET endpoint (중상). 다른 디바이스·세션에서 "계획 0곳" 회로 발견. 프론트는 1차 회피로 `TripListItem.siteCount` 사용.
