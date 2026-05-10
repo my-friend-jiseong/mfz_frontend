@@ -443,6 +443,47 @@ body: { status?: 'arrived' | 'skipped'; order?: number; }
 
 ---
 
+## 12. 🟠 ERD 파악 및 최신화 — 프론트와 합동 진행
+
+### 배경
+[`docs/ERD.drawio`](./ERD.drawio) 가 현재 백엔드 실제 스키마와 어디까지 맞물리는지 확인된 바 없음. 본 백로그 §6~§11 (현장 cascade, 보고서 본문/multipart, visit phase, MinIO/압축, destinations 영속화) 가 모두 데이터 모델 변경을 동반하는데, 단일한 ERD 진실값이 없어 다음 회로에서 어긋남:
+
+- 프론트 [`src/types/entities.ts`](../src/types/entities.ts) 의 `Trip`/`Field`/`Visit`/`Destination` 등 인터페이스가 백엔드 실제 컬럼과 1:1 인지 검증 어려움 (현재는 응답 typing 으로만 간접 추적).
+- `TripListItem.siteCount`/`visitCount` 같은 derived 값이 어떤 join/count 로 계산되는지 ERD 만 봐선 모름 — §11 destinations 영속화 후 변경 영향 평가도 막힘.
+- visit phase (§9) / report 첨부 분기 (§7) / fields cascade (§6) 가 들어가면 어떤 FK/제약/인덱스가 추가/수정되는지 ERD 에 반영 필요.
+
+### 해야 할 것 (백엔드·프론트 합동)
+
+**(A) 현재 스키마 추출 — 백엔드 주도**
+- 운영 DB 의 실제 테이블·컬럼·FK·인덱스·제약을 dump (예: `pg_dump --schema-only` 또는 dbml export).
+- 컬럼별 의미·nullable·기본값·enum·CASCADE 정책을 한국어 주석으로 정리.
+
+**(B) ERD.drawio 비교·갱신 — 프론트 합류**
+- 추출한 스키마를 `docs/ERD.drawio` 와 diff. 누락 테이블/컬럼·잘못 그려진 관계·실제와 다른 cardinality 를 좌우 비교 노트로.
+- 본 백로그 §6~§11 에서 합의된 변경 (예: §11 destinations 테이블 신설, §9 visit_phase 컬럼) 을 ERD 의 "예정" 레이어로 별도 표기 — 현재 vs 미래 동시 가시화.
+- `src/types/entities.ts` 의 프론트 인터페이스와 칼럼 매핑 표 1장 첨부.
+
+**(C) 갱신 ERD 합의 후 PR 분리**
+- 백엔드 schema migration 은 §6~§11 각 항목의 별도 PR 로.
+- ERD.drawio 갱신은 본 항목(§12) PR 단독으로 — 데이터 모델 진실값을 먼저 합의한 뒤 코드 진입.
+
+### 프론트엔드 영향
+- `src/types/entities.ts` 와 `src/api/endpoints/*` 의 타입을 ERD 와 줄 맞춤. 차이가 있으면 프론트가 먼저 옮겨가고 백엔드 응답 정합성은 §6~§11 진행 시점에 맞춤.
+- 합동 작업 — 백엔드가 (A) dump 를 내면 프론트가 (B) 비교·drawio 갱신을 같이 함. 회의 또는 GitHub PR 코멘트로 양쪽이 한 번에 합의.
+
+### 우선순위
+🟠 중상 — §11 destinations 영속화 등 본 백로그의 다른 데이터 모델 변경이 시작되기 전에 끝나야 충돌·재작업 없음. §6~§11 을 한 사이클로 묶을 거라면 그 사이클의 첫 워크.
+
+### 발견 시점
+2026-05-11 (사용자 — "ERD 파악 및 최신화도 백로그에 추가, 프론트랑 합동")
+
+### 관련 자료
+- [`docs/ERD.drawio`](./ERD.drawio) — 현재 ERD (검증 미수행)
+- 프론트 [`src/types/entities.ts`](../src/types/entities.ts) — 프론트 데이터 모델
+- 본 백로그 §6 (cascade), §7 (보고서), §9 (visit phase), §10 (파일 인프라), §11 (destinations) — 각 항목이 ERD 변경을 동반
+
+---
+
 ## 변경 이력
 
 - **2026-05-08**: 백로그 신설. §1 길찾기 카카오-only 정책 반영. (이전 §1 title 은 백엔드 처리 완료로 제거)
@@ -451,3 +492,4 @@ body: { status?: 'arrived' | 'skipped'; order?: number; }
 - **2026-05-10**: §6·§7·§8·§9·§10 추가 — 사용자 요구사항 정리 라운드. §6 현장 삭제 cascade(중상), §7 보고서 본문 검증 완화 + multipart(중상), §8 자동 체크인 정합(닫힘), §9 visit phase 모델(중상·별도 사이클), §10 MinIO/압축 인프라(낮·별도 사이클).
 - **2026-05-10**: §8 클로즈 — 사용자 검토 결과 현 반자동(Alert confirm) 흐름이 의도. 백엔드/프론트 변경 보류.
 - **2026-05-11**: §11 추가 — destinations 영속화 + GET endpoint (중상). 다른 디바이스·세션에서 "계획 0곳" 회로 발견. 프론트는 1차 회피로 `TripListItem.siteCount` 사용.
+- **2026-05-11**: §12 추가 — ERD 파악 및 최신화 (중상·프론트 합동). §6~§11 데이터 모델 변경의 선행 워크.
