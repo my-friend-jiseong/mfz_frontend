@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import { useRouter } from 'expo-router';
@@ -16,14 +16,7 @@ export default function NewTripSelect() {
   const router = useRouter();
   const userId = useAuthStore((s) => s.user?.id);
   const allFields = useFieldStore((s) => s.fields);
-  const refreshFields = useFieldStore((s) => s.refresh);
   const activeTripId = useTripStore((s) => s.activeTripId);
-
-  // 외근 탭은 평소 현장 전체를 자동 로드하지 않음(요구사항 #4). 사용자가 '외근 시작' 을
-  // 누르고 이 화면에 진입한 시점은 명시적 트리거이므로 여기서 fields 를 페치.
-  useEffect(() => {
-    void refreshFields();
-  }, [refreshFields]);
 
   const myFields = useMemo(
     () => (userId ? allFields.filter((f) => f.userId === userId) : []),
@@ -83,7 +76,7 @@ export default function NewTripSelect() {
 
   if (activeTripId !== null) {
     return (
-      <MapSheetLayout title="외근 시작" onBack={() => safeBack(router)} mapFieldIds={[]}>
+      <MapSheetLayout title="외근 시작" onBack={() => safeBack(router)}>
         <EmptyState
           title="이미 진행 중인 외근이 있습니다"
           description="현재 외근을 종료한 뒤 새 외근을 시작해주세요"
@@ -122,8 +115,7 @@ export default function NewTripSelect() {
   };
 
   return (
-    // 사용자가 체크한 현장만 지도 마커로 노출 — 외근 컨텍스트 일관성. 0개여도 [] 명시.
-    <MapSheetLayout title="방문할 현장 선택" onBack={() => safeBack(router)} mapFieldIds={selectedIds}>
+    <MapSheetLayout title="방문할 현장 선택" onBack={() => safeBack(router)}>
       <View style={styles.head}>
         <View style={styles.headRow}>
           <Text style={styles.headTitle}>방문할 현장 선택</Text>
