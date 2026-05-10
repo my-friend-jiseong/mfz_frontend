@@ -51,6 +51,7 @@ export default function ActiveTrip() {
   const reorderDestinations = useDestinationStore((s) => s.reorder);
 
   const getField = useFieldStore((s) => s.getById);
+  const loadFieldDetail = useFieldStore((s) => s.loadDetail);
   const allVisits = useVisitStore((s) => s.visits);
 
   const allTrips = useTripStore((s) => s.trips);
@@ -81,6 +82,19 @@ export default function ActiveTrip() {
     () => destinations.map((d) => d.fieldId),
     [destinations],
   );
+
+  // deep-link 진입(외근 탭이 fields 를 자동 hydrate 안 하므로) 시 destinations 의
+  // fieldId 들의 좌표가 fieldStore 에 없을 수 있음. 없는 것만 ensure-load.
+  // loadDetail 이 ensure-insert 식이라 한 번 호출로 store 에 들어감.
+  const fieldIdsKey = tripFieldIds.join('|');
+  useEffect(() => {
+    if (tripFieldIds.length === 0) return;
+    for (const fid of tripFieldIds) {
+      if (!getField(fid)) void loadFieldDetail(fid);
+    }
+    // fieldIdsKey 만 의존성에 두어 destinations 객체 변동에 의한 무한 루프 방지.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fieldIdsKey, loadFieldDetail]);
 
   // 진행률 통계 — arrived + skipped 가 처리됨, pending 만 남음.
   const progress = useMemo(() => {

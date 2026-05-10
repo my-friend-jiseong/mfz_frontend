@@ -65,25 +65,42 @@ export const useFieldStore = create<FieldState>((set, get) => ({
   },
 
   refresh: async (params) => {
+    // 1회 재시도 — 부팅 직후 인증 토큰 race 또는 운영 일시 hiccup 으로 첫 호출이 실패해도
+    // 두 번째 호출이 보통 성공. 두 번 모두 실패해야 silent 종료.
+    const tryOnce = () => fieldsApi.listMine(params ?? { visitDateScope: 'all' });
+    let res;
     try {
-      const res = await fieldsApi.listMine(params ?? { visitDateScope: 'all' });
-      const items: Field[] = res.items.map((it) => ({
-        id: it.fieldId,
-        userId: it.assigneeUserId,
-        status: it.status,
-        address: it.address,
-        addressDetail: it.detailAddress ?? '',
-        latitude: it.lat,
-        longitude: it.lng,
-        tags: it.tags,
-        recentVisitedAt: it.recentVisitedAt,
-        updatedAt: it.updatedAt,
-        title: it.title,
-      }));
-      set({ fields: items });
-    } catch (e) {
-      if (__DEV__) console.error('[fieldStore.refresh] failed', e);
+      res = await tryOnce();
+    } catch (firstErr) {
+      if (__DEV__) {
+        const msg = firstErr instanceof Error ? `${firstErr.name}: ${firstErr.message}` : String(firstErr);
+        console.warn('[fieldStore.refresh] 1차 실패, 1초 후 재시도:', msg);
+      }
+      await new Promise((r) => setTimeout(r, 1000));
+      try {
+        res = await tryOnce();
+      } catch (secondErr) {
+        if (__DEV__) {
+          const msg = secondErr instanceof Error ? `${secondErr.name}: ${secondErr.message}` : String(secondErr);
+          console.error('[fieldStore.refresh] 2차 실패 — 포기:', msg, secondErr);
+        }
+        return;
+      }
     }
+    const items: Field[] = res.items.map((it) => ({
+      id: it.fieldId,
+      userId: it.assigneeUserId,
+      status: it.status,
+      address: it.address,
+      addressDetail: it.detailAddress ?? '',
+      latitude: it.lat,
+      longitude: it.lng,
+      tags: it.tags,
+      recentVisitedAt: it.recentVisitedAt,
+      updatedAt: it.updatedAt,
+      title: it.title,
+    }));
+    set({ fields: items });
   },
 
   create: async (body) => {
@@ -208,24 +225,31 @@ export const useFieldStore = create<FieldState>((set, get) => ({
   loadDetail: async (id) => {
     try {
       const res = await fieldsApi.detail(id);
-      set((s) => ({
-        fields: s.fields.map((f) =>
-          f.id === id
-            ? {
-                ...f,
-                id: res.fieldId,
-                userId: res.assigneeUserId,
-                status: res.status,
-                address: res.address,
-                addressDetail: res.detailAddress ?? '',
-                latitude: res.lat,
-                longitude: res.lng,
-                title: res.title ?? f.title,
-              }
-            : f,
-        ),
-        directAttachments: { ...s.directAttachments, [id]: res.directAttachments ?? [] },
-      }));
+      set((s) => {
+        const next: Field = {
+          id: res.fieldId,
+          userId: res.assigneeUserId,
+          status: res.status,
+          address: res.address,
+          addressDetail: res.detailAddress ?? '',
+          latitude: res.lat,
+          longitude: res.lng,
+          title: res.title ?? undefined,
+        };
+        // ensure-insert: store 에 없으면 append, 있으면 patch (기존 title 보존).
+        // active 화면 deep-link 진입에서 fields 가 비어 있어도 destinations.fieldId 의
+        // 좌표가 store 에 들어와 지도 마커·길찾기·geofence 가 정상 동작하도록.
+        const exists = s.fields.some((f) => f.id === id);
+        const fields = exists
+          ? s.fields.map((f) =>
+              f.id === id ? { ...f, ...next, title: next.title ?? f.title } : f,
+            )
+          : [...s.fields, next];
+        return {
+          fields,
+          directAttachments: { ...s.directAttachments, [id]: res.directAttachments ?? [] },
+        };
+      });
     } catch {
       // ignore
     }

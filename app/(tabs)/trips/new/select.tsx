@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import { useRouter } from 'expo-router';
@@ -16,7 +16,14 @@ export default function NewTripSelect() {
   const router = useRouter();
   const userId = useAuthStore((s) => s.user?.id);
   const allFields = useFieldStore((s) => s.fields);
+  const refreshFields = useFieldStore((s) => s.refresh);
   const activeTripId = useTripStore((s) => s.activeTripId);
+
+  // 외근 탭은 평소 현장 전체를 자동 로드하지 않음(요구사항 #4). 사용자가 '외근 시작' 을
+  // 누르고 이 화면에 진입한 시점은 명시적 트리거이므로 여기서 fields 를 페치.
+  useEffect(() => {
+    void refreshFields();
+  }, [refreshFields]);
 
   const myFields = useMemo(
     () => (userId ? allFields.filter((f) => f.userId === userId) : []),
