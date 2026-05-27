@@ -1,224 +1,133 @@
-# 통합 테스트 시나리오 — 회원가입부터 보고서까지 전 범위
+# 통합 테스트 시나리오 — ERD v2 (스키마 단순화 이후)
 
-> 작성일: 2026-05-09 (마지막 갱신: 2026-05-11 — 보고서 통합·모달 picker·safeBack 반영. 외근 탭 자동 로드 차단·mapFieldIds 화이트리스트는 PR 102a6c2 / e039d97 revert 로 되돌림.)
-> 대상 빌드: 일가요(mfz) 프론트엔드 main 브랜치 (HEAD: `9221bd8` 시점 기준)
-> 진행 환경: web (`npm run web`) — 모바일 전용 기능(geofence, 카메라/마이크 네이티브, expo-secure-store) 은 web fallback 으로 평가
+> 작성: 2026-05-28 · 대상 빌드: `feat/erd-v2-frontend` (HEAD `9b0a67c` 기준)
+> 진행 환경: web (`npm run web` 또는 `npm run build:web` 정적 서브) — 모바일 전용(카메라/마이크 네이티브, expo-secure-store) 은 web fallback 평가
+> 백엔드: `EXPO_PUBLIC_API_BASE_URL` 미설정 시 운영 도메인 `https://ilgayo.co.kr` ([config.ts](../src/api/config.ts))
 >
-> 이 문서는 "무엇을 어떻게 시도하는가" 만 정의. 발견되는 문제·모호점·환경 제약은 별도 QA 로그로 빼서 통합 테스트 종료 후 일괄 처리.
+> 이 문서는 "무엇을 어떻게 시도하는가" 만 정의. 발견 사항은 별도 QA 로그로 누적.
+
+> ⚠️ **선행 조건 — 백엔드 ERD v2 여부**: 본 시나리오는 백엔드가 ERD v2([ERD_REVOLUTION.md](ERD_REVOLUTION.md)) 로 배포된 상태를 가정한다. 운영 도메인이 아직 v1 이면 mutation 단계에서 계약 불일치(404·400) 가 나는 것이 정상이며, 그 경우 v2 백엔드(스테이징/로컬) 의 URL 을 `.env.local` `EXPO_PUBLIC_API_BASE_URL` 로 지정한 뒤 재실행한다.
+> ⚠️ **운영 데이터 보호**: 운영 도메인을 그대로 쓰는 동안에는 mutation(회원가입·현장·외근·보고서 생성) 을 자동 실행하지 않는다. 자동 검증은 read-only(부팅·렌더·콘솔 에러) 만, mutation 은 v2 백엔드 확보 후 수동/별도 spec.
 
 ---
 
-## 0. 사전 준비
+## 0. ERD v2 변경에 따른 시나리오 차이 (구 시나리오 대비 폐기·신규)
 
-| 항목 | 값 / 위치 |
+| 구분 | 내용 |
 |---|---|
-| 백엔드 base URL | `EXPO_PUBLIC_API_BASE_URL` (`.env.local`) → `src/api/config.ts` |
-| 토큰 저장소 (web) | `localStorage` key `mfz.refreshToken` (access 는 메모리) |
-| 토큰 저장소 (native) | `expo-secure-store` |
-| 오프라인 큐 키 | `AsyncStorage.mfz.offlineQueue.v1` |
-| 회원가입 정책 | 이메일 정규식 + 비밀번호 10자 이상 + 영대/영소/숫자/특수문자 중 3종, 한글 불가 |
-
-테스트 계정 (시나리오 진행 중 신규 생성):
-- email: `qa+integ-20260509@example.com`
-- password: `Qa-Integ-20260509!` (3종 충족)
-- name: `통합테스터`
+| **폐기** | 오프라인 큐(S15), 토큰 외 무관, **공유 토큰 페이지(`/shared/{token}`)**, **방문 첨부(메모/사진/음성)**, **음성 메모 전반**, **보고서 본문(content)**, **외근 상태전환 이력**, **공식보고 고지**, geofence 자동 도착 |
+| **신규** | **현장 분류(categories)** 입력, **보고서 현장별 전·중·후 사진(field_reports)** 표시, 현장 메모/사진은 **현장 전용** |
+| **계약 변경** | 현장 생성(roadAddress·detailAddress·lat·lng / title·jibun 제거), 체크인(fieldId 만), 외근 시작(title 만), 보고서 생성(title 필수·content 제거), 보고서 삭제(hard delete), 에러키 `already_active_trip` |
+| **미surface** | `projects` 는 스토어·엔드포인트만 존재(전용 화면 없음). `field_reports` 는 보고서 상세에서 **읽기**, AI 생성 시 before/after 저장 — 수동 현장보고 편집 UI 는 아직 없음 |
 
 ---
 
-## 1. 시나리오 본편 — 신규 사용자 김외근의 하루
+## 1. 자동 검증 가능 (read-only · 백엔드 mutation 불필요)
 
-### S1. 첫 진입 (부팅, 비로그인)
+> Playwright 헤드리스([qa-runner.mjs](../qa-runner.mjs)) 또는 수동 web 으로 확인. 핵심 목적: **대규모 리팩터 후 번들/부팅/렌더가 깨지지 않는지** + 삭제된 모듈(`geofence`·`offlineQueueStore`·`OfflineBadge`·`api/network`·`app/shared`) 잔존 import 로 인한 런타임 크래시 부재.
 
-1. 브라우저로 `/` 접속.
-2. 기대: `app/index.tsx` → `app/_layout.tsx` 의 `hydrate()` 가 동작. refresh token 이 없어 비로그인 분기 → `/(auth)/login` 으로 리다이렉트.
-3. 로그인 화면이 정상 렌더되는지 확인.
+### A1. 번들 성공
+- `npm run build:web` 이 에러 없이 export 완료. (삭제 모듈을 import 하는 코드가 남아 있으면 여기서 실패 → 강한 신호)
 
-### S2. 회원가입
+### A2. 부팅 → 비로그인 → 로그인 화면
+- localStorage 비운 상태로 `/` 접속 → `/(auth)/login` 렌더. 콘솔/page 에러 0.
 
-1. 로그인 화면 하단 "처음 사용하시나요? 회원가입" 클릭 → `/(auth)/signup`.
-2. 입력:
-   - 이메일: 비워두고 제출 → 인라인 에러
-   - 잘못된 이메일 (`abc@`) → 인라인 에러
-   - 약한 비밀번호 (`password`) → 인라인 에러 ("10자 이상, 3종 조합")
-   - 비밀번호 확인 불일치 → 인라인 에러
-   - 약관 미동의 → 제출 비활성/에러
-   - 정상 입력 후 제출 → `POST /auth/signup` 성공
-3. 기대: 자동 로그인 (refresh/access 토큰 저장) → `/(tabs)` 진입 + 첫 화면(외근 탭) 렌더.
-4. 동일 이메일로 재가입 시도 → `email_already_exists` Alert 처리.
+### A3. 회원가입 화면 렌더 + 인라인 검증
+- `/(auth)/signup` 진입 → 이메일/비밀번호/약관 인라인 검증 동작(제출 없이 클라이언트 검증만). 콘솔 에러 0.
 
-### S3. 로그아웃 후 재로그인
+### A4. +not-found
+- 존재하지 않는 경로(`/foo/bar`) → not-found 화면 렌더, "뒤로" `safeBack` 폴백.
 
-1. 프로필 탭 → 로그아웃.
-2. 다시 로그인 → S2 에서 만든 계정 입력 → 성공 시 외근 탭 진입.
-3. 잘못된 비밀번호 → `invalid_credentials` 인라인 에러 + 비밀번호 필드 클리어 + 포커스.
-
-### S4. 첫 현장 추가
-
-1. 현장 탭 → "현장 추가" → `/(tabs)/fields/new`.
-2. 주소 검색:
-   - 짧은 키워드 (1자) → `MIN_KEYWORD_LEN` 미만이라 검색 미발화
-   - 정상 키워드 ("동아대학교 부민캠퍼스") → 디바운스 후 결과 리스트
-   - 항목 선택 → 좌표 자동 채움 (한국 영역 가드 `isInKorea`)
-3. 정보 입력:
-   - 제목·상세주소: 입력 필드의 `maxLength` (제목 50자·상세 100자) 가 초과 입력 자체를 차단 → 키보드로 51번째 글자가 들어가지 않는지 확인 (서버 검증 분기 도달 X)
-   - 상태: "조치 전" 기본값 (라벨 통일 후) — 셀렉트 토글 동작 확인
-4. 제출 → `POST /api/fields` 성공 → 현장 상세 진입.
-5. **중복 주소 분기**: 같은 주소로 다시 추가 시도 → `duplicate_address_warning_required` → confirm Alert → "계속 추가" → `forceCreateWithDuplicate=true` 재호출 → 성공.
-
-### S5. 두 번째 현장 추가
-
-1. 다른 주소 ("부산광역시청") 로 같은 흐름 반복. 외근 시작 시 다중 선택을 시험하기 위해 최소 2개의 현장 확보.
-
-### S6. 현장 상세 → 상태 변경
-
-1. 현장 카드 진입 → `/(tabs)/fields/[id]`.
-2. 상태 chip 탭 → Alert 로 다른 상태 노출 ("조치 중" / "조치 완료") → "조치 중" 선택.
-3. 기대: `PATCH /api/fields/{id}/status` 성공 → 상세 화면 chip 색·라벨 즉시 갱신.
-4. 빠른 연속 탭 — `statusBusyRef` 가드 동작하는지.
-5. 현장 수정 화면 진입 → `/(tabs)/fields/[id]/edit` → 제목/태그/상세주소 수정 → 저장.
-
-### S7. 외근 시작 (현장 2곳 선택)
-
-1. 외근 탭 → "외근 시작" → `/(tabs)/trips/new/select`.
-2. 검색·상태 필터 toggle 동작 확인.
-3. 위에서 만든 2개 현장 체크 → "다음" → `/(tabs)/trips/new/order`.
-4. 순서 최적화:
-   - "최적 순서 추천" → `POST /api/trips/navigation/optimize-preview` 시도 — 실패하면 클라이언트 nearest-neighbor fallback.
-   - 드래그/스왑으로 수동 재정렬.
-5. 외근 제목 입력 (선택) → "외근 시작" → `POST /api/trips/start` → destinations bulk 생성 → `/(tabs)/trips/active` 리다이렉트.
-
-### S8. 외근 진행 — 길찾기 / 체크인 / 건너뛰기
-
-`/(tabs)/trips/active` 에서:
-
-1. **지도 scope** 검증: 배경 지도에 이 외근의 현장만 마커로 보여야 함 (직전 PR `08bc06c` 대상).
-2. **길찾기**: "현재 목적지" 카드의 "길찾기" → `POST /api/trips/{tripId}/navigation/deep-links` → 카카오맵 web URL 단독 또는 다이얼로그.
-   - web 환경: `kakaomap://`·`nmap://` 스킴은 가드로 제외 → 카카오 web URL 만 남는 경로 검증.
-3. **체크인**: 첫 번째 목적지 "체크인" → `/(tabs)/fields/[id]/checkin`.
-4. **건너뛰기**: 두 번째 목적지 행에서 → "건너뛰기" → `markSkipped(destId)`.
-5. **재최적화 버튼**: pending 2개 미만이면 비노출 — pending 1개 + skipped 1개 상태에서 버튼이 사라지는지 확인.
-
-### S9. 체크인 화면 — 결과/메모/사진
-
-`/(tabs)/fields/[id]/checkin` 에서:
-
-1. 진입 시 `POST /api/visits/check-in` 자동 호출 → visit 생성.
-2. 결과 status:
-   - "기타" 선택 → statusReason 10자 미만이면 차단 / 10자 이상이면 통과
-3. 텍스트 메모:
-   - 빈 메모 제출 → 차단
-   - 짧은 메모 추가 → `POST /api/visits/{id}/memos/text`
-4. 사진:
-   - web 에선 카메라 미지원 → 갤러리/파일 선택만
-   - 1장 추가 → `POST /api/visits/{id}/photos` (multipart)
-5. 음성 메모: web 에선 expo-av 동작 확인. 미지원이면 회로가 막혀 있어야 함 (Alert 등).
-6. 결과 status "완료" → `PATCH /api/visits/{id}/status` → destination 상태 arrived → 활성 외근 화면으로 복귀.
-
-### S10. 외근 종료
-
-1. `/(tabs)/trips/active` 의 하단 "외근 종료" 버튼 클릭.
-2. 1건 방문 + 1건 skipped 상태이므로 정상 종료 — `POST /api/trips/end`.
-3. 종료 직후 `/(tabs)/trips` 로 이동, AI 보고서 작성 prompt (web 분기 `window.confirm`).
-4. **방문 0건 분기**: 따로 새 외근 시작 → 현장 1곳 선택 → 체크인 없이 즉시 종료 → `confirm_required_zero_visits` → 다이얼로그 → "종료" → `force=true` 재호출 → 종료 성공.
-
-### S11. 외근 상세 조회
-
-1. `/(tabs)/trips` 목록의 방금 종료한 외근 카드 → `/(tabs)/trips/[id]`.
-2. **시트 헤더**: trip.title 있으면 그것, 없으면 "외근 상세" (직전 PR `2653811` 대상).
-3. **본문 ListHeader**: 시작/종료 시각, 계획 N곳·실제 방문 N건, 계획된 목적지 status별 라벨, AI/수동 보고서 CTA.
-4. **상태 전환 이력**: `GET /api/trips/state-history` 호출 → 응답이 비면 history box 미노출.
-5. **지도 scope**: 배경 지도가 이 외근의 현장만 노출되는지 (직전 PR `08bc06c` 대상).
-
-### S12. 보고서 작성 — 통합 폼 (AI 초안 / 직접 저장)
-
-> **변경**: PR `2f2c700` 으로 AI 보고서·수동 보고서 두 화면이 `/reports/new` 단일 폼으로 통합됨. 옛 경로 `/reports/generate` 는 같은 tripId 를 끌고 `/reports/new` 로 redirect.
-> 진입점도 단일화: 외근 상세·보고서 인덱스의 두 CTA → 단일 "📝 보고서 작성" 버튼 (PR `2f2c700`/`9aa47da`).
-
-1. **진입 경로 검증**:
-   - 외근 상세 `/(tabs)/trips/{id}` 의 "📝 보고서 작성" → `/(tabs)/reports/new?tripId={tripId}`.
-   - 보고서 탭 인덱스 하단 "📝 보고서 작성" → 외근 미선택 상태로 `/(tabs)/reports/new`.
-   - 백호환: 옛 링크 `/(tabs)/reports/generate?tripId={tripId}` 직접 진입 → `/(tabs)/reports/new?tripId={tripId}` 로 즉시 replace 되는지 (PR `2f2c700`).
-
-2. **외근 선택 — 트리거 + 모달 picker (PR `5e2cca6`)**:
-   - 폼이 열리면 외근이 미선택 상태일 때 "+ 외근 선택" 버튼만, 선택된 상태일 때 외근 카드 1개 (변경/해제 액션) 노출. 폼 안에서 myTrips 가 인라인 리스트로 나오지 않는지 확인.
-   - 트리거 탭 → RN Modal 안에서 myTrips 리스트 노출 → 항목 선택 시 모달 닫히고 폼에 카드 채워짐.
-   - 라벨 일관성 (PR `2f2c700`): `{날짜} · {title || 폴백}` / 보조 라인 `{시작 시각} · 방문 {N}건`. 어디에도 raw `#{tripId}` 가 보이면 안 됨.
-   - "변경" → 모달 재오픈 / "해제" → 외근 미연결 상태로 초기화.
-
-3. **공통 입력**:
-   - 제목 (선택), 본문 (필수, 10자 이상 50,000자 이하).
-   - 외근 사진 import 슬롯 (before/after) — 외근이 선택된 경우에만 노출.
-   - web 에서 사진 슬롯 선택 / 메모 import 시 `WebChoiceModal` (PR `9b1ed7e`) 가 열려 사용자가 명시적으로 슬롯·동작을 고르는지. (B-4·B-5 회귀 검증)
-
-4. **하단 액션 분기 (PR `2f2c700`)**:
-   - **[✨ AI로 초안 받기]** → `POST /api/reports/generate` (multipart, 사진/메모 동봉) → Gemini 응답 → 보고서 상세로 이동.
-   - **[✏ 직접 저장]** → `POST /api/reports` → 즉시 저장 → 보고서 상세로 이동. 외근 미연결도 허용.
-   - 본문 9자 / 50,001자 → 양쪽 액션 모두 인라인 차단.
-   - 같은 외근 내 동일 제목 중복 → 경고 (차단 X) → "계속 저장" 가능.
-   - 백엔드 미응답·타임아웃 시 에러 메시지 노출 + 폼 입력 보존.
-
-### S13. 보고서 상세 / 수정 / 공유
-
-1. `/(tabs)/reports/{id}` 진입 → 제목·본문·생성자·외근 정보·다운로드 링크.
-2. "수정" → `/(tabs)/reports/{id}/edit` → 제목·본문 수정 → `PATCH /api/reports/{id}` → 상세로 복귀.
-3. "공유" → `POST /api/reports/{id}/share` → 토큰·URL 받기 → 클립보드 복사 또는 Linking.
-4. **공유 토큰 화면**: `/shared/{token}` 비로그인 접근 시 보고서 노출 — 만료 처리·잘못된 토큰 분기.
-
-### S14. 보고서 탭 진입점 정리 (PR `9aa47da`)
-
-> **변경**: 보고서 탭의 외근별 섹션 우측 "+ 추가" 버튼 제거. 외근별 다중 보고서는 화면 하단 "📝 보고서 작성" 진입점에서 외근을 선택하는 방식으로 동일 가능.
-
-1. 보고서 탭 `/(tabs)/reports` 진입 → 외근별 섹션 헤더 우측에 "+ 추가" 가 더 이상 보이지 않는지.
-2. 같은 외근에 보고서를 더 작성하려면 → 하단 "📝 보고서 작성" → 외근 picker 에서 해당 외근 재선택 → 폼 진입.
-3. 화면 하단 "📝 보고서 작성" 진입점은 외근 선택 없이 직접 입력 (수동 저장) 도 허용.
-
-### S15. 오프라인 큐 (네트워크 끊김 시나리오)
-
-1. DevTools Network 탭 → Offline 모드.
-2. 활성 외근에서 체크인 후 텍스트 메모 추가 → NetworkError → AsyncStorage 큐에 적재 + optimistic UI.
-3. 결과 status PATCH 도 큐잉.
-4. Online 복귀 → 자동 flush (auth 게이트 통과 후) → 서버 동기화.
-5. 부팅 직후 hydrate 실패 (refresh 401) → flush 보류, 강제 로그아웃 race 차단 (직전 PR `320ce80` 대상).
-
-### S16. 토큰 만료/회전
-
-1. localStorage 의 refresh token 을 일부러 깨뜨림 (예: 한 글자 변경).
-2. 페이지 새로고침 → `POST /auth/refresh` 401 → 토큰 폐기 + 로그인 화면 이동.
-3. **이상 분기**: refresh 응답에 `user` 가 없는 경우 (직전 PR `c12d359` 가 다룬 contract 정합) — 본 시나리오에선 백엔드 응답 정상이라 가정, 회로 자체는 정적 점검만.
-
-### S17. 흰화면 fallback (`safeBack` / +not-found, PR `9aa47da`)
-
-> **변경**: deep-link 로 깊은 라우트 진입 후 한 번도 push 하지 않은 상태에서 router.back() 을 호출하면 expo-router 가 navigation 을 닫아버려 흰 화면으로 떨어지던 회로. 모든 onBack 진입점이 `src/utils/backNavigation.ts` 의 `safeBack(router)` 을 거치도록 통일 + `app/+not-found.tsx` 라우트 추가.
-
-1. **safeBack 회귀**: 시크릿 창에서 다음 경로들로 직접 진입 → "뒤로" 버튼 → `/(tabs)/trips` 로 폴백되는지 확인:
-   - `/(tabs)/fields/{id}` / `/(tabs)/fields/{id}/edit` / `/(tabs)/fields/{id}/checkin`
-   - `/(tabs)/reports/{id}` / `/(tabs)/reports/{id}/edit` / `/(tabs)/reports/new`
-   - `/(tabs)/trips/{id}` / `/(tabs)/trips/active` / `/(tabs)/trips/visit`
-   - `/(tabs)/trips/new/select` / `/(tabs)/trips/new/order`
-   - `/(auth)/signup` (비로그인 직진)
-2. **+not-found**: 존재하지 않는 경로 (예: `/foo/bar`) 직접 진입 → not-found 화면이 렌더되는지, 거기서 "뒤로" 도 fallback 동작 하는지.
-3. 일반 흐름 (탭 → 카드 → 상세) 에선 stack 이 살아 있어 평소처럼 직전 화면으로 돌아가는지 회귀 확인.
+### A5. 삭제 잔재 부재 (정적)
+- `OfflineBadge`·`network watcher` 가 `app/_layout.tsx` 에서 제거됐는지 (부팅 시 관련 콘솔 경고 없음).
+- 루트 Stack 에 `shared/[token]` 스크린이 없는지.
 
 ---
 
-## 2. 검증 체크리스트 (요약)
+## 2. 백엔드 mutation 필요 (v2 백엔드 확보 후)
 
-- [ ] 부팅 후 비로그인 → /(auth)/login 으로 진입
-- [ ] 회원가입 정책 검증 (이메일·비밀번호·약관·비밀번호 확인·중복 이메일)
-- [ ] 로그인 실패 시 invalid_credentials 처리
-- [ ] 현장 추가 — 주소 검색·중복 경고·강제 추가
-- [ ] 현장 상태 변경 — 빠른 연속 탭 가드 / web 인라인 선택 (B-3 회귀)
-- [ ] 외근 시작 — 다중 선택 / 순서 최적화 / start
-- [ ] 외근 진행 — 지도 scope·길찾기·체크인·건너뛰기·재최적화
-- [ ] 체크인 — 결과·메모·사진·음성 / 기타 사유 10자
-- [ ] 외근 종료 — 정상·zero_visits force
-- [ ] 외근 상세 — 헤더 라벨·timeline·보고서 CTA (단일 "📝 보고서 작성")
-- [ ] 보고서 통합 폼 — `/reports/generate` → `/reports/new` redirect / AI 초안·직접 저장 분기 / WebChoiceModal (B-4·B-5 회귀)
-- [ ] 보고서 외근 선택 — 트리거 + 모달 picker / 라벨에 raw `#tripId` 미노출 (A-5 회귀)
-- [ ] 보고서 탭 — 외근 섹션 "+ 추가" 버튼 제거 확인
-- [ ] 보고서 — 수정·공유 / shared 토큰 페이지
-- [ ] 오프라인 큐 — 큐잉·flush·boot race
-- [ ] 토큰 회전 — refresh 401·user 없는 응답
-- [ ] 흰화면 fallback — deep-link 진입 후 safeBack → `/(tabs)/trips` / +not-found 라우트
+> v2 백엔드 URL 을 `.env.local` 에 지정하고 신규 QA 계정으로 진행. 운영 도메인에서는 실행 금지.
 
-검증 결과는 별도 QA 로그로 누적 (이전 `qa-log-2026-05-09.md` 는 102a6c2 revert 와 함께 폐기).
+### S1. 인증
+1. 비로그인 부팅 → 로그인 화면.
+2. 회원가입(이메일·비밀번호 10자+3종·약관) → 자동 로그인 → 외근 탭.
+3. 로그아웃 → 재로그인 / 오답 시 `invalid_credentials`.
+
+### S2. 현장 추가 (ERD v2 계약)
+1. 현장 탭 → "현장 추가" → [fields/new](<../app/(tabs)/fields/new.tsx>).
+2. 주소 검색(카카오) → 항목 선택 → 좌표 자동 채움(한국 영역 가드).
+3. 입력: **분류(categories, 쉼표 구분)**, 상세주소, 상태. (구 "제목" 입력 제거 확인)
+4. 제출 → `POST /api/fields` (body: name·status·roadAddress·detailAddress·lat·lng·categories?). **jibunAddress/title 미전송** 확인.
+5. 중복 주소 → `duplicate_address_warning_required` → confirm → `forceCreateWithDuplicate=true` 재호출 → 성공.
+6. 최소 2개 현장 확보(외근 다중 선택용).
+
+### S3. 현장 상세 / 수정
+1. 현장 카드 → [fields/[id]](<../app/(tabs)/fields/[id]/index.tsx>).
+2. 헤더: **주소**가 제목 자리(구 title 폴백 제거), **분류 칩**, 좌표, 길찾기.
+3. 상태 chip 탭 → 상태 선택 → `PATCH /api/fields/{id}/status` → 즉시 갱신 / 빠른연속탭 가드.
+4. **현장 직접 메모**: 텍스트 추가 → `POST /api/fields/{id}/memos`. **사진** 추가 → `POST /api/fields/{id}/photos`. (음성 녹음 버튼 부재 확인)
+5. 수정 화면 [edit](<../app/(tabs)/fields/[id]/edit.tsx>) → 분류·상세주소·상태·주소 변경 → 저장. (제목 입력 부재 확인)
+6. 방문 이력 행: 날짜·상태만(첨부 카운트 부재 확인).
+
+### S4. 외근 시작 → 진행
+1. 외근 탭 → "외근 시작" → [select](<../app/(tabs)/trips/new/select.tsx>) → 현장 2곳 체크 → [order](<../app/(tabs)/trips/new/order.tsx>).
+2. 순서 최적화(`optimize-preview` 시도 → 실패 시 nearest-neighbor fallback) / 수동 재정렬.
+3. 제목(선택) → "외근 시작" → `POST /api/trips/start` (**title 만** 전송, startLocation·plannedFields 미전송) → [active](<../app/(tabs)/trips/active.tsx>).
+4. **active 화면**: 지도 scope(이 외근 현장만), 길찾기(`navigation/deep-links`), 수동 "체크인"·"건너뛰기". **공식보고 고지 카드 부재**·**도착 자동감지 부재** 확인.
+
+### S5. 체크인 (ERD v2 — 단순화)
+1. 현장 "체크인" → [checkin](<../app/(tabs)/fields/[id]/checkin.tsx>) → 진입 시 `POST /api/visits/check-in` (**fieldId 만**) 자동 호출.
+2. **방문 결과 상태** 선택(단일 status, "기타 사유 10자" 규칙 부재 확인).
+3. "메모·사진은 현장 상세에서" 링크 → 현장 상세 이동. (체크인 화면 내 메모/사진/음성/파일 입력 부재 확인)
+4. "결과 저장하고 완료" → `PATCH /api/visits/{id}/status` (body `{status}`) → destination arrived → active 복귀.
+   - ⚠️ §8: 이 엔드포인트 존속·body 는 백엔드 확인 대상. 404/400 시 로그 기록.
+
+### S6. 외근 종료 / 상세
+1. active 하단 "외근 종료" → `POST /api/trips/end` → `/(tabs)/trips` 이동 + 보고서 작성 prompt.
+2. 방문 0건 종료 → `confirm_required_zero_visits` → 확인 → `forceEndWithoutVisit=true` 재호출.
+3. 외근 상세 [trips/[id]](<../app/(tabs)/trips/[id].tsx>): 시작/종료 시각, 계획 N곳·실제 방문 M건, 계획 목적지 status, 보고서 CTA. **상태전환 이력 박스 부재** 확인. 방문 행에 첨부 카운트 부재 확인.
+
+### S7. 보고서 — 작성 (통합 폼)
+1. 외근 상세/보고서 탭 → "📝 보고서 작성" → [reports/new](<../app/(tabs)/reports/new.tsx>).
+2. 외근 picker(모달) → 선택 시 카드. 라벨에 raw `#tripId` 미노출.
+3. 입력: **제목(필수)**, 현장 메모(AI 초안용), 조치 전/후 사진. (구 "요약"·"추가 메모"·"작업 위치"·외근 메모/사진 import 부재 확인)
+4. **[✏ 직접 저장]** → `POST /api/reports` (body `{title, tripId?}`) → 상세 이동. (content 미전송 확인)
+5. **[✨ AI 초안]** → `POST /api/reports/generate` (multipart: notes·title·tripId·before/after) → 상세 이동.
+   - ⚠️ §8: generate 신 응답 형태(reportId/fieldReport) 확인 대상.
+
+### S8. 보고서 — 상세 / 수정 / 삭제
+1. [reports/[id]](<../app/(tabs)/reports/[id]/index.tsx>): 제목·연결 외근·작성 시각·**현장별 전·중·후 사진 카드(field_reports)**·output 파일 다운로드. (본문 content 영역·**공유 버튼 부재** 확인)
+2. "수정" → [edit](<../app/(tabs)/reports/[id]/edit.tsx>) → **제목만** 수정 → `PATCH /api/reports/{id}`.
+3. "삭제" → confirm → `DELETE /api/reports/{id}` (**hard delete**) → 목록 복귀.
+4. 보고서 탭 목록: 외근별 그룹, 카드에 본문 미리보기 부재(제목·날짜만) 확인.
+
+### S9. 흰화면 fallback (safeBack)
+- 시크릿 창에서 deep-link 직진 후 "뒤로" → `/(tabs)/trips` 폴백:
+  - `fields/{id}` `/edit` `/checkin`, `reports/{id}` `/edit` `/new`, `trips/{id}` `/active` `/visit`, `trips/new/select` `/order`, `(auth)/signup`.
+
+### S10. 토큰 만료/회전
+1. localStorage refresh token 손상 → 새로고침 → `/auth/refresh` 401 → 토큰 폐기 + 로그인 이동.
+
+---
+
+## 3. 검증 체크리스트
+
+**자동(read-only)**
+- [ ] A1 `build:web` 번들 성공
+- [ ] A2 부팅 → 로그인 렌더 / 콘솔 에러 0
+- [ ] A3 회원가입 인라인 검증
+- [ ] A4 +not-found + safeBack
+- [ ] A5 OfflineBadge·network watcher·shared 라우트 잔재 부재
+
+**mutation(v2 백엔드 후)**
+- [ ] S2 현장 생성 — categories 전송 / title·jibun 미전송 / 중복 confirm
+- [ ] S3 현장 상세 — 주소 헤더·분류칩·현장 메모/사진(음성 부재)
+- [ ] S4 외근 시작 — title 만 / 공식고지·도착감지 부재
+- [ ] S5 체크인 — fieldId 만 / 단일 status / 첨부 입력 부재  *(§8 status 엔드포인트)*
+- [ ] S6 외근 종료·상세 — zero_visits force / 상태이력 부재
+- [ ] S7 보고서 작성 — title 필수·content 미전송 / AI generate  *(§8 generate)*
+- [ ] S8 보고서 상세 — field_reports 카드 / 공유 부재 / hard delete
+- [ ] S9 safeBack 폴백
+- [ ] S10 토큰 회전
+
+> §8 = [frontend-erd-v2-plan.md](frontend-erd-v2-plan.md) 의 백엔드 확인 항목. 해당 호출에서 계약 불일치가 나면 로그에 raw 응답 첨부.
