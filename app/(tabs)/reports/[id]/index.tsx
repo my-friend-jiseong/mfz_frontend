@@ -28,7 +28,17 @@ function fmtDateTime(iso: string) {
 }
 
 // 현장별 전·중·후 사진 카드 (ERD v2: 보고서 본문 대체).
-function FieldReportCard({ fr, fieldName }: { fr: FieldReport; fieldName?: string }) {
+function FieldReportCard({
+  fr,
+  fieldName,
+  onEdit,
+  onDelete,
+}: {
+  fr: FieldReport;
+  fieldName?: string;
+  onEdit?: () => void;
+  onDelete?: () => void;
+}) {
   const slots: Array<{ label: string; url?: string | null; caption?: string | null }> = [
     { label: '전', url: fr.beforePhotoUrl, caption: fr.beforePhotoCaption },
     { label: '중', url: fr.pendingPhotoUrl, caption: fr.pendingPhotoCaption },
@@ -37,7 +47,23 @@ function FieldReportCard({ fr, fieldName }: { fr: FieldReport; fieldName?: strin
   const resolve = (raw: string) => (raw.startsWith('http') ? raw : `${API_BASE_URL}${raw}`);
   return (
     <View style={styles.frCard}>
-      <Text style={styles.frTitle}>{fr.title || fieldName || '현장 보고'}</Text>
+      <View style={styles.frHead}>
+        <Text style={styles.frTitle}>{fr.title || fieldName || '현장 보고'}</Text>
+        {onEdit || onDelete ? (
+          <View style={styles.frHeadActions}>
+            {onEdit ? (
+              <Pressable onPress={onEdit} hitSlop={8}>
+                <Text style={styles.frEdit}>수정</Text>
+              </Pressable>
+            ) : null}
+            {onDelete ? (
+              <Pressable onPress={onDelete} hitSlop={8}>
+                <Text style={styles.frDelete}>삭제</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
+      </View>
       <View style={styles.frSlots}>
         {slots.map((s) => (
           <View key={s.label} style={styles.frSlot}>
@@ -66,6 +92,7 @@ export default function ReportDetail() {
   const detailCache = useReportStore((s) => s.detailCache);
   const loadDetail = useReportStore((s) => s.loadDetail);
   const remove = useReportStore((s) => s.remove);
+  const removeFieldReport = useReportStore((s) => s.removeFieldReport);
   const allTrips = useTripStore((s) => s.trips);
   const getField = useFieldStore((s) => s.getById);
   const userId = useAuthStore((s) => s.user?.id);
@@ -98,6 +125,21 @@ export default function ReportDetail() {
 
   const isOwner = userId === report.creatorId;
   const fieldReports = report.fieldReports ?? [];
+
+  const handleDeleteFr = (frId: string) => {
+    const doDelete = async () => {
+      const r = await removeFieldReport(report.id, frId);
+      if (!r.ok) Alert.alert('현장 보고 삭제 실패', r.error);
+    };
+    if (Platform.OS === 'web') {
+      if (confirm('이 현장 보고를 삭제할까요?')) void doDelete();
+    } else {
+      Alert.alert('현장 보고 삭제', '이 현장 보고를 삭제할까요?', [
+        { text: '취소', style: 'cancel' },
+        { text: '삭제', style: 'destructive', onPress: () => void doDelete() },
+      ]);
+    }
+  };
 
   const handleDelete = () => {
     const doDelete = async () => {
@@ -153,7 +195,17 @@ export default function ReportDetail() {
           {report.updatedAt ? ` · 수정: ${fmtDateTime(report.updatedAt)}` : ''}
         </Text>
 
-        <Text style={styles.sectionLabel}>현장별 전·중·후</Text>
+        <View style={styles.sectionHead}>
+          <Text style={styles.sectionLabel}>현장별 전·중·후</Text>
+          {isOwner ? (
+            <Pressable
+              onPress={() => router.push(`/(tabs)/reports/${report.id}/field-report` as never)}
+              style={({ pressed }) => [styles.addFrBtn, pressed && styles.pressed]}
+            >
+              <Text style={styles.addFrBtnText}>+ 현장 보고 추가</Text>
+            </Pressable>
+          ) : null}
+        </View>
         {fieldReports.length === 0 ? (
           <Text style={styles.emptyFr}>등록된 현장 보고가 없습니다.</Text>
         ) : (
@@ -162,6 +214,15 @@ export default function ReportDetail() {
               key={fr.id}
               fr={fr}
               fieldName={getField(fr.fieldId)?.address}
+              onEdit={
+                isOwner
+                  ? () =>
+                      router.push(
+                        `/(tabs)/reports/${report.id}/field-report?frId=${fr.id}` as never,
+                      )
+                  : undefined
+              }
+              onDelete={isOwner ? () => handleDeleteFr(fr.id) : undefined}
             />
           ))
         )}
@@ -227,13 +288,36 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginTop: spacing.sm,
   },
+  sectionHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing.xl,
+    marginBottom: spacing.sm,
+  },
   sectionLabel: {
     fontSize: fontSize.sm,
     color: colors.textMuted,
     fontWeight: '700',
-    marginTop: spacing.xl,
+  },
+  addFrBtn: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.primary + '10',
+  },
+  addFrBtnText: { fontSize: fontSize.xs, color: colors.primary, fontWeight: '700' },
+  frHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: spacing.sm,
   },
+  frHeadActions: { flexDirection: 'row', gap: spacing.md },
+  frEdit: { fontSize: fontSize.xs, color: colors.primary, fontWeight: '700' },
+  frDelete: { fontSize: fontSize.xs, color: colors.danger, fontWeight: '700' },
   emptyFr: {
     fontSize: fontSize.sm,
     color: colors.textMuted,

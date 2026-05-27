@@ -33,7 +33,6 @@ export function MapDashboard({ scopeFieldIds }: MapDashboardProps = {}) {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [visibleAttachments, setVisibleAttachments] = useState<VisibleAttachments>({
     text: true,
-    voice: true,
     photo: true,
   });
   const [showBoundary, setShowBoundary] = useState(false);
@@ -83,15 +82,11 @@ export function MapDashboard({ scopeFieldIds }: MapDashboardProps = {}) {
 
   // ERD v2: 메모·사진은 현장(field) 전용 — directAttachments 에서만 집계 (음성 폐기).
   const attachmentPresenceByField = useMemo(() => {
-    const map = new Map<
-      string,
-      { text: boolean; voice: boolean; photo: boolean }
-    >();
+    const map = new Map<string, { text: boolean; photo: boolean }>();
     visibleFields.forEach((f) => {
       const direct = directAttachmentsMap[f.id] ?? [];
       map.set(f.id, {
         text: direct.some((a) => a.type === 'text'),
-        voice: false,
         photo: direct.some((a) => a.type === 'photo'),
       });
     });
@@ -105,7 +100,6 @@ export function MapDashboard({ scopeFieldIds }: MapDashboardProps = {}) {
       if (!presence) return m;
       const tags: string[] = [];
       if (visibleAttachments.text && presence.text) tags.push('메모');
-      if (visibleAttachments.voice && presence.voice) tags.push('음성');
       if (visibleAttachments.photo && presence.photo) tags.push('사진');
       return tags.length > 0
         ? { ...m, label: `${m.label} · ${tags.join('·')}` }

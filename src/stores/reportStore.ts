@@ -8,6 +8,7 @@ import type {
   UpdateReportBody,
   ListReportsParams,
   ReportGenerateData,
+  FieldReportInput,
 } from '@/api';
 import { useAuthStore } from './authStore';
 
@@ -45,6 +46,10 @@ interface ReportState {
   create: (body: CreateReportBody) => Promise<CreateResult>;
   update: (id: string, body: UpdateReportBody) => Promise<GenericResult>;
   remove: (id: string) => Promise<GenericResult>;
+  // 현장별 전·중·후 보고(field_reports) CRUD — 성공 시 상세 재로드로 fieldReports 갱신.
+  addFieldReport: (reportId: string, body: FieldReportInput) => Promise<GenericResult>;
+  updateFieldReport: (reportId: string, fieldReportId: string, body: Partial<FieldReportInput>) => Promise<GenericResult>;
+  removeFieldReport: (reportId: string, fieldReportId: string) => Promise<GenericResult>;
   generate: (input: GenerateInput) => Promise<GenerateResult>;
 
   getById: (id: string) => Report | undefined;
@@ -167,6 +172,36 @@ export const useReportStore = create<ReportState>((set, get) => ({
       return { ok: true };
     } catch (e) {
       set({ busy: false });
+      return { ok: false, error: describeError(e) };
+    }
+  },
+
+  addFieldReport: async (reportId, body) => {
+    try {
+      await reportsApi.addFieldReport(reportId, body);
+      await get().loadDetail(reportId);
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: describeError(e) };
+    }
+  },
+
+  updateFieldReport: async (reportId, fieldReportId, body) => {
+    try {
+      await reportsApi.updateFieldReport(reportId, fieldReportId, body);
+      await get().loadDetail(reportId);
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: describeError(e) };
+    }
+  },
+
+  removeFieldReport: async (reportId, fieldReportId) => {
+    try {
+      await reportsApi.removeFieldReport(reportId, fieldReportId);
+      await get().loadDetail(reportId);
+      return { ok: true };
+    } catch (e) {
       return { ok: false, error: describeError(e) };
     }
   },

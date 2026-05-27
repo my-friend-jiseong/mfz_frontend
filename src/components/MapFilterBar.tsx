@@ -6,7 +6,7 @@ import { spacing, radius, fontSize } from '@/theme/spacing';
 import { FIELD_STATUS_LABEL, type FieldStatus } from '@/types/entities';
 
 export type DisplayMode = 'markers' | 'heatmap' | 'choropleth';
-export type AttachmentKind = 'text' | 'voice' | 'photo';
+export type AttachmentKind = 'text' | 'photo';
 export type VisibleAttachments = Record<AttachmentKind, boolean>;
 export type RangePreset = 'all' | '30d' | '7d' | '1d';
 type GroupKey = 'display' | 'visibility' | 'filter';
@@ -48,7 +48,6 @@ const STATUS_CHIPS: { value: FieldStatus; label: string }[] = [
 
 const ATTACHMENT_CHIPS: { kind: AttachmentKind; label: string }[] = [
   { kind: 'text', label: '글자 메모' },
-  { kind: 'voice', label: '음성 메모' },
   { kind: 'photo', label: '사진' },
 ];
 
@@ -77,12 +76,11 @@ export function MapFilterBar({
   const filterActiveCount =
     selectedStatuses.length + (rangeActive ? 1 : 0) + selectedTags.length;
 
-  // 표시 여부: 기본 = 메모·음성·사진 ON, 경계 OFF.
+  // 표시 여부: 기본 = 메모·사진 ON, 경계 OFF.
   const attachmentOnCount =
     (visibleAttachments.text ? 1 : 0) +
-    (visibleAttachments.voice ? 1 : 0) +
     (visibleAttachments.photo ? 1 : 0);
-  const allAttachmentsOn = attachmentOnCount === 3;
+  const allAttachmentsOn = attachmentOnCount === 2;
   const visibilityAtDefault = allAttachmentsOn && !showBoundary;
   const visibilityOnCount = attachmentOnCount + (showBoundary ? 1 : 0);
 

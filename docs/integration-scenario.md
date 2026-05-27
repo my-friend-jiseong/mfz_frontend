@@ -97,6 +97,7 @@
 
 ### S8. 보고서 — 상세 / 수정 / 삭제
 1. [reports/[id]](<../app/(tabs)/reports/[id]/index.tsx>): 제목·연결 외근·작성 시각·**현장별 전·중·후 사진 카드(field_reports)**·output 파일 다운로드. (본문 content 영역·**공유 버튼 부재** 확인)
+   - owner: "**+ 현장 보고 추가**" 및 카드별 **수정/삭제** → [field-report](<../app/(tabs)/reports/[id]/field-report.tsx>) 편집 화면(현장 선택 + 전·중·후 사진 업로드·캡션). `POST/PATCH/DELETE /api/reports/{id}/field-reports` — 검증 완료(2026-05-28).
 2. "수정" → [edit](<../app/(tabs)/reports/[id]/edit.tsx>) → **제목만** 수정 → `PATCH /api/reports/{id}`.
 3. "삭제" → confirm → `DELETE /api/reports/{id}` (**hard delete**) → 목록 복귀.
 4. 보고서 탭 목록: 외근별 그룹, 카드에 본문 미리보기 부재(제목·날짜만) 확인.
