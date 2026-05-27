@@ -219,7 +219,7 @@ DB 는 남아있으나 요청/응답 형태가 달라진 부분. 각 항목은 �
 2. `categories` — **자유 텍스트 배열**. 전송값 그대로 저장·반환, 응답에 `categories` + `tags` 둘 다 포함. ✅
 3. `projects.status` — 생성 시 미지정 → 기본 `active`. ✅
 4. `field_reports` — **JSON body**. 키 `before/pending/afterPhotoUrl`·`*Caption` 정합, 응답에 `field:{fieldId,name}` 포함. 사진은 URL 참조(업로드 후 연결). ✅
-5. `POST /api/reports/generate` — **미검증**(multipart·AI 라 probe 제외). 실 사용 시 응답 형태 재확인 필요. ⚠️
+5. `POST /api/reports/generate` — 검증 시도 → **운영에서 500**(다른 v2 엔드포인트는 정상). 요청 형태는 수용되나 내부 처리에서 크래시 → 백엔드 백로그 §13 등록. 성공 응답 contract 미확정. 프론트는 500 을 정상 흡수(에러+재시도, 직접 저장 가능). ⚠️ **백엔드 수정 대기** 
 6. 현장 상세 location — **평탄 필드**(`roadAddress`/`detailAddress`/`sido`/`sigungu`/`lat`/`lng`), 중첩 객체 아님, 키는 `lat`/`lng`. ✅
 7. `trips/active` — `{isActive, tripId, elapsedMinutes}`. `lifecycleStatus`/`abnormalTag`/`elapsedHHMM`/`message` 없음(배너는 `startedAt` 로 자체 계산). ✅
 8. `field_photos` caption 컬럼 없음 확정 — 프론트 사진 업로드 caption 미전송, 정합. ✅

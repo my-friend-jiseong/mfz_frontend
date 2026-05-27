@@ -484,6 +484,37 @@ body: { status?: 'arrived' | 'skipped'; order?: number; }
 
 ---
 
+## 13. 🔴 `POST /api/reports/generate` — 운영에서 500 (AI 보고서 생성 전면 실패)
+
+### 배경
+ERD v2 통합 검증(2026-05-28) 중 운영 호출 시, multipart 요청(`notes`·`title`·`tripId`·`fieldId`·`before_photo`·`after_photo`) 에 대해 **일관되게 500 `internal_server_error`** 반환. 사진 동봉·미동봉 모두 동일. 같은 토큰으로 호출한 다른 v2 엔드포인트(현장·외근·체크인·보고서 CRUD·field-reports)는 전부 정상이었음.
+
+```
+POST /api/reports/generate (multipart)  → 500 { code: "internal_server_error", message: "일시적인 오류가 발생했습니다" }
+```
+
+400/422(검증 실패) 가 아니라 **500** 이므로 요청 형태는 수용되고 내부 처리(AI 호출 또는 field_report 저장) 단계에서 크래시하는 것으로 추정.
+
+### 백엔드 확인 필요
+- 운영의 AI 제공자(Gemini) 키·쿼터·네트워크 설정.
+- ERD v2 재작성 시 generate 가 `field_report` 에 before/after 저장하도록 바뀐 경로의 버그 여부.
+- **성공 응답 contract 확정** — `reportId`/`id`, `fieldReport`, `outputFileUrl` 등. 프론트 `ReportGenerateData` 는 가정값이며 미검증.
+
+### 프론트엔드 영향 / 현황
+- 프론트는 500 을 정상 흡수: 에러 메시지 노출 + 버튼 "↻ AI 다시 시도", **직접 저장은 계속 가능** → 기능 전면 차단은 아님.
+- 성공 응답 형태가 확정되면 `ReportGenerateData` · `reportStore.generate` 매핑 재확인.
+
+### 우선순위
+🔴 높음 — AI 초안 기능이 운영에서 동작 불가.
+
+### 발견 시점
+2026-05-28 (ERD v2 통합 검증, 실호출).
+
+### 관련 코드
+- 프론트 [`src/api/endpoints/reports.ts`](../src/api/endpoints/reports.ts) `generate`, [`src/stores/reportStore.ts`](../src/stores/reportStore.ts) `generate`, [`app/(tabs)/reports/new.tsx`](../app/\(tabs\)/reports/new.tsx) `handleAiGenerate`
+
+---
+
 ## 변경 이력
 
 - **2026-05-08**: 백로그 신설. §1 길찾기 카카오-only 정책 반영. (이전 §1 title 은 백엔드 처리 완료로 제거)
@@ -493,3 +524,4 @@ body: { status?: 'arrived' | 'skipped'; order?: number; }
 - **2026-05-10**: §8 클로즈 — 사용자 검토 결과 현 반자동(Alert confirm) 흐름이 의도. 백엔드/프론트 변경 보류.
 - **2026-05-11**: §11 추가 — destinations 영속화 + GET endpoint (중상). 다른 디바이스·세션에서 "계획 0곳" 회로 발견. 프론트는 1차 회피로 `TripListItem.siteCount` 사용.
 - **2026-05-11**: §12 추가 — ERD 파악 및 최신화 (중상·프론트 합동). §6~§11 데이터 모델 변경의 선행 워크.
+- **2026-05-28**: §13 추가 — ERD v2 프론트 정합 작업 중 운영 실호출에서 `POST /api/reports/generate` 500 발견(높음). 그 외 v2 엔드포인트는 정상 검증됨.
