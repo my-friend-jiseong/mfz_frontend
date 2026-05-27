@@ -15,24 +15,32 @@ export interface TripStartBody {
   title?: string;
 }
 
+// v2 검증(2026-05-28): start/end 응답엔 banner·toast 없음 — optional.
 export interface TripStartResponse {
   tripId: string;
   startedAt: string;
   title?: string;
-  banner: TripBanner;
-  toast: string;
+  banner?: TripBanner;
+  toast?: string;
 }
 
 export interface TripEndResponse {
   tripId: string;
   endedAt: string;
-  banner: TripBanner;
-  toast: string;
+  durationMinutes?: number;
+  visitCount?: number;
+  banner?: TripBanner;
+  toast?: string;
 }
 
-export interface ActiveTripResponse extends TripBanner {
+// v2 검증: { isActive, tripId, elapsedMinutes }. elapsedHHMM·message 는 없음(배너는 startedAt 로 자체 계산).
+export interface ActiveTripResponse {
+  isActive: boolean;
+  tripId: string | null;
+  elapsedMinutes?: number;
+  elapsedHHMM?: string | null;
+  message?: string | null;
   startedAt?: string;
-  // ERD v2: trips.status('active'|'ended'). lifecycleStatus 는 v2 존속 불확실 — optional (§8).
   status?: 'active' | 'ended' | string;
   lifecycleStatus?: string;
 }

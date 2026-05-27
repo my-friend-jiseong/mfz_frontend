@@ -65,13 +65,31 @@ export interface RecentVisitItem {
   memoPreview?: string;
 }
 
+// v2 검증(2026-05-28): 현장 상세는 memos[] + photos[] 분리 배열 (directAttachments 아님).
+export interface FieldMemoItem {
+  id: string;
+  fieldId: string;
+  content: string;
+  createdBy?: string;
+  createdAt: string;
+}
+export interface FieldPhotoItem {
+  id: string;
+  fieldId: string;
+  fileName?: string;
+  mimeType?: string;
+  fileUrl: string;
+  fileSize?: number;
+  createdAt: string;
+}
+
 export interface FieldDetailResponse extends FieldCore {
   userId?: string;
   assigneeUserId?: string;
   recentVisits: RecentVisitItem[];
-  directAttachments: FieldDirectAttachment[];
-  attachmentSummary?: { text: number; photo: number; total: number };
-  checkInCta?: { label: string; enabled: boolean; reason: string | null; action: string | null };
+  memos: FieldMemoItem[];
+  photos: FieldPhotoItem[];
+  checkInCta?: { label: string; enabled: boolean; reason?: string | null; action?: string | null };
 }
 
 export interface CreateFieldBody {
@@ -117,9 +135,14 @@ export interface PatchStatusResponse {
   previousStatus: FieldStatus;
 }
 
-export interface FieldAttachmentResponse {
+// v2 검증: 메모 추가 → { fieldId, memo }, 사진 추가 → { fieldId, photo }.
+export interface FieldMemoResponse {
   fieldId: string;
-  attachment: FieldDirectAttachment;
+  memo: FieldMemoItem;
+}
+export interface FieldPhotoResponse {
+  fieldId: string;
+  photo: FieldPhotoItem;
 }
 
 // 주소 검색 — Kakao 응답. jibunAddress 는 외부 검색 결과 표시용(현장 저장과 무관).
@@ -186,7 +209,7 @@ export const fields = {
     }),
 
   addTextMemo: (fieldId: string, text: string) =>
-    request<FieldAttachmentResponse>(`/api/fields/${fieldId}/memos`, {
+    request<FieldMemoResponse>(`/api/fields/${fieldId}/memos`, {
       method: 'POST',
       body: { text },
     }),
@@ -194,7 +217,7 @@ export const fields = {
   addPhoto: (fieldId: string, file: { uri: string; name: string; type: string }) => {
     const fd = new FormData();
     fd.append('file', file as unknown as Blob);
-    return request<FieldAttachmentResponse>(`/api/fields/${fieldId}/photos`, {
+    return request<FieldPhotoResponse>(`/api/fields/${fieldId}/photos`, {
       method: 'POST',
       body: fd,
       multipart: true,

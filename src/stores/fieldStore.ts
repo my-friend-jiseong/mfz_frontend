@@ -48,6 +48,22 @@ interface FieldState {
 
 const describeError = localizeError;
 
+// v2: 현장 상세의 memos[]/photos[] 를 화면 캐시용 FieldDirectAttachment 로 정규화.
+function memoToAttachment(m: {
+  id: string; fieldId: string; content: string; createdAt: string;
+}): FieldDirectAttachment {
+  return { id: m.id, fieldId: m.fieldId, type: 'text', text: m.content, createdAt: m.createdAt };
+}
+function photoToAttachment(p: {
+  id: string; fieldId: string; fileName?: string; mimeType?: string; fileUrl: string; fileSize?: number; createdAt: string;
+}): FieldDirectAttachment {
+  return {
+    id: p.id, fieldId: p.fieldId, type: 'photo',
+    fileName: p.fileName, mimeType: p.mimeType, fileUrl: p.fileUrl,
+    fileSize: p.fileSize, byteSize: p.fileSize, createdAt: p.createdAt,
+  };
+}
+
 export const useFieldStore = create<FieldState>((set, get) => ({
   fields: [],
   directAttachments: {},
@@ -59,7 +75,8 @@ export const useFieldStore = create<FieldState>((set, get) => ({
 
   refresh: async (params) => {
     try {
-      const res = await fieldsApi.listMine(params ?? { visitDateScope: 'all' });
+      // v2 검증: visitDateScope 미지정 시 목록이 빈다 — 항상 기본 'all' 보장.
+      const res = await fieldsApi.listMine({ visitDateScope: 'all', ...params });
       const items: Field[] = res.items.map((it) => ({
         id: it.fieldId,
         userId: it.userId ?? it.assigneeUserId ?? '',
@@ -203,7 +220,13 @@ export const useFieldStore = create<FieldState>((set, get) => ({
               }
             : f,
         ),
-        directAttachments: { ...s.directAttachments, [id]: res.directAttachments ?? [] },
+        directAttachments: {
+          ...s.directAttachments,
+          [id]: [
+            ...(res.memos ?? []).map(memoToAttachment),
+            ...(res.photos ?? []).map(photoToAttachment),
+          ],
+        },
       }));
     } catch {
       // ignore
@@ -216,7 +239,7 @@ export const useFieldStore = create<FieldState>((set, get) => ({
       set((s) => ({
         directAttachments: {
           ...s.directAttachments,
-          [id]: [...(s.directAttachments[id] ?? []), res.attachment],
+          [id]: [...(s.directAttachments[id] ?? []), memoToAttachment(res.memo)],
         },
       }));
       return { ok: true };
@@ -231,7 +254,7 @@ export const useFieldStore = create<FieldState>((set, get) => ({
       set((s) => ({
         directAttachments: {
           ...s.directAttachments,
-          [id]: [...(s.directAttachments[id] ?? []), res.attachment],
+          [id]: [...(s.directAttachments[id] ?? []), photoToAttachment(res.photo)],
         },
       }));
       return { ok: true };

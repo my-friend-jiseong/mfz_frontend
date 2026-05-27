@@ -211,16 +211,29 @@ DB 는 남아있으나 요청/응답 형태가 달라진 부분. 각 항목은 �
 
 ---
 
-## 8. 확인 필요 (백엔드/Swagger 동기화 후 확정)
+## 8. 확인 필요 → **검증 완료 (2026-05-28, 운영 `https://ilgayo.co.kr` 실호출)**
 
-1. `PATCH /api/visits/:id/status` 존속 여부 및 body — `statusReason` 수용? `status` enum 값 목록?
-2. `field_categories.category` 가 자유 텍스트인지 고정 enum 인지.
-3. `projects.status` enum 값.
-4. `field_reports` 의 정확한 요청/응답 필드명(`pendingPhoto*` 등)과 사진 업로드 방식(URL 직접 vs multipart).
-5. `POST /api/reports/generate` 신 계약 — `reportId`+`fieldId` 동반 필수 여부, 응답 형태.
-6. 현장 상세 응답이 location 을 중첩 객체로 주는지 평탄 필드로 주는지, 키 이름(`lat`/`latitude`).
-7. `trips` 응답의 `lifecycleStatus`/`abnormalTag` v2 존속 여부.
-8. `field_photos` 에 caption 컬럼 없음 — 현 사진 업로드의 caption 전송 처리(무시 vs 제거).
+운영 백엔드가 ERD v2 로 배포돼 있어 전 플로우(signup→현장→외근→체크인→보고서→field-reports)를 실호출로 검증함.
+
+1. `PATCH /api/visits/:id/status` — **존속**. body `{status}` 수용, 응답 `{visitId, status, resultStatus}`(status='completed' 면 resultStatus 자동 'normal'). statusReason 불필요. → 프론트 `setResult(visitId, status)` 정합. ✅
+2. `categories` — **자유 텍스트 배열**. 전송값 그대로 저장·반환, 응답에 `categories` + `tags` 둘 다 포함. ✅
+3. `projects.status` — 생성 시 미지정 → 기본 `active`. ✅
+4. `field_reports` — **JSON body**. 키 `before/pending/afterPhotoUrl`·`*Caption` 정합, 응답에 `field:{fieldId,name}` 포함. 사진은 URL 참조(업로드 후 연결). ✅
+5. `POST /api/reports/generate` — **미검증**(multipart·AI 라 probe 제외). 실 사용 시 응답 형태 재확인 필요. ⚠️
+6. 현장 상세 location — **평탄 필드**(`roadAddress`/`detailAddress`/`sido`/`sigungu`/`lat`/`lng`), 중첩 객체 아님, 키는 `lat`/`lng`. ✅
+7. `trips/active` — `{isActive, tripId, elapsedMinutes}`. `lifecycleStatus`/`abnormalTag`/`elapsedHHMM`/`message` 없음(배너는 `startedAt` 로 자체 계산). ✅
+8. `field_photos` caption 컬럼 없음 확정 — 프론트 사진 업로드 caption 미전송, 정합. ✅
+
+### 검증으로 발견해 수정한 응답 불일치 (커밋 반영)
+
+| 항목 | 백엔드 실제 | 프론트 수정 |
+|---|---|---|
+| `GET /api/fields/mine` | `visitDateScope` 없으면 **빈 목록** | `fieldStore.refresh` 가 항상 `visitDateScope:'all'` 보장 |
+| `projects` 키 | `projectId` (+목록 `fieldCount`) | `ProjectItem.projectId`, store 매핑 `projectId→id` |
+| 현장 상세 첨부 | `memos[]` + `photos[]` (directAttachments 아님) | `FieldDetailResponse.memos/photos`, store 가 캐시로 정규화 |
+| 메모/사진 추가 응답 | `{fieldId, memo}` / `{fieldId, photo}` | `FieldMemoResponse`/`FieldPhotoResponse` + 매핑 |
+| 보고서 생성 응답 | `authorUserId` (createdBy 아님) | `ReportCreateData.authorUserId`, store 매핑 |
+| trip start/end | `banner`/`toast` 없음 | optional 로 완화 |
 
 ---
 

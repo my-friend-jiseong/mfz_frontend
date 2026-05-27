@@ -23,8 +23,8 @@ const describeError = localizeError;
 
 function toProject(it: ProjectItem): Project {
   return {
-    id: it.id,
-    userId: it.userId ?? '',
+    id: it.projectId ?? it.id ?? '',
+    userId: '', // 응답에 userId 없음 — 본인 목록
     name: it.name,
     status: it.status,
     createdAt: it.createdAt,

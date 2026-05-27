@@ -14,7 +14,7 @@ export interface CheckInResponse {
   visitId: string;
   fieldId: string;
   visitedAt: string;
-  message: string;
+  message?: string;       // v2 응답엔 없음 — optional
 }
 
 export interface VisitDetailResponse {

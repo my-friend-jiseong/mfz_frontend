@@ -40,7 +40,7 @@ export interface ReportCreateData {
   tripId: string | null;
   title: string;
   outputFileUrl: string | null;
-  createdBy: string;
+  authorUserId: string;   // POST /api/reports 는 authorUserId 로 응답 (검증 2026-05-28)
   createdAt: string;
   updatedAt: string;
 }

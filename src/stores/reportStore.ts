@@ -117,7 +117,7 @@ export const useReportStore = create<ReportState>((set, get) => ({
       const data = await reportsApi.create(body);
       const r: Report = {
         id: data.id,
-        creatorId: data.createdBy,
+        creatorId: data.authorUserId,
         tripId: data.tripId,
         title: data.title,
         outputFileUrl: data.outputFileUrl,

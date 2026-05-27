@@ -5,10 +5,12 @@ import { request } from '../client';
 //   - status enum 값은 §8 확인 대상.
 
 export interface ProjectItem {
-  id: string;
-  userId?: string;
+  // 백엔드 v2 는 projectId 키 사용 (fields 의 fieldId 와 동일 컨벤션). id 는 구버전 호환.
+  projectId: string;
+  id?: string;
   name: string;
   status: string;
+  fieldCount?: number;
   createdAt: string;
   updatedAt?: string;
 }
@@ -35,6 +37,8 @@ export const projects = {
 
   detail: (projectId: string) =>
     request<ProjectItem>(`/api/projects/${projectId}`),
+
+  // 참고: 생성/목록 응답 모두 projectId 키 (검증 2026-05-28).
 
   create: (body: CreateProjectBody) =>
     request<ProjectItem>('/api/projects', { method: 'POST', body }),
