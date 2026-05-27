@@ -28,10 +28,7 @@ export function FieldCard({ field, onPress }: Props) {
           </Text>
         </View>
       </View>
-      <Text style={styles.address}>{field.title || field.address}</Text>
-      {field.title ? (
-        <Text style={styles.detail}>{field.address}</Text>
-      ) : null}
+      <Text style={styles.address}>{field.address}</Text>
       {field.addressDetail ? (
         <Text style={styles.detail}>{field.addressDetail}</Text>
       ) : null}

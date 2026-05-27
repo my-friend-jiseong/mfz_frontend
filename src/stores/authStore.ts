@@ -7,7 +7,6 @@ import {
   clearRefreshToken,
 } from '@/api/storage';
 import { useSessionGuardStore } from './sessionGuardStore';
-import { useOfflineQueueStore } from './offlineQueueStore';
 import { useDestinationStore } from './destinationStore';
 
 type Result<T = void> =
@@ -91,9 +90,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           isAuthenticated: true,
           isHydrating: false,
         });
-        // 인증 확정 후 큐 flush — 부팅 시점엔 isAuthenticated=false 라 큐가 skip 됐고,
-        // 여기서 한 번 시도. 인증 없는 요청이 _refreshAccess 와 race 일으키는 회로 차단.
-        void useOfflineQueueStore.getState().flushAll();
         // refresh 응답엔 user 가 없는 게 백엔드 contract — 별도 /api/me 로 백그라운드 fetch.
         // isAuthenticated=true 는 이미 set 했으므로 (tabs) 진입은 정상 진행.
         if (!session.user) {
@@ -183,8 +179,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         refreshToken: session.refreshToken,
         isAuthenticated: true,
       });
-      // 인증 확정 직후 큐 flush — 인증 안 된 채로 남은 큐가 인증 후 처리되도록.
-      void useOfflineQueueStore.getState().flushAll();
       return { ok: true };
     } catch (e) {
       return { ok: false, error: describeError(e), code: errorCode(e) ?? undefined };
@@ -211,8 +205,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         refreshToken: session.refreshToken,
         isAuthenticated: true,
       });
-      // 인증 확정 직후 큐 flush — 인증 안 된 채로 남은 큐가 인증 후 처리되도록.
-      void useOfflineQueueStore.getState().flushAll();
       return { ok: true };
     } catch (e) {
       return { ok: false, error: describeError(e), code: errorCode(e) ?? undefined };
@@ -230,7 +222,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
     }
     await clearRefreshToken();
-    await useOfflineQueueStore.getState().clear();
     await useDestinationStore.getState().clearAll();
     set({
       user: null,

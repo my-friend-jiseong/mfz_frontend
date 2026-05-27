@@ -3,7 +3,6 @@ import { StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useFieldStore } from '@/stores/fieldStore';
 import { useAuthStore } from '@/stores/authStore';
-import { useVisitStore } from '@/stores/visitStore';
 import { KakaoMapWebView, fieldsToMarkers } from '@/components/KakaoMapWebView';
 import {
   MapFilterBar,
@@ -27,10 +26,6 @@ export function MapDashboard({ scopeFieldIds }: MapDashboardProps = {}) {
   const userId = useAuthStore((s) => s.user?.id);
   const allFields = useFieldStore((s) => s.fields);
   const directAttachmentsMap = useFieldStore((s) => s.directAttachments);
-  const allVisits = useVisitStore((s) => s.visits);
-  const allTextMemos = useVisitStore((s) => s.textMemos);
-  const allVoiceMemos = useVisitStore((s) => s.voiceMemos);
-  const allPhotos = useVisitStore((s) => s.photos);
 
   const [displayMode, setDisplayMode] = useState<DisplayMode>('markers');
   const [selectedStatuses, setSelectedStatuses] = useState<FieldStatus[]>([]);
@@ -56,10 +51,10 @@ export function MapDashboard({ scopeFieldIds }: MapDashboardProps = {}) {
     return myFields.filter((f) => allow.has(f.id));
   }, [myFields, scopeFieldIds]);
 
-  // 가용 태그 — 스코프된 현장에 등록된 태그 합집합 (정렬)
+  // 가용 분류 — 스코프된 현장에 등록된 분류(field_categories) 합집합 (정렬)
   const availableTags = useMemo(() => {
     const set = new Set<string>();
-    scopedFields.forEach((f) => f.tags?.forEach((t) => set.add(t)));
+    scopedFields.forEach((f) => f.categories?.forEach((t) => set.add(t)));
     return Array.from(set).sort();
   }, [scopedFields]);
 
@@ -80,43 +75,28 @@ export function MapDashboard({ scopeFieldIds }: MapDashboardProps = {}) {
     }
     if (selectedTags.length > 0) {
       list = list.filter((f) =>
-        selectedTags.every((tag) => f.tags?.includes(tag)),
+        selectedTags.every((tag) => f.categories?.includes(tag)),
       );
     }
     return list;
   }, [scopedFields, selectedStatuses, rangePreset, selectedTags]);
 
+  // ERD v2: 메모·사진은 현장(field) 전용 — directAttachments 에서만 집계 (음성 폐기).
   const attachmentPresenceByField = useMemo(() => {
     const map = new Map<
       string,
       { text: boolean; voice: boolean; photo: boolean }
     >();
     visibleFields.forEach((f) => {
-      const visitIds = allVisits
-        .filter((v) => v.fieldId === f.id)
-        .map((v) => v.id);
-      const visitText = visitIds.some((vid) =>
-        allTextMemos.some((m) => m.visitId === vid),
-      );
-      const visitVoice = visitIds.some((vid) =>
-        allVoiceMemos.some((m) => m.visitId === vid),
-      );
-      const visitPhoto = visitIds.some((vid) =>
-        allPhotos.some((p) => p.visitId === vid),
-      );
-      // 현장 직접 첨부(visit 없이) 도 포함 — checkin 흐름이 아닌 현장 상세에서 추가된 것
       const direct = directAttachmentsMap[f.id] ?? [];
-      const directText = direct.some((a) => a.type === 'text');
-      const directVoice = direct.some((a) => a.type === 'audio');
-      const directPhoto = direct.some((a) => a.type === 'photo');
       map.set(f.id, {
-        text: visitText || directText,
-        voice: visitVoice || directVoice,
-        photo: visitPhoto || directPhoto,
+        text: direct.some((a) => a.type === 'text'),
+        voice: false,
+        photo: direct.some((a) => a.type === 'photo'),
       });
     });
     return map;
-  }, [visibleFields, allVisits, allTextMemos, allVoiceMemos, allPhotos, directAttachmentsMap]);
+  }, [visibleFields, directAttachmentsMap]);
 
   const markers = useMemo(() => {
     const base = fieldsToMarkers(visibleFields);

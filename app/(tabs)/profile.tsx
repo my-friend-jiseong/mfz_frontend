@@ -10,7 +10,6 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '@/stores/authStore';
-import { useOfflineQueueStore } from '@/stores/offlineQueueStore';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
 
@@ -31,7 +30,6 @@ export default function Profile() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
-  const offlinePending = useOfflineQueueStore((s) => s.queue.length);
 
   const [loggingOut, setLoggingOut] = useState(false);
 
@@ -43,10 +41,7 @@ export default function Profile() {
   };
 
   const handleLogout = () => {
-    const message =
-      offlinePending > 0
-        ? `동기화 대기 중인 작업이 ${offlinePending}건 있습니다.\n로그아웃 시 폐기됩니다. 계속할까요?`
-        : '정말 로그아웃하시겠습니까?';
+    const message = '정말 로그아웃하시겠습니까?';
 
     if (Platform.OS === 'web') {
       if (confirm(message)) void performLogout();
@@ -82,15 +77,6 @@ export default function Profile() {
             </Text>
           </View>
         </View>
-
-        {offlinePending > 0 ? (
-          <View style={styles.warnBox}>
-            <Text style={styles.warnTitle}>동기화 대기 중</Text>
-            <Text style={styles.warnBody}>
-              네트워크 끊김 동안 누적된 작업이 {offlinePending}건 있습니다. 네트워크 복구 후 자동 동기화됩니다.
-            </Text>
-          </View>
-        ) : null}
 
         <Pressable
           onPress={handleLogout}

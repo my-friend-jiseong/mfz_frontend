@@ -1,32 +1,35 @@
 import { request } from '../client';
 import type { FieldStatus } from '@/types/entities';
 
-// docs/_swagger_responses.md §4 (Phase 2 보강 반영)
+// ERD v2 정렬 — fields 슬림화: 주소·좌표는 locations(1:1), 분류는 field_categories.
+//   - 생성: jibunAddress·title 불필요. roadAddress·detailAddress·lat·lng·name·status 필수.
+//   - 담당자: userId (호환 assigneeUserId 병행). 분류: categories (요청 tags 동의어).
+//   - 목록: /api/fields/mine 만 (관리자 전체목록·assignee PATCH 제거).
+//   - 음성 메모(voice-memos) 제거.
 
-// list/detail 공통 (Phase 2 부터 lat/lng + 분리주소 포함)
+// list/detail 공통
 interface FieldCore {
   fieldId: string;
   name: string;
-  // 사용자 입력 제목 — 프론트가 선행 도입. 백엔드 미구현 단계에선 응답에 없음.
-  title?: string;
   address: string;          // 합쳐진 표시용 string
   roadAddress?: string;
-  jibunAddress?: string;
   detailAddress?: string;
   sido?: string;
   sigungu?: string;
   status: FieldStatus;
   lat: number;
   lng: number;
-  tags: string[];
+  // ERD v2: field_categories. 호환을 위해 tags 도 optional 로 흡수.
+  categories?: string[];
+  tags?: string[];
+  projectId?: string | null;
   updatedAt: string;
 }
 
 export interface FieldListItem extends FieldCore {
-  // Phase 3 §1.3 반영: 백엔드가 userId 제거 → assigneeUserId 단일.
-  // 과거 응답과 호환 위해 옵셔널 유지 (구버전 백엔드와 충돌 방지).
+  // ERD v2: 담당자는 userId. 구버전 호환 위해 assigneeUserId 도 optional.
   userId?: string;
-  assigneeUserId: string;
+  assigneeUserId?: string;
   recentVisitedAt: string | null;
 }
 
@@ -37,60 +40,53 @@ export interface FieldListResponse {
   appliedFilter: unknown;
 }
 
-// Phase 3 §2.3 schemas — VisitPhotoAttachment/VisitAudioAttachment/VisitTextMemoAttachment +
-// FieldPhotoAttachment/FieldAudioAttachment 통합. 모두 옵셔널 처리해서 endpoint 별 차이 흡수.
+// ERD v2: memos(텍스트) + field_photos(사진) 만. 음성 제거, caption·좌표·visit 연결 없음.
+// 응답 형태가 v2 에서 단순화될 수 있어 미디어 필드는 방어적 optional (§8).
 export interface FieldDirectAttachment {
   id: string;
   fieldId: string;
-  type: 'text' | 'photo' | 'audio';
+  type: 'text' | 'photo';
   text?: string;
   fileName?: string;
   mimeType?: string;
   fileUrl?: string;
   thumbnailUrl?: string;
+  fileSize?: number;
   byteSize?: number;
-  durationSec?: number;
-  durationSeconds?: number;
-  caption?: string;
   createdAt: string;
-  latitude?: number | null;
-  longitude?: number | null;
-  visitId: string | null;
 }
 
-// 현장 상세 응답의 recentVisits 항목 — 최근 방문 요약.
+// 현장 상세 응답의 recentVisits 항목 — ERD v2: visit 첨부·result_status 제거.
 export interface RecentVisitItem {
   visitId: string;
   tripId: string;
   visitedAt: string;
-  resultStatus: string;     // 영문 enum (VisitStatus)
-  status: string;           // 한국어 표시값 (백엔드)
-  statusReason: string | null;
+  status?: string;          // visits.status
   memoPreview?: string;
-  attachmentCounts?: { text: number; photo: number; audio: number };
 }
 
 export interface FieldDetailResponse extends FieldCore {
-  assigneeUserId: string;
+  userId?: string;
+  assigneeUserId?: string;
   recentVisits: RecentVisitItem[];
   directAttachments: FieldDirectAttachment[];
-  attachmentSummary: { text: number; photo: number; audio: number; total: number };
-  checkInCta: { label: string; enabled: boolean; reason: string | null; action: string | null };
+  attachmentSummary?: { text: number; photo: number; total: number };
+  checkInCta?: { label: string; enabled: boolean; reason: string | null; action: string | null };
 }
 
 export interface CreateFieldBody {
   name: string;
-  // 사용자 입력 제목 — 프론트 선행. 백엔드 미구현이면 무시되어도 안전.
-  title?: string;
   status: FieldStatus;
+  // ERD v2 필수: 도로명·상세주소·좌표.
   roadAddress: string;
-  jibunAddress: string;
   detailAddress: string;
   lat: number;
   lng: number;
   sido?: string;
   sigungu?: string;
-  // userId/forceCreateWithDuplicate 는 백엔드 스펙상 존재하나 본 서비스에서 사용 안 함
+  // 선택: 프로젝트 소속·분류.
+  projectId?: string;
+  categories?: string[];
   forceCreateWithDuplicate?: boolean;
 }
 
@@ -104,16 +100,14 @@ export interface CreateFieldResponse {
 
 export interface UpdateFieldBody {
   name?: string;
-  title?: string;
   roadAddress?: string;
-  jibunAddress?: string;
   detailAddress?: string;
   sido?: string;
   sigungu?: string;
   lat?: number;
   lng?: number;
-  tags?: string[];
-  // assignedUserId 는 백엔드 스펙상 존재하나 본 서비스(단일 Actor)에서는 사용 안 함
+  projectId?: string | null;
+  categories?: string[];
 }
 
 export interface PatchStatusResponse {
@@ -123,12 +117,12 @@ export interface PatchStatusResponse {
   previousStatus: FieldStatus;
 }
 
-export interface FieldTextMemoResponse {
+export interface FieldAttachmentResponse {
   fieldId: string;
   attachment: FieldDirectAttachment;
 }
 
-// Phase 3 §1.4 — 백엔드 목업 응답에서 확정된 shape
+// 주소 검색 — Kakao 응답. jibunAddress 는 외부 검색 결과 표시용(현장 저장과 무관).
 export interface AddressSearchItem {
   roadAddress: string;
   jibunAddress: string;
@@ -140,8 +134,6 @@ export interface AddressSearchItem {
   lng: number;
 }
 
-// handoff-response §1: 백엔드 응답에는 provider.primary 와 manualCoordinateFallback 만 있음.
-// secondary/retryOnFailure/emptyMessage 는 프론트 가정 — 미사용이면 옵셔널 유지.
 export interface AddressSearchResponse {
   query: string;
   provider: {
@@ -156,7 +148,7 @@ export interface AddressSearchResponse {
 
 export interface ListMineParams {
   status?: string; // CSV: pending,in_progress,done
-  tag?: string;
+  category?: string;
   fromDate?: string;
   toDate?: string;
   visitDateScope?: 'all' | 'none';
@@ -185,7 +177,6 @@ export const fields = {
       body: { status },
     }),
 
-  // force=true 옵션은 백엔드 스펙에만 존재하며 본 서비스(단일 Actor)에서는 사용하지 않음.
   remove: (fieldId: string) =>
     request<null>(`/api/fields/${fieldId}`, { method: 'DELETE' }),
 
@@ -195,27 +186,15 @@ export const fields = {
     }),
 
   addTextMemo: (fieldId: string, text: string) =>
-    request<FieldTextMemoResponse>(`/api/fields/${fieldId}/memos`, {
+    request<FieldAttachmentResponse>(`/api/fields/${fieldId}/memos`, {
       method: 'POST',
       body: { text },
     }),
 
-  addPhoto: (fieldId: string, file: { uri: string; name: string; type: string }, caption?: string) => {
+  addPhoto: (fieldId: string, file: { uri: string; name: string; type: string }) => {
     const fd = new FormData();
     fd.append('file', file as unknown as Blob);
-    if (caption) fd.append('caption', caption);
-    return request<FieldTextMemoResponse>(`/api/fields/${fieldId}/photos`, {
-      method: 'POST',
-      body: fd,
-      multipart: true,
-    });
-  },
-
-  addVoiceMemo: (fieldId: string, file: { uri: string; name: string; type: string }, durationSeconds?: number) => {
-    const fd = new FormData();
-    fd.append('file', file as unknown as Blob);
-    if (durationSeconds !== undefined) fd.append('durationSeconds', String(durationSeconds));
-    return request<FieldTextMemoResponse>(`/api/fields/${fieldId}/voice-memos`, {
+    return request<FieldAttachmentResponse>(`/api/fields/${fieldId}/photos`, {
       method: 'POST',
       body: fd,
       multipart: true,

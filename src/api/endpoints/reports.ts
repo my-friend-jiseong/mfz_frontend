@@ -1,17 +1,19 @@
 import { request } from '../client';
+import type { FieldReport } from '@/types/entities';
 
-// Phase 7 cut-over — 모든 reports 라우트가 raw 도메인 객체 반환 ({success, data} envelope 제거).
+// ERD v2 정렬 — reports 슬림화:
+//   - content/summary/status/share/AI·soft-delete·단일사진 컬럼 제거.
+//   - title + trip_id + output_file_url + created_by 중심. 삭제는 hard delete.
+//   - 본문은 fieldReports(현장별 전·중·후 사진) 로 분리 — /api/reports/:id/field-reports.
 
-// list 응답 item (flat, reportId)
 export interface ReportListItem {
   reportId: string;
   tripId: string | null;
   trip: { tripDate: string | null; startedAt: string | null; endedAt: string | null };
   title: string;
-  contentPreview: string;
   createdAt: string;
   updatedAt: string | null;
-  fileUrl: string | null;
+  outputFileUrl: string | null;
 }
 
 export interface ReportListResponse {
@@ -20,49 +22,39 @@ export interface ReportListResponse {
   emptyMessage: string | null;
 }
 
-// detail/PATCH 응답 (flat, reportId)
 export interface ReportDetailResponse {
   reportId: string;
   tripId: string | null;
   trip: { startedAt: string | null; endedAt: string | null; visitCount: number | null };
   title: string;
-  content: string;
+  outputFileUrl: string | null;
   createdAt: string;
   updatedAt: string | null;
-  fileUrl: string | null;
   creator: { id: string; name: string };
+  fieldReports: FieldReport[];
 }
 
-// POST /api/reports 응답 (Phase 7 부터 raw)
+// POST /api/reports 응답
 export interface ReportCreateData {
   id: string;
   tripId: string | null;
   title: string;
-  content: string;
-  summary: string | null;
-  authorUserId: string;
-  status: 'draft' | 'published' | string;
-  generatedByAi: boolean;
   outputFileUrl: string | null;
-  shareEnabled: boolean;
-  shareToken: string | null;
-  sharedAt: string | null;
-  shareExpiresAt: string | null;
+  createdBy: string;
   createdAt: string;
   updatedAt: string;
-  deletedAt: string | null;
 }
 
 export interface CreateReportBody {
+  // ERD v2: title 필수. content/summary 제거. outputFileUrl 선택.
   title: string;
-  content: string;
-  summary?: string;
   tripId?: string;
+  outputFileUrl?: string;
 }
 
 export interface UpdateReportBody {
   title?: string;
-  content?: string;
+  outputFileUrl?: string;
 }
 
 export interface ListReportsParams {
@@ -74,46 +66,42 @@ export interface ListReportsParams {
   toDate?: string;
 }
 
-// 공유 링크 응답
-export interface ShareReportData {
-  reportId: string;
-  shareEnabled: boolean;
-  shareToken: string;
-  shareUrl: string;
-  sharedAt: string;
-  expiresAt?: string;
-  shareExpiresAt?: string;
+// ----- 현장별 보고(field_reports) — 전·중·후 사진 + 캡션 -----
+// 요청/응답 정확한 필드명·사진 업로드 방식(URL vs multipart)은 §8 확인 대상.
+// 우선 URL 참조 기반(JSON)으로 가정 — field_photos 업로드 후 그 URL 을 연결.
+export interface FieldReportInput {
+  fieldId: string;
+  title?: string;
+  beforePhotoUrl?: string;
+  beforePhotoCaption?: string;
+  pendingPhotoUrl?: string;
+  pendingPhotoCaption?: string;
+  afterPhotoUrl?: string;
+  afterPhotoCaption?: string;
 }
 
-export interface DisableShareData {
-  reportId: string;
-  shareEnabled: false;
-}
-
-// AI 분석 결과 schema — 공통 필드는 typed, 모델 raw output 등 나머지는 free-form 통과.
-// 백엔드 모델 변경에 안정적 (필드 추가는 unknown 으로 받아도 기존 코드 안 깨짐).
+// ----- AI 보고서 생성 -----
+// ERD v2: 본문 content 컬럼 없음. fieldId 제공 시 field_report 에 before/after 저장.
+// 응답 형태가 재정의됐을 수 있어 방어적 optional (§8).
 export interface ReportAnalysis {
   summary?: string;
   keypoints?: string[];
   recommendations?: string[];
   sentiment?: 'positive' | 'neutral' | 'negative' | string;
   raw?: string;
-  // 미래 확장 — 모델 응답에 추가 필드가 와도 흡수
   [key: string]: unknown;
 }
 
-// Phase 3 §2.1 — generate 응답 (Phase 7 부터 raw, message 는 동위 필드)
 export interface ReportGenerateData {
   id: string;
+  reportId?: string;
   tripId: string | null;
   title: string;
-  content: string;
-  summary: string;
-  generatedByAi: boolean;
-  outputFileUrl: string;
+  outputFileUrl?: string;
   fileUrl?: string;
   downloadUrl?: string;
   outputFileName?: string;
+  fieldReport?: FieldReport;
   analysis?: ReportAnalysis;
   generationMetadata?: { model?: string; tokens?: number | null; elapsedMs?: number };
   message?: string;
@@ -135,28 +123,32 @@ export const reports = {
       body,
     }),
 
+  // ERD v2: hard delete.
   remove: (reportId: string) =>
     request<null>(`/api/reports/${reportId}`, { method: 'DELETE' }),
 
-  share: (reportId: string) =>
-    request<ShareReportData>(`/api/reports/${reportId}/share`, {
+  // ----- field-reports CRUD -----
+  listFieldReports: (reportId: string) =>
+    request<{ items: FieldReport[] }>(`/api/reports/${reportId}/field-reports`),
+
+  addFieldReport: (reportId: string, body: FieldReportInput) =>
+    request<FieldReport>(`/api/reports/${reportId}/field-reports`, {
       method: 'POST',
-      body: {},
+      body,
     }),
 
-  /** Phase 3 §2.2 — 공유 토큰 무효화 */
-  disableShare: (reportId: string) =>
-    request<DisableShareData>(`/api/reports/${reportId}/share`, {
+  updateFieldReport: (reportId: string, fieldReportId: string, body: Partial<FieldReportInput>) =>
+    request<FieldReport>(`/api/reports/${reportId}/field-reports/${fieldReportId}`, {
+      method: 'PATCH',
+      body,
+    }),
+
+  removeFieldReport: (reportId: string, fieldReportId: string) =>
+    request<null>(`/api/reports/${reportId}/field-reports/${fieldReportId}`, {
       method: 'DELETE',
     }),
 
-  getShared: (token: string) =>
-    request<ReportCreateData>(`/api/reports/shared/${token}`, { skipAuth: true }),
-
-  /**
-   * Phase 3 §2.1 — AI 보고서 생성·저장. multipart body:
-   *  notes (필수), title, extraNotes, tripId, location, before_photo, after_photo
-   */
+  /** AI 보고서 생성·저장. multipart body: notes(필수), title, tripId, fieldId, before_photo, after_photo */
   generate: (form: FormData) =>
     request<ReportGenerateData>('/api/reports/generate', {
       method: 'POST',

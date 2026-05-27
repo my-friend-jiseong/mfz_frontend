@@ -6,9 +6,7 @@ import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
 import { TripStatusBanner } from '@/components/TripStatusBanner';
 import { SessionGuardModal } from '@/components/SessionGuardModal';
-import { OfflineBadge } from '@/components/OfflineBadge';
 import { startSessionActivity, stopSessionActivity } from '@/stores/sessionActivity';
-import { startNetworkWatcher, stopNetworkWatcher } from '@/api/network';
 import { initSentry } from '@/utils/sentry';
 import { applyWebAlertPatch } from '@/utils/webAlertPatch';
 import { useAuthStore } from '@/stores/authStore';
@@ -31,10 +29,8 @@ export default function RootLayout() {
     void hydrate();
     void useDestinationStore.getState().hydrate();
     startSessionActivity();
-    startNetworkWatcher();
     return () => {
       stopSessionActivity();
-      stopNetworkWatcher();
     };
   }, [hydrate]);
 
@@ -57,13 +53,11 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <SafeAreaView style={styles.root} edges={['top']}>
           <TripStatusBanner />
-          <OfflineBadge />
           <View style={styles.content}>
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="index" />
               <Stack.Screen name="(auth)" />
               <Stack.Screen name="(tabs)" />
-              <Stack.Screen name="shared/[token]" />
             </Stack>
           </View>
           <SessionGuardModal />

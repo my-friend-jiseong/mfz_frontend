@@ -7,6 +7,7 @@ export type { ApiUser, AuthSession, SignupBody, LoginBody } from './endpoints/au
 
 export { trips } from './endpoints/trips';
 export type {
+  TripStartBody,
   TripStartResponse,
   TripEndResponse,
   ActiveTripResponse,
@@ -14,21 +15,13 @@ export type {
   TripListItem,
   TripDetailResponse,
   TripTimelineEntry,
+  NavigationDeepLinksBody,
+  NavigationDeepLinksResponse,
+  OptimizePreviewBody,
+  OptimizePreviewResponse,
   OptimizeNavigationBody,
   OptimizeNavigationResponse,
   OptimizedOrderItem,
-  GeofenceRegisterBody,
-  GeofenceRegisterResponse,
-  GeofenceArrivalBody,
-  GeofenceArrivalResponse,
-  NavigationDeepLinksBody,
-  NavigationDeepLinksResponse,
-  TripStateTransition,
-  TripStateHistoryListItem,
-  StateHistoryResponse,
-  OptimizePreviewBody,
-  OptimizePreviewResponse,
-  OfficialNoticeBody,
 } from './endpoints/trips';
 
 export { visits } from './endpoints/visits';
@@ -45,11 +38,19 @@ export type {
   CreateFieldResponse,
   UpdateFieldBody,
   PatchStatusResponse,
-  FieldTextMemoResponse,
+  FieldAttachmentResponse,
   AddressSearchResponse,
   AddressSearchItem,
   ListMineParams,
 } from './endpoints/fields';
+
+export { projects } from './endpoints/projects';
+export type {
+  ProjectItem,
+  ProjectListResponse,
+  CreateProjectBody,
+  ListProjectsParams,
+} from './endpoints/projects';
 
 export { reports } from './endpoints/reports';
 export type {
@@ -60,8 +61,7 @@ export type {
   CreateReportBody,
   UpdateReportBody,
   ListReportsParams,
-  ShareReportData,
-  DisableShareData,
+  FieldReportInput,
   ReportGenerateData,
   ReportAnalysis,
 } from './endpoints/reports';

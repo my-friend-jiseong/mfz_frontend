@@ -7,7 +7,6 @@ import type {
   CreateReportBody,
   UpdateReportBody,
   ListReportsParams,
-  ShareReportData,
   ReportGenerateData,
 } from '@/api';
 import { useAuthStore } from './authStore';
@@ -20,16 +19,11 @@ type GenericResult =
   | { ok: true }
   | { ok: false; error: string; code?: string };
 
-type ShareResult =
-  | { ok: true; share: ShareReportData }
-  | { ok: false; error: string };
-
 export interface GenerateInput {
   notes: string;
   title?: string;
-  extraNotes?: string;
   tripId?: string;
-  location?: string;
+  fieldId?: string;
   beforePhoto?: { uri: string; name: string; type: string };
   afterPhoto?: { uri: string; name: string; type: string };
 }
@@ -39,9 +33,9 @@ type GenerateResult =
   | { ok: false; error: string };
 
 interface ReportState {
-  // 목록 표시용 (list 응답 — title/contentPreview 등)
+  // 목록 표시용 (list 응답)
   reports: Report[];
-  // 상세 화면 진입 시 채워지는 캐시
+  // 상세 화면 진입 시 채워지는 캐시 (fieldReports 포함)
   detailCache: Record<string, Report>;
   busy: boolean;
 
@@ -51,8 +45,6 @@ interface ReportState {
   create: (body: CreateReportBody) => Promise<CreateResult>;
   update: (id: string, body: UpdateReportBody) => Promise<GenericResult>;
   remove: (id: string) => Promise<GenericResult>;
-  share: (id: string) => Promise<ShareResult>;
-  disableShare: (id: string) => Promise<GenericResult>;
   generate: (input: GenerateInput) => Promise<GenerateResult>;
 
   getById: (id: string) => Report | undefined;
@@ -64,12 +56,11 @@ function listItemToReport(item: ReportListItem, currentUserId: string): Report {
   return {
     id: item.reportId,
     creatorId: currentUserId, // list 응답에 creator 없음 — 본인 목록이라 현재 사용자
-    tripId: item.tripId ?? '',
+    tripId: item.tripId,
     title: item.title,
-    content: item.contentPreview, // 목록은 preview 만 — 상세 진입 시 loadDetail 로 전체 채움
+    outputFileUrl: item.outputFileUrl,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
-    deletedAt: null,
   };
 }
 
@@ -77,13 +68,12 @@ function detailToReport(d: ReportDetailResponse): Report {
   return {
     id: d.reportId,
     creatorId: d.creator.id,
-    tripId: d.tripId ?? '',
+    tripId: d.tripId,
     title: d.title,
-    content: d.content,
+    outputFileUrl: d.outputFileUrl,
+    fieldReports: d.fieldReports,
     createdAt: d.createdAt,
     updatedAt: d.updatedAt,
-    deletedAt: null,
-    fileUrl: d.fileUrl,
   };
 }
 
@@ -113,7 +103,6 @@ export const useReportStore = create<ReportState>((set, get) => ({
       const r = detailToReport(res);
       set((s) => ({
         detailCache: { ...s.detailCache, [reportId]: r },
-        // list 항목의 content 도 풀 본문으로 보강
         reports: s.reports.map((x) => (x.id === reportId ? r : x)),
       }));
       return r;
@@ -128,14 +117,12 @@ export const useReportStore = create<ReportState>((set, get) => ({
       const data = await reportsApi.create(body);
       const r: Report = {
         id: data.id,
-        creatorId: data.authorUserId,
-        tripId: data.tripId ?? '',
+        creatorId: data.createdBy,
+        tripId: data.tripId,
         title: data.title,
-        content: data.content,
+        outputFileUrl: data.outputFileUrl,
         createdAt: data.createdAt,
         updatedAt: data.updatedAt,
-        deletedAt: data.deletedAt,
-        fileUrl: data.outputFileUrl,
       };
       set((s) => ({
         reports: [r, ...s.reports.filter((x) => x.id !== r.id)],
@@ -184,33 +171,14 @@ export const useReportStore = create<ReportState>((set, get) => ({
     }
   },
 
-  share: async (id) => {
-    try {
-      const data = await reportsApi.share(id);
-      return { ok: true, share: data };
-    } catch (e) {
-      return { ok: false, error: describeError(e) };
-    }
-  },
-
-  disableShare: async (id) => {
-    try {
-      await reportsApi.disableShare(id);
-      return { ok: true };
-    } catch (e) {
-      return { ok: false, error: describeError(e) };
-    }
-  },
-
   generate: async (input) => {
     set({ busy: true });
     try {
       const fd = new FormData();
       fd.append('notes', input.notes);
       if (input.title) fd.append('title', input.title);
-      if (input.extraNotes) fd.append('extraNotes', input.extraNotes);
       if (input.tripId) fd.append('tripId', input.tripId);
-      if (input.location) fd.append('location', input.location);
+      if (input.fieldId) fd.append('fieldId', input.fieldId);
       if (input.beforePhoto) fd.append('before_photo', input.beforePhoto as unknown as Blob);
       if (input.afterPhoto) fd.append('after_photo', input.afterPhoto as unknown as Blob);
 
@@ -218,15 +186,14 @@ export const useReportStore = create<ReportState>((set, get) => ({
 
       // 생성 결과를 list 캐시·detailCache 에도 즉시 반영
       const r: Report = {
-        id: data.id,                                      // generate 응답은 항상 id
+        id: data.reportId ?? data.id,
         creatorId: useAuthStore.getState().user?.id ?? '',
-        tripId: data.tripId ?? '',
+        tripId: data.tripId,
         title: data.title,
-        content: data.content,
+        outputFileUrl: data.outputFileUrl ?? data.fileUrl ?? data.downloadUrl ?? null,
+        fieldReports: data.fieldReport ? [data.fieldReport] : undefined,
         createdAt: new Date().toISOString(),
         updatedAt: null,
-        deletedAt: null,
-        fileUrl: data.outputFileUrl ?? data.fileUrl ?? data.downloadUrl ?? null,
       };
       set((s) => ({
         reports: [r, ...s.reports.filter((x) => x.id !== r.id)],
