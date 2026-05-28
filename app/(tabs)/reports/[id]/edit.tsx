@@ -33,23 +33,17 @@ export default function EditReport() {
   const update = useReportStore((s) => s.update);
   const userId = useAuthStore((s) => s.user?.id);
 
-  const cacheHas = !!detailCache[reportId];
-  const [firstFetchDone, setFirstFetchDone] = useState(cacheHas);
+  // store 가 id 별 fetch 상태를 노출 — 로컬 가드 대신 단일 진실 출처 사용.
+  const detailStatus = useReportStore((s) => s.detailStatus[reportId]);
+  const fetchedRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!reportId || cacheHas) {
-      if (cacheHas) setFirstFetchDone(true);
-      return;
-    }
-    let cancelled = false;
-    void (async () => {
-      await loadDetail(reportId);
-      if (!cancelled) setFirstFetchDone(true);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [reportId, cacheHas, loadDetail]);
+    if (!reportId) return;
+    if (fetchedRef.current === reportId) return;
+    if (detailCache[reportId]) return; // 이미 캐시에 있으면 fetch 생략
+    fetchedRef.current = reportId;
+    void loadDetail(reportId);
+  }, [reportId, detailCache, loadDetail]);
 
   const report = detailCache[reportId];
   const summary = useMemo(
@@ -95,7 +89,7 @@ export default function EditReport() {
     // 첫 fetch 끝났는데도 null 이면 not-found, 아니면 race 보호용 LoadingState.
     return (
       <View style={styles.container}>
-        {firstFetchDone ? (
+        {detailStatus === 'missing' ? (
           <EmptyState
             icon="document-text-outline"
             title="보고서를 찾을 수 없습니다"

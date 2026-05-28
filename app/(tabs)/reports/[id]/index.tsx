@@ -105,27 +105,17 @@ export default function ReportDetail() {
   const userId = useAuthStore((s) => s.user?.id);
 
   const [deleting, setDeleting] = useState(false);
-  // 첫 fetch 가 끝났는지 추적 — null 응답을 무한 LoadingState 가 아닌
-  // 'not found' EmptyState 로 종결시키기 위한 단순 게이트.
-  const [firstFetchDone, setFirstFetchDone] = useState(
-    () => !!detailCache[reportId],
-  );
-  const fetchOnceRef = useRef(false);
+  // store 가 id 별 fetch 진행 상태를 노출 — 로컬 가드 대신 단일 진실 출처 사용.
+  const detailStatus = useReportStore((s) => s.detailStatus[reportId]);
+  const fetchedRef = useRef<string | null>(null);
 
   // 진입 시 백엔드에서 detail 페치 (목록은 fieldReports 없음).
   useEffect(() => {
     if (!reportId || deleting) return;
-    if (fetchOnceRef.current) return;
-    fetchOnceRef.current = true;
-    let cancelled = false;
-    void (async () => {
-      await loadDetail(reportId);
-      if (!cancelled) setFirstFetchDone(true);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [reportId, loadDetail, deleting]);
+    if (fetchedRef.current === reportId) return;
+    fetchedRef.current = reportId;
+    void loadDetail(reportId);
+  }, [reportId, deleting, loadDetail]);
 
   const report = useMemo(
     () => detailCache[reportId] ?? allReports.find((r) => r.id === reportId),
@@ -142,7 +132,7 @@ export default function ReportDetail() {
       <MapSheetLayout title="보고서 상세" onBack={() => safeBack(router)}>
         {deleting ? (
           <EmptyState icon="trash-outline" title="보고서를 삭제 중입니다" />
-        ) : firstFetchDone ? (
+        ) : detailStatus === 'missing' ? (
           <EmptyState
             icon="document-text-outline"
             title="보고서를 찾을 수 없습니다"
