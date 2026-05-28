@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { FIELD_STATUS_LABEL, type Field } from '@/types/entities';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
+import { withAlpha } from '@/theme/withAlpha';
 
 interface Props {
   field: Field;
@@ -19,7 +20,7 @@ export function FieldCard({ field, onPress }: Props) {
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
       <View style={styles.header}>
-        <View style={[styles.statusChip, { backgroundColor: statusColor + '22' }]}>
+        <View style={[styles.statusChip, { backgroundColor: withAlpha(statusColor, 0.13) }]}>
           <Text style={[styles.statusShape, { color: statusColor }]}>
             {STATUS_SHAPE[field.status]}
           </Text>

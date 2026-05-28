@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
+import { withAlpha } from '@/theme/withAlpha';
 
 // react-native-web 의 Alert 는 모듈 import 시점에 webAlertPatch 가
 // window.confirm 으로 monkey-patch 하지만, 3+ 버튼은 OK/Cancel 양분이라
@@ -166,7 +167,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.primary,
-    backgroundColor: colors.primary + '10',
+    backgroundColor: withAlpha(colors.primary, 0.06),
     alignItems: 'center',
   },
   choiceText: {
@@ -176,7 +177,7 @@ const styles = StyleSheet.create({
   },
   choiceDanger: {
     borderColor: colors.danger,
-    backgroundColor: colors.danger + '10',
+    backgroundColor: withAlpha(colors.danger, 0.06),
   },
   choiceDangerText: { color: colors.danger },
   cancel: {

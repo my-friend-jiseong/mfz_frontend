@@ -18,6 +18,7 @@ import {
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize, fontWeight } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
+import { withAlpha } from '@/theme/withAlpha';
 
 // 노션 "데이터 필터" — 기간 프리셋 (시작일·종료일 직접 입력은 후속).
 // 'default_30d' 는 백엔드 기본값(visit 기준 최근 30일).
@@ -104,7 +105,7 @@ export default function FieldsList() {
                 onPress={() => toggleStatus(s)}
                 style={({ pressed }) => [
                   styles.chip,
-                  active && { backgroundColor: c + '22', borderColor: c },
+                  active && { backgroundColor: withAlpha(c, 0.13), borderColor: c },
                   pressed && { opacity: opacity.pressed },
                 ]}
               >

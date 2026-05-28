@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
+import { withAlpha } from '@/theme/withAlpha';
 import { FIELD_STATUS_LABEL, type FieldStatus } from '@/types/entities';
 
 export type DisplayMode = 'markers' | 'heatmap' | 'choropleth';
@@ -284,7 +285,7 @@ function SubChip({
   const baseStyle = [
     styles.subChip,
     active && (accent
-      ? { backgroundColor: accent + '22', borderColor: accent }
+      ? { backgroundColor: withAlpha(accent, 0.13), borderColor: accent }
       : styles.subChipActive),
     disabled && styles.subChipDisabled,
   ];
@@ -329,11 +330,11 @@ const styles = StyleSheet.create({
   },
   groupChipActive: {
     borderColor: colors.primary,
-    backgroundColor: colors.primary + '10',
+    backgroundColor: withAlpha(colors.primary, 0.06),
   },
   groupChipExpanded: {
     borderColor: colors.primary,
-    backgroundColor: colors.primary + '18',
+    backgroundColor: withAlpha(colors.primary, 0.09),
   },
   groupChipLabel: {
     fontSize: fontSize.sm,
@@ -377,7 +378,7 @@ const styles = StyleSheet.create({
   },
   subChipActive: {
     borderColor: colors.primary,
-    backgroundColor: colors.primary + '15',
+    backgroundColor: withAlpha(colors.primary, 0.08),
   },
   subChipDisabled: {
     opacity: 0.5,

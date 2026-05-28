@@ -12,6 +12,7 @@ import {
 import { useProjectStore } from '@/stores/projectStore';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
+import { withAlpha } from '@/theme/withAlpha';
 
 // ERD v2: 현장 폼에서 소속 프로젝트 선택. 비어있을 때 진입 시 1회 lazy load + 인라인 생성.
 
@@ -190,7 +191,7 @@ const styles = StyleSheet.create({
   triggerSelected: {
     borderColor: colors.primary,
     borderStyle: 'solid',
-    backgroundColor: colors.primary + '10',
+    backgroundColor: withAlpha(colors.primary, 0.06),
   },
   triggerText: { fontSize: fontSize.base, color: colors.text, fontWeight: '600' },
   placeholder: { fontSize: fontSize.base, color: colors.textMuted, fontWeight: '700' },
@@ -233,7 +234,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
-  itemActive: { borderColor: colors.primary, backgroundColor: colors.primary + '10' },
+  itemActive: { borderColor: colors.primary, backgroundColor: withAlpha(colors.primary, 0.06) },
   itemText: { fontSize: fontSize.sm, color: colors.text, fontWeight: '600' },
   itemTextActive: { color: colors.primary, fontWeight: '700' },
   itemMeta: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: 2 },

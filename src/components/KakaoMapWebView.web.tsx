@@ -10,6 +10,7 @@ import {
 } from '@/assets/boundaries/sigungu';
 import { colors } from '@/theme/colors';
 import { spacing, fontSize, radius } from '@/theme/spacing';
+import { withAlpha } from '@/theme/withAlpha';
 import { groupSameLocationMarkers } from '@/utils/groupSameLocationMarkers';
 
 export interface KakaoMapMarker {
@@ -446,7 +447,7 @@ const styles = StyleSheet.create({
     top: spacing.md,
     left: spacing.md,
     right: spacing.md,
-    backgroundColor: colors.danger + 'ee',
+    backgroundColor: withAlpha(colors.danger, 0.93),
     padding: spacing.md,
     borderRadius: 8,
   },
@@ -457,7 +458,7 @@ const styles = StyleSheet.create({
     top: spacing.md,
     left: spacing.md,
     right: spacing.md,
-    backgroundColor: colors.warning + 'ee',
+    backgroundColor: withAlpha(colors.warning, 0.93),
     padding: spacing.md,
     borderRadius: 8,
   },

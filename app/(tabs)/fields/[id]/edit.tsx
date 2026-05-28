@@ -37,6 +37,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
+import { withAlpha } from '@/theme/withAlpha';
 
 const DETAIL_MAX = 100;
 
@@ -567,7 +568,7 @@ export default function EditField() {
                 accessibilityState={{ selected: active }}
                 style={({ pressed }) => [
                   styles.statusChip,
-                  active && { backgroundColor: c + '22', borderColor: c },
+                  active && { backgroundColor: withAlpha(c, 0.13), borderColor: c },
                   pressed && { opacity: opacity.pressed },
                 ]}
               >

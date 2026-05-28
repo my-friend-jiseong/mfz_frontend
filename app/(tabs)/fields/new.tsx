@@ -33,6 +33,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
+import { withAlpha } from '@/theme/withAlpha';
 
 export default function NewField() {
   const router = useRouter();
@@ -406,7 +407,7 @@ export default function NewField() {
                     accessibilityState={{ selected: active }}
                     style={({ pressed }) => [
                       styles.statusChip,
-                      active && { backgroundColor: c + '22', borderColor: c },
+                      active && { backgroundColor: withAlpha(c, 0.13), borderColor: c },
                       pressed && { opacity: opacity.pressed },
                     ]}
                   >

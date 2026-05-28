@@ -28,6 +28,7 @@ import { Button } from '@/components/ui/Button';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
+import { withAlpha } from '@/theme/withAlpha';
 
 // ERD v2: 체크인은 방문 기록(trip·field·시각·status)만 생성. 메모·사진·음성 첨부는
 // 현장(field) 상세에서 관리.
@@ -146,7 +147,7 @@ export default function FieldCheckin() {
                 accessibilityState={{ selected: active }}
                 style={({ pressed }) => [
                   styles.statusChip,
-                  active && { backgroundColor: c + '22', borderColor: c },
+                  active && { backgroundColor: withAlpha(c, 0.13), borderColor: c },
                   pressed && { opacity: opacity.pressed },
                 ]}
               >

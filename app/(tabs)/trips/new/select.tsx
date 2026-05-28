@@ -14,6 +14,7 @@ import { safeBack } from '@/utils/backNavigation';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
+import { withAlpha } from '@/theme/withAlpha';
 import {
   FIELD_STATUS_VALUES,
   FIELD_STATUS_LABEL,
@@ -149,7 +150,7 @@ export default function NewTripSelect() {
                 onPress={() => toggleStatus(s)}
                 style={({ pressed }) => [
                   styles.chip,
-                  active && { backgroundColor: c + '22', borderColor: c },
+                  active && { backgroundColor: withAlpha(c, 0.13), borderColor: c },
                   pressed && { opacity: opacity.pressed },
                 ]}
               >

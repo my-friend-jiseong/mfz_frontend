@@ -22,6 +22,7 @@ import { Input } from '@/components/ui/Input';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
+import { withAlpha } from '@/theme/withAlpha';
 import {
   FIELD_STATUS_VALUES,
   VISIT_STATUS_LABEL,
@@ -165,7 +166,7 @@ export default function FieldDetail() {
         accessibilityLabel={`현재 상태: ${FIELD_STATUS_LABEL[field.status]}. 변경하려면 누르세요`}
         style={({ pressed }) => [
           styles.statusTap,
-          { backgroundColor: statusFg + '22', borderColor: statusFg },
+          { backgroundColor: withAlpha(statusFg, 0.13), borderColor: statusFg },
           pressed && { opacity: opacity.pressed },
         ]}
       >
