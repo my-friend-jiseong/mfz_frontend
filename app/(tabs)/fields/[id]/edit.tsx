@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -8,13 +7,16 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFieldStore } from '@/stores/fieldStore';
 import { safeBack } from '@/utils/backNavigation';
-import { FIELD_STATUS_VALUES, FIELD_STATUS_LABEL, type FieldStatus } from '@/types/entities';
+import {
+  FIELD_STATUS_VALUES,
+  FIELD_STATUS_LABEL,
+  type FieldStatus,
+} from '@/types/entities';
 import { fields as fieldsApi, errorCode, localizeError } from '@/api';
 import type { AddressSearchItem, UpdateFieldBody } from '@/api';
 import {
@@ -28,8 +30,13 @@ import {
 } from '@/utils/addressSearch';
 import { EmptyState } from '@/components/EmptyState';
 import { ProjectPicker } from '@/components/ProjectPicker';
+import { Card } from '@/components/ui/Card';
+import { Input } from '@/components/ui/Input';
+import { Button } from '@/components/ui/Button';
+import { LoadingState } from '@/components/ui/LoadingState';
 import { colors } from '@/theme/colors';
-import { spacing, radius, fontSize } from '@/theme/spacing';
+import { spacing, radius, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
+import { opacity } from '@/theme/motion';
 
 const DETAIL_MAX = 100;
 
@@ -187,7 +194,7 @@ export default function EditField() {
   if (!field) {
     return (
       <View style={styles.container}>
-        <EmptyState title="현장을 찾을 수 없습니다" />
+        <EmptyState icon="search-outline" title="현장을 찾을 수 없습니다" />
       </View>
     );
   }
@@ -229,7 +236,7 @@ export default function EditField() {
           ? categoriesTrim.split(',').map((c) => c.trim()).filter(Boolean)
           : [];
       }
-      if (projectIdChanged) body.projectId = projectId; // null → 해제
+      if (projectIdChanged) body.projectId = projectId;
       if (addressChanged && newAddress) {
         body.roadAddress = newAddress.roadAddress;
         body.lat = newAddress.lat;
@@ -314,6 +321,13 @@ export default function EditField() {
     ]);
   };
 
+  const noResults =
+    !searching &&
+    !providerUnavailable &&
+    !searchError &&
+    query.trim().length >= MIN_KEYWORD_LEN &&
+    results.length === 0;
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -323,86 +337,83 @@ export default function EditField() {
         <View style={styles.labelRow}>
           <Text style={styles.label}>주소</Text>
           {!editingAddress && !newAddress ? (
-            <Pressable
+            <Button
               onPress={handleStartAddressEdit}
               disabled={submitting}
-              style={({ pressed }) => [
-                styles.addrEditBtn,
-                pressed && styles.pressed,
-              ]}
+              variant="secondary"
+              size="sm"
+              leftIcon="create-outline"
             >
-              <Text style={styles.addrEditBtnText}>수정</Text>
-            </Pressable>
+              수정
+            </Button>
           ) : null}
           {newAddress ? (
-            <Pressable
+            <Button
               onPress={handleRevertAddress}
               disabled={submitting}
-              style={({ pressed }) => [
-                styles.addrEditBtn,
-                pressed && styles.pressed,
-              ]}
+              variant="ghost"
+              size="sm"
+              leftIcon="arrow-undo"
             >
-              <Text style={styles.addrEditBtnText}>되돌리기</Text>
-            </Pressable>
+              되돌리기
+            </Button>
           ) : null}
         </View>
-        <View
-          style={[
-            styles.readonly,
-            newAddress && styles.readonlyChanged,
-          ]}
+        <Card
+          padding="md"
+          style={[styles.readonly, newAddress ? styles.readonlyChanged : undefined]}
         >
           <Text style={styles.readonlyText}>
             {newAddress ? newAddress.display : field.address}
           </Text>
           {newAddress ? (
             <Text style={styles.changedHint}>
-              변경 예정 — 저장 시 적용 (좌표 {newAddress.lat.toFixed(4)}, {newAddress.lng.toFixed(4)})
+              변경 예정 — 저장 시 적용 (좌표 {newAddress.lat.toFixed(4)},{' '}
+              {newAddress.lng.toFixed(4)})
             </Text>
           ) : null}
-        </View>
+        </Card>
 
         {editingAddress ? (
-          <View style={styles.addrSearchBox}>
+          <Card padding="md" style={styles.addrSearchBox}>
             <View style={styles.searchHead}>
               <Text style={styles.label}>새 주소 검색</Text>
-              <Pressable onPress={handleCancelAddressEdit} disabled={submitting}>
-                <Text style={styles.cancelLink}>취소</Text>
-              </Pressable>
+              <Button
+                onPress={handleCancelAddressEdit}
+                disabled={submitting}
+                variant="ghost"
+                size="sm"
+              >
+                취소
+              </Button>
             </View>
-            <TextInput
+            <Input
               value={query}
               onChangeText={setQuery}
-              style={styles.input}
               placeholder="예: 해운대 우동, 동성로"
               autoCapitalize="none"
               returnKeyType="search"
               autoFocus
+              containerStyle={styles.searchInput}
             />
             {searching ? (
               <View style={styles.loadingRow}>
-                <ActivityIndicator color={colors.primary} size="small" />
-                <Text style={styles.loadingText}>검색 중...</Text>
+                <LoadingState inline label="검색 중" />
               </View>
             ) : null}
             {searchError ? <Text style={styles.fieldError}>{searchError}</Text> : null}
             {providerUnavailable ? (
-              <View style={styles.warnBox}>
+              <Card padding="md" style={styles.warnBox}>
                 <Text style={styles.warnTitle}>주소 검색 일시 장애</Text>
                 <Text style={styles.warnBody}>
                   카카오 주소 서비스가 일시적으로 응답하지 않습니다. 잠시 후 다시 시도하거나 좌표를 직접 입력하세요.
                 </Text>
-              </View>
+              </Card>
             ) : null}
-            {!searching &&
-            !providerUnavailable &&
-            !searchError &&
-            query.trim().length >= MIN_KEYWORD_LEN &&
-            results.length === 0 ? (
+            {noResults ? (
               <Text style={styles.hint}>{emptyMessage ?? '검색 결과가 없습니다'}</Text>
             ) : null}
-            <View style={{ marginTop: spacing.sm }}>
+            <View style={styles.resultList}>
               {results.map((r, idx) => {
                 const key = `${r.roadAddress}|${r.jibunAddress}|${idx}`;
                 const sub = [r.sido, r.sigungu].filter(Boolean).join(' ');
@@ -410,7 +421,10 @@ export default function EditField() {
                   <Pressable
                     key={key}
                     onPress={() => handleSelectItem(r)}
-                    style={({ pressed }) => [styles.addrItem, pressed && styles.pressed]}
+                    style={({ pressed }) => [
+                      styles.addrItem,
+                      pressed && { opacity: opacity.pressed },
+                    ]}
                   >
                     <Text style={styles.addrText}>
                       {r.roadAddress || r.jibunAddress}
@@ -432,63 +446,60 @@ export default function EditField() {
             {(providerUnavailable || manualMode) ? (
               <View style={styles.manualBox}>
                 <Text style={styles.manualTitle}>좌표 직접 입력</Text>
-                <Text style={styles.label}>도로명 주소</Text>
-                <TextInput
+                <Input
+                  label="도로명 주소"
                   value={manualRoad}
                   onChangeText={setManualRoad}
-                  style={styles.input}
                   placeholder="예: 부산광역시 해운대구 해운대해변로 264"
+                  containerStyle={styles.manualField}
                 />
-                <Text style={styles.label}>지번 주소</Text>
-                <TextInput
+                <Input
+                  label="지번 주소"
                   value={manualJibun}
                   onChangeText={setManualJibun}
-                  style={styles.input}
                   placeholder="예: 부산광역시 해운대구 우동 1411"
+                  containerStyle={styles.manualField}
                 />
                 <View style={styles.coordRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.label}>위도 (lat)</Text>
-                    <TextInput
-                      value={manualLatStr}
-                      onChangeText={setManualLatStr}
-                      style={styles.input}
-                      keyboardType="numeric"
-                      placeholder="33~43"
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.label}>경도 (lng)</Text>
-                    <TextInput
-                      value={manualLngStr}
-                      onChangeText={setManualLngStr}
-                      style={styles.input}
-                      keyboardType="numeric"
-                      placeholder="124~132"
-                    />
-                  </View>
+                  <Input
+                    label="위도 (lat)"
+                    value={manualLatStr}
+                    onChangeText={setManualLatStr}
+                    keyboardType="numeric"
+                    placeholder="33~43"
+                    containerStyle={styles.coordHalf}
+                  />
+                  <Input
+                    label="경도 (lng)"
+                    value={manualLngStr}
+                    onChangeText={setManualLngStr}
+                    keyboardType="numeric"
+                    placeholder="124~132"
+                    containerStyle={styles.coordHalf}
+                  />
                 </View>
-                <Pressable
+                <Button
                   onPress={handleManualSubmit}
-                  style={({ pressed }) => [styles.btn, pressed && styles.pressed]}
+                  fullWidth
+                  leftIcon="location"
+                  style={styles.manualSubmit}
                 >
-                  <Text style={styles.btnText}>이 좌표로 적용</Text>
-                </Pressable>
+                  이 좌표로 적용
+                </Button>
               </View>
             ) : null}
-            {!manualMode &&
-            !providerUnavailable &&
-            !searching &&
-            query.trim().length >= MIN_KEYWORD_LEN &&
-            results.length === 0 ? (
-              <Pressable
+            {noResults && !manualMode ? (
+              <Button
                 onPress={() => setManualMode(true)}
-                style={({ pressed }) => [styles.manualLink, pressed && styles.pressed]}
+                variant="ghost"
+                size="sm"
+                rightIcon="arrow-forward"
+                style={styles.manualLink}
               >
-                <Text style={styles.manualLinkText}>좌표 직접 입력으로 진행 →</Text>
-              </Pressable>
+                좌표 직접 입력으로 진행
+              </Button>
             ) : null}
-          </View>
+          </Card>
         ) : null}
 
         {fieldErrors.address ? (
@@ -503,20 +514,18 @@ export default function EditField() {
           disabled={submitting}
         />
 
-        <Text style={styles.label}>분류 (쉼표로 구분)</Text>
-        <TextInput
+        <Input
+          label="분류 (쉼표로 구분)"
           value={categoriesStr}
           onChangeText={(v) => {
             setCategoriesStr(v);
             if (fieldErrors.categories) clearFieldErr('categories');
           }}
           editable={!submitting}
-          style={[styles.input, fieldErrors.categories && styles.inputError]}
           placeholder="예: 가로수, 보수, 긴급"
+          error={fieldErrors.categories}
+          containerStyle={styles.fieldGap}
         />
-        {fieldErrors.categories ? (
-          <Text style={styles.fieldError}>{fieldErrors.categories}</Text>
-        ) : null}
 
         <View style={styles.labelRow}>
           <Text style={styles.label}>상세 주소</Text>
@@ -524,7 +533,7 @@ export default function EditField() {
             {addressDetail.length} / {DETAIL_MAX}
           </Text>
         </View>
-        <TextInput
+        <Input
           value={addressDetail}
           onChangeText={(v) => {
             setAddressDetail(v);
@@ -532,12 +541,9 @@ export default function EditField() {
           }}
           editable={!submitting}
           maxLength={DETAIL_MAX}
-          style={[styles.input, fieldErrors.detailAddress && styles.inputError]}
           placeholder="예: 101동 1203호"
+          error={fieldErrors.detailAddress}
         />
-        {fieldErrors.detailAddress ? (
-          <Text style={styles.fieldError}>{fieldErrors.detailAddress}</Text>
-        ) : null}
 
         <Text style={styles.label}>상태</Text>
         <View style={styles.statusRow}>
@@ -552,15 +558,18 @@ export default function EditField() {
                   if (fieldErrors.status) clearFieldErr('status');
                 }}
                 disabled={submitting}
-                style={[
+                accessibilityRole="radio"
+                accessibilityState={{ selected: active }}
+                style={({ pressed }) => [
                   styles.statusChip,
                   active && { backgroundColor: c + '22', borderColor: c },
+                  pressed && { opacity: opacity.pressed },
                 ]}
               >
                 <Text
                   style={[
                     styles.statusChipText,
-                    active && { color: c, fontWeight: '700' },
+                    active && { color: c, fontWeight: fontWeight.bold },
                   ]}
                 >
                   {FIELD_STATUS_LABEL[s]}
@@ -575,35 +584,32 @@ export default function EditField() {
 
         {globalError ? <Text style={styles.error}>{globalError}</Text> : null}
 
-        <Pressable
+        <Button
           onPress={handleSave}
-          disabled={submitting || !hasChanges}
-          style={({ pressed }) => [
-            styles.btn,
-            (!hasChanges || submitting) && styles.btnDisabled,
-            pressed && styles.pressed,
-          ]}
+          disabled={!hasChanges}
+          loading={submitting}
+          size="lg"
+          fullWidth
+          leftIcon="save"
+          style={styles.submit}
         >
-          <Text
-            style={[
-              styles.btnText,
-              (!hasChanges || submitting) && styles.btnTextDisabled,
-            ]}
-          >
-            {submitting ? '저장 중...' : hasChanges ? '저장' : '변경 사항 없음'}
-          </Text>
-        </Pressable>
+          {hasChanges ? '저장' : '변경 사항 없음'}
+        </Button>
 
-        <Pressable onPress={handleCancel} style={styles.cancel}>
-          <Text style={styles.cancelText}>취소</Text>
-        </Pressable>
+        <Button onPress={handleCancel} variant="ghost" size="sm" fullWidth>
+          취소
+        </Button>
 
-        <Pressable
+        <Button
           onPress={handleDelete}
-          style={({ pressed }) => [styles.dangerBtn, pressed && styles.pressed]}
+          variant="ghost"
+          size="sm"
+          fullWidth
+          leftIcon="trash"
+          style={styles.dangerBtn}
         >
-          <Text style={styles.dangerText}>현장 삭제</Text>
-        </Pressable>
+          현장 삭제
+        </Button>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -611,45 +617,47 @@ export default function EditField() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  scroll: { padding: spacing.xl },
+  scroll: { padding: spacing.xl, paddingBottom: spacing.xxl * 2 },
   labelRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginTop: spacing.md,
     marginBottom: spacing.xs,
+    gap: spacing.sm,
   },
   label: {
     fontSize: fontSize.sm,
     color: colors.textMuted,
-    fontWeight: '600',
+    fontWeight: fontWeight.semibold,
     marginTop: spacing.md,
     marginBottom: spacing.xs,
   },
   counter: {
     fontSize: fontSize.xs,
     color: colors.textMuted,
-    fontWeight: '600',
+    fontWeight: fontWeight.semibold,
   },
+  fieldGap: { marginTop: spacing.sm },
   readonly: {
-    backgroundColor: colors.background,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.md,
+    backgroundColor: colors.surfaceMuted,
   },
-  readonlyText: { fontSize: fontSize.base, color: colors.text },
-  input: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+  readonlyText: {
     fontSize: fontSize.base,
     color: colors.text,
+    lineHeight: lineHeight.base,
   },
-  inputError: { borderColor: colors.danger },
+  readonlyChanged: {
+    backgroundColor: colors.primaryMuted,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  changedHint: {
+    fontSize: fontSize.xs,
+    color: colors.primary,
+    marginTop: spacing.xs,
+    fontWeight: fontWeight.semibold,
+  },
   fieldError: {
     color: colors.danger,
     fontSize: fontSize.xs,
@@ -667,87 +675,36 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   statusChipText: { fontSize: fontSize.sm, color: colors.textMuted },
-  btn: {
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.lg,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    marginTop: spacing.xl,
-  },
-  btnDisabled: { backgroundColor: colors.border },
-  btnText: { color: '#fff', fontSize: fontSize.base, fontWeight: '700' },
-  btnTextDisabled: { color: colors.textMuted },
-  cancel: { alignItems: 'center', paddingVertical: spacing.md },
-  cancelText: { color: colors.textMuted, fontSize: fontSize.sm },
-  dangerBtn: {
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-    marginTop: spacing.md,
-  },
-  dangerText: { color: colors.danger, fontSize: fontSize.sm, fontWeight: '700' },
-  pressed: { opacity: 0.85 },
-  // 주소 수정 토글·검색 관련
-  addrEditBtn: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 4,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    backgroundColor: colors.surface,
-  },
-  addrEditBtnText: {
-    fontSize: fontSize.xs,
-    color: colors.primary,
-    fontWeight: '700',
-  },
-  readonlyChanged: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primary + '08',
-  },
-  changedHint: {
-    fontSize: fontSize.xs,
-    color: colors.primary,
-    marginTop: spacing.xs,
-    fontWeight: '600',
-  },
+  submit: { marginTop: spacing.xl },
+  dangerBtn: { marginTop: spacing.md },
+  // 주소 검색 box
   addrSearchBox: {
     marginTop: spacing.md,
-    paddingTop: spacing.md,
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.md,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
   },
   searchHead: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  cancelLink: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    fontWeight: '600',
-  },
+  searchInput: { marginTop: spacing.sm },
   loadingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
     marginTop: spacing.sm,
   },
-  loadingText: { fontSize: fontSize.xs, color: colors.textMuted },
   warnBox: {
-    backgroundColor: '#fff7e6',
-    borderColor: '#f0ad4e',
+    backgroundColor: colors.warningMuted,
     borderWidth: 1,
-    borderRadius: radius.md,
-    padding: spacing.md,
+    borderColor: colors.warning,
     marginTop: spacing.sm,
   },
-  warnTitle: { fontSize: fontSize.sm, fontWeight: '700', color: colors.text },
-  warnBody: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: 4 },
+  warnTitle: { fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.text },
+  warnBody: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    marginTop: 4,
+    lineHeight: lineHeight.xs,
+  },
   hint: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: spacing.sm },
+  resultList: { marginTop: spacing.sm },
   addrItem: {
     backgroundColor: colors.background,
     borderWidth: 1,
@@ -756,7 +713,11 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     marginBottom: spacing.xs,
   },
-  addrText: { fontSize: fontSize.base, color: colors.text, fontWeight: '600' },
+  addrText: {
+    fontSize: fontSize.base,
+    color: colors.text,
+    fontWeight: fontWeight.semibold,
+  },
   addrJibun: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: 2 },
   addrCoord: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: 2 },
   manualBox: {
@@ -767,18 +728,13 @@ const styles = StyleSheet.create({
   },
   manualTitle: {
     fontSize: fontSize.base,
-    fontWeight: '700',
+    fontWeight: fontWeight.bold,
     color: colors.text,
-    marginBottom: spacing.xs,
+    marginBottom: spacing.sm,
   },
-  manualLink: {
-    marginTop: spacing.md,
-    alignSelf: 'flex-start',
-  },
-  manualLinkText: {
-    fontSize: fontSize.sm,
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  coordRow: { flexDirection: 'row', gap: spacing.sm },
+  manualField: { marginTop: spacing.sm },
+  coordRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
+  coordHalf: { flex: 1 },
+  manualSubmit: { marginTop: spacing.md },
+  manualLink: { marginTop: spacing.md, alignSelf: 'flex-start' },
 });
