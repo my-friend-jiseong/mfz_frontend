@@ -16,27 +16,17 @@ import { useDestinationStore } from '@/stores/destinationStore';
 import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
 import { Card } from '@/components/ui/Card';
-import { Badge, type BadgeShape, type BadgeTone } from '@/components/ui/Badge';
+import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { VISIT_STATUS_BADGE } from '@/theme/statusBadge';
 import { safeBack } from '@/utils/backNavigation';
 import { colors } from '@/theme/colors';
 import { spacing, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
 import {
   VISIT_STATUS_LABEL,
   type Visit,
-  type VisitStatus,
   type Destination,
 } from '@/types/entities';
-
-// visit 결과 → badge 매핑.
-const VISIT_BADGE: Record<VisitStatus, { tone: BadgeTone; shape: BadgeShape }> = {
-  completed: { tone: 'success', shape: 'square' },
-  absent: { tone: 'neutral', shape: 'circle' },
-  refused: { tone: 'danger', shape: 'triangle' },
-  unknown_address: { tone: 'info', shape: 'diamond' },
-  revisit_needed: { tone: 'warning', shape: 'diamond' },
-  other: { tone: 'neutral', shape: 'diamond' },
-};
 
 const DEST_LABEL: Record<Destination['status'], string> = {
   pending: '예정',
@@ -156,7 +146,7 @@ export default function TripDetail() {
 
   const renderItem = ({ item }: { item: Visit }) => {
     const field = getField(item.fieldId);
-    const badge = VISIT_BADGE[item.status];
+    const badge = VISIT_STATUS_BADGE[item.status];
     return (
       <Card
         onPress={() =>

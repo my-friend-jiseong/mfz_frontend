@@ -8,26 +8,16 @@ import { useVisitStore } from '@/stores/visitStore';
 import { useFieldStore } from '@/stores/fieldStore';
 import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
-import { Badge, type BadgeShape, type BadgeTone } from '@/components/ui/Badge';
+import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { VISIT_STATUS_BADGE } from '@/theme/statusBadge';
 import {
   VISIT_STATUS_LABEL,
   normalizeVisitStatus,
-  type VisitStatus,
 } from '@/types/entities';
 import { colors } from '@/theme/colors';
 import { spacing, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
-
-// visit 결과 → badge 매핑. 색 + 형상 + 라벨 3중 인코딩.
-const VISIT_BADGE: Record<VisitStatus, { tone: BadgeTone; shape: BadgeShape }> = {
-  completed: { tone: 'success', shape: 'square' },
-  absent: { tone: 'neutral', shape: 'circle' },
-  refused: { tone: 'danger', shape: 'triangle' },
-  unknown_address: { tone: 'info', shape: 'diamond' },
-  revisit_needed: { tone: 'warning', shape: 'diamond' },
-  other: { tone: 'neutral', shape: 'diamond' },
-};
 
 function fmtDateTime(iso: string) {
   return new Date(iso).toLocaleString('ko-KR');
@@ -86,7 +76,7 @@ export default function VisitDetail() {
   }
 
   const status = normalizeVisitStatus(data.status);
-  const badge = VISIT_BADGE[status];
+  const badge = VISIT_STATUS_BADGE[status];
   const fieldId = data.fieldId ?? visitInStore?.fieldId ?? null;
   const siteName = data.siteName ?? (fieldId ? getField(fieldId)?.address : null);
 

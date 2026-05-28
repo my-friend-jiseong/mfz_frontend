@@ -8,40 +8,23 @@ import { useFieldStore } from '@/stores/fieldStore';
 import { useVisitStore } from '@/stores/visitStore';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
 import { Button } from '@/components/ui/Button';
-import type { BadgeShape, BadgeTone } from '@/components/ui/Badge';
+import {
+  VISIT_STATUS_BADGE,
+  DESTINATION_STATUS_BADGE,
+} from '@/theme/statusBadge';
 import { TripSummaryCard } from '@/components/trips/TripSummaryCard';
 import { CurrentDestCard } from '@/components/trips/CurrentDestCard';
 import { AllDoneCard } from '@/components/trips/AllDoneCard';
 import { DestinationRow } from '@/components/trips/DestinationRow';
 import { openKakaoRouteTo } from '@/utils/kakaoMap';
 import { trips as tripsApi, localizeError } from '@/api';
-import { VISIT_STATUS_LABEL, type VisitStatus } from '@/types/entities';
+import { VISIT_STATUS_LABEL } from '@/types/entities';
 import { nearestNeighborOrder } from '@/utils/routeOptimize';
 import * as Linking from 'expo-linking';
 import { safeBack } from '@/utils/backNavigation';
 import { colors } from '@/theme/colors';
 import { spacing, fontSize, fontWeight } from '@/theme/spacing';
 import type { Destination } from '@/types/entities';
-
-// destination 상태 → badge 매핑. 색 + 형상 + 라벨 3중 인코딩.
-const DEST_BADGE: Record<
-  Destination['status'],
-  { tone: BadgeTone; shape: BadgeShape; label: string }
-> = {
-  pending: { tone: 'warning', shape: 'circle', label: '예정' },
-  arrived: { tone: 'success', shape: 'square', label: '방문 완료' },
-  skipped: { tone: 'neutral', shape: 'diamond', label: '건너뜀' },
-};
-
-// visit 결과(arrived 인 경우 우선 노출) → badge tone/shape 매핑.
-const VISIT_BADGE: Record<VisitStatus, { tone: BadgeTone; shape: BadgeShape }> = {
-  completed: { tone: 'success', shape: 'square' },
-  absent: { tone: 'neutral', shape: 'circle' },
-  refused: { tone: 'danger', shape: 'triangle' },
-  unknown_address: { tone: 'info', shape: 'diamond' },
-  revisit_needed: { tone: 'warning', shape: 'diamond' },
-  other: { tone: 'neutral', shape: 'diamond' },
-};
 
 export default function ActiveTrip() {
   const router = useRouter();
@@ -411,20 +394,9 @@ export default function ActiveTrip() {
     // arrived 인 경우 visit 결과 라벨 우선 노출 (정상/부재/거절 등).
     const visit = item.status === 'arrived' ? visitForDestination(item.fieldId) : null;
 
-    let statusLabel: string;
-    let statusTone: BadgeTone;
-    let statusShape: BadgeShape | undefined;
-    if (visit) {
-      const m = VISIT_BADGE[visit.status];
-      statusLabel = VISIT_STATUS_LABEL[visit.status];
-      statusTone = m.tone;
-      statusShape = m.shape;
-    } else {
-      const m = DEST_BADGE[item.status];
-      statusLabel = m.label;
-      statusTone = m.tone;
-      statusShape = m.shape;
-    }
+    const m = visit
+      ? { ...VISIT_STATUS_BADGE[visit.status], label: VISIT_STATUS_LABEL[visit.status] }
+      : DESTINATION_STATUS_BADGE[item.status];
 
     const onPress = () => {
       if (visit) {
@@ -441,9 +413,9 @@ export default function ActiveTrip() {
         order={item.order}
         address={field?.address ?? '알 수 없는 현장'}
         addressDetail={field?.addressDetail ?? undefined}
-        statusLabel={statusLabel}
-        statusTone={statusTone}
-        statusShape={statusShape}
+        statusLabel={m.label}
+        statusTone={m.tone}
+        statusShape={m.shape}
         isCurrent={isCurrent}
         onPress={onPress}
       />

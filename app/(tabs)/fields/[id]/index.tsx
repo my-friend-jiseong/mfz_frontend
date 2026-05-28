@@ -14,9 +14,9 @@ import { pickPhoto, promptPhotoSource } from '@/utils/media';
 import { openKakaoRouteTo } from '@/utils/kakaoMap';
 import { PhotoGrid } from '@/components/AttachmentPreview';
 import { Card } from '@/components/ui/Card';
-import { Badge, type BadgeShape, type BadgeTone } from '@/components/ui/Badge';
-// Badge 의 fieldStatus tone 매핑은 향후 status chip 통일 시 확장.
+import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { VISIT_STATUS_BADGE } from '@/theme/statusBadge';
 import { Input } from '@/components/ui/Input';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
@@ -26,19 +26,9 @@ import {
   VISIT_STATUS_LABEL,
   FIELD_STATUS_LABEL,
   type Visit,
-  type VisitStatus,
 } from '@/types/entities';
 
 // ERD v2: 메모·사진은 현장(field) 전용. 음성 메모·방문 첨부 제거.
-
-const VISIT_BADGE: Record<VisitStatus, { tone: BadgeTone; shape: BadgeShape }> = {
-  completed: { tone: 'success', shape: 'square' },
-  absent: { tone: 'neutral', shape: 'circle' },
-  refused: { tone: 'danger', shape: 'triangle' },
-  unknown_address: { tone: 'info', shape: 'diamond' },
-  revisit_needed: { tone: 'warning', shape: 'diamond' },
-  other: { tone: 'neutral', shape: 'diamond' },
-};
 
 function fmtDateTime(iso: string) {
   return new Date(iso).toLocaleString('ko-KR');
@@ -151,7 +141,7 @@ export default function FieldDetail() {
   const statusFg = colors.fieldStatus[field.status];
 
   const renderVisit = ({ item }: { item: Visit }) => {
-    const badge = VISIT_BADGE[item.status];
+    const badge = VISIT_STATUS_BADGE[item.status];
     return (
       <Card
         onPress={() =>
