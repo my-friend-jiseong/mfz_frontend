@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useReportStore } from '@/stores/reportStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -8,8 +9,12 @@ import { useTripStore } from '@/stores/tripStore';
 import { useVisitStore } from '@/stores/visitStore';
 import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
+import { Card } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
 import { colors } from '@/theme/colors';
-import { spacing, radius, fontSize } from '@/theme/spacing';
+import { spacing, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
+import { opacity } from '@/theme/motion';
 import type { Report, Trip } from '@/types/entities';
 
 function fmtDate(iso: string) {
@@ -77,66 +82,81 @@ export default function ReportsIndex() {
               onPress={() =>
                 router.push(`/(tabs)/trips/${item.trip.id}` as never)
               }
-              style={styles.tripHeaderRow}
+              accessibilityRole="button"
+              accessibilityLabel={`${fmtDate(item.trip.startedAt)} 외근 상세로 이동`}
+              style={({ pressed }) => [
+                styles.tripHeaderRow,
+                pressed && { opacity: opacity.pressed },
+              ]}
             >
+              <Ionicons name="briefcase-outline" size={16} color={colors.primary} />
               <View style={styles.tripHeaderTextWrap}>
                 <Text style={styles.tripHeader}>
                   외근 · {fmtDate(item.trip.startedAt)}
                 </Text>
                 <Text style={styles.tripHeaderMeta}>
                   {fmtTime(item.trip.startedAt)}
-                  {item.trip.endedAt ? `–${fmtTime(item.trip.endedAt)}` : ' · 진행 중'}
+                  {item.trip.endedAt
+                    ? `–${fmtTime(item.trip.endedAt)}`
+                    : ' · 진행 중'}
                   {' · 방문 '}
                   {visitsByTrip(item.trip.id).length}건
                 </Text>
               </View>
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
             </Pressable>
             {item.reports.map((r) => (
-              <Pressable
+              <Card
                 key={r.id}
                 onPress={() => router.push(`/(tabs)/reports/${r.id}` as never)}
-                style={({ pressed }) => [
-                  styles.reportCard,
-                  pressed && styles.pressed,
-                ]}
+                style={styles.reportCard}
               >
-                <Text style={styles.reportTitle}>{r.title}</Text>
-                <Text style={styles.reportMeta}>
-                  {fmtDate(r.createdAt)}
-                  {r.updatedAt ? ` · 수정됨` : ''}
-                </Text>
-              </Pressable>
+                <View style={styles.reportHead}>
+                  <Text style={styles.reportTitle} numberOfLines={2}>
+                    {r.title}
+                  </Text>
+                  {r.updatedAt ? (
+                    <Badge label="수정됨" tone="primary" />
+                  ) : null}
+                </View>
+                <View style={styles.reportMetaRow}>
+                  <Ionicons name="calendar-outline" size={12} color={colors.textSubtle} />
+                  <Text style={styles.reportMeta}>{fmtDate(r.createdAt)}</Text>
+                </View>
+              </Card>
             ))}
           </View>
         )}
         contentContainerStyle={styles.list}
         ListEmptyComponent={
           <EmptyState
+            icon="document-text-outline"
             title="작성된 보고서가 없습니다"
             description="아래 버튼으로 외근에 연결된 보고서를 작성하세요"
           />
         }
       />
-      <View style={styles.fabRow}>
-        <Pressable
+      <View style={styles.ctaWrap}>
+        <Button
           onPress={() => router.push('/(tabs)/reports/new' as never)}
-          style={({ pressed }) => [styles.fab, pressed && styles.pressed]}
+          size="lg"
+          fullWidth
+          leftIcon="document-text"
         >
-          <Text style={styles.fabText}>📝 보고서 작성</Text>
-        </Pressable>
+          보고서 작성
+        </Button>
       </View>
     </MapSheetLayout>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
   list: { padding: spacing.lg, paddingBottom: 120 },
   group: { marginBottom: spacing.lg },
   tripHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: spacing.sm,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
     marginBottom: spacing.xs,
@@ -144,7 +164,7 @@ const styles = StyleSheet.create({
   tripHeaderTextWrap: { flex: 1 },
   tripHeader: {
     fontSize: fontSize.sm,
-    fontWeight: '700',
+    fontWeight: fontWeight.bold,
     color: colors.primary,
   },
   tripHeaderMeta: {
@@ -152,54 +172,34 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginTop: 2,
   },
-  reportCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.lg,
-    marginBottom: spacing.sm,
+  reportCard: { marginBottom: spacing.sm },
+  reportHead: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
   },
-  pressed: { opacity: 0.7 },
   reportTitle: {
+    flex: 1,
     fontSize: fontSize.base,
-    fontWeight: '700',
+    fontWeight: fontWeight.bold,
     color: colors.text,
+    lineHeight: lineHeight.base,
   },
-  reportSummary: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    marginTop: spacing.xs,
+  reportMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
   },
   reportMeta: {
     fontSize: fontSize.xs,
     color: colors.textMuted,
-    marginTop: spacing.sm,
   },
-  fabRow: {
+  ctaWrap: {
     position: 'absolute',
     bottom: spacing.xl,
     left: spacing.xl,
     right: spacing.xl,
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  fab: {
-    flex: 1,
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.lg,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-  },
-  fabText: { color: '#fff', fontSize: fontSize.base, fontWeight: '700' },
-  notice: {
-    backgroundColor: colors.primary + '10',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-  },
-  noticeText: {
-    fontSize: fontSize.xs,
-    color: colors.primary,
-    fontWeight: '600',
   },
 });
