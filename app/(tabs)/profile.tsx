@@ -118,11 +118,11 @@ export default function Profile() {
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.avatarBox}>
           <View style={styles.avatar}>
-            <Text color="onPrimary" style={styles.avatarText}>
+            <Text weight="heavy" color="onPrimary" style={styles.avatarText}>
               {initialOf(user?.name)}
             </Text>
           </View>
-          <Text variant="h2" align="center" style={styles.name}>
+          <Text variant="h2" weight="heavy" align="center" style={styles.name}>
             {user?.name ?? '-'}
           </Text>
           <Text variant="bodySm" color="textMuted" align="center">

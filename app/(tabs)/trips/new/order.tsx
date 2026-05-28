@@ -280,7 +280,7 @@ export default function NewTripOrder() {
         <Text variant="body" weight="semibold">
           위에서부터 순서대로 방문합니다
         </Text>
-        <Text variant="bodySm" color="textMuted">
+        <Text variant="bodySm" color="textMuted" style={{ marginTop: 2 }}>
           상하 화살표로 순서, × 로 제외할 수 있습니다
         </Text>
         <Button

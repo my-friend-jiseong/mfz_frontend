@@ -320,7 +320,7 @@ export default function NewField() {
               ) : null}
             </Card>
 
-            <Text variant="bodySm" weight="bold" color="textMuted" style={styles.label}>
+            <Text variant="bodySm" weight="semibold" color="textMuted" style={styles.label}>
               프로젝트 (선택)
             </Text>
             <ProjectPicker value={projectId} onChange={setProjectId} />
@@ -341,7 +341,7 @@ export default function NewField() {
               containerStyle={styles.fieldGap}
             />
 
-            <Text variant="bodySm" weight="bold" color="textMuted" style={styles.label}>
+            <Text variant="bodySm" weight="semibold" color="textMuted" style={styles.label}>
               상태
             </Text>
             <View style={styles.statusRow}>

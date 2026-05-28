@@ -161,7 +161,10 @@ export default function FieldCheckin() {
               >
                 <Text
                   variant="caption"
-                  style={active ? { color: c } : { color: colors.textSubtle }}
+                  style={[
+                    { lineHeight: 12 },
+                    active ? { color: c } : { color: colors.textSubtle },
+                  ]}
                 >
                   {VISIT_SHAPE[s]}
                 </Text>
