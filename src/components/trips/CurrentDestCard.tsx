@@ -22,21 +22,28 @@ interface Props {
 
 // 1차 액션(체크인) 풀폭 + separator + 유틸 row 3개 (icon + 작은 라벨).
 // 이전: 풀폭 버튼 4개 수직 스택 → 위계 약하고 카드가 비대.
+type UtilTone = 'primary' | 'warning' | 'danger';
+
+const UTIL_COLOR: Record<UtilTone, string> = {
+  primary: colors.primary,
+  warning: colors.warning,
+  danger: colors.danger,
+};
+
 function UtilAction({
   icon,
   label,
   onPress,
-  danger,
+  tone = 'primary',
   loading,
 }: {
   icon: IonName;
   label: string;
   onPress: () => void;
-  danger?: boolean;
+  tone?: UtilTone;
   loading?: boolean;
 }) {
-  const tint = danger ? colors.danger : colors.textMuted;
-  const textColor = danger ? colors.danger : colors.text;
+  const c = UTIL_COLOR[tone];
   return (
     <Pressable
       onPress={onPress}
@@ -49,8 +56,8 @@ function UtilAction({
         loading && { opacity: opacity.disabled },
       ]}
     >
-      <Ionicons name={icon} size={22} color={tint} />
-      <Text style={[styles.utilLabel, { color: textColor }]}>{label}</Text>
+      <Ionicons name={icon} size={22} color={c} />
+      <Text style={[styles.utilLabel, { color: c }]}>{label}</Text>
     </Pressable>
   );
 }
@@ -83,11 +90,17 @@ export function CurrentDestCard({
       </Button>
 
       <View style={styles.utilRow}>
-        <UtilAction icon="navigate" label="길찾기" onPress={onNavigate} />
+        <UtilAction
+          icon="navigate"
+          label="길찾기"
+          tone="primary"
+          onPress={onNavigate}
+        />
         {showReop ? (
           <UtilAction
             icon="sparkles"
             label="재최적화"
+            tone="warning"
             onPress={onReoptimize}
             loading={optimizing}
           />
@@ -95,8 +108,8 @@ export function CurrentDestCard({
         <UtilAction
           icon="play-skip-forward"
           label="건너뛰기"
+          tone="danger"
           onPress={onSkip}
-          danger
         />
       </View>
     </Card>
