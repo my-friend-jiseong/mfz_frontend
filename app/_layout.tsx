@@ -4,7 +4,7 @@ import { useFonts } from 'expo-font';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
-import { ActivityIndicator, Text, View, StyleSheet } from 'react-native';
+import { ActivityIndicator, View, StyleSheet } from 'react-native';
 import { TripStatusBanner } from '@/components/TripStatusBanner';
 import { SessionGuardModal } from '@/components/SessionGuardModal';
 import { startSessionActivity, stopSessionActivity } from '@/stores/sessionActivity';
@@ -13,21 +13,15 @@ import { applyWebAlertPatch } from '@/utils/webAlertPatch';
 import { useAuthStore } from '@/stores/authStore';
 import { useDestinationStore } from '@/stores/destinationStore';
 import { colors } from '@/theme/colors';
-import { FONTS_TO_LOAD, fontFamily } from '@/theme/typography';
+import { FONTS_TO_LOAD } from '@/theme/typography';
 
 // 모듈 로드 시 초기화 (DSN 환경변수 없으면 no-op)
 initSentry();
 // react-native-web 의 Alert.alert no-op 우회 — 전 코드베이스의 alert 가 web 에서 동작.
 applyWebAlertPatch();
 
-// 모든 <Text> 의 기본 fontFamily 를 Pretendard 로. 토큰 미사용 화면에도 자동 적용 —
-// 폰트 로드 전엔 OS fallback, 로드 후엔 Pretendard 로 자동 교체.
-const TextWithDefaults = Text as unknown as { defaultProps?: { style?: unknown } };
-if (!TextWithDefaults.defaultProps) TextWithDefaults.defaultProps = {};
-TextWithDefaults.defaultProps.style = [
-  { fontFamily: fontFamily.regular },
-  TextWithDefaults.defaultProps.style,
-];
+// Text.defaultProps monkey-patch 는 React 19 / 미래 RN 의 deprecation 위험 + 라이브러리/
+// 시스템 텍스트까지 광범위 영향이라 제거. 대신 ui/* 컴포넌트가 styles 에 fontFamily 명시.
 
 export default function RootLayout() {
   // 부팅 시 보안 저장소의 refresh 토큰으로 세션 복원.
@@ -35,7 +29,7 @@ export default function RootLayout() {
   // (index 라우트는 deep-link 새로고침에서 마운트되지 않음).
   const isHydrating = useAuthStore((s) => s.isHydrating);
   const hydrate = useAuthStore((s) => s.hydrate);
-  const [fontsLoaded] = useFonts(FONTS_TO_LOAD);
+  const [fontsLoaded, fontError] = useFonts(FONTS_TO_LOAD);
 
   useEffect(() => {
     void hydrate();
@@ -46,9 +40,13 @@ export default function RootLayout() {
     };
   }, [hydrate]);
 
-  // hydrate / 폰트 로드 끝날 때까지 splash. 토큰 없이 API 호출이 새거나
-  // 시스템 폰트로 그렸다가 Pretendard 로 점프하는 flicker 차단.
-  if (isHydrating || !fontsLoaded) {
+  // 폰트 로드 실패 시 console 로 보고하고 진행 — splash 데드락 방지 (OS 폰트 fallback).
+  useEffect(() => {
+    if (fontError) console.warn('[fonts] Pretendard 로드 실패', fontError);
+  }, [fontError]);
+
+  // hydrate / 폰트 로드 끝날 때까지 splash. 폰트 에러 시 OS 폰트로 진입 허용.
+  if (isHydrating || (!fontsLoaded && !fontError)) {
     return (
       <GestureHandlerRootView style={styles.root}>
         <SafeAreaProvider>

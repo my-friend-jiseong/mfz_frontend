@@ -12,6 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize, fontWeight } from '@/theme/spacing';
+import { fontFamily } from '@/theme/typography';
 import { opacity } from '@/theme/motion';
 
 type IonName = React.ComponentProps<typeof Ionicons>['name'];
@@ -160,6 +161,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   text: {
+    fontFamily: fontFamily.bold,
     fontWeight: fontWeight.bold,
   },
   fullWidth: { alignSelf: 'stretch' },

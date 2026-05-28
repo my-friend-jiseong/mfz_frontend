@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { colors } from '@/theme/colors';
 import { spacing, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
+import { fontFamily } from '@/theme/typography';
 
 interface Props {
   title: string;
@@ -30,12 +31,14 @@ const styles = StyleSheet.create({
   },
   text: { flex: 1 },
   title: {
+    fontFamily: fontFamily.bold,
     fontSize: fontSize.lg,
     fontWeight: fontWeight.bold,
     color: colors.text,
     lineHeight: lineHeight.lg,
   },
   desc: {
+    fontFamily: fontFamily.regular,
     fontSize: fontSize.sm,
     color: colors.textMuted,
     marginTop: 2,

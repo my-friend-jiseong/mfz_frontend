@@ -1,6 +1,7 @@
 import { StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize, fontWeight } from '@/theme/spacing';
+import { fontFamily } from '@/theme/typography';
 
 export type BadgeTone =
   | 'primary'
@@ -77,6 +78,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     gap: 4,
   },
-  shape: {},
-  label: { fontWeight: fontWeight.semibold },
+  shape: { fontFamily: fontFamily.regular },
+  label: { fontFamily: fontFamily.semibold, fontWeight: fontWeight.semibold },
 });

@@ -2,6 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/theme/colors';
 import { spacing, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
+import { fontFamily } from '@/theme/typography';
 
 type IonName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -43,6 +44,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   title: {
+    fontFamily: fontFamily.semibold,
     fontSize: fontSize.base,
     color: colors.text,
     fontWeight: fontWeight.semibold,
@@ -51,6 +53,7 @@ const styles = StyleSheet.create({
     lineHeight: lineHeight.base,
   },
   desc: {
+    fontFamily: fontFamily.regular,
     fontSize: fontSize.sm,
     color: colors.textMuted,
     textAlign: 'center',

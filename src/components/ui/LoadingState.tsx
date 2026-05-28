@@ -1,6 +1,7 @@
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { colors } from '@/theme/colors';
 import { spacing, fontSize } from '@/theme/spacing';
+import { fontFamily } from '@/theme/typography';
 
 interface Props {
   label?: string;
@@ -33,6 +34,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   blockLabel: {
+    fontFamily: fontFamily.regular,
     fontSize: fontSize.sm,
     color: colors.textMuted,
   },
@@ -42,6 +44,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   inlineLabel: {
+    fontFamily: fontFamily.regular,
     fontSize: fontSize.sm,
     color: colors.textMuted,
   },

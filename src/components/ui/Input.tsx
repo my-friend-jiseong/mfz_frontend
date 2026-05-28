@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize, fontWeight } from '@/theme/spacing';
+import { fontFamily } from '@/theme/typography';
 
 interface Props extends TextInputProps {
   label?: string;
@@ -65,6 +66,7 @@ export const Input = forwardRef<TextInput, Props>(function Input(
 
 const styles = StyleSheet.create({
   label: {
+    fontFamily: fontFamily.semibold,
     fontSize: fontSize.sm,
     color: colors.textMuted,
     fontWeight: fontWeight.semibold,
@@ -85,6 +87,7 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     paddingVertical: spacing.md,
+    fontFamily: fontFamily.regular,
     fontSize: fontSize.base,
     color: colors.text,
   },
@@ -93,11 +96,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   error: {
+    fontFamily: fontFamily.regular,
     color: colors.danger,
     fontSize: fontSize.xs,
     marginTop: spacing.xs,
   },
   helper: {
+    fontFamily: fontFamily.regular,
     color: colors.textMuted,
     fontSize: fontSize.xs,
     marginTop: spacing.xs,

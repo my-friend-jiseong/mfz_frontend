@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize, fontWeight } from '@/theme/spacing';
+import { fontFamily } from '@/theme/typography';
 import { opacity } from '@/theme/motion';
 import { withAlpha } from '@/theme/withAlpha';
 
@@ -78,5 +79,5 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   dashed: { borderStyle: 'dashed' },
-  label: { fontSize: fontSize.xs, color: colors.textMuted },
+  label: { fontFamily: fontFamily.regular, fontSize: fontSize.xs, color: colors.textMuted },
 });
