@@ -158,7 +158,7 @@ export default function Profile() {
         <Button
           onPress={handleLogout}
           loading={loggingOut}
-          variant="ghost"
+          variant="destructive"
           fullWidth
           leftIcon="log-out-outline"
           style={styles.logout}

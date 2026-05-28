@@ -129,23 +129,22 @@ export function Button({
         s.container,
         fullWidth && styles.fullWidth,
         pressed && !inactive && { opacity: opacity.pressed },
-        disabled && { opacity: opacity.disabled },
+        // disabled 와 loading 모두 비활성 — 시각도 함께 dim 시켜 탭 안 먹힘 인상 제거.
+        inactive && { opacity: opacity.disabled },
         style,
       ]}
     >
-      {loading ? (
-        <ActivityIndicator color={v.tint} size="small" />
-      ) : (
-        <View style={[styles.row, { gap: s.gap }]}>
-          {leftIcon ? (
-            <Ionicons name={leftIcon} size={s.iconSize} color={v.tint} />
-          ) : null}
-          <Text style={[styles.text, s.text, v.text]}>{children}</Text>
-          {rightIcon ? (
-            <Ionicons name={rightIcon} size={s.iconSize} color={v.tint} />
-          ) : null}
-        </View>
-      )}
+      <View style={[styles.row, { gap: s.gap }]}>
+        {loading ? (
+          <ActivityIndicator color={v.tint} size="small" />
+        ) : leftIcon ? (
+          <Ionicons name={leftIcon} size={s.iconSize} color={v.tint} />
+        ) : null}
+        <Text style={[styles.text, s.text, v.text]}>{children}</Text>
+        {!loading && rightIcon ? (
+          <Ionicons name={rightIcon} size={s.iconSize} color={v.tint} />
+        ) : null}
+      </View>
     </Pressable>
   );
 }
