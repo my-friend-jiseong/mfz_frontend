@@ -5,9 +5,9 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
+import { Text } from '@/components/ui/Text';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useReportStore } from '@/stores/reportStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -17,7 +17,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { colors } from '@/theme/colors';
-import { spacing, fontSize, fontWeight } from '@/theme/spacing';
+import { spacing } from '@/theme/spacing';
 
 // ERD v2: 보고서 본문(content) 제거 — 제목만 편집. 본문은 현장별 전·중·후 사진(field_reports).
 const TITLE_MAX = 100;
@@ -152,8 +152,10 @@ export default function EditReport() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.labelRow}>
-          <Text style={styles.label}>제목 *</Text>
-          <Text style={styles.counter}>
+          <Text variant="bodySm" weight="bold" color="textMuted">
+            제목 *
+          </Text>
+          <Text variant="caption" weight="semibold" color="textMuted">
             {title.length} / {TITLE_MAX}
           </Text>
         </View>
@@ -170,7 +172,11 @@ export default function EditReport() {
           helperText={titleErr ? undefined : '현장별 전·중·후 사진은 보고서 상세 화면에서 관리합니다.'}
         />
 
-        {globalError ? <Text style={styles.error}>{globalError}</Text> : null}
+        {globalError ? (
+          <Text variant="bodySm" color="danger" style={styles.error}>
+            {globalError}
+          </Text>
+        ) : null}
 
         <Button
           onPress={handleSave}
@@ -201,16 +207,6 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
     marginBottom: spacing.sm,
   },
-  label: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    fontWeight: fontWeight.bold,
-  },
-  counter: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
-    fontWeight: fontWeight.semibold,
-  },
-  error: { color: colors.danger, fontSize: fontSize.sm, marginTop: spacing.md },
+  error: { marginTop: spacing.md },
   submit: { marginTop: spacing.xl },
 });

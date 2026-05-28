@@ -8,9 +8,9 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
+import { Text } from '@/components/ui/Text';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useReportStore } from '@/stores/reportStore';
@@ -23,7 +23,7 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { colors } from '@/theme/colors';
-import { spacing, radius, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
+import { spacing, radius } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
 import { fmtDate, fmtTime } from '@/utils/datetime';
 
@@ -201,21 +201,27 @@ export default function ComposeReport() {
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
         >
-          <Text style={styles.title}>보고서 작성</Text>
-          <Text style={styles.subtitle}>
+          <Text variant="h2" weight="heavy">
+            보고서 작성
+          </Text>
+          <Text variant="bodySm" color="textMuted" style={styles.subtitle}>
             제목을 입력하고 'AI 초안 받기' 또는 '직접 저장' 을 선택하세요. 현장별 전·중·후 사진은 저장 후 상세 화면에서 추가합니다.
           </Text>
 
-          <Text style={styles.label}>연결할 외근 (선택)</Text>
+          <Text variant="bodySm" weight="bold" color="textMuted" style={styles.label}>
+            연결할 외근 (선택)
+          </Text>
           {myTrips.length === 0 ? (
-            <Text style={styles.hint}>등록된 외근이 없습니다.</Text>
+            <Text variant="caption" color="textMuted" style={styles.hint}>
+              등록된 외근이 없습니다.
+            </Text>
           ) : selectedTrip ? (
             <Card padding="md" style={styles.tripCardSelected}>
               <View style={styles.tripCardBody}>
-                <Text style={styles.tripItemDateActive}>
+                <Text variant="bodySm" weight="bold" color="primary">
                   {tripLabel(selectedTrip).head}
                 </Text>
-                <Text style={styles.tripItemMetaActive}>
+                <Text variant="caption" color="primary" style={styles.tripItemMetaActive}>
                   {tripLabel(selectedTrip).meta}
                 </Text>
               </View>
@@ -246,13 +252,19 @@ export default function ComposeReport() {
               ]}
             >
               <Ionicons name="add-circle-outline" size={18} color={colors.textMuted} />
-              <Text style={styles.tripPickerBtnText}>외근 선택</Text>
+              <Text variant="bodySm" weight="bold" color="textMuted">
+                외근 선택
+              </Text>
             </Pressable>
           )}
 
           <View style={styles.notesHeader}>
-            <Text style={[styles.label, styles.labelInline]}>제목 *</Text>
-            <Text style={styles.counter}>{title.length} / 100</Text>
+            <Text variant="bodySm" weight="bold" color="textMuted">
+              제목 *
+            </Text>
+            <Text variant="caption" weight="semibold" color="textMuted">
+              {title.length} / 100
+            </Text>
           </View>
           <Input
             value={title}
@@ -264,13 +276,19 @@ export default function ComposeReport() {
           {dupWarning ? (
             <View style={styles.warnRow}>
               <Ionicons name="warning-outline" size={14} color={colors.warning} />
-              <Text style={styles.warn}>{dupWarning}</Text>
+              <Text variant="bodySm" color="warning">
+                {dupWarning}
+              </Text>
             </View>
           ) : null}
 
           <View style={styles.notesHeader}>
-            <Text style={[styles.label, styles.labelInline]}>현장 메모 (AI 초안용)</Text>
-            <Text style={styles.counter}>{notes.length} / 50,000</Text>
+            <Text variant="bodySm" weight="bold" color="textMuted">
+              현장 메모 (AI 초안용)
+            </Text>
+            <Text variant="caption" weight="semibold" color="textMuted">
+              {notes.length} / 50,000
+            </Text>
           </View>
           <Input
             value={notes}
@@ -283,11 +301,15 @@ export default function ComposeReport() {
 
           <View style={styles.sectionDivider}>
             <View style={styles.dividerLine} />
-            <Text style={styles.sectionDividerText}>조치 전·후 사진 (AI 초안용)</Text>
+            <Text variant="caption" weight="bold" color="textMuted">
+              조치 전·후 사진 (AI 초안용)
+            </Text>
             <View style={styles.dividerLine} />
           </View>
 
-          <Text style={styles.label}>조치 전 사진</Text>
+          <Text variant="bodySm" weight="bold" color="textMuted" style={styles.label}>
+            조치 전 사진
+          </Text>
           <View style={styles.photoBox}>
             {beforePhoto ? (
               <Image source={{ uri: beforePhoto.uri }} style={styles.photoPreview} />
@@ -314,7 +336,9 @@ export default function ComposeReport() {
             </View>
           </View>
 
-          <Text style={styles.label}>조치 후 사진</Text>
+          <Text variant="bodySm" weight="bold" color="textMuted" style={styles.label}>
+            조치 후 사진
+          </Text>
           <View style={styles.photoBox}>
             {afterPhoto ? (
               <Image source={{ uri: afterPhoto.uri }} style={styles.photoPreview} />
@@ -341,7 +365,11 @@ export default function ComposeReport() {
             </View>
           </View>
 
-          {error ? <Text style={styles.error}>{error}</Text> : null}
+          {error ? (
+            <Text variant="bodySm" color="danger" style={styles.error}>
+              {error}
+            </Text>
+          ) : null}
 
           {busy === 'ai' ? (
             <Card padding="md" style={styles.progressBox}>
@@ -359,10 +387,9 @@ export default function ComposeReport() {
                       ]}
                     >
                       <Text
-                        style={[
-                          styles.progressDotText,
-                          (done || active) && styles.progressDotTextActive,
-                        ]}
+                        variant="caption"
+                        weight="bold"
+                        style={(done || active) ? { color: colors.primary } : { color: colors.textMuted }}
                       >
                         {i}
                       </Text>
@@ -370,10 +397,10 @@ export default function ComposeReport() {
                   );
                 })}
               </View>
-              <Text style={styles.progressTitle}>
+              <Text variant="bodySm" weight="bold">
                 {stepLabel.idx}/3 · {stepLabel.text}
               </Text>
-              <Text style={styles.progressMeta}>
+              <Text variant="caption" color="textMuted" style={styles.progressMeta}>
                 {elapsedSec}초 경과
                 {remainEstSec > 0 ? ` · 약 ${remainEstSec}초 남음` : ' · 마무리 중'}
               </Text>
@@ -411,7 +438,7 @@ export default function ComposeReport() {
           {busy === 'ai' ? (
             <View style={styles.footRow}>
               <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} />
-              <Text style={styles.foot}>
+              <Text variant="caption" color="textMuted" align="center">
                 AI 생성에 시간이 걸릴 수 있습니다. 화면을 떠나지 마세요.
               </Text>
             </View>
@@ -426,7 +453,7 @@ export default function ComposeReport() {
       >
         <Pressable style={styles.pickerBackdrop} onPress={() => setTripPickerOpen(false)}>
           <Pressable style={styles.pickerCard} onPress={() => undefined}>
-            <Text style={styles.pickerTitle}>외근 선택</Text>
+            <Text variant="h3">외근 선택</Text>
             <ScrollView style={styles.pickerList} contentContainerStyle={styles.pickerListContent}>
               {myTrips.map((t) => {
                 const active = t.id === tripId;
@@ -444,10 +471,18 @@ export default function ComposeReport() {
                       pressed && { opacity: opacity.pressed },
                     ]}
                   >
-                    <Text style={[styles.tripItemDate, active && styles.tripItemDateActive]}>
+                    <Text
+                      variant="bodySm"
+                      weight={active ? 'bold' : 'semibold'}
+                      color={active ? 'primary' : 'text'}
+                    >
                       {head}
                     </Text>
-                    <Text style={[styles.tripItemMeta, active && styles.tripItemMetaActive]}>
+                    <Text
+                      variant="caption"
+                      color={active ? 'primary' : 'textMuted'}
+                      style={styles.tripItemMetaSpacing}
+                    >
                       {meta}
                     </Text>
                   </Pressable>
@@ -472,33 +507,18 @@ export default function ComposeReport() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   scroll: { padding: spacing.xl, paddingBottom: spacing.xxl },
-  title: {
-    fontSize: fontSize.xl,
-    fontWeight: fontWeight.heavy,
-    color: colors.text,
-    lineHeight: lineHeight.xl,
-  },
-  subtitle: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    marginTop: spacing.xs,
-    lineHeight: lineHeight.sm,
-  },
+  subtitle: { marginTop: spacing.xs },
   label: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    fontWeight: fontWeight.bold,
     marginTop: spacing.lg,
     marginBottom: spacing.sm,
   },
-  hint: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: spacing.xs },
+  hint: { marginTop: spacing.xs },
   warnRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
     marginTop: spacing.xs,
   },
-  warn: { color: colors.warning, fontSize: fontSize.sm },
   // 외근 선택 — 선택된 카드
   tripCardSelected: {
     flexDirection: 'row',
@@ -524,11 +544,6 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
-  tripPickerBtnText: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    fontWeight: fontWeight.bold,
-  },
   // 외근 picker modal
   pickerBackdrop: {
     flex: 1,
@@ -546,11 +561,6 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     gap: spacing.md,
   },
-  pickerTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.bold,
-    color: colors.text,
-  },
   pickerList: { flexGrow: 0 },
   pickerListContent: { gap: spacing.xs, paddingVertical: spacing.xs },
   tripItem: {
@@ -565,22 +575,8 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
     backgroundColor: colors.primaryMuted,
   },
-  tripItemDate: {
-    fontSize: fontSize.sm,
-    color: colors.text,
-    fontWeight: fontWeight.semibold,
-  },
-  tripItemMeta: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: 2 },
-  tripItemDateActive: {
-    fontSize: fontSize.sm,
-    color: colors.primary,
-    fontWeight: fontWeight.bold,
-  },
-  tripItemMetaActive: {
-    fontSize: fontSize.xs,
-    color: colors.primary,
-    marginTop: 2,
-  },
+  tripItemMetaSpacing: { marginTop: 2 },
+  tripItemMetaActive: { marginTop: 2 },
   // 입력
   multiline: { minHeight: 160, textAlignVertical: 'top' },
   notesHeader: {
@@ -589,12 +585,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginTop: spacing.lg,
     marginBottom: spacing.sm,
-  },
-  labelInline: { marginTop: 0, marginBottom: 0 },
-  counter: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
-    fontWeight: fontWeight.semibold,
   },
   sectionDivider: {
     flexDirection: 'row',
@@ -607,11 +597,6 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: colors.border,
   },
-  sectionDividerText: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
-    fontWeight: fontWeight.bold,
-  },
   // 사진
   photoBox: { gap: spacing.sm },
   photoPreview: {
@@ -623,7 +608,7 @@ const styles = StyleSheet.create({
   photoActions: { flexDirection: 'row', gap: spacing.sm },
   photoBtnFlex: { flex: 1 },
   // 에러
-  error: { color: colors.danger, fontSize: fontSize.sm, marginTop: spacing.md },
+  error: { marginTop: spacing.md },
   // AI 진행 박스
   progressBox: {
     marginTop: spacing.md,
@@ -655,22 +640,7 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
     backgroundColor: colors.surface,
   },
-  progressDotText: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
-    fontWeight: fontWeight.bold,
-  },
-  progressDotTextActive: { color: colors.primary },
-  progressTitle: {
-    fontSize: fontSize.sm,
-    color: colors.text,
-    fontWeight: fontWeight.bold,
-  },
-  progressMeta: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
-    marginTop: 2,
-  },
+  progressMeta: { marginTop: 2 },
   // 액션
   actionRow: {
     marginTop: spacing.xl,
@@ -685,10 +655,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.xs,
     marginTop: spacing.sm,
-  },
-  foot: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
-    textAlign: 'center',
   },
 });

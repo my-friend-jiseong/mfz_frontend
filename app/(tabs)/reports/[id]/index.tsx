@@ -6,9 +6,9 @@ import {
   Platform,
   Pressable,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
+import { Text } from '@/components/ui/Text';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
@@ -24,7 +24,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { colors } from '@/theme/colors';
-import { spacing, radius, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
+import { spacing, radius } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
 import { fmtDateTime } from '@/utils/datetime';
 import type { FieldReport } from '@/types/entities';
@@ -51,7 +51,9 @@ function FieldReportCard({
   return (
     <Card padding="md" style={styles.frCard}>
       <View style={styles.frHead}>
-        <Text style={styles.frTitle}>{fr.title || fieldName || '현장 보고'}</Text>
+        <Text variant="bodySm" weight="bold" style={styles.frTitle}>
+          {fr.title || fieldName || '현장 보고'}
+        </Text>
         {onEdit || onDelete ? (
           <View style={styles.frHeadActions}>
             {onEdit ? (
@@ -70,7 +72,9 @@ function FieldReportCard({
       <View style={styles.frSlots}>
         {slots.map((s) => (
           <View key={s.label} style={styles.frSlot}>
-            <Text style={styles.frSlotLabel}>{s.label}</Text>
+            <Text variant="caption" weight="bold" color="textMuted" style={styles.frSlotLabel}>
+              {s.label}
+            </Text>
             {s.url ? (
               <Image
                 source={{ uri: resolve(s.url) }}
@@ -79,10 +83,14 @@ function FieldReportCard({
               />
             ) : (
               <View style={[styles.frPhoto, styles.frPhotoEmpty]}>
-                <Text style={styles.frPhotoEmptyText}>없음</Text>
+                <Text variant="caption" color="textMuted">없음</Text>
               </View>
             )}
-            {s.caption ? <Text style={styles.frCaption}>{s.caption}</Text> : null}
+            {s.caption ? (
+              <Text variant="caption" align="center" style={styles.frCaption}>
+                {s.caption}
+              </Text>
+            ) : null}
           </View>
         ))}
       </View>
@@ -199,7 +207,9 @@ export default function ReportDetail() {
       initialIndex={2}
     >
       <BottomSheetScrollView contentContainerStyle={styles.scroll}>
-        <Text style={styles.title}>{report.title}</Text>
+        <Text variant="h2" weight="heavy">
+          {report.title}
+        </Text>
 
         {trip ? (
           <Pressable
@@ -210,20 +220,22 @@ export default function ReportDetail() {
             ]}
           >
             <Ionicons name="briefcase-outline" size={14} color={colors.primary} />
-            <Text style={styles.tripLinkText}>
+            <Text variant="bodySm" weight="semibold" color="primary">
               연결 외근: #{trip.id} · {fmtDateTime(trip.startedAt)}
             </Text>
             <Ionicons name="chevron-forward" size={14} color={colors.primary} />
           </Pressable>
         ) : null}
 
-        <Text style={styles.meta}>
+        <Text variant="caption" color="textMuted" style={styles.meta}>
           작성: {fmtDateTime(report.createdAt)}
           {report.updatedAt ? ` · 수정: ${fmtDateTime(report.updatedAt)}` : ''}
         </Text>
 
         <View style={styles.sectionHead}>
-          <Text style={styles.sectionLabel}>현장별 전·중·후</Text>
+          <Text variant="bodySm" weight="bold" color="textMuted">
+            현장별 전·중·후
+          </Text>
           {isOwner ? (
             <Button
               onPress={() =>
@@ -238,7 +250,9 @@ export default function ReportDetail() {
           ) : null}
         </View>
         {fieldReports.length === 0 ? (
-          <Text style={styles.emptyFr}>등록된 현장 보고가 없습니다.</Text>
+          <Text variant="bodySm" color="textMuted" style={styles.emptyFr}>
+            등록된 현장 보고가 없습니다.
+          </Text>
         ) : (
           fieldReports.map((fr) => (
             <FieldReportCard
@@ -315,12 +329,6 @@ export default function ReportDetail() {
 
 const styles = StyleSheet.create({
   scroll: { padding: spacing.lg, paddingBottom: spacing.xxl },
-  title: {
-    fontSize: fontSize.xl,
-    fontWeight: fontWeight.heavy,
-    color: colors.text,
-    lineHeight: lineHeight.xl,
-  },
   tripLink: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -332,16 +340,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     alignSelf: 'flex-start',
   },
-  tripLinkText: {
-    fontSize: fontSize.sm,
-    color: colors.primary,
-    fontWeight: fontWeight.semibold,
-  },
-  meta: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
-    marginTop: spacing.sm,
-  },
+  meta: { marginTop: spacing.sm },
   sectionHead: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -350,16 +349,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     gap: spacing.sm,
   },
-  sectionLabel: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    fontWeight: fontWeight.bold,
-  },
-  emptyFr: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    paddingVertical: spacing.lg,
-  },
+  emptyFr: { paddingVertical: spacing.lg },
   frCard: { marginBottom: spacing.md },
   frHead: {
     flexDirection: 'row',
@@ -369,20 +359,10 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   frHeadActions: { flexDirection: 'row', gap: spacing.xs },
-  frTitle: {
-    flex: 1,
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.bold,
-    color: colors.text,
-  },
+  frTitle: { flex: 1 },
   frSlots: { flexDirection: 'row', gap: spacing.sm },
   frSlot: { flex: 1, alignItems: 'center' },
-  frSlotLabel: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
-    fontWeight: fontWeight.bold,
-    marginBottom: 4,
-  },
+  frSlotLabel: { marginBottom: 4 },
   frPhoto: {
     width: '100%',
     aspectRatio: 1,
@@ -396,13 +376,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderStyle: 'dashed',
   },
-  frPhotoEmptyText: { fontSize: fontSize.xs, color: colors.textMuted },
-  frCaption: {
-    fontSize: fontSize.xs,
-    color: colors.text,
-    marginTop: 4,
-    textAlign: 'center',
-  },
+  frCaption: { marginTop: 4 },
   downloadBtn: { marginTop: spacing.md },
   actions: {
     flexDirection: 'row',

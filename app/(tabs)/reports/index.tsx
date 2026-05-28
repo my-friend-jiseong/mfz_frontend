@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '@/components/ui/Text';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -14,7 +15,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { StickyBottomBar } from '@/components/ui/StickyBottomBar';
 import { colors } from '@/theme/colors';
-import { spacing, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
+import { spacing } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
 import { fmtDate, fmtTime } from '@/utils/datetime';
 import type { Report, Trip } from '@/types/entities';
@@ -84,10 +85,10 @@ export default function ReportsIndex() {
             >
               <Ionicons name="briefcase-outline" size={16} color={colors.primary} />
               <View style={styles.tripHeaderTextWrap}>
-                <Text style={styles.tripHeader}>
+                <Text variant="bodySm" weight="bold" color="primary">
                   외근 · {fmtDate(item.trip.startedAt)}
                 </Text>
-                <Text style={styles.tripHeaderMeta}>
+                <Text variant="caption" color="textMuted" style={styles.tripHeaderMeta}>
                   {fmtTime(item.trip.startedAt)}
                   {item.trip.endedAt
                     ? `–${fmtTime(item.trip.endedAt)}`
@@ -105,7 +106,7 @@ export default function ReportsIndex() {
                 style={styles.reportCard}
               >
                 <View style={styles.reportHead}>
-                  <Text style={styles.reportTitle} numberOfLines={2}>
+                  <Text variant="body" weight="bold" numberOfLines={2} style={styles.reportTitle}>
                     {r.title}
                   </Text>
                   {r.updatedAt ? (
@@ -114,7 +115,7 @@ export default function ReportsIndex() {
                 </View>
                 <View style={styles.reportMetaRow}>
                   <Ionicons name="calendar-outline" size={12} color={colors.textSubtle} />
-                  <Text style={styles.reportMeta}>{fmtDate(r.createdAt)}</Text>
+                  <Text variant="caption" color="textMuted">{fmtDate(r.createdAt)}</Text>
                 </View>
               </Card>
             ))}
@@ -155,16 +156,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   tripHeaderTextWrap: { flex: 1 },
-  tripHeader: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.bold,
-    color: colors.primary,
-  },
-  tripHeaderMeta: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
-    marginTop: 2,
-  },
+  tripHeaderMeta: { marginTop: 2 },
   reportCard: { marginBottom: spacing.sm },
   reportHead: {
     flexDirection: 'row',
@@ -172,21 +164,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.sm,
   },
-  reportTitle: {
-    flex: 1,
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.bold,
-    color: colors.text,
-    lineHeight: lineHeight.base,
-  },
+  reportTitle: { flex: 1 },
   reportMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
     marginTop: spacing.sm,
-  },
-  reportMeta: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
   },
 });

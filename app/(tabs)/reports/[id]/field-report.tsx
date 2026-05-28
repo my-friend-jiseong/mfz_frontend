@@ -8,9 +8,9 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
+import { Text } from '@/components/ui/Text';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useReportStore } from '@/stores/reportStore';
@@ -23,7 +23,7 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { colors } from '@/theme/colors';
-import { spacing, radius, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
+import { spacing, radius } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
 
 // ERD v2: 보고서 본문 = 현장별 전·중·후 사진+캡션(field_reports). 추가/수정 화면.
@@ -182,14 +182,16 @@ export default function FieldReportEditor() {
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
         >
-          <Text style={styles.heading}>
+          <Text variant="h2" weight="heavy" style={styles.heading}>
             {isEdit ? '현장 보고 수정' : '현장 보고 추가'}
           </Text>
 
-          <Text style={styles.label}>현장 *</Text>
+          <Text variant="bodySm" weight="bold" color="textMuted" style={styles.label}>
+            현장 *
+          </Text>
           {isEdit ? (
             <Card padding="md" style={styles.readonly}>
-              <Text style={styles.readonlyText}>
+              <Text variant="body">
                 {selectedField?.address ?? fieldId}
               </Text>
             </Card>
@@ -207,9 +209,10 @@ export default function FieldReportEditor() {
                 color={selectedField ? colors.primary : colors.textMuted}
               />
               <Text
-                style={
-                  selectedField ? styles.fieldPickText : styles.fieldPickPlaceholder
-                }
+                variant="body"
+                weight={selectedField ? 'semibold' : 'bold'}
+                color={selectedField ? 'text' : 'textMuted'}
+                style={styles.fieldPickText}
               >
                 {selectedField ? selectedField.address : '현장 선택'}
               </Text>
@@ -230,7 +233,9 @@ export default function FieldReportEditor() {
             const img = resolveUrl(slot.url);
             return (
               <Card key={p.key} padding="md" style={styles.phaseBox}>
-                <Text style={styles.phaseLabel}>{p.label}</Text>
+                <Text variant="bodySm" weight="bold">
+                  {p.label}
+                </Text>
                 {img ? (
                   <Image
                     source={{ uri: img }}
@@ -239,7 +244,7 @@ export default function FieldReportEditor() {
                   />
                 ) : (
                   <View style={[styles.phasePhoto, styles.phasePhotoEmpty]}>
-                    <Text style={styles.phasePhotoEmptyText}>
+                    <Text variant="bodySm" color="textMuted">
                       {uploading === p.key ? '업로드 중...' : '사진 없음'}
                     </Text>
                   </View>
@@ -277,7 +282,11 @@ export default function FieldReportEditor() {
             );
           })}
 
-          {error ? <Text style={styles.error}>{error}</Text> : null}
+          {error ? (
+            <Text variant="bodySm" color="danger" style={styles.error}>
+              {error}
+            </Text>
+          ) : null}
 
           <Button
             onPress={handleSave}
@@ -307,13 +316,15 @@ export default function FieldReportEditor() {
           onPress={() => setFieldPickerOpen(false)}
         >
           <Pressable style={styles.pickerCard} onPress={() => undefined}>
-            <Text style={styles.pickerTitle}>현장 선택</Text>
+            <Text variant="h3">현장 선택</Text>
             <ScrollView
               style={styles.pickerList}
               contentContainerStyle={styles.pickerListContent}
             >
               {allFields.length === 0 ? (
-                <Text style={styles.pickerEmpty}>등록된 현장이 없습니다.</Text>
+                <Text variant="bodySm" color="textMuted" style={styles.pickerEmpty}>
+                  등록된 현장이 없습니다.
+                </Text>
               ) : (
                 allFields.map((f) => (
                   <Pressable
@@ -329,15 +340,16 @@ export default function FieldReportEditor() {
                     ]}
                   >
                     <Text
-                      style={[
-                        styles.pickerItemText,
-                        f.id === fieldId && styles.pickerItemTextActive,
-                      ]}
+                      variant="bodySm"
+                      weight={f.id === fieldId ? 'bold' : 'semibold'}
+                      color={f.id === fieldId ? 'primary' : 'text'}
                     >
                       {f.address}
                     </Text>
                     {f.addressDetail ? (
-                      <Text style={styles.pickerItemMeta}>{f.addressDetail}</Text>
+                      <Text variant="caption" color="textMuted" style={styles.pickerItemMeta}>
+                        {f.addressDetail}
+                      </Text>
                     ) : null}
                   </Pressable>
                 ))
@@ -361,27 +373,14 @@ export default function FieldReportEditor() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   scroll: { padding: spacing.xl, paddingBottom: spacing.xxl },
-  heading: {
-    fontSize: fontSize.xl,
-    fontWeight: fontWeight.heavy,
-    color: colors.text,
-    marginBottom: spacing.md,
-    lineHeight: lineHeight.xl,
-  },
+  heading: { marginBottom: spacing.md },
   label: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    fontWeight: fontWeight.bold,
     marginTop: spacing.lg,
     marginBottom: spacing.sm,
   },
   readonly: {
     backgroundColor: colors.surfaceMuted,
     borderWidth: 0,
-  },
-  readonlyText: {
-    fontSize: fontSize.base,
-    color: colors.text,
   },
   fieldPickBtn: {
     flexDirection: 'row',
@@ -395,27 +394,11 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
-  fieldPickText: {
-    flex: 1,
-    fontSize: fontSize.base,
-    color: colors.text,
-    fontWeight: fontWeight.semibold,
-  },
-  fieldPickPlaceholder: {
-    flex: 1,
-    fontSize: fontSize.base,
-    color: colors.textMuted,
-    fontWeight: fontWeight.bold,
-  },
+  fieldPickText: { flex: 1 },
   titleField: { marginTop: spacing.md },
   phaseBox: {
     marginTop: spacing.lg,
     gap: spacing.sm,
-  },
-  phaseLabel: {
-    fontSize: fontSize.sm,
-    color: colors.text,
-    fontWeight: fontWeight.bold,
   },
   phasePhoto: {
     width: '100%',
@@ -430,11 +413,10 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderStyle: 'dashed',
   },
-  phasePhotoEmptyText: { fontSize: fontSize.sm, color: colors.textMuted },
   phaseActions: { flexDirection: 'row', gap: spacing.sm },
   phaseBtnFlex: { flex: 1 },
   captionField: { marginTop: spacing.sm },
-  error: { color: colors.danger, fontSize: fontSize.sm, marginTop: spacing.md },
+  error: { marginTop: spacing.md },
   submit: { marginTop: spacing.xl },
   // picker modal
   pickerBackdrop: {
@@ -453,18 +435,9 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     gap: spacing.md,
   },
-  pickerTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.bold,
-    color: colors.text,
-  },
   pickerList: { flexGrow: 0 },
   pickerListContent: { gap: spacing.xs, paddingVertical: spacing.xs },
-  pickerEmpty: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    paddingVertical: spacing.md,
-  },
+  pickerEmpty: { paddingVertical: spacing.md },
   pickerItem: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
@@ -477,14 +450,5 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
     backgroundColor: colors.primaryMuted,
   },
-  pickerItemText: {
-    fontSize: fontSize.sm,
-    color: colors.text,
-    fontWeight: fontWeight.semibold,
-  },
-  pickerItemTextActive: {
-    color: colors.primary,
-    fontWeight: fontWeight.bold,
-  },
-  pickerItemMeta: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: 2 },
+  pickerItemMeta: { marginTop: 2 },
 });
