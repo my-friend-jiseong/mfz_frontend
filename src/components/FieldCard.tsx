@@ -1,7 +1,8 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '@/components/ui/Text';
 import { FIELD_STATUS_LABEL, type Field } from '@/types/entities';
 import { colors } from '@/theme/colors';
-import { spacing, radius, fontSize } from '@/theme/spacing';
+import { spacing, radius } from '@/theme/spacing';
 import { withAlpha } from '@/theme/withAlpha';
 
 interface Props {
@@ -21,17 +22,21 @@ export function FieldCard({ field, onPress }: Props) {
     <Pressable onPress={onPress} style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
       <View style={styles.header}>
         <View style={[styles.statusChip, { backgroundColor: withAlpha(statusColor, 0.13) }]}>
-          <Text style={[styles.statusShape, { color: statusColor }]}>
+          <Text variant="caption" style={{ color: statusColor }}>
             {STATUS_SHAPE[field.status]}
           </Text>
-          <Text style={[styles.statusText, { color: statusColor }]}>
+          <Text variant="caption" weight="semibold" style={{ color: statusColor }}>
             {FIELD_STATUS_LABEL[field.status]}
           </Text>
         </View>
       </View>
-      <Text style={styles.address}>{field.address}</Text>
+      <Text variant="body" weight="semibold">
+        {field.address}
+      </Text>
       {field.addressDetail ? (
-        <Text style={styles.detail}>{field.addressDetail}</Text>
+        <Text variant="bodySm" color="textMuted" style={styles.detail}>
+          {field.addressDetail}
+        </Text>
       ) : null}
     </Pressable>
   );
@@ -59,12 +64,5 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     gap: 4,
   },
-  statusShape: { fontSize: fontSize.xs },
-  statusText: { fontSize: fontSize.xs, fontWeight: '600' },
-  address: { fontSize: fontSize.base, color: colors.text, fontWeight: '600' },
-  detail: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    marginTop: 2,
-  },
+  detail: { marginTop: 2 },
 });

@@ -6,9 +6,9 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
+import { Text } from '@/components/ui/Text';
 import { useRouter } from 'expo-router';
 import { useFieldStore } from '@/stores/fieldStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -29,7 +29,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { colors } from '@/theme/colors';
-import { spacing, radius, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
+import { spacing, radius } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
 import { FilterChip } from '@/components/ui/FilterChip';
 
@@ -180,14 +180,22 @@ export default function NewField() {
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <View style={styles.stepRow}>
           <View style={[styles.stepDot, styles.stepDotActive]}>
-            <Text style={styles.stepDotText}>1</Text>
+            <Text variant="caption" weight="bold" color="onPrimary">
+              1
+            </Text>
           </View>
           <View style={[styles.stepLine, step === 2 && styles.stepLineActive]} />
           <View style={[styles.stepDot, step === 2 && styles.stepDotActive]}>
-            <Text style={[styles.stepDotText, step !== 2 && styles.stepDotTextMuted]}>2</Text>
+            <Text
+              variant="caption"
+              weight="bold"
+              color={step === 2 ? 'onPrimary' : 'textMuted'}
+            >
+              2
+            </Text>
           </View>
         </View>
-        <Text style={styles.title}>
+        <Text variant="h3" style={styles.title}>
           {step === 1 ? '주소 검색' : '상세 입력'}
         </Text>
 
@@ -209,19 +217,27 @@ export default function NewField() {
               </View>
             ) : null}
 
-            {searchError ? <Text style={styles.errorText}>{searchError}</Text> : null}
+            {searchError ? (
+              <Text variant="caption" color="danger" style={styles.errorText}>
+                {searchError}
+              </Text>
+            ) : null}
 
             {providerUnavailable ? (
               <Card padding="md" style={styles.warnBox}>
-                <Text style={styles.warnTitle}>주소 검색 일시 장애</Text>
-                <Text style={styles.warnBody}>
+                <Text variant="bodySm" weight="bold">
+                  주소 검색 일시 장애
+                </Text>
+                <Text variant="caption" color="textMuted" style={styles.warnBody}>
                   카카오 주소 서비스가 일시적으로 응답하지 않습니다. 잠시 후 다시 시도하거나 좌표를 직접 입력하세요.
                 </Text>
               </Card>
             ) : null}
 
             {showEmptyHint ? (
-              <Text style={styles.hint}>{emptyMessage ?? '검색 결과가 없습니다'}</Text>
+              <Text variant="caption" color="textMuted" style={styles.hint}>
+                {emptyMessage ?? '검색 결과가 없습니다'}
+              </Text>
             ) : null}
 
             <View style={styles.resultList}>
@@ -237,14 +253,16 @@ export default function NewField() {
                       pressed && { opacity: opacity.pressed },
                     ]}
                   >
-                    <Text style={styles.addrText}>
+                    <Text variant="body" weight="semibold">
                       {r.roadAddress || r.jibunAddress}
                       {r.buildingName ? ` (${r.buildingName})` : ''}
                     </Text>
                     {r.roadAddress && r.jibunAddress && r.roadAddress !== r.jibunAddress ? (
-                      <Text style={styles.addrJibun}>지번: {r.jibunAddress}</Text>
+                      <Text variant="caption" color="textMuted" style={styles.addrJibun}>
+                        지번: {r.jibunAddress}
+                      </Text>
                     ) : null}
-                    <Text style={styles.addrCoord}>
+                    <Text variant="caption" color="textMuted" style={styles.addrCoord}>
                       {sub ? `${sub} · ` : ''}
                       {r.lat.toFixed(4)}, {r.lng.toFixed(4)}
                     </Text>
@@ -289,16 +307,22 @@ export default function NewField() {
             </Button>
 
             <Card padding="md" style={styles.selectedBox}>
-              <Text style={styles.selectedLabel}>선택한 주소</Text>
-              <Text style={styles.selectedAddr}>{selected?.display}</Text>
+              <Text variant="caption" weight="bold" color="primary">
+                선택한 주소
+              </Text>
+              <Text variant="body" weight="semibold" style={styles.selectedAddr}>
+                {selected?.display}
+              </Text>
               {selected ? (
-                <Text style={styles.selectedCoord}>
+                <Text variant="caption" color="textMuted" style={styles.selectedCoord}>
                   {selected.lat.toFixed(4)}, {selected.lng.toFixed(4)}
                 </Text>
               ) : null}
             </Card>
 
-            <Text style={styles.label}>프로젝트 (선택)</Text>
+            <Text variant="bodySm" weight="bold" color="textMuted" style={styles.label}>
+              프로젝트 (선택)
+            </Text>
             <ProjectPicker value={projectId} onChange={setProjectId} />
 
             <Input
@@ -317,7 +341,9 @@ export default function NewField() {
               containerStyle={styles.fieldGap}
             />
 
-            <Text style={styles.label}>상태</Text>
+            <Text variant="bodySm" weight="bold" color="textMuted" style={styles.label}>
+              상태
+            </Text>
             <View style={styles.statusRow}>
               {FIELD_STATUS_VALUES.map((s) => (
                 <FilterChip
@@ -366,12 +392,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   stepDotActive: { backgroundColor: colors.primary },
-  stepDotText: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.bold,
-    color: colors.onPrimary,
-  },
-  stepDotTextMuted: { color: colors.textMuted },
   stepLine: {
     flex: 1,
     height: 2,
@@ -379,45 +399,22 @@ const styles = StyleSheet.create({
     borderRadius: 1,
   },
   stepLineActive: { backgroundColor: colors.primary },
-  title: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.bold,
-    color: colors.text,
-    marginBottom: spacing.lg,
-    lineHeight: lineHeight.lg,
-  },
+  title: { marginBottom: spacing.lg },
   label: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    fontWeight: fontWeight.semibold,
     marginTop: spacing.md,
     marginBottom: spacing.xs,
   },
   fieldGap: { marginTop: spacing.md },
-  hint: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: spacing.sm },
+  hint: { marginTop: spacing.sm },
   loadingRow: { marginTop: spacing.sm },
-  errorText: {
-    fontSize: fontSize.xs,
-    color: colors.danger,
-    marginTop: spacing.sm,
-  },
+  errorText: { marginTop: spacing.sm },
   warnBox: {
     backgroundColor: colors.warningMuted,
     borderWidth: 1,
     borderColor: colors.warning,
     marginTop: spacing.sm,
   },
-  warnTitle: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.bold,
-    color: colors.text,
-  },
-  warnBody: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
-    marginTop: 4,
-    lineHeight: lineHeight.xs,
-  },
+  warnBody: { marginTop: 4 },
   resultList: { marginTop: spacing.md },
   addrItem: {
     backgroundColor: colors.surface,
@@ -427,36 +424,16 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     marginBottom: spacing.xs,
   },
-  addrText: {
-    fontSize: fontSize.base,
-    color: colors.text,
-    fontWeight: fontWeight.semibold,
-  },
-  addrJibun: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: 2 },
-  addrCoord: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: 2 },
+  addrJibun: { marginTop: 2 },
+  addrCoord: { marginTop: 2 },
   manualLink: { marginTop: spacing.md, alignSelf: 'flex-start' },
   backBtn: { alignSelf: 'flex-start', marginBottom: spacing.md },
   selectedBox: {
     backgroundColor: colors.primaryMuted,
     marginBottom: spacing.md,
   },
-  selectedLabel: {
-    fontSize: fontSize.xs,
-    color: colors.primary,
-    fontWeight: fontWeight.bold,
-  },
-  selectedAddr: {
-    fontSize: fontSize.base,
-    color: colors.text,
-    marginTop: 2,
-    fontWeight: fontWeight.semibold,
-    lineHeight: lineHeight.base,
-  },
-  selectedCoord: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
-    marginTop: 4,
-  },
+  selectedAddr: { marginTop: 2 },
+  selectedCoord: { marginTop: 4 },
   statusRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
   submit: { marginTop: spacing.xl },
 });

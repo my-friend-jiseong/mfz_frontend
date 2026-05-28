@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import { Alert, StyleSheet, View } from 'react-native';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { Text } from '@/components/ui/Text';
 import {
   isInKorea,
   KR_LAT,
@@ -9,7 +10,7 @@ import {
   type SelectedAddress,
 } from '@/utils/addressSearch';
 import { colors } from '@/theme/colors';
-import { spacing, fontSize, fontWeight } from '@/theme/spacing';
+import { spacing } from '@/theme/spacing';
 
 interface Props {
   onResolve: (addr: SelectedAddress) => void;
@@ -62,7 +63,9 @@ export function ManualCoordinateForm({ onResolve }: Props) {
 
   return (
     <View style={styles.box}>
-      <Text style={styles.title}>좌표 직접 입력</Text>
+      <Text variant="body" weight="bold" style={styles.title}>
+        좌표 직접 입력
+      </Text>
       <Input
         label="도로명 주소"
         value={road}
@@ -114,12 +117,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
-  title: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.bold,
-    color: colors.text,
-    marginBottom: spacing.sm,
-  },
+  title: { marginBottom: spacing.sm },
   field: { marginTop: spacing.sm },
   coordRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
   coordHalf: { flex: 1 },

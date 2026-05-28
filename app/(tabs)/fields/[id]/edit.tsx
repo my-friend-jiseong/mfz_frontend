@@ -6,9 +6,9 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
+import { Text } from '@/components/ui/Text';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFieldStore } from '@/stores/fieldStore';
 import { safeBack } from '@/utils/backNavigation';
@@ -33,7 +33,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { colors } from '@/theme/colors';
-import { spacing, radius, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
+import { spacing, radius } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
 import { FilterChip } from '@/components/ui/FilterChip';
 
@@ -300,7 +300,7 @@ export default function EditField() {
     >
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <View style={styles.labelRow}>
-          <Text style={styles.label}>주소</Text>
+          <Text variant="bodySm" weight="semibold" color="textMuted" style={styles.label}>주소</Text>
           {!editingAddress && !newAddress ? (
             <Button
               onPress={handleStartAddressEdit}
@@ -328,11 +328,11 @@ export default function EditField() {
           padding="md"
           style={[styles.readonly, newAddress ? styles.readonlyChanged : undefined]}
         >
-          <Text style={styles.readonlyText}>
+          <Text variant="body">
             {newAddress ? newAddress.display : field.address}
           </Text>
           {newAddress ? (
-            <Text style={styles.changedHint}>
+            <Text variant="caption" weight="semibold" color="primary" style={styles.changedHint}>
               변경 예정 — 저장 시 적용 (좌표 {newAddress.lat.toFixed(4)},{' '}
               {newAddress.lng.toFixed(4)})
             </Text>
@@ -342,7 +342,7 @@ export default function EditField() {
         {editingAddress ? (
           <Card padding="md" style={styles.addrSearchBox}>
             <View style={styles.searchHead}>
-              <Text style={styles.label}>새 주소 검색</Text>
+              <Text variant="bodySm" weight="semibold" color="textMuted" style={styles.label}>새 주소 검색</Text>
               <Button
                 onPress={handleCancelAddressEdit}
                 disabled={submitting}
@@ -366,17 +366,17 @@ export default function EditField() {
                 <LoadingState inline label="검색 중" />
               </View>
             ) : null}
-            {searchError ? <Text style={styles.fieldError}>{searchError}</Text> : null}
+            {searchError ? <Text variant="caption" color="danger" style={styles.fieldError}>{searchError}</Text> : null}
             {providerUnavailable ? (
               <Card padding="md" style={styles.warnBox}>
-                <Text style={styles.warnTitle}>주소 검색 일시 장애</Text>
-                <Text style={styles.warnBody}>
+                <Text variant="bodySm" weight="bold">주소 검색 일시 장애</Text>
+                <Text variant="caption" color="textMuted" style={styles.warnBody}>
                   카카오 주소 서비스가 일시적으로 응답하지 않습니다. 잠시 후 다시 시도하거나 좌표를 직접 입력하세요.
                 </Text>
               </Card>
             ) : null}
             {noResults ? (
-              <Text style={styles.hint}>{emptyMessage ?? '검색 결과가 없습니다'}</Text>
+              <Text variant="caption" color="textMuted" style={styles.hint}>{emptyMessage ?? '검색 결과가 없습니다'}</Text>
             ) : null}
             <View style={styles.resultList}>
               {results.map((r, idx) => {
@@ -391,16 +391,16 @@ export default function EditField() {
                       pressed && { opacity: opacity.pressed },
                     ]}
                   >
-                    <Text style={styles.addrText}>
+                    <Text variant="body" weight="semibold">
                       {r.roadAddress || r.jibunAddress}
                       {r.buildingName ? ` (${r.buildingName})` : ''}
                     </Text>
                     {r.roadAddress &&
                     r.jibunAddress &&
                     r.roadAddress !== r.jibunAddress ? (
-                      <Text style={styles.addrJibun}>지번: {r.jibunAddress}</Text>
+                      <Text variant="caption" color="textMuted" style={styles.addrJibun}>지번: {r.jibunAddress}</Text>
                     ) : null}
-                    <Text style={styles.addrCoord}>
+                    <Text variant="caption" color="textMuted" style={styles.addrCoord}>
                       {sub ? `${sub} · ` : ''}
                       {r.lat.toFixed(4)}, {r.lng.toFixed(4)}
                     </Text>
@@ -432,10 +432,10 @@ export default function EditField() {
         ) : null}
 
         {fieldErrors.address ? (
-          <Text style={styles.fieldError}>{fieldErrors.address}</Text>
+          <Text variant="caption" color="danger" style={styles.fieldError}>{fieldErrors.address}</Text>
         ) : null}
 
-        <Text style={styles.label}>프로젝트 (선택)</Text>
+        <Text variant="bodySm" weight="semibold" color="textMuted" style={styles.label}>프로젝트 (선택)</Text>
         <ProjectPicker
           value={projectId}
           onChange={setProjectId}
@@ -457,8 +457,8 @@ export default function EditField() {
         />
 
         <View style={styles.labelRow}>
-          <Text style={styles.label}>상세 주소</Text>
-          <Text style={styles.counter}>
+          <Text variant="bodySm" weight="semibold" color="textMuted" style={styles.label}>상세 주소</Text>
+          <Text variant="caption" weight="semibold" color="textMuted">
             {addressDetail.length} / {DETAIL_MAX}
           </Text>
         </View>
@@ -474,7 +474,7 @@ export default function EditField() {
           error={fieldErrors.detailAddress}
         />
 
-        <Text style={styles.label}>상태</Text>
+        <Text variant="bodySm" weight="semibold" color="textMuted" style={styles.label}>상태</Text>
         <View style={styles.statusRow}>
           {FIELD_STATUS_VALUES.map((s) => (
             <FilterChip
@@ -491,10 +491,10 @@ export default function EditField() {
           ))}
         </View>
         {fieldErrors.status ? (
-          <Text style={styles.fieldError}>{fieldErrors.status}</Text>
+          <Text variant="caption" color="danger" style={styles.fieldError}>{fieldErrors.status}</Text>
         ) : null}
 
-        {globalError ? <Text style={styles.error}>{globalError}</Text> : null}
+        {globalError ? <Text variant="bodySm" color="danger" style={styles.error}>{globalError}</Text> : null}
 
         <Button
           onPress={handleSave}
@@ -539,44 +539,21 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   label: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    fontWeight: fontWeight.semibold,
     marginTop: spacing.md,
     marginBottom: spacing.xs,
-  },
-  counter: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
-    fontWeight: fontWeight.semibold,
   },
   fieldGap: { marginTop: spacing.sm },
   readonly: {
     backgroundColor: colors.surfaceMuted,
-  },
-  readonlyText: {
-    fontSize: fontSize.base,
-    color: colors.text,
-    lineHeight: lineHeight.base,
   },
   readonlyChanged: {
     backgroundColor: colors.primaryMuted,
     borderWidth: 1,
     borderColor: colors.primary,
   },
-  changedHint: {
-    fontSize: fontSize.xs,
-    color: colors.primary,
-    marginTop: spacing.xs,
-    fontWeight: fontWeight.semibold,
-  },
-  fieldError: {
-    color: colors.danger,
-    fontSize: fontSize.xs,
-    marginTop: 4,
-    marginLeft: 4,
-  },
-  error: { color: colors.danger, fontSize: fontSize.sm, marginTop: spacing.md },
+  changedHint: { marginTop: spacing.xs },
+  fieldError: { marginTop: 4, marginLeft: 4 },
+  error: { marginTop: spacing.md },
   statusRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
   submit: { marginTop: spacing.xl },
   dangerBtn: { marginTop: spacing.md },
@@ -599,14 +576,8 @@ const styles = StyleSheet.create({
     borderColor: colors.warning,
     marginTop: spacing.sm,
   },
-  warnTitle: { fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.text },
-  warnBody: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
-    marginTop: 4,
-    lineHeight: lineHeight.xs,
-  },
-  hint: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: spacing.sm },
+  warnBody: { marginTop: 4 },
+  hint: { marginTop: spacing.sm },
   resultList: { marginTop: spacing.sm },
   addrItem: {
     backgroundColor: colors.background,
@@ -616,12 +587,7 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     marginBottom: spacing.xs,
   },
-  addrText: {
-    fontSize: fontSize.base,
-    color: colors.text,
-    fontWeight: fontWeight.semibold,
-  },
-  addrJibun: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: 2 },
-  addrCoord: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: 2 },
+  addrJibun: { marginTop: 2 },
+  addrCoord: { marginTop: 2 },
   manualLink: { marginTop: spacing.md, alignSelf: 'flex-start' },
 });

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '@/components/ui/Text';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import { Ionicons } from '@expo/vector-icons';
 import { useFieldStore } from '@/stores/fieldStore';
@@ -20,7 +21,7 @@ import { VISIT_STATUS_BADGE } from '@/theme/statusBadge';
 import { fmtDateTime } from '@/utils/datetime';
 import { Input } from '@/components/ui/Input';
 import { colors } from '@/theme/colors';
-import { spacing, radius, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
+import { spacing, radius } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
 import { withAlpha } from '@/theme/withAlpha';
 import {
@@ -151,7 +152,7 @@ export default function FieldDetail() {
         style={styles.visitCard}
       >
         <View style={styles.visitHead}>
-          <Text style={styles.visitDate}>{fmtDateTime(item.visitedAt)}</Text>
+          <Text variant="bodySm">{fmtDateTime(item.visitedAt)}</Text>
           <Badge label={VISIT_STATUS_LABEL[item.status]} tone={badge.tone} shape={badge.shape} />
         </View>
       </Card>
@@ -170,31 +171,37 @@ export default function FieldDetail() {
           pressed && { opacity: opacity.pressed },
         ]}
       >
-        <Text style={[styles.statusText, { color: statusFg }]}>
+        <Text variant="caption" weight="bold" style={{ color: statusFg }}>
           {FIELD_STATUS_LABEL[field.status]}
         </Text>
         <Ionicons name="chevron-down" size={14} color={statusFg} />
       </Pressable>
 
-      <Text style={styles.addr}>{field.address}</Text>
+      <Text variant="h3" style={styles.addr}>
+        {field.address}
+      </Text>
       {field.addressDetail ? (
-        <Text style={styles.detail}>{field.addressDetail}</Text>
+        <Text variant="body">{field.addressDetail}</Text>
       ) : null}
       {field.projectName ? (
         <View style={styles.metaRow}>
           <Ionicons name="folder-outline" size={14} color={colors.textMuted} />
-          <Text style={styles.metaText}>{field.projectName}</Text>
+          <Text variant="bodySm" color="textMuted">
+            {field.projectName}
+          </Text>
         </View>
       ) : null}
       {field.categories && field.categories.length > 0 ? (
         <View style={styles.metaRow}>
           <Ionicons name="pricetags-outline" size={14} color={colors.textMuted} />
-          <Text style={styles.metaText}>{field.categories.join(', ')}</Text>
+          <Text variant="bodySm" color="textMuted">
+            {field.categories.join(', ')}
+          </Text>
         </View>
       ) : null}
 
       <View style={styles.coordRow}>
-        <Text style={styles.coord}>
+        <Text variant="caption" color="textMuted">
           좌표: {field.latitude.toFixed(4)}, {field.longitude.toFixed(4)}
         </Text>
         <Button
@@ -233,10 +240,10 @@ export default function FieldDetail() {
         </Button>
       </View>
 
-      <Text style={styles.sectionTitle}>
+      <Text variant="bodySm" weight="bold" color="textMuted" style={styles.sectionTitle}>
         현장 직접 메모 ({directTextMemos.length})
       </Text>
-      <Text style={styles.directHint}>
+      <Text variant="caption" color="textMuted" style={styles.directHint}>
         외근 진행 중이 아닐 때도 이 현장에 메모를 남길 수 있습니다.
       </Text>
       <View style={styles.memoInputRow}>
@@ -261,8 +268,10 @@ export default function FieldDetail() {
         <View style={styles.memoList}>
           {directTextMemos.map((m) => (
             <Card key={m.id} padding="md" style={styles.memoItem}>
-              <Text style={styles.memoText}>{m.text}</Text>
-              <Text style={styles.memoMeta}>{fmtDateTime(m.createdAt)}</Text>
+              <Text variant="bodySm">{m.text}</Text>
+              <Text variant="caption" color="textMuted" style={styles.memoMeta}>
+                {fmtDateTime(m.createdAt)}
+              </Text>
             </Card>
           ))}
         </View>
@@ -282,7 +291,9 @@ export default function FieldDetail() {
 
       <PhotoGrid photos={directPhotos} />
 
-      <Text style={styles.sectionTitle}>방문 이력 ({visits.length})</Text>
+      <Text variant="bodySm" weight="bold" color="textMuted" style={styles.sectionTitle}>
+        방문 이력 ({visits.length})
+      </Text>
     </View>
   );
 
@@ -323,31 +334,12 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     borderWidth: 1,
   },
-  statusText: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.bold,
-  },
-  addr: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.bold,
-    color: colors.text,
-    marginTop: spacing.sm,
-    lineHeight: lineHeight.lg,
-  },
-  detail: {
-    fontSize: fontSize.base,
-    color: colors.text,
-    lineHeight: lineHeight.base,
-  },
+  addr: { marginTop: spacing.sm },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
     marginTop: 2,
-  },
-  metaText: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
   },
   coordRow: {
     flexDirection: 'row',
@@ -355,27 +347,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginTop: spacing.sm,
   },
-  coord: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
-  },
   actions: {
     flexDirection: 'row',
     gap: spacing.sm,
     marginTop: spacing.md,
   },
   actionFlex: { flex: 1 },
-  sectionTitle: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.bold,
-    color: colors.textMuted,
-    marginTop: spacing.lg,
-  },
-  directHint: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
-    marginTop: spacing.xs,
-  },
+  sectionTitle: { marginTop: spacing.lg },
+  directHint: { marginTop: spacing.xs },
   memoInputRow: {
     flexDirection: 'row',
     gap: spacing.sm,
@@ -385,16 +364,7 @@ const styles = StyleSheet.create({
   memoInputWrap: { flex: 1 },
   memoList: { marginTop: spacing.sm, gap: spacing.xs },
   memoItem: {},
-  memoText: {
-    fontSize: fontSize.sm,
-    color: colors.text,
-    lineHeight: lineHeight.sm,
-  },
-  memoMeta: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
-    marginTop: spacing.xs,
-  },
+  memoMeta: { marginTop: spacing.xs },
   photoBtn: { marginTop: spacing.sm },
   list: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
   visitCard: { marginBottom: spacing.xs },
@@ -402,9 +372,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-  },
-  visitDate: {
-    fontSize: fontSize.sm,
-    color: colors.text,
   },
 });

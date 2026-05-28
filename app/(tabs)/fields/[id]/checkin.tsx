@@ -6,9 +6,9 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
+import { Text } from '@/components/ui/Text';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFieldStore } from '@/stores/fieldStore';
@@ -26,7 +26,7 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { colors } from '@/theme/colors';
-import { spacing, radius, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
+import { spacing, radius } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
 import { withAlpha } from '@/theme/withAlpha';
 
@@ -126,15 +126,23 @@ export default function FieldCheckin() {
         <Card padding="lg" style={styles.header}>
           <View style={styles.headerTitleRow}>
             <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
-            <Text style={styles.headerTitle}>체크인 완료</Text>
+            <Text variant="bodySm" weight="bold" color="primary">
+              체크인 완료
+            </Text>
           </View>
-          <Text style={styles.headerSub}>{field.address}</Text>
+          <Text variant="body" weight="semibold" style={styles.headerSub}>
+            {field.address}
+          </Text>
           {field.addressDetail ? (
-            <Text style={styles.headerSubMuted}>{field.addressDetail}</Text>
+            <Text variant="bodySm" color="textMuted" style={styles.headerSubMuted}>
+              {field.addressDetail}
+            </Text>
           ) : null}
         </Card>
 
-        <Text style={styles.sectionTitle}>방문 결과 상태</Text>
+        <Text variant="bodySm" weight="bold" color="textMuted" style={styles.sectionTitle}>
+          방문 결과 상태
+        </Text>
         <View style={styles.statusGrid}>
           {VISIT_STATUS_VALUES.map((s) => {
             const active = status === s;
@@ -152,18 +160,15 @@ export default function FieldCheckin() {
                 ]}
               >
                 <Text
-                  style={[
-                    styles.statusShape,
-                    active ? { color: c } : { color: colors.textSubtle },
-                  ]}
+                  variant="caption"
+                  style={active ? { color: c } : { color: colors.textSubtle }}
                 >
                   {VISIT_SHAPE[s]}
                 </Text>
                 <Text
-                  style={[
-                    styles.statusChipText,
-                    active && { color: c, fontWeight: fontWeight.bold },
-                  ]}
+                  variant="bodySm"
+                  weight={active ? 'bold' : 'regular'}
+                  style={active ? { color: c } : { color: colors.textMuted }}
                 >
                   {VISIT_STATUS_LABEL[s]}
                 </Text>
@@ -227,28 +232,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs,
   },
-  headerTitle: {
-    fontSize: fontSize.sm,
-    color: colors.primary,
-    fontWeight: fontWeight.bold,
-  },
-  headerSub: {
-    fontSize: fontSize.base,
-    color: colors.text,
-    marginTop: spacing.xs,
-    lineHeight: lineHeight.base,
-    fontWeight: fontWeight.semibold,
-  },
-  headerSubMuted: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    marginTop: 2,
-    lineHeight: lineHeight.sm,
-  },
+  headerSub: { marginTop: spacing.xs },
+  headerSubMuted: { marginTop: 2 },
   sectionTitle: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    fontWeight: fontWeight.bold,
     marginTop: spacing.sm,
     marginBottom: spacing.sm,
   },
@@ -268,8 +254,6 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
-  statusShape: { fontSize: fontSize.xs },
-  statusChipText: { fontSize: fontSize.sm, color: colors.textMuted },
   reasonBox: { marginTop: spacing.md },
   reasonField: { minHeight: 72, textAlignVertical: 'top' },
   toField: { marginTop: spacing.xl },
