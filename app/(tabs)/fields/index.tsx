@@ -91,6 +91,7 @@ export default function FieldsList() {
           onChangeText={setSearch}
           placeholder="주소·상세주소 검색"
           autoCapitalize="none"
+          clearButtonMode="while-editing"
           leftSlot={<Ionicons name="search" size={18} color={colors.textMuted} />}
         />
         <View style={styles.chipRow}>

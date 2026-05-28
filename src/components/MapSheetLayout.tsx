@@ -48,7 +48,12 @@ export function MapSheetLayout({
     useCallback(() => {
       if (!shouldSync) return;
       const target = useUiStore.getState().sheetIndex;
-      sheetRef.current?.snapToIndex(target);
+      // mount race 차단 — sheetRef 가 ready 되기 전에 snapToIndex 가 호출되면
+      // 시트가 startIndex(18%) 에 머물러 흰 화면이 됨. 한 프레임 미뤄 ref 부착 후 호출.
+      const handle = requestAnimationFrame(() => {
+        sheetRef.current?.snapToIndex(target);
+      });
+      return () => cancelAnimationFrame(handle);
     }, [shouldSync]),
   );
 

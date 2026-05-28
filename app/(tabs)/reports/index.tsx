@@ -72,9 +72,8 @@ export default function ReportsIndex() {
   }, [allReports, allTrips, userId]);
 
   return (
-    // initialIndex 명시 — 다른 탭과 sheetIndex 공유 회피.
-    // shouldSync 일 때 첫 마운트 race 로 시트가 18% 에 머무는 흰 화면 버그 방지.
-    <MapSheetLayout title="보고서" initialIndex={1}>
+    // sheet 공유 모드 — MapSheetLayout 의 race 가 근원에서 해결됐으므로 initialIndex 생략.
+    <MapSheetLayout title="보고서">
       <BottomSheetFlatList
         data={groups}
         keyExtractor={(g) => String(g.trip.id)}

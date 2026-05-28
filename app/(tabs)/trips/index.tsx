@@ -8,7 +8,6 @@ import { useVisitStore } from '@/stores/visitStore';
 import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
 import { Card } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { colors } from '@/theme/colors';
 import { spacing, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
@@ -50,19 +49,17 @@ export default function TripsList() {
     return <Redirect href="/(tabs)/trips/active" />;
   }
 
+  // 라인 46 의 <Redirect/> 로 activeTripId 있으면 이 화면에 도달 못함 →
+  // 'isActive Badge' 분기는 영구 dead. 진행 중 외근은 외근 탭 진입 시 active 화면이 직행으로 받음.
   const renderItem = ({ item }: { item: Trip }) => {
     const visitCount = allVisits.filter((v) => v.tripId === item.id).length;
-    const isActive = item.id === activeTripId;
     const dateText = fmtDate(item.startedAt);
     return (
       <Card
         onPress={() => router.push(`/(tabs)/trips/${item.id}` as never)}
         style={styles.cardSpacing}
       >
-        <View style={styles.row}>
-          <Text style={styles.title}>{item.title || dateText}</Text>
-          {isActive ? <Badge tone="danger" shape="circle" label="진행 중" /> : null}
-        </View>
+        <Text style={styles.title}>{item.title || dateText}</Text>
         <Text style={styles.meta}>
           {item.title ? `${dateText} · ` : ''}
           {fmtDuration(item.startedAt, item.endedAt)} · 방문 {visitCount}건
@@ -103,14 +100,7 @@ export default function TripsList() {
 const styles = StyleSheet.create({
   list: { padding: spacing.lg, paddingBottom: 120 },
   cardSpacing: { marginBottom: spacing.sm },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-  },
   title: {
-    flex: 1,
     fontSize: fontSize.base,
     fontWeight: fontWeight.bold,
     color: colors.text,

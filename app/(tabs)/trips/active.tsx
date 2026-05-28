@@ -68,11 +68,13 @@ export default function ActiveTrip() {
   const [elapsedTick, setElapsedTick] = useState(0);
 
   // 외근 진행 시간을 1분 주기로 갱신. 화면이 active 일 때만 동작.
+  // deps 를 activeTripId (스칼라) 로 좁힘 — 이전엔 activeTrip 객체 (allTrips memo 결과)
+  // 가 다른 store mutation 마다 새 reference 가 되어 인터벌이 분 단위로 리셋되는 회로.
   useEffect(() => {
-    if (!activeTrip) return;
+    if (!activeTripId) return;
     const id = setInterval(() => setElapsedTick((n) => n + 1), 60_000);
     return () => clearInterval(id);
-  }, [activeTrip]);
+  }, [activeTripId]);
 
   const destinations = useMemo<Destination[]>(() => {
     if (activeTripId === null) return [];
