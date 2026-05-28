@@ -6,7 +6,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   TextInput,
   View,
 } from 'react-native';
@@ -14,9 +13,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '@/stores/authStore';
 import { colors } from '@/theme/colors';
-import { spacing, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
+import { spacing } from '@/theme/spacing';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Text } from '@/components/ui/Text';
 
 interface FieldErrors {
   email?: string;
@@ -80,8 +80,17 @@ export default function Login() {
     >
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
-          <Text style={styles.brand}>일가요</Text>
-          <Text style={styles.tagline}>현장 방문 업무를 함께합니다</Text>
+          <Text variant="h1" color="primary" align="center">
+            일가요
+          </Text>
+          <Text
+            variant="bodySm"
+            color="textMuted"
+            align="center"
+            style={styles.tagline}
+          >
+            현장 방문 업무를 함께합니다
+          </Text>
         </View>
 
         <View style={styles.form}>
@@ -130,7 +139,11 @@ export default function Login() {
             }
           />
 
-          {globalError ? <Text style={styles.error}>{globalError}</Text> : null}
+          {globalError ? (
+            <Text variant="bodySm" color="danger">
+              {globalError}
+            </Text>
+          ) : null}
 
           <Button
             onPress={handleLogin}
@@ -160,7 +173,9 @@ export default function Login() {
             }
             style={styles.subtleLink}
           >
-            <Text style={styles.subtleLinkText}>비밀번호를 잊으셨나요?</Text>
+            <Text variant="caption" weight="medium" color="textMuted">
+              비밀번호를 잊으셨나요?
+            </Text>
           </Pressable>
         </View>
       </ScrollView>
@@ -172,33 +187,11 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   scroll: { padding: spacing.xl, paddingTop: spacing.xxl * 2 },
   header: { marginBottom: spacing.xxl },
-  brand: {
-    fontSize: fontSize.xxl,
-    fontWeight: fontWeight.heavy,
-    color: colors.primary,
-    textAlign: 'center',
-    lineHeight: lineHeight.xxl,
-  },
-  tagline: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    textAlign: 'center',
-    marginTop: spacing.sm,
-    lineHeight: lineHeight.sm,
-  },
+  tagline: { marginTop: spacing.sm },
   form: { gap: spacing.md },
   submit: { marginTop: spacing.md },
-  error: {
-    color: colors.danger,
-    fontSize: fontSize.sm,
-  },
   subtleLink: {
     alignItems: 'center',
     paddingVertical: spacing.sm,
-  },
-  subtleLinkText: {
-    color: colors.textMuted,
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.medium,
   },
 });

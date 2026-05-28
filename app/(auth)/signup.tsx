@@ -6,7 +6,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   TextInput,
   View,
 } from 'react-native';
@@ -15,9 +14,10 @@ import { useRouter } from 'expo-router';
 import { useAuthStore } from '@/stores/authStore';
 import { safeBack } from '@/utils/backNavigation';
 import { colors } from '@/theme/colors';
-import { spacing, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
+import { spacing } from '@/theme/spacing';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Text } from '@/components/ui/Text';
 
 interface FieldErrors {
   email?: string;
@@ -134,7 +134,9 @@ export default function Signup() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <Text style={styles.title}>회원가입</Text>
+        <Text variant="h2" weight="heavy" style={styles.title}>
+          회원가입
+        </Text>
 
         <View style={styles.form}>
           <Input
@@ -234,15 +236,21 @@ export default function Signup() {
               size={22}
               color={agreeRequired ? colors.primary : colors.textMuted}
             />
-            <Text style={styles.agreeText}>
+            <Text variant="bodySm" style={styles.agreeText}>
               (필수) 이용약관·개인정보 처리방침·위치정보 이용약관에 동의합니다
             </Text>
           </Pressable>
           {fieldErrors.terms ? (
-            <Text style={styles.termsError}>{fieldErrors.terms}</Text>
+            <Text variant="caption" color="danger" style={styles.termsError}>
+              {fieldErrors.terms}
+            </Text>
           ) : null}
 
-          {globalError ? <Text style={styles.error}>{globalError}</Text> : null}
+          {globalError ? (
+            <Text variant="bodySm" color="danger">
+              {globalError}
+            </Text>
+          ) : null}
 
           <Button
             onPress={handleSignup}
@@ -271,13 +279,7 @@ export default function Signup() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   scroll: { padding: spacing.xl, paddingTop: spacing.xxl * 2 },
-  title: {
-    fontSize: fontSize.xl,
-    fontWeight: fontWeight.heavy,
-    color: colors.text,
-    marginBottom: spacing.xl,
-    lineHeight: lineHeight.xl,
-  },
+  title: { marginBottom: spacing.xl },
   form: { gap: spacing.md },
   agreeRow: {
     flexDirection: 'row',
@@ -285,8 +287,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     gap: spacing.sm,
   },
-  agreeText: { flex: 1, fontSize: fontSize.sm, color: colors.text, lineHeight: lineHeight.sm },
-  termsError: { color: colors.danger, fontSize: fontSize.xs, marginTop: spacing.xs },
-  error: { color: colors.danger, fontSize: fontSize.sm },
+  agreeText: { flex: 1 },
+  termsError: { marginTop: spacing.xs },
   submit: { marginTop: spacing.md },
 });
