@@ -33,7 +33,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
-import { withAlpha } from '@/theme/withAlpha';
+import { FilterChip } from '@/components/ui/FilterChip';
 
 export default function NewField() {
   const router = useRouter();
@@ -396,32 +396,15 @@ export default function NewField() {
 
             <Text style={styles.label}>상태</Text>
             <View style={styles.statusRow}>
-              {FIELD_STATUS_VALUES.map((s) => {
-                const active = status === s;
-                const c = colors.fieldStatus[s];
-                return (
-                  <Pressable
-                    key={s}
-                    onPress={() => setStatus(s)}
-                    accessibilityRole="radio"
-                    accessibilityState={{ selected: active }}
-                    style={({ pressed }) => [
-                      styles.statusChip,
-                      active && { backgroundColor: withAlpha(c, 0.13), borderColor: c },
-                      pressed && { opacity: opacity.pressed },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.statusChipText,
-                        active && { color: c, fontWeight: fontWeight.bold },
-                      ]}
-                    >
-                      {FIELD_STATUS_LABEL[s]}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+              {FIELD_STATUS_VALUES.map((s) => (
+                <FilterChip
+                  key={s}
+                  label={FIELD_STATUS_LABEL[s]}
+                  active={status === s}
+                  activeColor={colors.fieldStatus[s]}
+                  onPress={() => setStatus(s)}
+                />
+              ))}
             </View>
 
             <Button
@@ -568,14 +551,5 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   statusRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
-  statusChip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  statusChipText: { fontSize: fontSize.sm, color: colors.textMuted },
   submit: { marginTop: spacing.xl },
 });

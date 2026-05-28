@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -10,15 +10,14 @@ import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { FilterChip } from '@/components/ui/FilterChip';
 import {
   FIELD_STATUS_VALUES,
   FIELD_STATUS_LABEL,
   type FieldStatus,
 } from '@/types/entities';
 import { colors } from '@/theme/colors';
-import { spacing, radius, fontSize, fontWeight } from '@/theme/spacing';
-import { opacity } from '@/theme/motion';
-import { withAlpha } from '@/theme/withAlpha';
+import { spacing } from '@/theme/spacing';
 
 // 노션 "데이터 필터" — 기간 프리셋 (시작일·종료일 직접 입력은 후속).
 // 'default_30d' 는 백엔드 기본값(visit 기준 최근 30일).
@@ -96,74 +95,37 @@ export default function FieldsList() {
           leftSlot={<Ionicons name="search" size={18} color={colors.textMuted} />}
         />
         <View style={styles.chipRow}>
-          {FIELD_STATUS_VALUES.map((s) => {
-            const active = statusFilter.includes(s);
-            const c = colors.fieldStatus[s];
-            return (
-              <Pressable
-                key={s}
-                onPress={() => toggleStatus(s)}
-                style={({ pressed }) => [
-                  styles.chip,
-                  active && { backgroundColor: withAlpha(c, 0.13), borderColor: c },
-                  pressed && { opacity: opacity.pressed },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.chipText,
-                    active && { color: c, fontWeight: fontWeight.bold },
-                  ]}
-                >
-                  {FIELD_STATUS_LABEL[s]}
-                </Text>
-              </Pressable>
-            );
-          })}
+          {FIELD_STATUS_VALUES.map((s) => (
+            <FilterChip
+              key={s}
+              label={FIELD_STATUS_LABEL[s]}
+              active={statusFilter.includes(s)}
+              activeColor={colors.fieldStatus[s]}
+              onPress={() => toggleStatus(s)}
+            />
+          ))}
           {hasFilter ? (
-            <Pressable
+            <FilterChip
+              label="필터 해제"
+              active={false}
               onPress={() => {
                 setStatusFilter([]);
                 setRangePreset('all');
               }}
-              style={({ pressed }) => [
-                styles.chip,
-                styles.chipReset,
-                pressed && { opacity: opacity.pressed },
-              ]}
-            >
-              <Ionicons name="close" size={12} color={colors.textMuted} />
-              <Text style={styles.chipText}>필터 해제</Text>
-            </Pressable>
+              dashed
+              leftIcon="close"
+            />
           ) : null}
         </View>
         <View style={styles.chipRow}>
-          {RANGE_ORDER.map((p) => {
-            const active = rangePreset === p;
-            return (
-              <Pressable
-                key={p}
-                onPress={() => setRangePreset(p)}
-                style={({ pressed }) => [
-                  styles.chip,
-                  active && {
-                    backgroundColor: colors.primaryMuted,
-                    borderColor: colors.primary,
-                  },
-                  pressed && { opacity: opacity.pressed },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.chipText,
-                    active && { color: colors.primary, fontWeight: fontWeight.bold },
-                  ]}
-                >
-                  {RANGE_LABEL[p]}
-                </Text>
-              </Pressable>
-            );
-          })}
+          {RANGE_ORDER.map((p) => (
+            <FilterChip
+              key={p}
+              label={RANGE_LABEL[p]}
+              active={rangePreset === p}
+              onPress={() => setRangePreset(p)}
+            />
+          ))}
         </View>
       </View>
       <BottomSheetFlatList
@@ -217,19 +179,6 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     flexWrap: 'wrap',
   },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  chipReset: { borderStyle: 'dashed' },
-  chipText: { fontSize: fontSize.xs, color: colors.textMuted },
   list: { padding: spacing.lg, paddingBottom: 120 },
   ctaWrap: {
     position: 'absolute',

@@ -14,7 +14,7 @@ import { safeBack } from '@/utils/backNavigation';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
-import { withAlpha } from '@/theme/withAlpha';
+import { FilterChip } from '@/components/ui/FilterChip';
 import {
   FIELD_STATUS_VALUES,
   FIELD_STATUS_LABEL,
@@ -141,48 +141,25 @@ export default function NewTripSelect() {
           leftSlot={<Ionicons name="search" size={18} color={colors.textMuted} />}
         />
         <View style={styles.chipRow}>
-          {FIELD_STATUS_VALUES.map((s) => {
-            const active = statusFilter.includes(s);
-            const c = colors.fieldStatus[s];
-            return (
-              <Pressable
-                key={s}
-                onPress={() => toggleStatus(s)}
-                style={({ pressed }) => [
-                  styles.chip,
-                  active && { backgroundColor: withAlpha(c, 0.13), borderColor: c },
-                  pressed && { opacity: opacity.pressed },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.chipText,
-                    active && { color: c, fontWeight: fontWeight.bold },
-                  ]}
-                >
-                  {FIELD_STATUS_LABEL[s]}
-                </Text>
-              </Pressable>
-            );
-          })}
+          {FIELD_STATUS_VALUES.map((s) => (
+            <FilterChip
+              key={s}
+              label={FIELD_STATUS_LABEL[s]}
+              active={statusFilter.includes(s)}
+              activeColor={colors.fieldStatus[s]}
+              onPress={() => toggleStatus(s)}
+            />
+          ))}
           {fields.length > 0 ? (
-            <Pressable
+            <FilterChip
+              label={visibleAllSelected ? '모두 해제' : '모두 선택'}
+              active={false}
+              dashed
+              leftIcon={
+                visibleAllSelected ? 'remove-circle-outline' : 'checkbox-outline'
+              }
               onPress={toggleSelectAll}
-              style={({ pressed }) => [
-                styles.chip,
-                styles.chipReset,
-                pressed && { opacity: opacity.pressed },
-              ]}
-            >
-              <Ionicons
-                name={visibleAllSelected ? 'remove-circle-outline' : 'checkbox-outline'}
-                size={12}
-                color={colors.textMuted}
-              />
-              <Text style={styles.chipText}>
-                {visibleAllSelected ? '모두 해제' : '모두 선택'}
-              </Text>
-            </Pressable>
+            />
           ) : null}
         </View>
       </View>
@@ -245,19 +222,6 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.bold,
   },
   chipRow: { flexDirection: 'row', gap: spacing.xs, flexWrap: 'wrap' },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  chipReset: { borderStyle: 'dashed' },
-  chipText: { fontSize: fontSize.xs, color: colors.textMuted },
   list: { paddingHorizontal: spacing.lg, paddingBottom: 120 },
   row: {
     flexDirection: 'row',

@@ -37,7 +37,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
-import { withAlpha } from '@/theme/withAlpha';
+import { FilterChip } from '@/components/ui/FilterChip';
 
 const DETAIL_MAX = 100;
 
@@ -553,36 +553,19 @@ export default function EditField() {
 
         <Text style={styles.label}>상태</Text>
         <View style={styles.statusRow}>
-          {FIELD_STATUS_VALUES.map((s) => {
-            const active = status === s;
-            const c = colors.fieldStatus[s];
-            return (
-              <Pressable
-                key={s}
-                onPress={() => {
-                  setStatus(s);
-                  if (fieldErrors.status) clearFieldErr('status');
-                }}
-                disabled={submitting}
-                accessibilityRole="radio"
-                accessibilityState={{ selected: active }}
-                style={({ pressed }) => [
-                  styles.statusChip,
-                  active && { backgroundColor: withAlpha(c, 0.13), borderColor: c },
-                  pressed && { opacity: opacity.pressed },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.statusChipText,
-                    active && { color: c, fontWeight: fontWeight.bold },
-                  ]}
-                >
-                  {FIELD_STATUS_LABEL[s]}
-                </Text>
-              </Pressable>
-            );
-          })}
+          {FIELD_STATUS_VALUES.map((s) => (
+            <FilterChip
+              key={s}
+              label={FIELD_STATUS_LABEL[s]}
+              active={status === s}
+              activeColor={colors.fieldStatus[s]}
+              disabled={submitting}
+              onPress={() => {
+                setStatus(s);
+                if (fieldErrors.status) clearFieldErr('status');
+              }}
+            />
+          ))}
         </View>
         {fieldErrors.status ? (
           <Text style={styles.fieldError}>{fieldErrors.status}</Text>
@@ -672,15 +655,6 @@ const styles = StyleSheet.create({
   },
   error: { color: colors.danger, fontSize: fontSize.sm, marginTop: spacing.md },
   statusRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
-  statusChip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  statusChipText: { fontSize: fontSize.sm, color: colors.textMuted },
   submit: { marginTop: spacing.xl },
   dangerBtn: { marginTop: spacing.md },
   // 주소 검색 box
