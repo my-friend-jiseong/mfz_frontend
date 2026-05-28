@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -8,7 +7,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -28,8 +26,13 @@ import {
   type SelectedAddress,
 } from '@/utils/addressSearch';
 import { ProjectPicker } from '@/components/ProjectPicker';
+import { Card } from '@/components/ui/Card';
+import { Input } from '@/components/ui/Input';
+import { Button } from '@/components/ui/Button';
+import { LoadingState } from '@/components/ui/LoadingState';
 import { colors } from '@/theme/colors';
-import { spacing, radius, fontSize } from '@/theme/spacing';
+import { spacing, radius, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
+import { opacity } from '@/theme/motion';
 
 export default function NewField() {
   const router = useRouter();
@@ -81,8 +84,6 @@ export default function NewField() {
         setResults(res.items);
         setEmptyMessage(res.emptyMessage ?? null);
         setProviderUnavailable(false);
-        // provider.manualCoordinateFallback === true 면 빈 결과 시 수동 입력 진입점 노출
-        // (검색 자체는 성공했지만 결과가 0건일 때)
         setSearchError(null);
       } catch (e) {
         if (myReqId !== reqIdRef.current) return;
@@ -179,9 +180,10 @@ export default function NewField() {
           }
         })();
       };
-      const msg = result.duplicateCount > 0
-        ? `같은 주소의 기존 현장이 ${result.duplicateCount}건 있습니다.\n계속 진행할까요?`
-        : `${result.message}\n계속 진행할까요?`;
+      const msg =
+        result.duplicateCount > 0
+          ? `같은 주소의 기존 현장이 ${result.duplicateCount}건 있습니다.\n계속 진행할까요?`
+          : `${result.message}\n계속 진행할까요?`;
       if (Platform.OS === 'web') {
         if (confirm(msg)) proceed(true);
       } else {
@@ -211,17 +213,25 @@ export default function NewField() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        <View style={styles.stepRow}>
+          <View style={[styles.stepDot, styles.stepDotActive]}>
+            <Text style={styles.stepDotText}>1</Text>
+          </View>
+          <View style={[styles.stepLine, step === 2 && styles.stepLineActive]} />
+          <View style={[styles.stepDot, step === 2 && styles.stepDotActive]}>
+            <Text style={[styles.stepDotText, step !== 2 && styles.stepDotTextMuted]}>2</Text>
+          </View>
+        </View>
         <Text style={styles.title}>
-          {step === 1 ? '1단계. 주소 검색' : '2단계. 상세 입력'}
+          {step === 1 ? '주소 검색' : '상세 입력'}
         </Text>
 
         {step === 1 ? (
           <>
-            <Text style={styles.label}>주소 또는 건물명</Text>
-            <TextInput
+            <Input
+              label="주소 또는 건물명"
               value={query}
               onChangeText={setQuery}
-              style={styles.input}
               placeholder="예: 해운대 우동, 동성로"
               autoFocus
               autoCapitalize="none"
@@ -230,29 +240,26 @@ export default function NewField() {
 
             {searching ? (
               <View style={styles.loadingRow}>
-                <ActivityIndicator color={colors.primary} size="small" />
-                <Text style={styles.loadingText}>검색 중...</Text>
+                <LoadingState inline label="검색 중" />
               </View>
             ) : null}
 
-            {searchError ? (
-              <Text style={styles.errorText}>{searchError}</Text>
-            ) : null}
+            {searchError ? <Text style={styles.errorText}>{searchError}</Text> : null}
 
             {providerUnavailable ? (
-              <View style={styles.warnBox}>
+              <Card padding="md" style={styles.warnBox}>
                 <Text style={styles.warnTitle}>주소 검색 일시 장애</Text>
                 <Text style={styles.warnBody}>
                   카카오 주소 서비스가 일시적으로 응답하지 않습니다. 잠시 후 다시 시도하거나 좌표를 직접 입력하세요.
                 </Text>
-              </View>
+              </Card>
             ) : null}
 
             {showEmptyHint ? (
               <Text style={styles.hint}>{emptyMessage ?? '검색 결과가 없습니다'}</Text>
             ) : null}
 
-            <View style={{ marginTop: spacing.md }}>
+            <View style={styles.resultList}>
               {results.map((r, idx) => {
                 const key = `${r.roadAddress}|${r.jibunAddress}|${idx}`;
                 const sub = [r.sido, r.sigungu].filter(Boolean).join(' ');
@@ -260,7 +267,10 @@ export default function NewField() {
                   <Pressable
                     key={key}
                     onPress={() => handleSelectItem(r)}
-                    style={({ pressed }) => [styles.addrItem, pressed && styles.pressed]}
+                    style={({ pressed }) => [
+                      styles.addrItem,
+                      pressed && { opacity: opacity.pressed },
+                    ]}
                   >
                     <Text style={styles.addrText}>
                       {r.roadAddress || r.jibunAddress}
@@ -282,68 +292,74 @@ export default function NewField() {
             {showManualEntry ? (
               <View style={styles.manualBox}>
                 <Text style={styles.manualTitle}>좌표 직접 입력</Text>
-                <Text style={styles.label}>도로명 주소</Text>
-                <TextInput
+                <Input
+                  label="도로명 주소"
                   value={manualRoad}
                   onChangeText={setManualRoad}
-                  style={styles.input}
                   placeholder="예: 부산광역시 해운대구 해운대해변로 264"
+                  containerStyle={styles.manualField}
                 />
-                <Text style={styles.label}>지번 주소</Text>
-                <TextInput
+                <Input
+                  label="지번 주소"
                   value={manualJibun}
                   onChangeText={setManualJibun}
-                  style={styles.input}
                   placeholder="예: 부산광역시 해운대구 우동 1411"
+                  containerStyle={styles.manualField}
                 />
                 <View style={styles.coordRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.label}>위도 (lat)</Text>
-                    <TextInput
-                      value={manualLatStr}
-                      onChangeText={setManualLatStr}
-                      style={styles.input}
-                      keyboardType="numeric"
-                      placeholder="33~43"
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.label}>경도 (lng)</Text>
-                    <TextInput
-                      value={manualLngStr}
-                      onChangeText={setManualLngStr}
-                      style={styles.input}
-                      keyboardType="numeric"
-                      placeholder="124~132"
-                    />
-                  </View>
+                  <Input
+                    label="위도 (lat)"
+                    value={manualLatStr}
+                    onChangeText={setManualLatStr}
+                    keyboardType="numeric"
+                    placeholder="33~43"
+                    containerStyle={styles.coordHalf}
+                  />
+                  <Input
+                    label="경도 (lng)"
+                    value={manualLngStr}
+                    onChangeText={setManualLngStr}
+                    keyboardType="numeric"
+                    placeholder="124~132"
+                    containerStyle={styles.coordHalf}
+                  />
                 </View>
-                <Pressable
+                <Button
                   onPress={handleManualSubmit}
-                  style={({ pressed }) => [styles.btn, pressed && styles.pressed]}
+                  fullWidth
+                  leftIcon="location"
+                  style={styles.manualSubmit}
                 >
-                  <Text style={styles.btnText}>이 좌표로 진행</Text>
-                </Pressable>
+                  이 좌표로 진행
+                </Button>
               </View>
             ) : null}
 
-            {/* 검색 결과 0건 시 수동 입력 진입점 — provider 가 manualCoordinateFallback 옵션을 두었을 때 의미 있음 */}
             {showEmptyHint && !manualMode ? (
-              <Pressable
+              <Button
                 onPress={() => setManualMode(true)}
-                style={({ pressed }) => [styles.manualLink, pressed && styles.pressed]}
+                variant="ghost"
+                size="sm"
+                rightIcon="arrow-forward"
+                style={styles.manualLink}
               >
-                <Text style={styles.manualLinkText}>좌표 직접 입력으로 진행 →</Text>
-              </Pressable>
+                좌표 직접 입력으로 진행
+              </Button>
             ) : null}
           </>
         ) : (
           <>
-            <Pressable onPress={() => setStep(1)}>
-              <Text style={styles.backLink}>← 주소 다시 선택</Text>
-            </Pressable>
+            <Button
+              onPress={() => setStep(1)}
+              variant="ghost"
+              size="sm"
+              leftIcon="arrow-back"
+              style={styles.backBtn}
+            >
+              주소 다시 선택
+            </Button>
 
-            <View style={styles.selectedBox}>
+            <Card padding="md" style={styles.selectedBox}>
               <Text style={styles.selectedLabel}>선택한 주소</Text>
               <Text style={styles.selectedAddr}>{selected?.display}</Text>
               {selected ? (
@@ -351,25 +367,25 @@ export default function NewField() {
                   {selected.lat.toFixed(4)}, {selected.lng.toFixed(4)}
                 </Text>
               ) : null}
-            </View>
+            </Card>
 
             <Text style={styles.label}>프로젝트 (선택)</Text>
             <ProjectPicker value={projectId} onChange={setProjectId} />
 
-            <Text style={styles.label}>분류 (선택, 쉼표로 구분)</Text>
-            <TextInput
+            <Input
+              label="분류 (선택, 쉼표로 구분)"
               value={categoriesStr}
               onChangeText={setCategoriesStr}
-              style={styles.input}
               placeholder="예: 가로수, 보수, 긴급"
+              containerStyle={styles.fieldGap}
             />
 
-            <Text style={styles.label}>상세 주소 (동/호수 등)</Text>
-            <TextInput
+            <Input
+              label="상세 주소 (동/호수 등)"
               value={detail}
               onChangeText={setDetail}
-              style={styles.input}
               placeholder="예: 101동 1203호"
+              containerStyle={styles.fieldGap}
             />
 
             <Text style={styles.label}>상태</Text>
@@ -381,15 +397,18 @@ export default function NewField() {
                   <Pressable
                     key={s}
                     onPress={() => setStatus(s)}
-                    style={[
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: active }}
+                    style={({ pressed }) => [
                       styles.statusChip,
                       active && { backgroundColor: c + '22', borderColor: c },
+                      pressed && { opacity: opacity.pressed },
                     ]}
                   >
                     <Text
                       style={[
                         styles.statusChipText,
-                        active && { color: c, fontWeight: '700' },
+                        active && { color: c, fontWeight: fontWeight.bold },
                       ]}
                     >
                       {FIELD_STATUS_LABEL[s]}
@@ -399,13 +418,16 @@ export default function NewField() {
               })}
             </View>
 
-            <Pressable
+            <Button
               onPress={handleCreate}
-              disabled={submitting}
-              style={({ pressed }) => [styles.btn, (pressed || submitting) && styles.pressed]}
+              loading={submitting}
+              size="lg"
+              fullWidth
+              leftIcon="checkmark"
+              style={styles.submit}
             >
-              <Text style={styles.btnText}>{submitting ? '등록 중...' : '현장 등록'}</Text>
-            </Pressable>
+              현장 등록
+            </Button>
           </>
         )}
       </ScrollView>
@@ -415,49 +437,76 @@ export default function NewField() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  scroll: { padding: spacing.xl },
+  scroll: { padding: spacing.xl, paddingBottom: spacing.xxl * 2 },
+  // 단계 표시
+  stepRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  stepDot: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.surfaceMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepDotActive: { backgroundColor: colors.primary },
+  stepDotText: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.bold,
+    color: colors.onPrimary,
+  },
+  stepDotTextMuted: { color: colors.textMuted },
+  stepLine: {
+    flex: 1,
+    height: 2,
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: 1,
+  },
+  stepLineActive: { backgroundColor: colors.primary },
   title: {
     fontSize: fontSize.lg,
-    fontWeight: '700',
+    fontWeight: fontWeight.bold,
     color: colors.text,
     marginBottom: spacing.lg,
+    lineHeight: lineHeight.lg,
   },
   label: {
     fontSize: fontSize.sm,
     color: colors.textMuted,
-    fontWeight: '600',
+    fontWeight: fontWeight.semibold,
     marginTop: spacing.md,
     marginBottom: spacing.xs,
   },
-  input: {
-    backgroundColor: colors.surface,
+  fieldGap: { marginTop: spacing.md },
+  hint: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: spacing.sm },
+  loadingRow: { marginTop: spacing.sm },
+  errorText: {
+    fontSize: fontSize.xs,
+    color: colors.danger,
+    marginTop: spacing.sm,
+  },
+  warnBox: {
+    backgroundColor: colors.warningMuted,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    fontSize: fontSize.base,
+    borderColor: colors.warning,
+    marginTop: spacing.sm,
+  },
+  warnTitle: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.bold,
     color: colors.text,
   },
-  hint: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: spacing.sm },
-  loadingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginTop: spacing.sm,
+  warnBody: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    marginTop: 4,
+    lineHeight: lineHeight.xs,
   },
-  loadingText: { fontSize: fontSize.xs, color: colors.textMuted },
-  errorText: { fontSize: fontSize.xs, color: colors.danger ?? '#d23', marginTop: spacing.sm },
-  warnBox: {
-    backgroundColor: '#fff7e6',
-    borderColor: '#f0ad4e',
-    borderWidth: 1,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    marginTop: spacing.sm,
-  },
-  warnTitle: { fontSize: fontSize.sm, fontWeight: '700', color: colors.text },
-  warnBody: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: 4 },
+  resultList: { marginTop: spacing.md },
   addrItem: {
     backgroundColor: colors.surface,
     borderWidth: 1,
@@ -466,8 +515,11 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     marginBottom: spacing.xs,
   },
-  pressed: { opacity: 0.7 },
-  addrText: { fontSize: fontSize.base, color: colors.text, fontWeight: '600' },
+  addrText: {
+    fontSize: fontSize.base,
+    color: colors.text,
+    fontWeight: fontWeight.semibold,
+  },
   addrJibun: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: 2 },
   addrCoord: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: 2 },
   manualBox: {
@@ -478,35 +530,37 @@ const styles = StyleSheet.create({
   },
   manualTitle: {
     fontSize: fontSize.base,
-    fontWeight: '700',
+    fontWeight: fontWeight.bold,
     color: colors.text,
     marginBottom: spacing.xs,
   },
-  manualLink: {
-    marginTop: spacing.md,
-    alignSelf: 'flex-start',
-  },
-  manualLinkText: {
-    fontSize: fontSize.sm,
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  coordRow: { flexDirection: 'row', gap: spacing.sm },
-  backLink: {
-    fontSize: fontSize.sm,
-    color: colors.primary,
-    fontWeight: '600',
-    marginBottom: spacing.md,
-  },
+  manualField: { marginTop: spacing.sm },
+  manualSubmit: { marginTop: spacing.md },
+  manualLink: { marginTop: spacing.md, alignSelf: 'flex-start' },
+  coordRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
+  coordHalf: { flex: 1 },
+  backBtn: { alignSelf: 'flex-start', marginBottom: spacing.md },
   selectedBox: {
-    backgroundColor: colors.primary + '10',
-    borderRadius: radius.md,
-    padding: spacing.md,
+    backgroundColor: colors.primaryMuted,
     marginBottom: spacing.md,
   },
-  selectedLabel: { fontSize: fontSize.xs, color: colors.primary, fontWeight: '600' },
-  selectedAddr: { fontSize: fontSize.base, color: colors.text, marginTop: 2 },
-  selectedCoord: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: 4 },
+  selectedLabel: {
+    fontSize: fontSize.xs,
+    color: colors.primary,
+    fontWeight: fontWeight.bold,
+  },
+  selectedAddr: {
+    fontSize: fontSize.base,
+    color: colors.text,
+    marginTop: 2,
+    fontWeight: fontWeight.semibold,
+    lineHeight: lineHeight.base,
+  },
+  selectedCoord: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    marginTop: 4,
+  },
   statusRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
   statusChip: {
     paddingHorizontal: spacing.md,
@@ -517,12 +571,5 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   statusChipText: { fontSize: fontSize.sm, color: colors.textMuted },
-  btn: {
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.lg,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    marginTop: spacing.xl,
-  },
-  btnText: { color: '#fff', fontSize: fontSize.base, fontWeight: '700' },
+  submit: { marginTop: spacing.xl },
 });
