@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from '@/components/ui/Text';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { visits as visitsApi, localizeError } from '@/api';
 import { safeBack } from '@/utils/backNavigation';
@@ -17,8 +18,7 @@ import {
   VISIT_STATUS_LABEL,
   normalizeVisitStatus,
 } from '@/types/entities';
-import { colors } from '@/theme/colors';
-import { spacing, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
+import { spacing } from '@/theme/spacing';
 
 export default function VisitDetail() {
   const router = useRouter();
@@ -80,7 +80,9 @@ export default function VisitDetail() {
   return (
     <MapSheetLayout title="방문 상세" onBack={() => safeBack(router)} initialIndex={2}>
       <ScrollView contentContainerStyle={styles.scroll}>
-        <Text style={styles.site}>{siteName ?? '현장 방문'}</Text>
+        <Text variant="h2" weight="heavy">
+          {siteName ?? '현장 방문'}
+        </Text>
         <View style={styles.badgeRow}>
           <Badge
             label={VISIT_STATUS_LABEL[status]}
@@ -89,7 +91,9 @@ export default function VisitDetail() {
             size="md"
           />
         </View>
-        <Text style={styles.meta}>방문 시각: {fmtDateTime(data.visitedAt)}</Text>
+        <Text variant="bodySm" color="textMuted" style={styles.meta}>
+          방문 시각: {fmtDateTime(data.visitedAt)}
+        </Text>
 
         {fieldId ? (
           <Button
@@ -109,13 +113,7 @@ export default function VisitDetail() {
 
 const styles = StyleSheet.create({
   scroll: { padding: spacing.lg, paddingBottom: spacing.xxl },
-  site: {
-    fontSize: fontSize.xl,
-    fontWeight: fontWeight.heavy,
-    color: colors.text,
-    lineHeight: lineHeight.xl,
-  },
   badgeRow: { marginTop: spacing.sm, flexDirection: 'row' },
-  meta: { fontSize: fontSize.sm, color: colors.textMuted, marginTop: spacing.sm },
+  meta: { marginTop: spacing.sm },
   toField: { marginTop: spacing.lg },
 });

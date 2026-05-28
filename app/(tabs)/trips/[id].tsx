@@ -4,10 +4,10 @@ import {
   Alert,
   Platform,
   StyleSheet,
-  Text,
   ToastAndroid,
   View,
 } from 'react-native';
+import { Text } from '@/components/ui/Text';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import { useTripStore } from '@/stores/tripStore';
 import { useVisitStore } from '@/stores/visitStore';
@@ -22,7 +22,7 @@ import { VISIT_STATUS_BADGE } from '@/theme/statusBadge';
 import { fmtTime } from '@/utils/datetime';
 import { safeBack } from '@/utils/backNavigation';
 import { colors } from '@/theme/colors';
-import { spacing, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
+import { spacing } from '@/theme/spacing';
 import {
   VISIT_STATUS_LABEL,
   type Visit,
@@ -154,28 +154,36 @@ export default function TripDetail() {
         style={styles.visitCard}
       >
         <View style={styles.visitHead}>
-          <Text style={styles.visitTime}>{fmtTime(item.visitedAt)}</Text>
+          <Text variant="bodySm" weight="semibold" color="textMuted">
+            {fmtTime(item.visitedAt)}
+          </Text>
           <Badge
             label={VISIT_STATUS_LABEL[item.status]}
             tone={badge.tone}
             shape={badge.shape}
           />
         </View>
-        <Text style={styles.fieldAddr}>{field?.address || '알 수 없는 현장'}</Text>
+        <Text variant="body" weight="semibold">
+          {field?.address || '알 수 없는 현장'}
+        </Text>
       </Card>
     );
   };
 
   const ListHeader = () => (
     <View style={styles.summary}>
-      {trip.title ? <Text style={styles.tripTitle}>{trip.title}</Text> : null}
-      <Text style={styles.summaryLine}>
+      {trip.title ? (
+        <Text variant="h3" style={styles.tripTitle}>
+          {trip.title}
+        </Text>
+      ) : null}
+      <Text variant="bodySm">
         {new Date(trip.startedAt).toLocaleString('ko-KR')} ~{' '}
         {trip.endedAt
           ? new Date(trip.endedAt).toLocaleString('ko-KR')
           : '진행 중'}
       </Text>
-      <Text style={styles.meta}>
+      <Text variant="bodySm" color="textMuted" style={styles.meta}>
         {/*
          * destinationStore/visitStore 는 로컬 전용 — 서버 list 응답의
          * siteCount/visitCount 가 있으면 그걸 우선 (backlog §11).
@@ -185,16 +193,29 @@ export default function TripDetail() {
       </Text>
       {destinations.length > 0 ? (
         <Card padding="md" style={styles.planBox}>
-          <Text style={styles.planTitle}>계획된 목적지</Text>
+          <Text
+            variant="caption"
+            weight="bold"
+            color="textMuted"
+            style={styles.planTitle}
+          >
+            계획된 목적지
+          </Text>
           {destinations.map((d) => {
             const f = getField(d.fieldId);
             return (
               <View key={d.id} style={styles.planRow}>
-                <Text style={styles.planOrder}>{d.order}.</Text>
-                <Text style={styles.planAddr} numberOfLines={1}>
+                <Text variant="bodySm" weight="bold" style={styles.planOrder}>
+                  {d.order}.
+                </Text>
+                <Text variant="bodySm" style={styles.planAddr} numberOfLines={1}>
                   {f?.address || '알 수 없는 현장'}
                 </Text>
-                <Text style={[styles.planStatus, { color: DEST_COLOR[d.status] }]}>
+                <Text
+                  variant="caption"
+                  weight="bold"
+                  style={{ color: DEST_COLOR[d.status] }}
+                >
                   {DEST_LABEL[d.status]}
                 </Text>
               </View>
@@ -253,14 +274,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.lg,
     gap: spacing.xs,
   },
-  tripTitle: {
-    fontSize: fontSize.lg,
-    color: colors.text,
-    fontWeight: fontWeight.bold,
-    marginBottom: 4,
-    lineHeight: lineHeight.lg,
-  },
-  summaryLine: { fontSize: fontSize.sm, color: colors.text },
+  tripTitle: { marginBottom: 4 },
   list: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
   visitCard: { marginBottom: spacing.sm },
   visitHead: {
@@ -269,33 +283,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: spacing.xs,
   },
-  visitTime: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    fontWeight: fontWeight.semibold,
-  },
-  fieldAddr: {
-    fontSize: fontSize.base,
-    color: colors.text,
-    fontWeight: fontWeight.semibold,
-  },
-  meta: { fontSize: fontSize.sm, color: colors.textMuted, marginTop: 2 },
+  meta: { marginTop: 2 },
   composeBtn: { marginTop: spacing.md },
   endBtn: { marginTop: spacing.md },
   planBox: { marginTop: spacing.sm, gap: spacing.xs },
-  planTitle: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.bold,
-    color: colors.textMuted,
-    marginBottom: 4,
-  },
+  planTitle: { marginBottom: 4 },
   planRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  planOrder: {
-    fontSize: fontSize.sm,
-    color: colors.text,
-    fontWeight: fontWeight.bold,
-    width: 20,
-  },
-  planAddr: { fontSize: fontSize.sm, color: colors.text, flex: 1 },
-  planStatus: { fontSize: fontSize.xs, fontWeight: fontWeight.bold },
+  planOrder: { width: 20 },
+  planAddr: { flex: 1 },
 });

@@ -1,8 +1,9 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from '@/components/ui/Card';
+import { Text } from '@/components/ui/Text';
 import { colors } from '@/theme/colors';
-import { spacing, radius, fontSize, fontWeight } from '@/theme/spacing';
+import { spacing, radius } from '@/theme/spacing';
 
 interface Props {
   startedAtLabel: string | null;
@@ -24,15 +25,19 @@ export function TripSummaryCard({
       {startedAtLabel ? (
         <View style={styles.elapsedRow}>
           <Ionicons name="time-outline" size={14} color={colors.textMuted} />
-          <Text style={styles.elapsed}>{startedAtLabel}</Text>
+          <Text variant="caption" weight="semibold" color="textMuted">
+            {startedAtLabel}
+          </Text>
         </View>
       ) : null}
       <View style={styles.progressRow}>
-        <Text style={styles.label}>
+        <Text variant="bodySm" weight="semibold">
           방문 {arrived}
           {skipped > 0 ? ` · 건너뜀 ${skipped}` : ''} / 총 {total}곳
         </Text>
-        <Text style={styles.ratio}>{ratio}%</Text>
+        <Text variant="bodySm" weight="heavy" color="primary">
+          {ratio}%
+        </Text>
       </View>
       <View style={styles.track}>
         <View style={[styles.fill, { width: `${ratio}%` }]} />
@@ -48,25 +53,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs,
   },
-  elapsed: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
-    fontWeight: fontWeight.semibold,
-  },
   progressRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-  },
-  label: {
-    fontSize: fontSize.sm,
-    color: colors.text,
-    fontWeight: fontWeight.semibold,
-  },
-  ratio: {
-    fontSize: fontSize.sm,
-    color: colors.primary,
-    fontWeight: fontWeight.heavy,
   },
   track: {
     height: 8,

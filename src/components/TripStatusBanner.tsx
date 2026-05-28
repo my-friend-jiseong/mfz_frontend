@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useTripStore } from '@/stores/tripStore';
 import { useDestinationStore } from '@/stores/destinationStore';
+import { Text } from '@/components/ui/Text';
 import { colors } from '@/theme/colors';
-import { spacing, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
+import { spacing } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
 
 function formatElapsed(startIso: string) {
@@ -63,7 +64,7 @@ export function TripStatusBanner() {
         <Ionicons name="navigate" size={14} color={colors.tripBanner} />
       </View>
       <View style={styles.body}>
-        <Text style={styles.text}>
+        <Text variant="bodySm" weight="semibold" color="onDanger">
           외근 중 · {formatElapsed(trip.startedAt)}
           {total > 0 ? ` · ${resolved}/${total}` : ''}
         </Text>
@@ -91,10 +92,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   body: { flex: 1 },
-  text: {
-    color: colors.onDanger,
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold,
-    lineHeight: lineHeight.sm,
-  },
 });

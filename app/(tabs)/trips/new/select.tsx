@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '@/components/ui/Text';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -12,7 +13,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { safeBack } from '@/utils/backNavigation';
 import { colors } from '@/theme/colors';
-import { spacing, radius, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
+import { spacing, radius } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
 import { FilterChip } from '@/components/ui/FilterChip';
 import { StickyBottomBar } from '@/components/ui/StickyBottomBar';
@@ -115,9 +116,13 @@ export default function NewTripSelect() {
           color={checked ? colors.primary : colors.textMuted}
         />
         <View style={styles.rowText}>
-          <Text style={styles.address}>{item.address}</Text>
+          <Text variant="body" weight="semibold">
+            {item.address}
+          </Text>
           {item.addressDetail ? (
-            <Text style={styles.detail}>{item.addressDetail}</Text>
+            <Text variant="bodySm" color="textMuted" style={styles.detail}>
+              {item.addressDetail}
+            </Text>
           ) : null}
         </View>
       </Pressable>
@@ -128,8 +133,10 @@ export default function NewTripSelect() {
     <MapSheetLayout title="방문할 현장 선택" onBack={() => safeBack(router)}>
       <View style={styles.head}>
         <View style={styles.headRow}>
-          <Text style={styles.headTitle}>방문할 현장 선택</Text>
-          <Text style={styles.headMeta}>
+          <Text variant="body" weight="bold">
+            방문할 현장 선택
+          </Text>
+          <Text variant="bodySm" weight="bold" color="primary">
             {selectedIds.length}/{myFields.length}개
           </Text>
         </View>
@@ -212,16 +219,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  headTitle: {
-    fontSize: fontSize.base,
-    color: colors.text,
-    fontWeight: fontWeight.bold,
-  },
-  headMeta: {
-    fontSize: fontSize.sm,
-    color: colors.primary,
-    fontWeight: fontWeight.bold,
-  },
   chipRow: { flexDirection: 'row', gap: spacing.xs, flexWrap: 'wrap' },
   list: { paddingHorizontal: spacing.lg, paddingBottom: 120 },
   row: {
@@ -240,11 +237,5 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primaryMuted,
   },
   rowText: { flex: 1 },
-  address: {
-    fontSize: fontSize.base,
-    color: colors.text,
-    fontWeight: fontWeight.semibold,
-    lineHeight: lineHeight.base,
-  },
-  detail: { fontSize: fontSize.sm, color: colors.textMuted, marginTop: 2 },
+  detail: { marginTop: 2 },
 });

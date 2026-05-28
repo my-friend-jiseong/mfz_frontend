@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '@/components/ui/Text';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -17,7 +18,7 @@ import { nearestNeighborOrder } from '@/utils/routeOptimize';
 import { trips as tripsApi } from '@/api';
 import { safeBack } from '@/utils/backNavigation';
 import { colors } from '@/theme/colors';
-import { spacing, radius, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
+import { spacing, radius } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
 
 interface OrderedField {
@@ -186,15 +187,26 @@ export default function NewTripOrder() {
   }) => (
     <View style={styles.row}>
       <View style={styles.orderBadge}>
-        <Text style={styles.orderText}>{index + 1}</Text>
+        <Text variant="bodySm" weight="bold" color="onPrimary">
+          {index + 1}
+        </Text>
       </View>
       <View style={styles.rowText}>
-        <Text style={styles.address}>{item.address}</Text>
+        <Text variant="body" weight="semibold">
+          {item.address}
+        </Text>
         {item.addressDetail ? (
-          <Text style={styles.detail}>{item.addressDetail}</Text>
+          <Text variant="bodySm" color="textMuted" style={styles.detail}>
+            {item.addressDetail}
+          </Text>
         ) : null}
         {optimized && item.distanceFromPrevKm !== undefined ? (
-          <Text style={styles.eta}>
+          <Text
+            variant="caption"
+            weight="semibold"
+            color="primary"
+            style={styles.eta}
+          >
             {index === 0
               ? '출발지 인근'
               : `+${item.distanceFromPrevKm}km · ${item.etaMinutes}분`}
@@ -265,8 +277,10 @@ export default function NewTripOrder() {
           maxLength={50}
           containerStyle={styles.titleField}
         />
-        <Text style={styles.headTitle}>위에서부터 순서대로 방문합니다</Text>
-        <Text style={styles.headMeta}>
+        <Text variant="body" weight="semibold">
+          위에서부터 순서대로 방문합니다
+        </Text>
+        <Text variant="bodySm" color="textMuted">
           상하 화살표로 순서, × 로 제외할 수 있습니다
         </Text>
         <Button
@@ -281,18 +295,30 @@ export default function NewTripOrder() {
         {totalDistanceKm !== null && totalEtaMin !== null ? (
           <Card padding="md" style={styles.summaryCard}>
             <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>총 거리</Text>
-              <Text style={styles.summaryValue}>{totalDistanceKm.toFixed(1)} km</Text>
+              <Text variant="caption" weight="semibold" color="textMuted">
+                총 거리
+              </Text>
+              <Text variant="body" weight="bold" style={styles.summaryValue}>
+                {totalDistanceKm.toFixed(1)} km
+              </Text>
             </View>
             <View style={styles.summaryDivider} />
             <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>예상 ETA</Text>
-              <Text style={styles.summaryValue}>{totalEtaMin}분</Text>
+              <Text variant="caption" weight="semibold" color="textMuted">
+                예상 ETA
+              </Text>
+              <Text variant="body" weight="bold" style={styles.summaryValue}>
+                {totalEtaMin}분
+              </Text>
             </View>
             <View style={styles.summaryDivider} />
             <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>방문 현장</Text>
-              <Text style={styles.summaryValue}>{list.length}곳</Text>
+              <Text variant="caption" weight="semibold" color="textMuted">
+                방문 현장
+              </Text>
+              <Text variant="body" weight="bold" style={styles.summaryValue}>
+                {list.length}곳
+              </Text>
             </View>
           </Card>
         ) : null}
@@ -328,12 +354,6 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
   },
   titleField: { marginBottom: spacing.md },
-  headTitle: {
-    fontSize: fontSize.base,
-    color: colors.text,
-    fontWeight: fontWeight.semibold,
-  },
-  headMeta: { fontSize: fontSize.sm, color: colors.textMuted, marginTop: 2 },
   optimizeBtn: { marginTop: spacing.sm, alignSelf: 'flex-start' },
   optimizeBtnActive: {
     backgroundColor: colors.successMuted,
@@ -359,25 +379,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  orderText: {
-    color: colors.onPrimary,
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.bold,
-  },
   rowText: { flex: 1 },
-  address: {
-    fontSize: fontSize.base,
-    color: colors.text,
-    fontWeight: fontWeight.semibold,
-    lineHeight: lineHeight.base,
-  },
-  detail: { fontSize: fontSize.sm, color: colors.textMuted, marginTop: 2 },
-  eta: {
-    fontSize: fontSize.xs,
-    color: colors.primary,
-    marginTop: 4,
-    fontWeight: fontWeight.semibold,
-  },
+  detail: { marginTop: 2 },
+  eta: { marginTop: 4 },
   controls: { gap: 4 },
   ctrlBtn: {
     width: 32,
@@ -403,16 +407,6 @@ const styles = StyleSheet.create({
     borderColor: colors.success,
   },
   summaryItem: { flex: 1, alignItems: 'center' },
-  summaryLabel: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
-    fontWeight: fontWeight.semibold,
-  },
-  summaryValue: {
-    fontSize: fontSize.base,
-    color: colors.text,
-    fontWeight: fontWeight.bold,
-    marginTop: 2,
-  },
+  summaryValue: { marginTop: 2 },
   summaryDivider: { width: 1, height: 28, backgroundColor: colors.border },
 });

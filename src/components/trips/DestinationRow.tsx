@@ -1,8 +1,9 @@
 import { memo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { Badge, type BadgeShape, type BadgeTone } from '@/components/ui/Badge';
+import { Text } from '@/components/ui/Text';
 import { colors } from '@/theme/colors';
-import { spacing, radius, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
+import { spacing, radius } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
 
 interface Props {
@@ -17,8 +18,7 @@ interface Props {
 }
 
 // 부모(active.tsx) 의 분 단위 setElapsedTick 으로 인한 헤더 재렌더에
-// row 까지 휩쓸리지 않도록 props 비교 memo. statusLabel/Tone/Shape 모두
-// primitive 또는 narrow string union 이므로 shallow compare 통과.
+// row 까지 휩쓸리지 않도록 props 비교 memo.
 export const DestinationRow = memo(function DestinationRow({
   order,
   address,
@@ -39,13 +39,23 @@ export const DestinationRow = memo(function DestinationRow({
       ]}
     >
       <View style={[styles.orderBadge, isCurrent && styles.orderBadgeCurrent]}>
-        <Text style={[styles.orderText, isCurrent && styles.orderTextCurrent]}>
+        <Text
+          variant="caption"
+          weight="bold"
+          color={isCurrent ? 'onPrimary' : 'text'}
+        >
           {order}
         </Text>
       </View>
       <View style={styles.body}>
-        <Text style={styles.address}>{address}</Text>
-        {addressDetail ? <Text style={styles.detail}>{addressDetail}</Text> : null}
+        <Text variant="body" weight="semibold">
+          {address}
+        </Text>
+        {addressDetail ? (
+          <Text variant="caption" color="textMuted" style={styles.detail}>
+            {addressDetail}
+          </Text>
+        ) : null}
       </View>
       <Badge label={statusLabel} tone={statusTone} shape={statusShape} />
     </Pressable>
@@ -82,22 +92,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     borderColor: colors.primary,
   },
-  orderText: {
-    color: colors.text,
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.bold,
-  },
-  orderTextCurrent: { color: colors.onPrimary },
   body: { flex: 1 },
-  address: {
-    fontSize: fontSize.base,
-    color: colors.text,
-    fontWeight: fontWeight.semibold,
-    lineHeight: lineHeight.base,
-  },
-  detail: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
-    marginTop: 2,
-  },
+  detail: { marginTop: 2 },
 });

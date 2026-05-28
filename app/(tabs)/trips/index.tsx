@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import { Redirect, useRouter } from 'expo-router';
 import { useTripStore } from '@/stores/tripStore';
@@ -9,9 +9,9 @@ import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { Text } from '@/components/ui/Text';
 import { StickyBottomBar } from '@/components/ui/StickyBottomBar';
-import { colors } from '@/theme/colors';
-import { spacing, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
+import { spacing } from '@/theme/spacing';
 import { fmtDate, fmtDuration } from '@/utils/datetime';
 import type { Trip } from '@/types/entities';
 
@@ -48,8 +48,10 @@ export default function TripsList() {
         onPress={() => router.push(`/(tabs)/trips/${item.id}` as never)}
         style={styles.cardSpacing}
       >
-        <Text style={styles.title}>{item.title || dateText}</Text>
-        <Text style={styles.meta}>
+        <Text variant="body" weight="bold">
+          {item.title || dateText}
+        </Text>
+        <Text variant="bodySm" color="textMuted" style={styles.meta}>
           {item.title ? `${dateText} · ` : ''}
           {fmtDuration(item.startedAt, item.endedAt)} · 방문 {visitCount}건
         </Text>
@@ -89,16 +91,5 @@ export default function TripsList() {
 const styles = StyleSheet.create({
   list: { padding: spacing.lg, paddingBottom: 120 },
   cardSpacing: { marginBottom: spacing.sm },
-  title: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.bold,
-    color: colors.text,
-    lineHeight: lineHeight.base,
-  },
-  meta: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    marginTop: spacing.xs,
-    lineHeight: lineHeight.sm,
-  },
+  meta: { marginTop: spacing.xs },
 });

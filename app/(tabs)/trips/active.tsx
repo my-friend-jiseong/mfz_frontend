@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Platform, StyleSheet, Text, View } from 'react-native';
+import { Alert, Platform, StyleSheet, View } from 'react-native';
+import { Text } from '@/components/ui/Text';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import { Redirect, useRouter } from 'expo-router';
 import { useTripStore } from '@/stores/tripStore';
@@ -24,8 +25,7 @@ import { VISIT_STATUS_LABEL } from '@/types/entities';
 import { nearestNeighborOrder } from '@/utils/routeOptimize';
 import * as Linking from 'expo-linking';
 import { safeBack } from '@/utils/backNavigation';
-import { colors } from '@/theme/colors';
-import { spacing, fontSize, fontWeight } from '@/theme/spacing';
+import { spacing } from '@/theme/spacing';
 import type { Destination } from '@/types/entities';
 
 export default function ActiveTrip() {
@@ -389,7 +389,9 @@ export default function ActiveTrip() {
       ) : (
         <AllDoneCard />
       )}
-      <Text style={styles.sectionTitle}>목적지 ({destinations.length})</Text>
+      <Text variant="bodySm" weight="bold" color="textMuted" style={styles.sectionTitle}>
+        목적지 ({destinations.length})
+      </Text>
     </View>
   );
 
@@ -467,9 +469,6 @@ const styles = StyleSheet.create({
   list: { paddingHorizontal: spacing.lg, paddingBottom: 120 },
   header: { paddingTop: spacing.md, gap: spacing.sm },
   sectionTitle: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    fontWeight: fontWeight.bold,
     marginTop: spacing.lg,
   },
 });

@@ -1,9 +1,10 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { Text } from '@/components/ui/Text';
 import { colors } from '@/theme/colors';
-import { spacing, radius, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
+import { spacing, radius } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
 
 type IonName = React.ComponentProps<typeof Ionicons>['name'];
@@ -20,8 +21,7 @@ interface Props {
   pendingCount?: number;
 }
 
-// 1차 액션(체크인) 풀폭 + separator + 유틸 row 3개 (icon + 작은 라벨).
-// 이전: 풀폭 버튼 4개 수직 스택 → 위계 약하고 카드가 비대.
+// 1차 액션(체크인) 풀폭 + utility row 3개 mini-card.
 type UtilTone = 'primary' | 'warning' | 'danger';
 
 const UTIL_COLOR: Record<UtilTone, string> = {
@@ -57,7 +57,9 @@ function UtilAction({
       ]}
     >
       <Ionicons name={icon} size={22} color={c} />
-      <Text style={[styles.utilLabel, { color: c }]}>{label}</Text>
+      <Text variant="caption" weight="semibold" style={{ color: c }}>
+        {label}
+      </Text>
     </Pressable>
   );
 }
@@ -76,9 +78,11 @@ export function CurrentDestCard({
   const showReop = onReoptimize && (pendingCount ?? 0) >= 2;
   return (
     <Card padding="lg" style={styles.card}>
-      <Text style={styles.label}>현재 목적지 · {order}번째</Text>
-      <Text style={styles.address}>{address}</Text>
-      {addressDetail ? <Text style={styles.detail}>{addressDetail}</Text> : null}
+      <Text variant="caption" weight="bold" color="primary">
+        현재 목적지 · {order}번째
+      </Text>
+      <Text variant="h3">{address}</Text>
+      {addressDetail ? <Text variant="bodySm">{addressDetail}</Text> : null}
 
       <Button
         onPress={onCheckIn}
@@ -123,25 +127,7 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
     gap: spacing.xs,
   },
-  label: {
-    fontSize: fontSize.xs,
-    color: colors.primary,
-    fontWeight: fontWeight.bold,
-  },
-  address: {
-    fontSize: fontSize.lg,
-    color: colors.text,
-    fontWeight: fontWeight.bold,
-    lineHeight: lineHeight.lg,
-  },
-  detail: {
-    fontSize: fontSize.sm,
-    color: colors.text,
-    lineHeight: lineHeight.sm,
-  },
   checkIn: { marginTop: spacing.sm },
-  // 카드 톤(primaryMuted) 위에 흰색 mini-card 3개 — 'tappable' affordance 명확.
-  // 이전엔 icon + text 만 있어 평범 텍스트처럼 보이던 회로 차단.
   utilRow: {
     flexDirection: 'row',
     marginTop: spacing.md,
@@ -155,9 +141,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     backgroundColor: colors.surface,
     borderRadius: radius.md,
-  },
-  utilLabel: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.semibold,
   },
 });
