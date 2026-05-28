@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
+import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFieldStore } from '@/stores/fieldStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -8,11 +9,15 @@ import { useTripStore } from '@/stores/tripStore';
 import { useDestinationStore } from '@/stores/destinationStore';
 import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
+import { Card } from '@/components/ui/Card';
+import { Input } from '@/components/ui/Input';
+import { Button } from '@/components/ui/Button';
 import { nearestNeighborOrder } from '@/utils/routeOptimize';
 import { trips as tripsApi } from '@/api';
 import { safeBack } from '@/utils/backNavigation';
 import { colors } from '@/theme/colors';
-import { spacing, radius, fontSize } from '@/theme/spacing';
+import { spacing, radius, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
+import { opacity } from '@/theme/motion';
 
 interface OrderedField {
   id: string;
@@ -106,7 +111,7 @@ export default function NewTripOrder() {
     setList(ordered);
     setOptimized(true);
     Alert.alert(
-      '✨ 최적 순서 적용됨',
+      '최적 순서 적용됨',
       `총 ${totalKm.toFixed(1)}km · 예상 ${totalEta}분\n\n수동으로 더 조정하셔도 됩니다.`,
     );
   };
@@ -118,7 +123,7 @@ export default function NewTripOrder() {
       [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
       return next;
     });
-    setOptimized(false); // 수동 조정 시 추천 라벨 해제
+    setOptimized(false);
   };
 
   const moveDown = (idx: number) => {
@@ -136,7 +141,6 @@ export default function NewTripOrder() {
     setOptimized(false);
   };
 
-  // 추천 적용된 결과의 총 거리·ETA — 수동 조정 시에도 직전 추천 값으로 표시
   const totalDistanceKm = optimized
     ? list.reduce((a, x) => a + (x.distanceFromPrevKm ?? 0), 0)
     : null;
@@ -164,6 +168,7 @@ export default function NewTripOrder() {
     return (
       <MapSheetLayout title="방문 순서 확인" onBack={() => safeBack(router)}>
         <EmptyState
+          icon="alert-circle-outline"
           title="선택된 현장이 없습니다"
           description="이전 화면으로 돌아가 현장을 선택해주세요"
         />
@@ -189,7 +194,9 @@ export default function NewTripOrder() {
         ) : null}
         {optimized && item.distanceFromPrevKm !== undefined ? (
           <Text style={styles.eta}>
-            {index === 0 ? '출발지 인근' : `+${item.distanceFromPrevKm}km · ${item.etaMinutes}분`}
+            {index === 0
+              ? '출발지 인근'
+              : `+${item.distanceFromPrevKm}km · ${item.etaMinutes}분`}
           </Text>
         ) : null}
       </View>
@@ -197,24 +204,26 @@ export default function NewTripOrder() {
         <Pressable
           onPress={() => moveUp(index)}
           disabled={index === 0}
+          accessibilityLabel="위로 이동"
           style={({ pressed }) => [
             styles.ctrlBtn,
             index === 0 && styles.ctrlDisabled,
-            pressed && styles.pressed,
+            pressed && { opacity: opacity.pressed },
           ]}
         >
-          <Text style={styles.ctrlText}>▲</Text>
+          <Ionicons name="chevron-up" size={14} color={colors.text} />
         </Pressable>
         <Pressable
           onPress={() => moveDown(index)}
           disabled={index === list.length - 1}
+          accessibilityLabel="아래로 이동"
           style={({ pressed }) => [
             styles.ctrlBtn,
             index === list.length - 1 && styles.ctrlDisabled,
-            pressed && styles.pressed,
+            pressed && { opacity: opacity.pressed },
           ]}
         >
-          <Text style={styles.ctrlText}>▼</Text>
+          <Ionicons name="chevron-down" size={14} color={colors.text} />
         </Pressable>
         <Pressable
           onPress={() =>
@@ -227,9 +236,14 @@ export default function NewTripOrder() {
               ],
             )
           }
-          style={({ pressed }) => [styles.ctrlBtn, styles.ctrlDanger, pressed && styles.pressed]}
+          accessibilityLabel="제외"
+          style={({ pressed }) => [
+            styles.ctrlBtn,
+            styles.ctrlDanger,
+            pressed && { opacity: opacity.pressed },
+          ]}
         >
-          <Text style={styles.ctrlDangerText}>×</Text>
+          <Ionicons name="close" size={16} color={colors.danger} />
         </Pressable>
       </View>
     </View>
@@ -242,35 +256,29 @@ export default function NewTripOrder() {
       mapFieldIds={list.map((f) => f.id)}
     >
       <View style={styles.head}>
-        <Text style={styles.titleLabel}>외근 제목 (선택)</Text>
-        <TextInput
+        <Input
+          label="외근 제목 (선택)"
           value={title}
           onChangeText={setTitle}
-          style={styles.titleInput}
           placeholder="예: 가로수 보수 공사, 동구 일상 점검"
           maxLength={50}
+          containerStyle={styles.titleField}
         />
         <Text style={styles.headTitle}>위에서부터 순서대로 방문합니다</Text>
-        <Text style={styles.headMeta}>▲▼ 로 순서, × 로 제외할 수 있습니다</Text>
-        <Pressable
+        <Text style={styles.headMeta}>
+          상하 화살표로 순서, × 로 제외할 수 있습니다
+        </Text>
+        <Button
           onPress={() => void handleOptimize()}
-          style={({ pressed }) => [
-            styles.optimizeBtn,
-            optimized && styles.optimizeBtnActive,
-            pressed && styles.pressed,
-          ]}
+          variant="secondary"
+          size="sm"
+          leftIcon={optimized ? 'checkmark-circle' : 'sparkles'}
+          style={[styles.optimizeBtn, optimized && styles.optimizeBtnActive]}
         >
-          <Text
-            style={[
-              styles.optimizeText,
-              optimized && styles.optimizeTextActive,
-            ]}
-          >
-            {optimized ? '✓ 최적 순서 적용됨 · 다시 추천' : '✨ 최적 순서 추천'}
-          </Text>
-        </Pressable>
+          {optimized ? '최적 순서 적용됨 · 다시 추천' : '최적 순서 추천'}
+        </Button>
         {totalDistanceKm !== null && totalEtaMin !== null ? (
-          <View style={styles.summaryCard}>
+          <Card padding="md" style={styles.summaryCard}>
             <View style={styles.summaryItem}>
               <Text style={styles.summaryLabel}>총 거리</Text>
               <Text style={styles.summaryValue}>{totalDistanceKm.toFixed(1)} km</Text>
@@ -285,7 +293,7 @@ export default function NewTripOrder() {
               <Text style={styles.summaryLabel}>방문 현장</Text>
               <Text style={styles.summaryValue}>{list.length}곳</Text>
             </View>
-          </View>
+          </Card>
         ) : null}
       </View>
       <BottomSheetFlatList
@@ -294,23 +302,20 @@ export default function NewTripOrder() {
         renderItem={renderItem}
         contentContainerStyle={styles.list}
       />
-      <Pressable
-        onPress={handleConfirm}
-        disabled={submitting || list.length === 0}
-        style={({ pressed }) => [
-          styles.fab,
-          (submitting || list.length === 0) && styles.fabDisabled,
-          pressed && styles.pressed,
-        ]}
-      >
-        <Text style={styles.fabText}>
-          {submitting
-            ? '외근 시작 중...'
-            : list.length === 0
-              ? '방문할 현장 없음'
-              : `외근 시작 확정 (${list.length}곳)`}
-        </Text>
-      </Pressable>
+      <View style={styles.ctaWrap}>
+        <Button
+          onPress={handleConfirm}
+          disabled={list.length === 0}
+          loading={submitting}
+          size="lg"
+          fullWidth
+          leftIcon="play-circle"
+        >
+          {list.length === 0
+            ? '방문할 현장 없음'
+            : `외근 시작 확정 (${list.length}곳)`}
+        </Button>
+      </View>
     </MapSheetLayout>
   );
 }
@@ -321,24 +326,17 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
     paddingBottom: spacing.sm,
   },
-  headTitle: { fontSize: fontSize.base, color: colors.text, fontWeight: '600' },
-  headMeta: { fontSize: fontSize.sm, color: colors.textMuted, marginTop: 2 },
-  titleLabel: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  titleInput: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+  titleField: { marginBottom: spacing.md },
+  headTitle: {
     fontSize: fontSize.base,
     color: colors.text,
-    marginBottom: spacing.md,
+    fontWeight: fontWeight.semibold,
+  },
+  headMeta: { fontSize: fontSize.sm, color: colors.textMuted, marginTop: 2 },
+  optimizeBtn: { marginTop: spacing.sm, alignSelf: 'flex-start' },
+  optimizeBtnActive: {
+    backgroundColor: colors.successMuted,
+    borderColor: colors.success,
   },
   list: { paddingHorizontal: spacing.lg, paddingBottom: 120 },
   row: {
@@ -360,77 +358,66 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  orderText: { color: '#fff', fontSize: fontSize.sm, fontWeight: '700' },
-  rowText: { flex: 1 },
-  address: { fontSize: fontSize.base, color: colors.text, fontWeight: '600' },
-  detail: { fontSize: fontSize.sm, color: colors.textMuted, marginTop: 2 },
-  eta: { fontSize: fontSize.xs, color: colors.primary, marginTop: 4, fontWeight: '600' },
-  optimizeBtn: {
-    marginTop: spacing.sm,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.primary + '55',
-    backgroundColor: colors.primary + '10',
-    alignSelf: 'flex-start',
-  },
-  optimizeBtnActive: {
-    backgroundColor: colors.success + '15',
-    borderColor: colors.success,
-  },
-  optimizeText: {
+  orderText: {
+    color: colors.onPrimary,
     fontSize: fontSize.sm,
-    color: colors.primary,
-    fontWeight: '700',
+    fontWeight: fontWeight.bold,
   },
-  optimizeTextActive: { color: colors.success },
+  rowText: { flex: 1 },
+  address: {
+    fontSize: fontSize.base,
+    color: colors.text,
+    fontWeight: fontWeight.semibold,
+    lineHeight: lineHeight.base,
+  },
+  detail: { fontSize: fontSize.sm, color: colors.textMuted, marginTop: 2 },
+  eta: {
+    fontSize: fontSize.xs,
+    color: colors.primary,
+    marginTop: 4,
+    fontWeight: fontWeight.semibold,
+  },
   controls: { gap: 4 },
   ctrlBtn: {
     width: 32,
     height: 26,
     borderRadius: radius.sm,
-    backgroundColor: colors.background,
+    backgroundColor: colors.surfaceMuted,
     borderWidth: 1,
     borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  ctrlDisabled: { opacity: 0.35 },
-  ctrlText: { fontSize: 12, color: colors.text, fontWeight: '700' },
-  ctrlDanger: { borderColor: colors.danger + '55', backgroundColor: colors.danger + '08' },
-  ctrlDangerText: { fontSize: 16, color: colors.danger, fontWeight: '700' },
+  ctrlDisabled: { opacity: opacity.disabled },
+  ctrlDanger: {
+    borderColor: colors.danger,
+    backgroundColor: colors.dangerMuted,
+  },
   summaryCard: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: spacing.sm,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.md,
+    backgroundColor: colors.successMuted,
     borderWidth: 1,
-    borderColor: colors.success + '40',
-    backgroundColor: colors.success + '0a',
+    borderColor: colors.success,
   },
   summaryItem: { flex: 1, alignItems: 'center' },
-  summaryLabel: { fontSize: fontSize.xs, color: colors.textMuted, fontWeight: '600' },
+  summaryLabel: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    fontWeight: fontWeight.semibold,
+  },
   summaryValue: {
     fontSize: fontSize.base,
     color: colors.text,
-    fontWeight: '700',
+    fontWeight: fontWeight.bold,
     marginTop: 2,
   },
   summaryDivider: { width: 1, height: 28, backgroundColor: colors.border },
-  pressed: { opacity: 0.7 },
-  fab: {
+  ctaWrap: {
     position: 'absolute',
     bottom: spacing.xl,
     left: spacing.xl,
     right: spacing.xl,
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.lg,
-    borderRadius: radius.pill,
-    alignItems: 'center',
   },
-  fabDisabled: { backgroundColor: colors.border },
-  fabText: { color: '#fff', fontSize: fontSize.base, fontWeight: '700' },
 });

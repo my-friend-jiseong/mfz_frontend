@@ -1,16 +1,25 @@
 import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useFieldStore } from '@/stores/fieldStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useTripStore } from '@/stores/tripStore';
 import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
+import { Input } from '@/components/ui/Input';
+import { Button } from '@/components/ui/Button';
 import { safeBack } from '@/utils/backNavigation';
 import { colors } from '@/theme/colors';
-import { spacing, radius, fontSize } from '@/theme/spacing';
-import { FIELD_STATUS_VALUES, FIELD_STATUS_LABEL, type Field, type FieldStatus } from '@/types/entities';
+import { spacing, radius, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
+import { opacity } from '@/theme/motion';
+import {
+  FIELD_STATUS_VALUES,
+  FIELD_STATUS_LABEL,
+  type Field,
+  type FieldStatus,
+} from '@/types/entities';
 
 export default function NewTripSelect() {
   const router = useRouter();
@@ -59,7 +68,6 @@ export default function NewTripSelect() {
   const toggleSelectAll = () => {
     const visibleIds = fields.map((f) => f.id);
     if (visibleAllSelected) {
-      // 보이는 현장만 선택 해제
       setSelectedIds((prev) => prev.filter((id) => !visibleIds.includes(id)));
     } else {
       setSelectedIds((prev) => Array.from(new Set([...prev, ...visibleIds])));
@@ -78,6 +86,7 @@ export default function NewTripSelect() {
     return (
       <MapSheetLayout title="외근 시작" onBack={() => safeBack(router)}>
         <EmptyState
+          icon="briefcase"
           title="이미 진행 중인 외근이 있습니다"
           description="현재 외근을 종료한 뒤 새 외근을 시작해주세요"
         />
@@ -90,17 +99,19 @@ export default function NewTripSelect() {
     return (
       <Pressable
         onPress={() => toggle(item.id)}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked }}
         style={({ pressed }) => [
           styles.row,
           checked && styles.rowChecked,
-          pressed && styles.pressed,
+          pressed && { opacity: opacity.pressed },
         ]}
       >
-        <View
-          style={[styles.checkbox, checked && styles.checkboxChecked]}
-        >
-          {checked ? <Text style={styles.checkMark}>✓</Text> : null}
-        </View>
+        <Ionicons
+          name={checked ? 'checkbox' : 'square-outline'}
+          size={22}
+          color={checked ? colors.primary : colors.textMuted}
+        />
         <View style={styles.rowText}>
           <Text style={styles.address}>{item.address}</Text>
           {item.addressDetail ? (
@@ -120,13 +131,12 @@ export default function NewTripSelect() {
             {selectedIds.length}/{myFields.length}개
           </Text>
         </View>
-        <TextInput
+        <Input
           value={search}
           onChangeText={setSearch}
           placeholder="주소·상세주소 검색"
-          style={styles.searchInput}
           autoCapitalize="none"
-          clearButtonMode="while-editing"
+          leftSlot={<Ionicons name="search" size={18} color={colors.textMuted} />}
         />
         <View style={styles.chipRow}>
           {FIELD_STATUS_VALUES.map((s) => {
@@ -136,15 +146,16 @@ export default function NewTripSelect() {
               <Pressable
                 key={s}
                 onPress={() => toggleStatus(s)}
-                style={[
+                style={({ pressed }) => [
                   styles.chip,
                   active && { backgroundColor: c + '22', borderColor: c },
+                  pressed && { opacity: opacity.pressed },
                 ]}
               >
                 <Text
                   style={[
                     styles.chipText,
-                    active && { color: c, fontWeight: '700' },
+                    active && { color: c, fontWeight: fontWeight.bold },
                   ]}
                 >
                   {FIELD_STATUS_LABEL[s]}
@@ -153,7 +164,19 @@ export default function NewTripSelect() {
             );
           })}
           {fields.length > 0 ? (
-            <Pressable onPress={toggleSelectAll} style={styles.chip}>
+            <Pressable
+              onPress={toggleSelectAll}
+              style={({ pressed }) => [
+                styles.chip,
+                styles.chipReset,
+                pressed && { opacity: opacity.pressed },
+              ]}
+            >
+              <Ionicons
+                name={visibleAllSelected ? 'remove-circle-outline' : 'checkbox-outline'}
+                size={12}
+                color={colors.textMuted}
+              />
               <Text style={styles.chipText}>
                 {visibleAllSelected ? '모두 해제' : '모두 선택'}
               </Text>
@@ -168,6 +191,7 @@ export default function NewTripSelect() {
         contentContainerStyle={styles.list}
         ListEmptyComponent={
           <EmptyState
+            icon={search || statusFilter.length > 0 ? 'search-outline' : 'location-outline'}
             title={
               search || statusFilter.length > 0
                 ? '검색 결과가 없습니다'
@@ -181,19 +205,17 @@ export default function NewTripSelect() {
           />
         }
       />
-      <Pressable
-        onPress={handleNext}
-        disabled={selectedIds.length === 0}
-        style={({ pressed }) => [
-          styles.fab,
-          selectedIds.length === 0 && styles.fabDisabled,
-          pressed && styles.pressed,
-        ]}
-      >
-        <Text style={styles.fabText}>
+      <View style={styles.ctaWrap}>
+        <Button
+          onPress={handleNext}
+          disabled={selectedIds.length === 0}
+          size="lg"
+          fullWidth
+          rightIcon="arrow-forward"
+        >
           다음 ({selectedIds.length})
-        </Text>
-      </Pressable>
+        </Button>
+      </View>
     </MapSheetLayout>
   );
 }
@@ -210,20 +232,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  headTitle: { fontSize: fontSize.base, color: colors.text, fontWeight: '700' },
-  headMeta: { fontSize: fontSize.sm, color: colors.primary, fontWeight: '700' },
-  searchInput: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    fontSize: fontSize.sm,
+  headTitle: {
+    fontSize: fontSize.base,
     color: colors.text,
+    fontWeight: fontWeight.bold,
+  },
+  headMeta: {
+    fontSize: fontSize.sm,
+    color: colors.primary,
+    fontWeight: fontWeight.bold,
   },
   chipRow: { flexDirection: 'row', gap: spacing.xs, flexWrap: 'wrap' },
   chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
     borderRadius: radius.pill,
@@ -231,6 +254,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
+  chipReset: { borderStyle: 'dashed' },
   chipText: { fontSize: fontSize.xs, color: colors.textMuted },
   list: { paddingHorizontal: spacing.lg, paddingBottom: 120 },
   row: {
@@ -246,36 +270,20 @@ const styles = StyleSheet.create({
   },
   rowChecked: {
     borderColor: colors.primary,
-    backgroundColor: colors.primary + '08',
+    backgroundColor: colors.primaryMuted,
   },
-  pressed: { opacity: 0.7 },
-  checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 4,
-    borderWidth: 2,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkboxChecked: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  checkMark: { color: '#fff', fontSize: 14, fontWeight: '700' },
   rowText: { flex: 1 },
-  address: { fontSize: fontSize.base, color: colors.text, fontWeight: '600' },
+  address: {
+    fontSize: fontSize.base,
+    color: colors.text,
+    fontWeight: fontWeight.semibold,
+    lineHeight: lineHeight.base,
+  },
   detail: { fontSize: fontSize.sm, color: colors.textMuted, marginTop: 2 },
-  fab: {
+  ctaWrap: {
     position: 'absolute',
     bottom: spacing.xl,
     left: spacing.xl,
     right: spacing.xl,
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.lg,
-    borderRadius: radius.pill,
-    alignItems: 'center',
   },
-  fabDisabled: { backgroundColor: colors.border },
-  fabText: { color: '#fff', fontSize: fontSize.base, fontWeight: '700' },
 });
