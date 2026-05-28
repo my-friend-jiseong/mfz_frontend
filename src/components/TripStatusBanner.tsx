@@ -21,7 +21,25 @@ export function TripStatusBanner() {
   const router = useRouter();
   const activeTripId = useTripStore((s) => s.activeTripId);
   const getById = useTripStore((s) => s.getById);
-  const allDestinations = useDestinationStore((s) => s.destinations);
+  // 좁은 selector — 전체 destinations 배열을 구독하면 다른 trip 의 mutation 까지
+  // root layout 재렌더로 이어짐. number 반환이라 === equality 로 변할 때만 react.
+  const total = useDestinationStore((s) =>
+    activeTripId === null
+      ? 0
+      : s.destinations.reduce(
+          (n, d) => n + (d.tripId === activeTripId ? 1 : 0),
+          0,
+        ),
+  );
+  const resolved = useDestinationStore((s) =>
+    activeTripId === null
+      ? 0
+      : s.destinations.reduce(
+          (n, d) =>
+            n + (d.tripId === activeTripId && d.status !== 'pending' ? 1 : 0),
+          0,
+        ),
+  );
   const [, setTick] = useState(0);
 
   useEffect(() => {
@@ -33,10 +51,6 @@ export function TripStatusBanner() {
   if (activeTripId === null) return null;
   const trip = getById(activeTripId);
   if (!trip) return null;
-
-  const tripDests = allDestinations.filter((d) => d.tripId === activeTripId);
-  const resolved = tripDests.filter((d) => d.status !== 'pending').length;
-  const total = tripDests.length;
 
   return (
     <Pressable

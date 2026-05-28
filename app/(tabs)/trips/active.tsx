@@ -12,6 +12,7 @@ import {
   VISIT_STATUS_BADGE,
   DESTINATION_STATUS_BADGE,
 } from '@/theme/statusBadge';
+import type { Visit } from '@/types/entities';
 import { TripSummaryCard } from '@/components/trips/TripSummaryCard';
 import { CurrentDestCard } from '@/components/trips/CurrentDestCard';
 import { AllDoneCard } from '@/components/trips/AllDoneCard';
@@ -82,13 +83,15 @@ export default function ActiveTrip() {
     return { total, arrived, skipped, resolved, ratio };
   }, [destinations]);
 
-  const visitForDestination = (fieldId: string) => {
-    if (!activeTripId) return null;
-    return (
-      allVisits.find((v) => v.tripId === activeTripId && v.fieldId === fieldId) ??
-      null
-    );
-  };
+  // O(1) visit lookup. 매 row 마다 allVisits.find 풀스캔하던 회로 차단.
+  const visitByFieldId = useMemo(() => {
+    const map = new Map<string, Visit>();
+    if (!activeTripId) return map;
+    for (const v of allVisits) {
+      if (v.tripId === activeTripId) map.set(v.fieldId, v);
+    }
+    return map;
+  }, [allVisits, activeTripId]);
 
   const elapsedLabel = useMemo(() => {
     void elapsedTick;
@@ -355,7 +358,11 @@ export default function ActiveTrip() {
     }
   };
 
-  const ListHeader = () => (
+  // 함수 컴포넌트 (`() => JSX`) 형태로 ListHeaderComponent 에 넘기면 매 render 마다
+  // 새 컴포넌트 reference → FlatList 가 헤더 서브트리를 unmount/remount.
+  // React element 로 넘겨 일반 children 재조정만 받도록 함.
+  const currentDestField = currentDest ? getField(currentDest.fieldId) : undefined;
+  const listHeader = (
     <View style={styles.header}>
       <TripSummaryCard
         startedAtLabel={elapsedLabel}
@@ -364,26 +371,23 @@ export default function ActiveTrip() {
         total={progress.total}
         ratio={progress.ratio}
       />
-      {currentDest
-        ? (() => {
-            const field = getField(currentDest.fieldId);
-            return (
-              <CurrentDestCard
-                order={currentDest.order}
-                address={field?.address ?? '알 수 없는 현장'}
-                addressDetail={field?.addressDetail ?? undefined}
-                onNavigate={() => void handleNavigate()}
-                onCheckIn={handleCheckIn}
-                onSkip={handleSkip}
-                onReoptimize={
-                  pendingDests.length >= 2 ? () => void handleReoptimize() : undefined
-                }
-                optimizing={optimizing}
-                pendingCount={pendingDests.length}
-              />
-            );
-          })()
-        : <AllDoneCard />}
+      {currentDest ? (
+        <CurrentDestCard
+          order={currentDest.order}
+          address={currentDestField?.address ?? '알 수 없는 현장'}
+          addressDetail={currentDestField?.addressDetail ?? undefined}
+          onNavigate={() => void handleNavigate()}
+          onCheckIn={handleCheckIn}
+          onSkip={handleSkip}
+          onReoptimize={
+            pendingDests.length >= 2 ? () => void handleReoptimize() : undefined
+          }
+          optimizing={optimizing}
+          pendingCount={pendingDests.length}
+        />
+      ) : (
+        <AllDoneCard />
+      )}
       <Text style={styles.sectionTitle}>목적지 ({destinations.length})</Text>
     </View>
   );
@@ -392,7 +396,7 @@ export default function ActiveTrip() {
     const field = getField(item.fieldId);
     const isCurrent = item.id === currentDest?.id;
     // arrived 인 경우 visit 결과 라벨 우선 노출 (정상/부재/거절 등).
-    const visit = item.status === 'arrived' ? visitForDestination(item.fieldId) : null;
+    const visit = item.status === 'arrived' ? visitByFieldId.get(item.fieldId) ?? null : null;
 
     const m = visit
       ? { ...VISIT_STATUS_BADGE[visit.status], label: VISIT_STATUS_LABEL[visit.status] }
@@ -434,7 +438,7 @@ export default function ActiveTrip() {
           data={destinations}
           keyExtractor={(d) => String(d.id)}
           renderItem={renderItem}
-          ListHeaderComponent={ListHeader}
+          ListHeaderComponent={listHeader}
           contentContainerStyle={styles.list}
         />
       </MapSheetLayout>

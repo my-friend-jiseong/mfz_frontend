@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Badge, type BadgeShape, type BadgeTone } from '@/components/ui/Badge';
 import { colors } from '@/theme/colors';
@@ -15,7 +16,10 @@ interface Props {
   onPress: () => void;
 }
 
-export function DestinationRow({
+// 부모(active.tsx) 의 분 단위 setElapsedTick 으로 인한 헤더 재렌더에
+// row 까지 휩쓸리지 않도록 props 비교 memo. statusLabel/Tone/Shape 모두
+// primitive 또는 narrow string union 이므로 shallow compare 통과.
+export const DestinationRow = memo(function DestinationRow({
   order,
   address,
   addressDetail,
@@ -46,7 +50,7 @@ export function DestinationRow({
       <Badge label={statusLabel} tone={statusTone} shape={statusShape} />
     </Pressable>
   );
-}
+});
 
 const styles = StyleSheet.create({
   row: {
