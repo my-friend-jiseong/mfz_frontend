@@ -64,25 +64,8 @@ export const typography = {
     fontWeight: fontWeight.regular,
     lineHeight: lineHeight.xs,
   } satisfies TextStyle,
-  // 강조 variant (label·메타 등에서 사용).
-  bodyBold: {
-    fontFamily: fontFamily.bold,
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.bold,
-    lineHeight: lineHeight.base,
-  } satisfies TextStyle,
-  bodySmBold: {
-    fontFamily: fontFamily.bold,
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.bold,
-    lineHeight: lineHeight.sm,
-  } satisfies TextStyle,
-  captionBold: {
-    fontFamily: fontFamily.bold,
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.bold,
-    lineHeight: lineHeight.xs,
-  } satisfies TextStyle,
+  // 강조는 Text 컴포넌트의 weight prop 로 일관 적용 — bodyBold/bodySmBold/captionBold
+  // 토큰은 정의했었으나 callsite 0 + Variant union 미노출이라 dead. 제거.
 } as const;
 
 // useFonts 에 넘길 폰트 맵. 키는 fontFamily 값과 일치.

@@ -7,21 +7,21 @@ import { typography, fontFamily } from '@/theme/typography';
 import { fontWeight } from '@/theme/spacing';
 import { colors } from '@/theme/colors';
 
-type Variant = 'h1' | 'h2' | 'h3' | 'bodyLg' | 'body' | 'bodySm' | 'caption';
-type Weight = 'regular' | 'medium' | 'semibold' | 'bold' | 'heavy';
+type Variant = keyof typeof typography;
+type Weight = keyof typeof fontFamily;
+
+// Text 의 color prop 으로 허용하는 colors 키 — semantic foreground 만.
+// 새 키 추가 시 colors.ts 갱신 후 이 union 만 한 줄 추가 (lookup 은 colors[color] 직접).
 type ColorKey =
   | 'text'
   | 'textMuted'
   | 'textSubtle'
-  | 'textDisabled'
   | 'textInverse'
-  | 'textLink'
   | 'primary'
   | 'success'
   | 'danger'
   | 'warning'
   | 'info'
-  | 'accent'
   | 'onPrimary'
   | 'onDanger';
 
@@ -31,23 +31,6 @@ interface Props extends RNTextProps {
   color?: ColorKey;
   align?: 'left' | 'center' | 'right';
 }
-
-const COLOR_MAP: Record<ColorKey, string> = {
-  text: colors.text,
-  textMuted: colors.textMuted,
-  textSubtle: colors.textSubtle,
-  textDisabled: colors.textDisabled,
-  textInverse: colors.textInverse,
-  textLink: colors.textLink,
-  primary: colors.primary,
-  success: colors.success,
-  danger: colors.danger,
-  warning: colors.warning,
-  info: colors.info,
-  accent: colors.accent,
-  onPrimary: colors.onPrimary,
-  onDanger: colors.onDanger,
-};
 
 // 디자인 시스템 typography composite + semantic color 일괄 적용.
 // 사용 예:
@@ -75,7 +58,7 @@ export function Text({
       style={[
         base,
         weightOverride,
-        { color: COLOR_MAP[color] },
+        { color: colors[color] },
         align ? { textAlign: align } : null,
         style,
       ]}
