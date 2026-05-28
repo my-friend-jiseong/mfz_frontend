@@ -188,6 +188,9 @@ export default function FieldDetail() {
       {field.addressDetail ? (
         <Text style={styles.detail}>{field.addressDetail}</Text>
       ) : null}
+      {field.projectName ? (
+        <Text style={styles.detail}>📁 {field.projectName}</Text>
+      ) : null}
       {field.categories && field.categories.length > 0 ? (
         <Text style={styles.detail}>분류: {field.categories.join(', ')}</Text>
       ) : null}

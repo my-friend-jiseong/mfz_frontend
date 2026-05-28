@@ -27,6 +27,7 @@ import {
   type SelectedAddress,
 } from '@/utils/addressSearch';
 import { EmptyState } from '@/components/EmptyState';
+import { ProjectPicker } from '@/components/ProjectPicker';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
 
@@ -54,14 +55,16 @@ export default function EditField() {
       addressDetail: field?.addressDetail ?? '',
       status: field?.status ?? ('pending' as FieldStatus),
       categories: (field?.categories ?? []).join(', '),
+      projectId: field?.projectId ?? null,
     }),
-    [field?.addressDetail, field?.status, field?.categories],
+    [field?.addressDetail, field?.status, field?.categories, field?.projectId],
   );
   const initialRef = useRef(initial);
 
   const [addressDetail, setAddressDetail] = useState(initial.addressDetail);
   const [status, setStatus] = useState<FieldStatus>(initial.status);
   const [categoriesStr, setCategoriesStr] = useState(initial.categories);
+  const [projectId, setProjectId] = useState<string | null>(initial.projectId);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -195,6 +198,7 @@ export default function EditField() {
     detailTrim !== initialRef.current.addressDetail.trim() ||
     status !== initialRef.current.status ||
     categoriesTrim !== initialRef.current.categories.trim() ||
+    projectId !== initialRef.current.projectId ||
     newAddress !== null;
 
   const clearFieldErr = (k: keyof FieldErrors) =>
@@ -214,9 +218,10 @@ export default function EditField() {
     const detailChanged = detailTrim !== initialRef.current.addressDetail.trim();
     const statusChanged = status !== initialRef.current.status;
     const categoriesChanged = categoriesTrim !== initialRef.current.categories.trim();
+    const projectIdChanged = projectId !== initialRef.current.projectId;
     const addressChanged = newAddress !== null;
 
-    if (detailChanged || categoriesChanged || addressChanged) {
+    if (detailChanged || categoriesChanged || projectIdChanged || addressChanged) {
       const body: UpdateFieldBody = {};
       if (detailChanged) body.detailAddress = detailTrim;
       if (categoriesChanged) {
@@ -224,6 +229,7 @@ export default function EditField() {
           ? categoriesTrim.split(',').map((c) => c.trim()).filter(Boolean)
           : [];
       }
+      if (projectIdChanged) body.projectId = projectId; // null → 해제
       if (addressChanged && newAddress) {
         body.roadAddress = newAddress.roadAddress;
         body.lat = newAddress.lat;
@@ -488,6 +494,14 @@ export default function EditField() {
         {fieldErrors.address ? (
           <Text style={styles.fieldError}>{fieldErrors.address}</Text>
         ) : null}
+
+        <Text style={styles.label}>프로젝트 (선택)</Text>
+        <ProjectPicker
+          value={projectId}
+          onChange={setProjectId}
+          initialLabel={field.projectName}
+          disabled={submitting}
+        />
 
         <Text style={styles.label}>분류 (쉼표로 구분)</Text>
         <TextInput

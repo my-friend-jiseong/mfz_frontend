@@ -56,17 +56,17 @@
 ### S2. 현장 추가 (ERD v2 계약)
 1. 현장 탭 → "현장 추가" → [fields/new](<../app/(tabs)/fields/new.tsx>).
 2. 주소 검색(카카오) → 항목 선택 → 좌표 자동 채움(한국 영역 가드).
-3. 입력: **분류(categories, 쉼표 구분)**, 상세주소, 상태. (구 "제목" 입력 제거 확인)
-4. 제출 → `POST /api/fields` (body: name·status·roadAddress·detailAddress·lat·lng·categories?). **jibunAddress/title 미전송** 확인.
+3. 입력: **프로젝트(picker: 목록·인라인 생성·해제)**, **분류(categories, 쉼표 구분)**, 상세주소, 상태. (구 "제목" 입력 제거 확인)
+4. 제출 → `POST /api/fields` (body: name·status·roadAddress·detailAddress·lat·lng·`projectId?`·categories?). **jibunAddress/title 미전송** 확인. 응답에 `projectName` 동반.
 5. 중복 주소 → `duplicate_address_warning_required` → confirm → `forceCreateWithDuplicate=true` 재호출 → 성공.
 6. 최소 2개 현장 확보(외근 다중 선택용).
 
 ### S3. 현장 상세 / 수정
 1. 현장 카드 → [fields/[id]](<../app/(tabs)/fields/[id]/index.tsx>).
-2. 헤더: **주소**가 제목 자리(구 title 폴백 제거), **분류 칩**, 좌표, 길찾기.
+2. 헤더: **주소**가 제목 자리(구 title 폴백 제거), **📁 projectName**(설정 시), **분류 칩**, 좌표, 길찾기.
 3. 상태 chip 탭 → 상태 선택 → `PATCH /api/fields/{id}/status` → 즉시 갱신 / 빠른연속탭 가드.
 4. **현장 직접 메모**: 텍스트 추가 → `POST /api/fields/{id}/memos`. **사진** 추가 → `POST /api/fields/{id}/photos`. (음성 녹음 버튼 부재 확인)
-5. 수정 화면 [edit](<../app/(tabs)/fields/[id]/edit.tsx>) → 분류·상세주소·상태·주소 변경 → 저장. (제목 입력 부재 확인)
+5. 수정 화면 [edit](<../app/(tabs)/fields/[id]/edit.tsx>) → 프로젝트·분류·상세주소·상태·주소 변경 → 저장. (제목 입력 부재 확인) `PATCH projectId:null` 로 해제, `projectId` 지정으로 재설정 가능 — 검증 완료(2026-05-28).
 6. 방문 이력 행: 날짜·상태만(첨부 카운트 부재 확인).
 
 ### S4. 외근 시작 → 진행

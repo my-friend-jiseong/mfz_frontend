@@ -23,6 +23,7 @@ interface FieldCore {
   categories?: string[];
   tags?: string[];
   projectId?: string | null;
+  projectName?: string | null;
   updatedAt: string;
 }
 

@@ -53,6 +53,8 @@ export interface Field {
   userId: string;
   // ERD v2: 현장은 프로젝트에 선택적으로 소속 (fields.project_id).
   projectId?: string | null;
+  // 백엔드 응답에 함께 오는 프로젝트 이름 — UI 표시용(편의).
+  projectName?: string | null;
   status: FieldStatus;
   // 주소·좌표는 locations 테이블 출처 (fields.location_id 1:1). UI 표시용으로 평탄 보관.
   address: string;

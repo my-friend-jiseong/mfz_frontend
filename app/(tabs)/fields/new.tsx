@@ -27,6 +27,7 @@ import {
   MIN_KEYWORD_LEN,
   type SelectedAddress,
 } from '@/utils/addressSearch';
+import { ProjectPicker } from '@/components/ProjectPicker';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
 
@@ -51,6 +52,7 @@ export default function NewField() {
   const [manualLngStr, setManualLngStr] = useState('');
 
   const [selected, setSelected] = useState<SelectedAddress | null>(null);
+  const [projectId, setProjectId] = useState<string | null>(null);
   const [categoriesStr, setCategoriesStr] = useState('');
   const [detail, setDetail] = useState('');
   const [status, setStatus] = useState<FieldStatus>('pending');
@@ -147,6 +149,7 @@ export default function NewField() {
       detailAddress: detail,
       lat: selected.lat,
       lng: selected.lng,
+      ...(projectId ? { projectId } : {}),
       ...(categories.length > 0 ? { categories } : {}),
       ...(selected.sido ? { sido: selected.sido } : {}),
       ...(selected.sigungu ? { sigungu: selected.sigungu } : {}),
@@ -349,6 +352,9 @@ export default function NewField() {
                 </Text>
               ) : null}
             </View>
+
+            <Text style={styles.label}>프로젝트 (선택)</Text>
+            <ProjectPicker value={projectId} onChange={setProjectId} />
 
             <Text style={styles.label}>분류 (선택, 쉼표로 구분)</Text>
             <TextInput
