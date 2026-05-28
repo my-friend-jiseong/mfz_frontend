@@ -6,7 +6,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,8 +13,9 @@ import { useRouter } from 'expo-router';
 import { useAuthStore } from '@/stores/authStore';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { Text } from '@/components/ui/Text';
 import { colors } from '@/theme/colors';
-import { spacing, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
+import { spacing } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
 import { fmtDate } from '@/utils/datetime';
 
@@ -54,8 +54,14 @@ function MenuRow({
       ]}
     >
       <Ionicons name={icon} size={18} color={colors.textMuted} />
-      <Text style={styles.menuLabel}>{label}</Text>
-      {value ? <Text style={styles.menuValue}>{value}</Text> : null}
+      <Text variant="bodySm" weight="semibold" style={styles.menuLabel}>
+        {label}
+      </Text>
+      {value ? (
+        <Text variant="bodySm" color="textMuted">
+          {value}
+        </Text>
+      ) : null}
       {interactive ? (
         <Ionicons name="chevron-forward" size={16} color={colors.textSubtle} />
       ) : null}
@@ -112,13 +118,26 @@ export default function Profile() {
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.avatarBox}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{initialOf(user?.name)}</Text>
+            <Text color="onPrimary" style={styles.avatarText}>
+              {initialOf(user?.name)}
+            </Text>
           </View>
-          <Text style={styles.name}>{user?.name ?? '-'}</Text>
-          <Text style={styles.email}>{user?.email ?? '-'}</Text>
+          <Text variant="h2" align="center" style={styles.name}>
+            {user?.name ?? '-'}
+          </Text>
+          <Text variant="bodySm" color="textMuted" align="center">
+            {user?.email ?? '-'}
+          </Text>
         </View>
 
-        <Text style={styles.sectionTitle}>계정</Text>
+        <Text
+          variant="caption"
+          weight="bold"
+          color="textMuted"
+          style={styles.sectionTitle}
+        >
+          계정
+        </Text>
         <Card padding="none" style={styles.sectionCard}>
           <MenuRow icon="mail-outline" label="이메일" value={user?.email ?? '-'} />
           <View style={styles.divider} />
@@ -129,7 +148,14 @@ export default function Profile() {
           />
         </Card>
 
-        <Text style={styles.sectionTitle}>정책·정보</Text>
+        <Text
+          variant="caption"
+          weight="bold"
+          color="textMuted"
+          style={styles.sectionTitle}
+        >
+          정책·정보
+        </Text>
         <Card padding="none" style={styles.sectionCard}>
           <MenuRow
             icon="document-text-outline"
@@ -181,26 +207,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarText: {
-    color: colors.onPrimary,
-    fontSize: 36,
-    fontWeight: fontWeight.heavy,
-  },
-  name: {
-    fontSize: fontSize.xl,
-    fontWeight: fontWeight.heavy,
-    color: colors.text,
-    marginTop: spacing.sm,
-    lineHeight: lineHeight.xl,
-  },
-  email: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-  },
+  // 매직 넘버 36 — typography scale 밖. avatar 1 곳 전용.
+  avatarText: { fontSize: 36 },
+  name: { marginTop: spacing.sm },
   sectionTitle: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
-    fontWeight: fontWeight.bold,
     marginTop: spacing.xl,
     marginBottom: spacing.sm,
     paddingHorizontal: spacing.xs,
@@ -216,19 +226,10 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     minHeight: 48,
   },
-  menuLabel: {
-    flex: 1,
-    fontSize: fontSize.sm,
-    color: colors.text,
-    fontWeight: fontWeight.semibold,
-  },
-  menuValue: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-  },
+  menuLabel: { flex: 1 },
   divider: {
     height: 1,
-    backgroundColor: colors.divider,
+    backgroundColor: colors.borderMuted,
     marginLeft: spacing.lg + 18 + spacing.md, // icon + gap 만큼 왼쪽 들여쓰기
   },
   logout: { marginTop: spacing.xl },
