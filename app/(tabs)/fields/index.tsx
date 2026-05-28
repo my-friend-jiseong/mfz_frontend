@@ -1,15 +1,23 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useFieldStore } from '@/stores/fieldStore';
 import { useAuthStore } from '@/stores/authStore';
 import { FieldCard } from '@/components/FieldCard';
 import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
-import { FIELD_STATUS_VALUES, FIELD_STATUS_LABEL, type FieldStatus } from '@/types/entities';
+import { Input } from '@/components/ui/Input';
+import { Button } from '@/components/ui/Button';
+import {
+  FIELD_STATUS_VALUES,
+  FIELD_STATUS_LABEL,
+  type FieldStatus,
+} from '@/types/entities';
 import { colors } from '@/theme/colors';
-import { spacing, radius, fontSize } from '@/theme/spacing';
+import { spacing, radius, fontSize, fontWeight } from '@/theme/spacing';
+import { opacity } from '@/theme/motion';
 
 // 노션 "데이터 필터" — 기간 프리셋 (시작일·종료일 직접 입력은 후속).
 // 'default_30d' 는 백엔드 기본값(visit 기준 최근 30일).
@@ -20,6 +28,7 @@ const RANGE_LABEL: Record<RangePreset, string> = {
   '1d': '오늘',
   all: '전체',
 };
+const RANGE_ORDER: RangePreset[] = ['all', '1d', '7d', 'default_30d'];
 
 function rangeToParams(preset: RangePreset): {
   visitDateScope?: 'all' | 'none';
@@ -44,9 +53,7 @@ export default function FieldsList() {
   const refresh = useFieldStore((s) => s.refresh);
 
   const [search, setSearch] = useState('');
-  // status 다중 선택. 빈 배열 = 전체
   const [statusFilter, setStatusFilter] = useState<FieldStatus[]>([]);
-  // 기간 프리셋 — 기본 'all' (신규 등록 직후도 보이도록)
   const [rangePreset, setRangePreset] = useState<RangePreset>('all');
 
   // 탭 진입 시 + status/기간 필터 변경 시 mine 페치
@@ -62,7 +69,6 @@ export default function FieldsList() {
     const mine = allFields.filter((f) => f.userId === userId);
     const q = search.trim().toLowerCase();
     if (!q) return mine;
-    // 클라이언트 측 텍스트 검색 — 주소·상세주소 LIKE
     return mine.filter(
       (f) =>
         f.address.toLowerCase().includes(q) ||
@@ -75,16 +81,17 @@ export default function FieldsList() {
       prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s],
     );
 
+  const hasFilter = statusFilter.length > 0 || rangePreset !== 'all';
+
   return (
     <MapSheetLayout title="현장">
       <View style={styles.toolbar}>
-        <TextInput
+        <Input
           value={search}
           onChangeText={setSearch}
           placeholder="주소·상세주소 검색"
-          style={styles.searchInput}
           autoCapitalize="none"
-          clearButtonMode="while-editing"
+          leftSlot={<Ionicons name="search" size={18} color={colors.textMuted} />}
         />
         <View style={styles.chipRow}>
           {FIELD_STATUS_VALUES.map((s) => {
@@ -94,15 +101,16 @@ export default function FieldsList() {
               <Pressable
                 key={s}
                 onPress={() => toggleStatus(s)}
-                style={[
+                style={({ pressed }) => [
                   styles.chip,
                   active && { backgroundColor: c + '22', borderColor: c },
+                  pressed && { opacity: opacity.pressed },
                 ]}
               >
                 <Text
                   style={[
                     styles.chipText,
-                    active && { color: c, fontWeight: '700' },
+                    active && { color: c, fontWeight: fontWeight.bold },
                   ]}
                 >
                   {FIELD_STATUS_LABEL[s]}
@@ -110,31 +118,43 @@ export default function FieldsList() {
               </Pressable>
             );
           })}
-          {statusFilter.length > 0 ? (
-            <Pressable onPress={() => setStatusFilter([])} style={styles.chip}>
-              <Text style={styles.chipText}>해제</Text>
+          {hasFilter ? (
+            <Pressable
+              onPress={() => {
+                setStatusFilter([]);
+                setRangePreset('all');
+              }}
+              style={({ pressed }) => [
+                styles.chip,
+                styles.chipReset,
+                pressed && { opacity: opacity.pressed },
+              ]}
+            >
+              <Ionicons name="close" size={12} color={colors.textMuted} />
+              <Text style={styles.chipText}>필터 해제</Text>
             </Pressable>
           ) : null}
         </View>
         <View style={styles.chipRow}>
-          {(Object.keys(RANGE_LABEL) as RangePreset[]).map((p) => {
+          {RANGE_ORDER.map((p) => {
             const active = rangePreset === p;
             return (
               <Pressable
                 key={p}
                 onPress={() => setRangePreset(p)}
-                style={[
+                style={({ pressed }) => [
                   styles.chip,
                   active && {
-                    backgroundColor: colors.primary + '15',
+                    backgroundColor: colors.primaryMuted,
                     borderColor: colors.primary,
                   },
+                  pressed && { opacity: opacity.pressed },
                 ]}
               >
                 <Text
                   style={[
                     styles.chipText,
-                    active && { color: colors.primary, fontWeight: '700' },
+                    active && { color: colors.primary, fontWeight: fontWeight.bold },
                   ]}
                 >
                   {RANGE_LABEL[p]}
@@ -156,31 +176,33 @@ export default function FieldsList() {
         contentContainerStyle={styles.list}
         ListEmptyComponent={
           <EmptyState
+            icon={search || hasFilter ? 'search-outline' : 'location-outline'}
             title={
-              search || statusFilter.length > 0
-                ? '검색 결과가 없습니다'
-                : '담당 현장이 없습니다'
+              search || hasFilter ? '검색 결과가 없습니다' : '담당 현장이 없습니다'
             }
             description={
-              search || statusFilter.length > 0
+              search || hasFilter
                 ? '검색어 또는 필터를 조정해보세요'
                 : '아래 버튼으로 새 현장을 등록하세요'
             }
           />
         }
       />
-      <Pressable
-        onPress={() => router.push('/(tabs)/fields/new' as never)}
-        style={({ pressed }) => [styles.fab, pressed && styles.pressed]}
-      >
-        <Text style={styles.fabText}>+ 새 현장</Text>
-      </Pressable>
+      <View style={styles.ctaWrap}>
+        <Button
+          onPress={() => router.push('/(tabs)/fields/new' as never)}
+          size="lg"
+          fullWidth
+          leftIcon="add-circle"
+        >
+          새 현장
+        </Button>
+      </View>
     </MapSheetLayout>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
   toolbar: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
@@ -188,22 +210,15 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     backgroundColor: colors.background,
   },
-  searchInput: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    fontSize: fontSize.sm,
-    color: colors.text,
-  },
   chipRow: {
     flexDirection: 'row',
     gap: spacing.xs,
     flexWrap: 'wrap',
   },
   chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
     borderRadius: radius.pill,
@@ -211,18 +226,13 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
+  chipReset: { borderStyle: 'dashed' },
   chipText: { fontSize: fontSize.xs, color: colors.textMuted },
   list: { padding: spacing.lg, paddingBottom: 120 },
-  fab: {
+  ctaWrap: {
     position: 'absolute',
     bottom: spacing.xl,
     left: spacing.xl,
     right: spacing.xl,
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.lg,
-    borderRadius: radius.pill,
-    alignItems: 'center',
   },
-  pressed: { opacity: 0.85 },
-  fabText: { color: '#fff', fontSize: fontSize.base, fontWeight: '700' },
 });
