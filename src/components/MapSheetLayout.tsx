@@ -7,6 +7,7 @@ import { MapDashboard } from './MapDashboard';
 import { useUiStore } from '@/stores/uiStore';
 import { colors } from '@/theme/colors';
 import { spacing, fontSize } from '@/theme/spacing';
+import { fontFamily } from '@/theme/typography';
 
 interface Props {
   title: string;
@@ -114,6 +115,7 @@ const styles = StyleSheet.create({
   },
   pressed: { opacity: 0.6 },
   title: {
+    fontFamily: fontFamily.bold,
     fontSize: fontSize.lg,
     fontWeight: '700',
     color: colors.text,
