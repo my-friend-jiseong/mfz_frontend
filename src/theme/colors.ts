@@ -111,8 +111,4 @@ export const colors = {
 
   // === Other ===
   tripBanner: palette.red[600],
-
-  // === Backward-compat alias ===
-  // 점진 마이그레이션 끝나면 제거.
-  divider: palette.slate[100], // → borderMuted
 } as const;
