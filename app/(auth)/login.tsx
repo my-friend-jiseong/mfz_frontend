@@ -10,10 +10,13 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '@/stores/authStore';
 import { colors } from '@/theme/colors';
-import { spacing, radius, fontSize } from '@/theme/spacing';
+import { spacing, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 
 interface FieldErrors {
   email?: string;
@@ -76,12 +79,14 @@ export default function Login() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <Text style={styles.title}>일가요</Text>
-        <Text style={styles.subtitle}>현장 방문 업무를 함께합니다</Text>
+        <View style={styles.header}>
+          <Text style={styles.brand}>일가요</Text>
+          <Text style={styles.tagline}>현장 방문 업무를 함께합니다</Text>
+        </View>
 
         <View style={styles.form}>
-          <Text style={styles.label}>이메일</Text>
-          <TextInput
+          <Input
+            label="이메일"
             value={email}
             onChangeText={(v) => {
               setEmail(v);
@@ -92,58 +97,59 @@ export default function Login() {
             returnKeyType="next"
             onSubmitEditing={() => passwordRef.current?.focus()}
             editable={!submitting}
-            style={[styles.input, fieldErrors.email && styles.inputError]}
             placeholder="example@domain.com"
+            error={fieldErrors.email}
           />
-          {fieldErrors.email ? (
-            <Text style={styles.fieldError}>{fieldErrors.email}</Text>
-          ) : null}
 
-          <Text style={styles.label}>비밀번호</Text>
-          <View style={styles.passwordRow}>
-            <TextInput
-              ref={passwordRef}
-              value={password}
-              onChangeText={(v) => {
-                setPassword(v);
-                if (fieldErrors.password) setFieldErrors((p) => ({ ...p, password: undefined }));
-              }}
-              secureTextEntry={!showPassword}
-              returnKeyType="go"
-              onSubmitEditing={() => void handleLogin()}
-              editable={!submitting}
-              style={[
-                styles.input,
-                styles.passwordInput,
-                fieldErrors.password && styles.inputError,
-              ]}
-              placeholder="비밀번호"
-            />
-            <Pressable
-              onPress={() => setShowPassword((v) => !v)}
-              style={styles.eyeBtn}
-              accessibilityLabel={showPassword ? '비밀번호 숨기기' : '비밀번호 보기'}
-            >
-              <Text style={styles.eyeBtnText}>{showPassword ? '🙈' : '👁'}</Text>
-            </Pressable>
-          </View>
-          {fieldErrors.password ? (
-            <Text style={styles.fieldError}>{fieldErrors.password}</Text>
-          ) : null}
+          <Input
+            ref={passwordRef}
+            label="비밀번호"
+            value={password}
+            onChangeText={(v) => {
+              setPassword(v);
+              if (fieldErrors.password) setFieldErrors((p) => ({ ...p, password: undefined }));
+            }}
+            secureTextEntry={!showPassword}
+            returnKeyType="go"
+            onSubmitEditing={() => void handleLogin()}
+            editable={!submitting}
+            placeholder="비밀번호"
+            error={fieldErrors.password}
+            rightSlot={
+              <Pressable
+                onPress={() => setShowPassword((v) => !v)}
+                accessibilityLabel={showPassword ? '비밀번호 숨기기' : '비밀번호 보기'}
+                hitSlop={8}
+              >
+                <Ionicons
+                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                  size={20}
+                  color={colors.textMuted}
+                />
+              </Pressable>
+            }
+          />
 
           {globalError ? <Text style={styles.error}>{globalError}</Text> : null}
 
-          <Pressable
+          <Button
             onPress={handleLogin}
-            disabled={submitting}
-            style={({ pressed }) => [styles.btn, (pressed || submitting) && styles.pressed]}
+            size="lg"
+            loading={submitting}
+            fullWidth
+            style={styles.submit}
           >
-            <Text style={styles.btnText}>{submitting ? '로그인 중...' : '로그인'}</Text>
-          </Pressable>
+            로그인
+          </Button>
 
-          <Pressable onPress={() => router.push('/(auth)/signup')} style={styles.link}>
-            <Text style={styles.linkText}>처음 사용하시나요? 회원가입</Text>
-          </Pressable>
+          <Button
+            onPress={() => router.push('/(auth)/signup')}
+            variant="ghost"
+            size="sm"
+            fullWidth
+          >
+            처음 사용하시나요? 회원가입
+          </Button>
 
           <Pressable
             onPress={() =>
@@ -152,9 +158,9 @@ export default function Login() {
                 '비밀번호 재설정은 현재 관리자에게 요청해주세요. 이메일로 임시 비밀번호를 발급해드립니다.',
               )
             }
-            style={styles.link}
+            style={styles.subtleLink}
           >
-            <Text style={styles.linkSubtle}>비밀번호를 잊으셨나요?</Text>
+            <Text style={styles.subtleLinkText}>비밀번호를 잊으셨나요?</Text>
           </Pressable>
         </View>
       </ScrollView>
@@ -165,84 +171,34 @@ export default function Login() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   scroll: { padding: spacing.xl, paddingTop: spacing.xxl * 2 },
-  title: {
+  header: { marginBottom: spacing.xxl },
+  brand: {
     fontSize: fontSize.xxl,
-    fontWeight: '800',
+    fontWeight: fontWeight.heavy,
     color: colors.primary,
     textAlign: 'center',
+    lineHeight: lineHeight.xxl,
   },
-  subtitle: {
+  tagline: {
     fontSize: fontSize.sm,
     color: colors.textMuted,
     textAlign: 'center',
     marginTop: spacing.sm,
-    marginBottom: spacing.xxl,
+    lineHeight: lineHeight.sm,
   },
-  form: { gap: spacing.sm },
-  label: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    fontWeight: '600',
-    marginTop: spacing.md,
-  },
-  input: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    fontSize: fontSize.base,
-    color: colors.text,
-  },
-  inputError: { borderColor: colors.danger },
-  fieldError: {
-    color: colors.danger,
-    fontSize: fontSize.xs,
-    marginTop: 4,
-    marginLeft: 4,
-  },
-  passwordRow: { position: 'relative' },
-  passwordInput: { paddingRight: spacing.xl * 2 },
-  eyeBtn: {
-    position: 'absolute',
-    right: spacing.md,
-    top: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.sm,
-  },
-  eyeBtnText: { fontSize: 18 },
+  form: { gap: spacing.md },
+  submit: { marginTop: spacing.md },
   error: {
     color: colors.danger,
     fontSize: fontSize.sm,
-    marginTop: spacing.xs,
   },
-  btn: {
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.lg,
-    borderRadius: radius.md,
+  subtleLink: {
     alignItems: 'center',
-    marginTop: spacing.xl,
+    paddingVertical: spacing.sm,
   },
-  pressed: { opacity: 0.85 },
-  btnText: {
-    color: '#fff',
-    fontSize: fontSize.base,
-    fontWeight: '700',
-  },
-  link: {
-    alignItems: 'center',
-    paddingVertical: spacing.md,
-  },
-  linkText: {
-    color: colors.primary,
-    fontSize: fontSize.sm,
-    fontWeight: '600',
-  },
-  linkSubtle: {
+  subtleLinkText: {
     color: colors.textMuted,
     fontSize: fontSize.xs,
-    fontWeight: '500',
+    fontWeight: fontWeight.medium,
   },
 });

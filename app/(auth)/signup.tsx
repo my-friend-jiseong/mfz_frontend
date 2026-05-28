@@ -10,11 +10,14 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '@/stores/authStore';
 import { safeBack } from '@/utils/backNavigation';
 import { colors } from '@/theme/colors';
-import { spacing, radius, fontSize } from '@/theme/spacing';
+import { spacing, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 
 interface FieldErrors {
   email?: string;
@@ -25,8 +28,7 @@ interface FieldErrors {
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PASSWORD_HINT =
-  '10자 이상 · 영대/영소/숫자/특수문자 중 3종 이상 조합';
+const PASSWORD_HINT = '10자 이상 · 영대/영소/숫자/특수문자 중 3종 이상 조합';
 
 // 백엔드 정책: 10자 이상 + 영대/영소/숫자/특수문자 중 3종 이상.
 // 한글은 4종 어디에도 매칭되지 않음 — 백엔드가 거부할 가능성 높아 명시적 안내.
@@ -85,7 +87,6 @@ export default function Signup() {
     return errs;
   };
 
-  // 글자 변경 시 해당 필드 에러 자동 클리어 — 사용자가 즉각 수정했음을 가정.
   const clearFieldErr = (key: keyof FieldErrors) =>
     setFieldErrors((p) => ({ ...p, [key]: undefined }));
 
@@ -104,7 +105,6 @@ export default function Signup() {
       return;
     }
 
-    // 이미 가입된 이메일이면 로그인 화면으로 안내 (기존 흐름 유지).
     if (result.code === 'email_already_exists') {
       Alert.alert(
         '이미 가입된 이메일',
@@ -117,7 +117,6 @@ export default function Signup() {
       return;
     }
 
-    // 백엔드 코드 → 인라인 필드 에러 매핑.
     if (result.code && CODE_TO_FIELD[result.code]) {
       setFieldErrors({ [CODE_TO_FIELD[result.code]]: result.error });
       return;
@@ -125,6 +124,9 @@ export default function Signup() {
 
     setGlobalError(result.error);
   };
+
+  const passwordMatched =
+    passwordConfirm.length > 0 && passwordConfirm === password && !fieldErrors.passwordConfirm;
 
   return (
     <KeyboardAvoidingView
@@ -135,8 +137,8 @@ export default function Signup() {
         <Text style={styles.title}>회원가입</Text>
 
         <View style={styles.form}>
-          <Text style={styles.label}>이메일</Text>
-          <TextInput
+          <Input
+            label="이메일"
             value={email}
             onChangeText={(v) => {
               setEmail(v);
@@ -147,16 +149,13 @@ export default function Signup() {
             returnKeyType="next"
             onSubmitEditing={() => nameRef.current?.focus()}
             editable={!submitting}
-            style={[styles.input, fieldErrors.email && styles.inputError]}
             placeholder="example@domain.com"
+            error={fieldErrors.email}
           />
-          {fieldErrors.email ? (
-            <Text style={styles.fieldError}>{fieldErrors.email}</Text>
-          ) : null}
 
-          <Text style={styles.label}>이름</Text>
-          <TextInput
+          <Input
             ref={nameRef}
+            label="이름"
             value={name}
             onChangeText={(v) => {
               setName(v);
@@ -165,52 +164,44 @@ export default function Signup() {
             returnKeyType="next"
             onSubmitEditing={() => passwordRef.current?.focus()}
             editable={!submitting}
-            style={[styles.input, fieldErrors.name && styles.inputError]}
             placeholder="홍길동"
+            error={fieldErrors.name}
           />
-          {fieldErrors.name ? (
-            <Text style={styles.fieldError}>{fieldErrors.name}</Text>
-          ) : null}
 
-          <Text style={styles.label}>비밀번호</Text>
-          <View style={styles.passwordRow}>
-            <TextInput
-              ref={passwordRef}
-              value={password}
-              onChangeText={(v) => {
-                setPassword(v);
-                if (fieldErrors.password) clearFieldErr('password');
-                // 확인 필드와 일치 여부 변하면 그쪽 에러도 클리어
-                if (fieldErrors.passwordConfirm) clearFieldErr('passwordConfirm');
-              }}
-              secureTextEntry={!showPassword}
-              returnKeyType="next"
-              onSubmitEditing={() => passwordConfirmRef.current?.focus()}
-              editable={!submitting}
-              style={[
-                styles.input,
-                styles.passwordInput,
-                fieldErrors.password && styles.inputError,
-              ]}
-              placeholder="비밀번호"
-            />
-            <Pressable
-              onPress={() => setShowPassword((v) => !v)}
-              style={styles.eyeBtn}
-              accessibilityLabel={showPassword ? '비밀번호 숨기기' : '비밀번호 보기'}
-            >
-              <Text style={styles.eyeBtnText}>{showPassword ? '🙈' : '👁'}</Text>
-            </Pressable>
-          </View>
-          {fieldErrors.password ? (
-            <Text style={styles.fieldError}>{fieldErrors.password}</Text>
-          ) : (
-            <Text style={styles.hint}>{PASSWORD_HINT}</Text>
-          )}
+          <Input
+            ref={passwordRef}
+            label="비밀번호"
+            value={password}
+            onChangeText={(v) => {
+              setPassword(v);
+              if (fieldErrors.password) clearFieldErr('password');
+              if (fieldErrors.passwordConfirm) clearFieldErr('passwordConfirm');
+            }}
+            secureTextEntry={!showPassword}
+            returnKeyType="next"
+            onSubmitEditing={() => passwordConfirmRef.current?.focus()}
+            editable={!submitting}
+            placeholder="비밀번호"
+            error={fieldErrors.password}
+            helperText={fieldErrors.password ? undefined : PASSWORD_HINT}
+            rightSlot={
+              <Pressable
+                onPress={() => setShowPassword((v) => !v)}
+                accessibilityLabel={showPassword ? '비밀번호 숨기기' : '비밀번호 보기'}
+                hitSlop={8}
+              >
+                <Ionicons
+                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                  size={20}
+                  color={colors.textMuted}
+                />
+              </Pressable>
+            }
+          />
 
-          <Text style={styles.label}>비밀번호 확인</Text>
-          <TextInput
+          <Input
             ref={passwordConfirmRef}
+            label="비밀번호 확인"
             value={passwordConfirm}
             onChangeText={(v) => {
               setPasswordConfirm(v);
@@ -220,14 +211,14 @@ export default function Signup() {
             returnKeyType="done"
             onSubmitEditing={() => void handleSignup()}
             editable={!submitting}
-            style={[styles.input, fieldErrors.passwordConfirm && styles.inputError]}
             placeholder="비밀번호 확인"
+            error={fieldErrors.passwordConfirm}
+            rightSlot={
+              passwordMatched ? (
+                <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+              ) : undefined
+            }
           />
-          {fieldErrors.passwordConfirm ? (
-            <Text style={styles.fieldError}>{fieldErrors.passwordConfirm}</Text>
-          ) : passwordConfirm.length > 0 && passwordConfirm === password ? (
-            <Text style={styles.matchOk}>✓ 비밀번호 일치</Text>
-          ) : null}
 
           <Pressable
             onPress={() => {
@@ -235,31 +226,42 @@ export default function Signup() {
               if (fieldErrors.terms) clearFieldErr('terms');
             }}
             style={styles.agreeRow}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: agreeRequired }}
           >
-            <View style={[styles.checkbox, agreeRequired && styles.checkboxActive]}>
-              {agreeRequired ? <Text style={styles.check}>✓</Text> : null}
-            </View>
+            <Ionicons
+              name={agreeRequired ? 'checkbox' : 'square-outline'}
+              size={22}
+              color={agreeRequired ? colors.primary : colors.textMuted}
+            />
             <Text style={styles.agreeText}>
               (필수) 이용약관·개인정보 처리방침·위치정보 이용약관에 동의합니다
             </Text>
           </Pressable>
           {fieldErrors.terms ? (
-            <Text style={styles.fieldError}>{fieldErrors.terms}</Text>
+            <Text style={styles.termsError}>{fieldErrors.terms}</Text>
           ) : null}
 
           {globalError ? <Text style={styles.error}>{globalError}</Text> : null}
 
-          <Pressable
+          <Button
             onPress={handleSignup}
-            disabled={submitting}
-            style={({ pressed }) => [styles.btn, (pressed || submitting) && styles.pressed]}
+            size="lg"
+            loading={submitting}
+            fullWidth
+            style={styles.submit}
           >
-            <Text style={styles.btnText}>{submitting ? '가입 중...' : '가입하고 시작하기'}</Text>
-          </Pressable>
+            가입하고 시작하기
+          </Button>
 
-          <Pressable onPress={() => safeBack(router)} style={styles.link}>
-            <Text style={styles.linkText}>이미 계정이 있어요</Text>
-          </Pressable>
+          <Button
+            onPress={() => safeBack(router)}
+            variant="ghost"
+            size="sm"
+            fullWidth
+          >
+            이미 계정이 있어요
+          </Button>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -271,89 +273,20 @@ const styles = StyleSheet.create({
   scroll: { padding: spacing.xl, paddingTop: spacing.xxl * 2 },
   title: {
     fontSize: fontSize.xl,
-    fontWeight: '800',
+    fontWeight: fontWeight.heavy,
     color: colors.text,
     marginBottom: spacing.xl,
+    lineHeight: lineHeight.xl,
   },
-  form: { gap: spacing.sm },
-  label: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    fontWeight: '600',
-    marginTop: spacing.md,
-  },
-  input: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    fontSize: fontSize.base,
-    color: colors.text,
-  },
-  inputError: { borderColor: colors.danger },
-  fieldError: {
-    color: colors.danger,
-    fontSize: fontSize.xs,
-    marginTop: 4,
-    marginLeft: 4,
-  },
-  hint: {
-    color: colors.textMuted,
-    fontSize: fontSize.xs,
-    marginTop: 4,
-    marginLeft: 4,
-  },
-  matchOk: {
-    color: colors.success,
-    fontSize: fontSize.xs,
-    marginTop: 4,
-    marginLeft: 4,
-    fontWeight: '700',
-  },
-  passwordRow: { position: 'relative' },
-  passwordInput: { paddingRight: spacing.xl * 2 },
-  eyeBtn: {
-    position: 'absolute',
-    right: spacing.md,
-    top: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.sm,
-  },
-  eyeBtnText: { fontSize: 18 },
+  form: { gap: spacing.md },
   agreeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: spacing.xl,
+    marginTop: spacing.md,
     gap: spacing.sm,
   },
-  checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 4,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkboxActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  check: { color: '#fff', fontSize: 14, fontWeight: '800' },
-  agreeText: { flex: 1, fontSize: fontSize.sm, color: colors.text },
-  error: { color: colors.danger, fontSize: fontSize.sm, marginTop: spacing.sm },
-  btn: {
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.lg,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    marginTop: spacing.xl,
-  },
-  pressed: { opacity: 0.85 },
-  btnText: { color: '#fff', fontSize: fontSize.base, fontWeight: '700' },
-  link: { alignItems: 'center', paddingVertical: spacing.md },
-  linkText: { color: colors.primary, fontSize: fontSize.sm, fontWeight: '600' },
+  agreeText: { flex: 1, fontSize: fontSize.sm, color: colors.text, lineHeight: lineHeight.sm },
+  termsError: { color: colors.danger, fontSize: fontSize.xs, marginTop: spacing.xs },
+  error: { color: colors.danger, fontSize: fontSize.sm },
+  submit: { marginTop: spacing.md },
 });
