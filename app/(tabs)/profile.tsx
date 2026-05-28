@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import {
   Alert,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -8,10 +9,18 @@ import {
   Text,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '@/stores/authStore';
+import { Card } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
 import { colors } from '@/theme/colors';
-import { spacing, radius, fontSize } from '@/theme/spacing';
+import { spacing, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
+import { opacity } from '@/theme/motion';
+
+const APP_VERSION = '0.1.0';
+const TERMS_URL = 'https://ilgayo.kr/terms';
+const PRIVACY_URL = 'https://ilgayo.kr/privacy';
 
 function fmtDate(iso?: string) {
   if (!iso) return '-';
@@ -24,6 +33,39 @@ function initialOf(name: string | undefined): string {
   const trimmed = name.trim();
   if (!trimmed) return '?';
   return Array.from(trimmed)[0] ?? '?';
+}
+
+type IonName = React.ComponentProps<typeof Ionicons>['name'];
+
+function MenuRow({
+  icon,
+  label,
+  value,
+  onPress,
+}: {
+  icon: IonName;
+  label: string;
+  value?: string;
+  onPress?: () => void;
+}) {
+  const interactive = !!onPress;
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={!interactive}
+      style={({ pressed }) => [
+        styles.menuRow,
+        pressed && interactive && { opacity: opacity.pressed },
+      ]}
+    >
+      <Ionicons name={icon} size={18} color={colors.textMuted} />
+      <Text style={styles.menuLabel}>{label}</Text>
+      {value ? <Text style={styles.menuValue}>{value}</Text> : null}
+      {interactive ? (
+        <Ionicons name="chevron-forward" size={16} color={colors.textSubtle} />
+      ) : null}
+    </Pressable>
+  );
 }
 
 export default function Profile() {
@@ -53,6 +95,17 @@ export default function Profile() {
     }
   };
 
+  const openExternal = (url: string, fallbackTitle: string) => {
+    Linking.canOpenURL(url)
+      .then((ok) => {
+        if (ok) return Linking.openURL(url);
+        throw new Error('not_supported');
+      })
+      .catch(() => {
+        Alert.alert(fallbackTitle, `${url}\n\n웹브라우저에서 위 주소로 접속해주세요.`);
+      });
+  };
+
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scroll}>
@@ -64,34 +117,48 @@ export default function Profile() {
           <Text style={styles.email}>{user?.email ?? '-'}</Text>
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>계정</Text>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>가입일</Text>
-            <Text style={styles.infoValue}>{fmtDate(user?.createdAt)}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>이메일</Text>
-            <Text style={styles.infoValue} numberOfLines={1}>
-              {user?.email ?? '-'}
-            </Text>
-          </View>
-        </View>
+        <Text style={styles.sectionTitle}>계정</Text>
+        <Card padding="none" style={styles.sectionCard}>
+          <MenuRow icon="mail-outline" label="이메일" value={user?.email ?? '-'} />
+          <View style={styles.divider} />
+          <MenuRow
+            icon="calendar-outline"
+            label="가입일"
+            value={fmtDate(user?.createdAt)}
+          />
+        </Card>
 
-        <Pressable
+        <Text style={styles.sectionTitle}>정책·정보</Text>
+        <Card padding="none" style={styles.sectionCard}>
+          <MenuRow
+            icon="document-text-outline"
+            label="이용약관"
+            onPress={() => openExternal(TERMS_URL, '이용약관')}
+          />
+          <View style={styles.divider} />
+          <MenuRow
+            icon="shield-checkmark-outline"
+            label="개인정보 처리방침"
+            onPress={() => openExternal(PRIVACY_URL, '개인정보 처리방침')}
+          />
+          <View style={styles.divider} />
+          <MenuRow
+            icon="information-circle-outline"
+            label="앱 버전"
+            value={`v${APP_VERSION}`}
+          />
+        </Card>
+
+        <Button
           onPress={handleLogout}
-          disabled={loggingOut}
-          style={({ pressed }) => [
-            styles.logoutBtn,
-            (pressed || loggingOut) && styles.pressed,
-          ]}
+          loading={loggingOut}
+          variant="ghost"
+          fullWidth
+          leftIcon="log-out-outline"
+          style={styles.logout}
         >
-          <Text style={styles.logoutText}>
-            {loggingOut ? '로그아웃 중...' : '로그아웃'}
-          </Text>
-        </Pressable>
-
-        <Text style={styles.versionHint}>일가요 v0.1.0</Text>
+          로그아웃
+        </Button>
       </ScrollView>
     </View>
   );
@@ -114,73 +181,54 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarText: {
-    color: '#fff',
+    color: colors.onPrimary,
     fontSize: 36,
-    fontWeight: '800',
+    fontWeight: fontWeight.heavy,
   },
   name: {
     fontSize: fontSize.xl,
-    fontWeight: '800',
+    fontWeight: fontWeight.heavy,
     color: colors.text,
     marginTop: spacing.sm,
+    lineHeight: lineHeight.xl,
   },
   email: {
     fontSize: fontSize.sm,
     color: colors.textMuted,
   },
-  section: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.lg,
-    marginTop: spacing.lg,
-  },
   sectionTitle: {
     fontSize: fontSize.xs,
     color: colors.textMuted,
-    fontWeight: '700',
-    marginBottom: spacing.md,
+    fontWeight: fontWeight.bold,
+    marginTop: spacing.xl,
+    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.xs,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  infoRow: {
+  sectionCard: { gap: 0 },
+  menuRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: spacing.sm,
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    minHeight: 48,
   },
-  infoLabel: { fontSize: fontSize.sm, color: colors.textMuted, fontWeight: '600' },
-  infoValue: {
+  menuLabel: {
+    flex: 1,
     fontSize: fontSize.sm,
     color: colors.text,
-    flex: 1,
-    textAlign: 'right',
-    marginLeft: spacing.md,
+    fontWeight: fontWeight.semibold,
   },
-  warnBox: {
-    marginTop: spacing.lg,
-    padding: spacing.md,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: '#f0ad4e',
-    backgroundColor: '#fff7e6',
-  },
-  warnTitle: { fontSize: fontSize.sm, fontWeight: '700', color: colors.text },
-  warnBody: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: 4 },
-  logoutBtn: {
-    marginTop: spacing.xl,
-    paddingVertical: spacing.lg,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.danger,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-  },
-  logoutText: { color: colors.danger, fontSize: fontSize.base, fontWeight: '700' },
-  pressed: { opacity: 0.85 },
-  versionHint: {
-    textAlign: 'center',
-    fontSize: fontSize.xs,
+  menuValue: {
+    fontSize: fontSize.sm,
     color: colors.textMuted,
-    marginTop: spacing.xl,
   },
+  divider: {
+    height: 1,
+    backgroundColor: colors.divider,
+    marginLeft: spacing.lg + 18 + spacing.md, // icon + gap 만큼 왼쪽 들여쓰기
+  },
+  logout: { marginTop: spacing.xl },
 });
