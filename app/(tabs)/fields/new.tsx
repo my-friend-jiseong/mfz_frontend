@@ -18,14 +18,12 @@ import type { FieldStatus } from '@/types/entities';
 import { FIELD_STATUS_VALUES, FIELD_STATUS_LABEL } from '@/types/entities';
 import {
   itemToSelected,
-  isInKorea,
-  KR_LAT,
-  KR_LNG,
   SEARCH_DEBOUNCE_MS,
   MIN_KEYWORD_LEN,
   type SelectedAddress,
 } from '@/utils/addressSearch';
 import { ProjectPicker } from '@/components/ProjectPicker';
+import { ManualCoordinateForm } from '@/components/fields/ManualCoordinateForm';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -48,12 +46,6 @@ export default function NewField() {
   const [providerUnavailable, setProviderUnavailable] = useState(false);
   const [searching, setSearching] = useState(false);
   const [manualMode, setManualMode] = useState(false);
-
-  // 수동 좌표 입력 폼 (provider unavailable / manual fallback 일 때만 노출)
-  const [manualRoad, setManualRoad] = useState('');
-  const [manualJibun, setManualJibun] = useState('');
-  const [manualLatStr, setManualLatStr] = useState('');
-  const [manualLngStr, setManualLngStr] = useState('');
 
   const [selected, setSelected] = useState<SelectedAddress | null>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
@@ -109,39 +101,6 @@ export default function NewField() {
     setStep(2);
   };
 
-  const handleManualSubmit = () => {
-    if (!manualRoad.trim() && !manualJibun.trim()) {
-      Alert.alert('주소 입력 필요', '도로명 주소 또는 지번 주소 중 하나는 입력해주세요.');
-      return;
-    }
-    // Number('') === 0 함정 차단 — 빈 입력은 finite 통과하므로 raw string 단계에서 가드.
-    if (!manualLatStr.trim() || !manualLngStr.trim()) {
-      Alert.alert('좌표 입력 필요', '위도·경도를 모두 입력해주세요.');
-      return;
-    }
-    const lat = Number(manualLatStr);
-    const lng = Number(manualLngStr);
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-      Alert.alert('좌표 형식 오류', '위도·경도를 숫자로 입력해주세요.');
-      return;
-    }
-    if (!isInKorea(lat, lng)) {
-      Alert.alert(
-        '대한민국 영역 외 좌표',
-        `위도는 ${KR_LAT.min}~${KR_LAT.max}, 경도는 ${KR_LNG.min}~${KR_LNG.max} 범위여야 합니다.`,
-      );
-      return;
-    }
-    setSelected({
-      roadAddress: manualRoad.trim() || manualJibun.trim(),
-      jibunAddress: manualJibun.trim() || manualRoad.trim(),
-      buildingName: null,
-      lat,
-      lng,
-      display: manualRoad.trim() || manualJibun.trim(),
-    });
-    setStep(2);
-  };
 
   const handleCreate = async () => {
     if (!user || !selected) return;
@@ -296,49 +255,13 @@ export default function NewField() {
 
             {/* 수동 좌표 입력 fallback — provider unavailable 또는 사용자 명시 진입 */}
             {showManualEntry ? (
-              <View style={styles.manualBox}>
-                <Text style={styles.manualTitle}>좌표 직접 입력</Text>
-                <Input
-                  label="도로명 주소"
-                  value={manualRoad}
-                  onChangeText={setManualRoad}
-                  placeholder="예: 부산광역시 해운대구 해운대해변로 264"
-                  containerStyle={styles.manualField}
-                />
-                <Input
-                  label="지번 주소"
-                  value={manualJibun}
-                  onChangeText={setManualJibun}
-                  placeholder="예: 부산광역시 해운대구 우동 1411"
-                  containerStyle={styles.manualField}
-                />
-                <View style={styles.coordRow}>
-                  <Input
-                    label="위도 (lat)"
-                    value={manualLatStr}
-                    onChangeText={setManualLatStr}
-                    keyboardType="numeric"
-                    placeholder="33~43"
-                    containerStyle={styles.coordHalf}
-                  />
-                  <Input
-                    label="경도 (lng)"
-                    value={manualLngStr}
-                    onChangeText={setManualLngStr}
-                    keyboardType="numeric"
-                    placeholder="124~132"
-                    containerStyle={styles.coordHalf}
-                  />
-                </View>
-                <Button
-                  onPress={handleManualSubmit}
-                  fullWidth
-                  leftIcon="location"
-                  style={styles.manualSubmit}
-                >
-                  이 좌표로 진행
-                </Button>
-              </View>
+              <ManualCoordinateForm
+                onResolve={(addr) => {
+                  setSelected(addr);
+                  setStep(2);
+                  setManualMode(false);
+                }}
+              />
             ) : null}
 
             {showEmptyHint && !manualMode ? (
@@ -511,23 +434,7 @@ const styles = StyleSheet.create({
   },
   addrJibun: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: 2 },
   addrCoord: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: 2 },
-  manualBox: {
-    marginTop: spacing.lg,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  manualTitle: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.bold,
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  manualField: { marginTop: spacing.sm },
-  manualSubmit: { marginTop: spacing.md },
   manualLink: { marginTop: spacing.md, alignSelf: 'flex-start' },
-  coordRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
-  coordHalf: { flex: 1 },
   backBtn: { alignSelf: 'flex-start', marginBottom: spacing.md },
   selectedBox: {
     backgroundColor: colors.primaryMuted,
