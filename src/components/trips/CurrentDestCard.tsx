@@ -1,8 +1,13 @@
-import { StyleSheet, Text } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { colors } from '@/theme/colors';
 import { spacing, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
+import { opacity } from '@/theme/motion';
+import { withAlpha } from '@/theme/withAlpha';
+
+type IonName = React.ComponentProps<typeof Ionicons>['name'];
 
 interface Props {
   order: number;
@@ -14,6 +19,41 @@ interface Props {
   onReoptimize?: () => void;
   optimizing?: boolean;
   pendingCount?: number;
+}
+
+// 1차 액션(체크인) 풀폭 + separator + 유틸 row 3개 (icon + 작은 라벨).
+// 이전: 풀폭 버튼 4개 수직 스택 → 위계 약하고 카드가 비대.
+function UtilAction({
+  icon,
+  label,
+  onPress,
+  danger,
+  loading,
+}: {
+  icon: IonName;
+  label: string;
+  onPress: () => void;
+  danger?: boolean;
+  loading?: boolean;
+}) {
+  const tint = danger ? colors.danger : colors.textMuted;
+  const textColor = danger ? colors.danger : colors.text;
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={loading}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={({ pressed }) => [
+        styles.util,
+        pressed && !loading && { opacity: opacity.pressed },
+        loading && { opacity: opacity.disabled },
+      ]}
+    >
+      <Ionicons name={icon} size={22} color={tint} />
+      <Text style={[styles.utilLabel, { color: textColor }]}>{label}</Text>
+    </Pressable>
+  );
 }
 
 export function CurrentDestCard({
@@ -34,32 +74,32 @@ export function CurrentDestCard({
       <Text style={styles.address}>{address}</Text>
       {addressDetail ? <Text style={styles.detail}>{addressDetail}</Text> : null}
 
-      <Button onPress={onCheckIn} leftIcon="checkmark-circle" style={styles.checkIn} fullWidth>
-        체크인
-      </Button>
       <Button
-        onPress={onNavigate}
-        variant="secondary"
-        leftIcon="navigate"
+        onPress={onCheckIn}
+        leftIcon="checkmark-circle"
+        style={styles.checkIn}
         fullWidth
       >
-        길찾기 (외부 지도 앱)
+        체크인
       </Button>
-      <Button onPress={onSkip} variant="ghost" size="sm" fullWidth>
-        이 목적지 건너뛰기
-      </Button>
-      {showReop ? (
-        <Button
-          onPress={onReoptimize}
-          variant="secondary"
-          size="sm"
-          fullWidth
-          loading={optimizing}
-          leftIcon="sparkles"
-        >
-          {optimizing ? '최적화 중' : `남은 경로 재최적화 (${pendingCount}개)`}
-        </Button>
-      ) : null}
+
+      <View style={styles.utilRow}>
+        <UtilAction icon="navigate" label="길찾기" onPress={onNavigate} />
+        {showReop ? (
+          <UtilAction
+            icon="sparkles"
+            label="재최적화"
+            onPress={onReoptimize}
+            loading={optimizing}
+          />
+        ) : null}
+        <UtilAction
+          icon="play-skip-forward"
+          label="건너뛰기"
+          onPress={onSkip}
+          danger
+        />
+      </View>
     </Card>
   );
 }
@@ -88,4 +128,21 @@ const styles = StyleSheet.create({
     lineHeight: lineHeight.sm,
   },
   checkIn: { marginTop: spacing.sm },
+  utilRow: {
+    flexDirection: 'row',
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: withAlpha(colors.primary, 0.2),
+  },
+  util: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: spacing.sm,
+  },
+  utilLabel: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.semibold,
+  },
 });
