@@ -3,9 +3,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { colors } from '@/theme/colors';
-import { spacing, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
+import { spacing, radius, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
-import { withAlpha } from '@/theme/withAlpha';
 
 type IonName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -128,18 +127,21 @@ const styles = StyleSheet.create({
     lineHeight: lineHeight.sm,
   },
   checkIn: { marginTop: spacing.sm },
+  // 카드 톤(primaryMuted) 위에 흰색 mini-card 3개 — 'tappable' affordance 명확.
+  // 이전엔 icon + text 만 있어 평범 텍스트처럼 보이던 회로 차단.
   utilRow: {
     flexDirection: 'row',
-    marginTop: spacing.sm,
-    paddingTop: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: withAlpha(colors.primary, 0.2),
+    marginTop: spacing.md,
+    gap: spacing.sm,
   },
   util: {
     flex: 1,
     alignItems: 'center',
     gap: 4,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
   },
   utilLabel: {
     fontSize: fontSize.xs,
