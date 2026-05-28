@@ -16,7 +16,6 @@ import { spacing, radius, fontSize } from '@/theme/spacing';
 
 interface OrderedField {
   id: string;
-  title?: string;
   address: string;
   addressDetail: string;
   lat: number;
@@ -44,7 +43,6 @@ export default function NewTripOrder() {
       .filter((f): f is NonNullable<ReturnType<typeof getField>> => Boolean(f))
       .map((f) => ({
         id: f.id,
-        title: f.title,
         address: f.address,
         addressDetail: f.addressDetail,
         lat: f.latitude,
@@ -81,7 +79,7 @@ export default function NewTripOrder() {
         startLng: start.lng,
         fields: list.map((f) => ({
           fieldId: f.id,
-          name: f.title || f.address,
+          name: f.address,
           lat: f.lat,
           lng: f.lng,
         })),
@@ -185,10 +183,7 @@ export default function NewTripOrder() {
         <Text style={styles.orderText}>{index + 1}</Text>
       </View>
       <View style={styles.rowText}>
-        <Text style={styles.address}>{item.title || item.address}</Text>
-        {item.title ? (
-          <Text style={styles.detail}>{item.address}</Text>
-        ) : null}
+        <Text style={styles.address}>{item.address}</Text>
         {item.addressDetail ? (
           <Text style={styles.detail}>{item.addressDetail}</Text>
         ) : null}
@@ -225,7 +220,7 @@ export default function NewTripOrder() {
           onPress={() =>
             Alert.alert(
               '이 현장 빼기',
-              `${item.title || item.address} 를 외근에서 제외할까요?`,
+              `${item.address} 를 외근에서 제외할까요?`,
               [
                 { text: '취소', style: 'cancel' },
                 { text: '빼기', style: 'destructive', onPress: () => removeAt(index) },

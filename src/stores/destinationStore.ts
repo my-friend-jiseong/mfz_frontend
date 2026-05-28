@@ -2,12 +2,12 @@ import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Destination } from '@/types/entities';
 
-// 백엔드가 destinations 를 영속화하지 않는 동안(handoff §9a) 프론트가 AsyncStorage 에
-// 로컬 영속화. 페이지 새로고침·앱 재기동 시 활성 외근의 목적지가 살아남아야 사용자가
-// "방금 3곳 선택했는데 0곳" 같은 상태를 보지 않는다.
+// ERD v2: trip_planned_stops 테이블이 제거되어 목적지는 백엔드에 영속화되지 않는다.
+// 프론트가 AsyncStorage 에 로컬 영속화 — 외근 진행 보조용(순수 클라이언트). 멀티 디바이스
+// 동기화는 되지 않으며, 페이지 새로고침·앱 재기동 시 활성 외근의 목적지가 살아남도록 한다.
 //
-// offlineQueueStore 와 동일한 manual persist 패턴 — zustand persist 미들웨어는
-// 일부 환경에서 모듈 초기화 단계 충돌이 보고된 적 있어 단순 패턴으로 통일.
+// zustand persist 미들웨어는 일부 환경에서 모듈 초기화 단계 충돌이 보고된 적 있어
+// 단순 manual persist 패턴으로 통일.
 
 const STORAGE_KEY = 'mfz.destinations.v1';
 

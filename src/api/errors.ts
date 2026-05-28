@@ -100,21 +100,18 @@ const ERROR_MESSAGES: Record<string, string> = {
   visit_status_reason_required: '"기타" 선택 시 사유를 10자 이상 입력해주세요',
   photo_format_invalid: '지원하지 않는 사진 형식입니다 (JPEG/PNG)',
   photo_size_exceeded: '사진 크기가 제한을 초과했습니다',
-  voice_format_invalid: '지원하지 않는 음성 형식입니다',
-  voice_size_exceeded: '음성 파일 크기가 제한을 초과했습니다',
-  voice_duration_invalid: '음성 길이가 허용 범위를 벗어났습니다',
-  // 보고서 (Reports)
-  report_title_content_required: '제목과 본문을 입력해주세요',
+  // 보고서 (Reports) — ERD v2: title 필수, content/공유 제거.
+  report_title_required: '제목을 입력해주세요',
   report_title_length_invalid: '제목 길이가 올바르지 않습니다',
-  report_content_length_invalid: '본문 길이가 올바르지 않습니다',
   report_notes_required: '메모를 입력해주세요',
   ai_analysis_empty: 'AI 분석 결과가 비어 있습니다. 메모·사진을 보강 후 다시 시도해주세요',
   report_tripid_immutable: '연결 외근은 변경할 수 없습니다',
   report_not_found: '이미 삭제되었거나 찾을 수 없는 보고서입니다',
   report_forbidden: '본인 작성 보고서만 변경할 수 있습니다',
-  // 공유
-  share_not_enabled: '공유가 활성화되지 않은 보고서입니다',
-  share_expired: '공유 링크가 만료되었습니다',
+  // 프로젝트 (Projects) — ERD v2 신규
+  project_name_required: '프로젝트 이름을 입력해주세요',
+  project_status_invalid: '프로젝트 상태 값이 올바르지 않습니다',
+  project_not_found: '프로젝트를 찾을 수 없습니다',
   // 외부 서비스
   kakao_provider_unavailable: '주소 검색 서비스가 일시적으로 불안정합니다. 잠시 후 다시 시도해주세요',
   // 일반

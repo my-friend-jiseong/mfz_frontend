@@ -18,23 +18,8 @@ import { EmptyState } from '@/components/EmptyState';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
 
+// ERD v2: 보고서 본문(content) 제거 — 제목만 편집. 본문은 현장별 전·중·후 사진(field_reports).
 const TITLE_MAX = 100;
-const CONTENT_MIN = 10;
-const CONTENT_MAX = 50_000;
-
-interface FieldErrors {
-  title?: string;
-  content?: string;
-}
-
-// 백엔드 code → 필드 매핑.
-const CODE_TO_FIELD: Record<string, keyof FieldErrors> = {
-  report_title_required: 'title',
-  report_title_length_invalid: 'title',
-  report_title_content_required: 'title',
-  report_content_required: 'content',
-  report_content_length_invalid: 'content',
-};
 
 export default function EditReport() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -47,39 +32,28 @@ export default function EditReport() {
   const update = useReportStore((s) => s.update);
   const userId = useAuthStore((s) => s.user?.id);
 
-  // 진입 시 detail 페치 — detailCache 가 풀 본문 source of truth.
-  // 목록의 contentPreview 는 짧게 잘려 있어 form 초기값으로 부적합.
   useEffect(() => {
     if (reportId && !detailCache[reportId]) void loadDetail(reportId);
   }, [reportId, detailCache, loadDetail]);
 
-  // detailCache 만 source — 페치 완료 전엔 폼을 띄우지 않음.
   const report = detailCache[reportId];
-  // 권한 체크용 — list 응답에서도 creatorId 확인 가능.
   const summary = useMemo(
-    () =>
-      report ?? allReports.find((r) => r.id === reportId && r.deletedAt === null),
+    () => report ?? allReports.find((r) => r.id === reportId),
     [allReports, report, reportId],
   );
 
   const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
-  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [titleErr, setTitleErr] = useState<string | null>(null);
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // initial 값 보존 — 변경 감지 / 뒤로 가기 confirm 용. detail 도착 시 한 번만 set.
-  const initialRef = useRef<{ title: string; content: string } | null>(null);
+  const initialRef = useRef<string | null>(null);
   const userTouchedRef = useRef(false);
 
-  // detail 도착 후 form 초기화 — 사용자 입력 안 한 상태에서만.
   useEffect(() => {
     if (!report || initialRef.current) return;
-    if (!userTouchedRef.current) {
-      setTitle(report.title);
-      setContent(report.content);
-    }
-    initialRef.current = { title: report.title, content: report.content };
+    if (!userTouchedRef.current) setTitle(report.title);
+    initialRef.current = report.title;
   }, [report]);
 
   if (!summary) {
@@ -101,7 +75,6 @@ export default function EditReport() {
     );
   }
 
-  // detail 페치 중 — form 미노출 (contentPreview 잘림 회귀 방지).
   if (!report) {
     return (
       <View style={styles.container}>
@@ -111,44 +84,28 @@ export default function EditReport() {
   }
 
   const titleTrim = title.trim();
-  const contentTrim = content.trim();
-  const hasChanges =
-    !!initialRef.current &&
-    (titleTrim !== initialRef.current.title.trim() ||
-      contentTrim !== initialRef.current.content.trim());
-
-  const validate = (): FieldErrors => {
-    const errs: FieldErrors = {};
-    if (titleTrim.length < 1) errs.title = '제목을 입력해주세요';
-    else if (titleTrim.length > TITLE_MAX) errs.title = `제목은 ${TITLE_MAX}자 이하여야 합니다`;
-    if (contentTrim.length < CONTENT_MIN) errs.content = `본문은 ${CONTENT_MIN}자 이상이어야 합니다`;
-    else if (contentTrim.length > CONTENT_MAX)
-      errs.content = `본문은 ${CONTENT_MAX.toLocaleString()}자 이하여야 합니다`;
-    return errs;
-  };
-
-  const clearFieldErr = (k: keyof FieldErrors) =>
-    setFieldErrors((p) => ({ ...p, [k]: undefined }));
+  const hasChanges = initialRef.current !== null && titleTrim !== initialRef.current.trim();
 
   const handleSave = async () => {
     setGlobalError(null);
-    const errs = validate();
-    setFieldErrors(errs);
-    if (Object.keys(errs).length > 0) return;
+    if (titleTrim.length < 1) {
+      setTitleErr('제목을 입력해주세요');
+      return;
+    }
+    if (titleTrim.length > TITLE_MAX) {
+      setTitleErr(`제목은 ${TITLE_MAX}자 이하여야 합니다`);
+      return;
+    }
     setSubmitting(true);
-    const r = await update(report.id, { title: titleTrim, content: contentTrim });
+    const r = await update(report.id, { title: titleTrim });
     setSubmitting(false);
     if (r.ok) {
       safeBack(router);
       return;
     }
-    // 백엔드 코드 → 필드 매핑.
-    const code =
-      typeof (r as { code?: string }).code === 'string'
-        ? (r as { code?: string }).code
-        : null;
-    if (code && CODE_TO_FIELD[code]) {
-      setFieldErrors({ [CODE_TO_FIELD[code]]: r.error });
+    const code = (r as { code?: string }).code;
+    if (code === 'report_title_required' || code === 'report_title_length_invalid') {
+      setTitleErr(r.error);
       return;
     }
     setGlobalError(r.error);
@@ -185,37 +142,17 @@ export default function EditReport() {
           onChangeText={(v) => {
             userTouchedRef.current = true;
             setTitle(v);
-            if (fieldErrors.title) clearFieldErr('title');
+            if (titleErr) setTitleErr(null);
           }}
           editable={!submitting}
-          style={[styles.input, fieldErrors.title && styles.inputError]}
+          style={[styles.input, titleErr && styles.inputError]}
           maxLength={TITLE_MAX}
         />
-        {fieldErrors.title ? (
-          <Text style={styles.fieldError}>{fieldErrors.title}</Text>
-        ) : null}
+        {titleErr ? <Text style={styles.fieldError}>{titleErr}</Text> : null}
 
-        <View style={styles.labelRow}>
-          <Text style={styles.label}>본문 * ({CONTENT_MIN}자 이상)</Text>
-          <Text style={styles.counter}>
-            {content.length.toLocaleString()} / {CONTENT_MAX.toLocaleString()}
-          </Text>
-        </View>
-        <TextInput
-          value={content}
-          onChangeText={(v) => {
-            userTouchedRef.current = true;
-            setContent(v);
-            if (fieldErrors.content) clearFieldErr('content');
-          }}
-          editable={!submitting}
-          style={[styles.input, styles.multiline, fieldErrors.content && styles.inputError]}
-          multiline
-          maxLength={CONTENT_MAX}
-        />
-        {fieldErrors.content ? (
-          <Text style={styles.fieldError}>{fieldErrors.content}</Text>
-        ) : null}
+        <Text style={styles.hint}>
+          현장별 전·중·후 사진은 보고서 상세 화면에서 관리합니다.
+        </Text>
 
         {globalError ? <Text style={styles.error}>{globalError}</Text> : null}
 
@@ -271,7 +208,6 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   inputError: { borderColor: colors.danger },
-  multiline: { minHeight: 200, textAlignVertical: 'top' },
   counter: {
     fontSize: fontSize.xs,
     color: colors.textMuted,
@@ -282,6 +218,11 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     marginTop: 4,
     marginLeft: 4,
+  },
+  hint: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    marginTop: spacing.lg,
   },
   error: { color: colors.danger, fontSize: fontSize.sm, marginTop: spacing.md },
   btn: {

@@ -23,11 +23,6 @@ function fmtTime(iso: string) {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-function summary(content: string, limit = 60) {
-  const s = content.replace(/\s+/g, ' ').trim();
-  return s.length > limit ? s.slice(0, limit) + '…' : s;
-}
-
 type Group = { trip: Trip; reports: Report[] };
 
 export default function ReportsIndex() {
@@ -44,11 +39,10 @@ export default function ReportsIndex() {
 
   const groups = useMemo<Group[]>(() => {
     if (!userId) return [];
-    const mine = allReports.filter(
-      (r) => r.creatorId === userId && r.deletedAt === null,
-    );
+    const mine = allReports.filter((r) => r.creatorId === userId);
     const byTripId = new Map<string, Report[]>();
     mine.forEach((r) => {
+      if (!r.tripId) return;
       const arr = byTripId.get(r.tripId) ?? [];
       arr.push(r);
       byTripId.set(r.tripId, arr);
@@ -107,9 +101,6 @@ export default function ReportsIndex() {
                 ]}
               >
                 <Text style={styles.reportTitle}>{r.title}</Text>
-                <Text style={styles.reportSummary} numberOfLines={2}>
-                  {summary(r.content)}
-                </Text>
                 <Text style={styles.reportMeta}>
                   {fmtDate(r.createdAt)}
                   {r.updatedAt ? ` · 수정됨` : ''}

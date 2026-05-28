@@ -16,25 +16,12 @@ import { useFieldStore } from '@/stores/fieldStore';
 import { useDestinationStore } from '@/stores/destinationStore';
 import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
-import { trips as tripsApi, type TripStateTransition } from '@/api';
 import { safeBack } from '@/utils/backNavigation';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
 import { VISIT_STATUS_LABEL, type Visit } from '@/types/entities';
 
-// 외근 lifecycle status 전환의 한국어 라벨 (handoff §6d — toStatus 매핑).
-// 알 수 없는 status 는 그대로 노출 (미래 확장 안전).
-const STATUS_LABEL: Record<string, string> = {
-  active: '진행 중',
-  abnormal_open: '미종료 처리',
-  ended: '종료',
-};
-
-function fmtDateTime(iso?: string) {
-  if (!iso) return '';
-  const d = new Date(iso);
-  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-}
+// ERD v2: trip_status_transitions(상태 이력) 제거 — 상태 전환 이력 UI 없음.
 
 function fmtTime(iso: string) {
   const d = new Date(iso);
@@ -50,8 +37,6 @@ export default function TripDetail() {
   const activeTripId = useTripStore((s) => s.activeTripId);
   const endTrip = useTripStore((s) => s.end);
   const allVisits = useVisitStore((s) => s.visits);
-  const allTextMemos = useVisitStore((s) => s.textMemos);
-  const allPhotos = useVisitStore((s) => s.photos);
   const getField = useFieldStore((s) => s.getById);
   const allDestinations = useDestinationStore((s) => s.destinations);
 
@@ -80,27 +65,6 @@ export default function TripDetail() {
         .sort((a, b) => a.visitedAt.localeCompare(b.visitedAt)),
     [allVisits, tripId],
   );
-  const memoCountByVisit = (visitId: string) =>
-    allTextMemos.filter((m) => m.visitId === visitId).length;
-  const photoCountByVisit = (visitId: string) =>
-    allPhotos.filter((p) => p.visitId === visitId).length;
-
-  // 상태 전환 이력 (감사용) — 백엔드 typed contract (handoff §6d).
-  // 응답: { data: { items: [{ tripId, ..., timeline: TripStateTransition[] }] } }
-  const [stateHistory, setStateHistory] = useState<TripStateTransition[]>([]);
-  useEffect(() => {
-    if (!tripId) return;
-    void (async () => {
-      try {
-        const res = await tripsApi.stateHistory({ tripId });
-        const entry = res.data?.items?.find((it) => it.tripId === tripId);
-        setStateHistory(entry?.timeline ?? []);
-      } catch {
-        setStateHistory([]);
-      }
-    })();
-  }, [tripId]);
-
   if (!trip) {
     return (
       <MapSheetLayout title="외근 상세" onBack={() => safeBack(router)}>
@@ -170,8 +134,6 @@ export default function TripDetail() {
   const renderItem = ({ item }: { item: Visit }) => {
     const field = getField(item.fieldId);
     const statusColor = colors.visitStatus[item.status];
-    const memoCount = memoCountByVisit(item.id);
-    const photoCount = photoCountByVisit(item.id);
 
     return (
       <Pressable
@@ -191,10 +153,7 @@ export default function TripDetail() {
           </View>
         </View>
         <Text style={styles.fieldAddr}>
-          {field?.title || field?.address || '알 수 없는 현장'}
-        </Text>
-        <Text style={styles.meta}>
-          텍스트 메모 {memoCount}건 · 사진 {photoCount}건
+          {field?.address || '알 수 없는 현장'}
         </Text>
       </Pressable>
     );
@@ -230,7 +189,7 @@ export default function TripDetail() {
               <View key={d.id} style={styles.planRow}>
                 <Text style={styles.planOrder}>{d.order}.</Text>
                 <Text style={styles.planAddr} numberOfLines={1}>
-                  {f?.title || f?.address || '알 수 없는 현장'}
+                  {f?.address || '알 수 없는 현장'}
                 </Text>
                 <Text
                   style={[
@@ -266,24 +225,6 @@ export default function TripDetail() {
       >
         <Text style={styles.composeBtnText}>📝 보고서 작성</Text>
       </Pressable>
-      {stateHistory.length > 0 ? (
-        <View style={styles.historyBox}>
-          <Text style={styles.historyTitle}>상태 전환 이력</Text>
-          {stateHistory.map((h, idx) => {
-            const fromLabel = h.fromStatus ? (STATUS_LABEL[h.fromStatus] ?? h.fromStatus) : '시작';
-            const toLabel = STATUS_LABEL[h.toStatus] ?? h.toStatus;
-            return (
-              <View key={`${h.id}-${idx}`} style={styles.historyRow}>
-                <Text style={styles.historyTime}>{fmtDateTime(h.changedAt)}</Text>
-                <Text style={styles.historyText}>
-                  {`${fromLabel} → ${toLabel}`}
-                  {h.reason ? ` · ${h.reason}` : ''}
-                </Text>
-              </View>
-            );
-          })}
-        </View>
-      ) : null}
     </View>
   );
 

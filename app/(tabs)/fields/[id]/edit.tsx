@@ -16,7 +16,7 @@ import { useFieldStore } from '@/stores/fieldStore';
 import { safeBack } from '@/utils/backNavigation';
 import { FIELD_STATUS_VALUES, FIELD_STATUS_LABEL, type FieldStatus } from '@/types/entities';
 import { fields as fieldsApi, errorCode, localizeError } from '@/api';
-import type { AddressSearchItem } from '@/api';
+import type { AddressSearchItem, UpdateFieldBody } from '@/api';
 import {
   itemToSelected,
   isInKorea,
@@ -27,17 +27,17 @@ import {
   type SelectedAddress,
 } from '@/utils/addressSearch';
 import { EmptyState } from '@/components/EmptyState';
+import { ProjectPicker } from '@/components/ProjectPicker';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
 
 const DETAIL_MAX = 100;
-const TITLE_MAX = 50;
 
 interface FieldErrors {
-  title?: string;
   detailAddress?: string;
   status?: string;
   address?: string;
+  categories?: string;
 }
 
 export default function EditField() {
@@ -52,17 +52,19 @@ export default function EditField() {
   // Hooks must be called unconditionally — early return 후로 옮기지 않고 옵셔널 처리.
   const initial = useMemo(
     () => ({
-      title: field?.title ?? '',
       addressDetail: field?.addressDetail ?? '',
       status: field?.status ?? ('pending' as FieldStatus),
+      categories: (field?.categories ?? []).join(', '),
+      projectId: field?.projectId ?? null,
     }),
-    [field?.title, field?.addressDetail, field?.status],
+    [field?.addressDetail, field?.status, field?.categories, field?.projectId],
   );
   const initialRef = useRef(initial);
 
-  const [title, setTitle] = useState(initial.title);
   const [addressDetail, setAddressDetail] = useState(initial.addressDetail);
   const [status, setStatus] = useState<FieldStatus>(initial.status);
+  const [categoriesStr, setCategoriesStr] = useState(initial.categories);
+  const [projectId, setProjectId] = useState<string | null>(initial.projectId);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -190,12 +192,13 @@ export default function EditField() {
     );
   }
 
-  const titleTrim = title.trim();
   const detailTrim = addressDetail.trim();
+  const categoriesTrim = categoriesStr.trim();
   const hasChanges =
-    titleTrim !== initialRef.current.title.trim() ||
     detailTrim !== initialRef.current.addressDetail.trim() ||
     status !== initialRef.current.status ||
+    categoriesTrim !== initialRef.current.categories.trim() ||
+    projectId !== initialRef.current.projectId ||
     newAddress !== null;
 
   const clearFieldErr = (k: keyof FieldErrors) =>
@@ -204,8 +207,6 @@ export default function EditField() {
   const handleSave = async () => {
     setGlobalError(null);
     const errs: FieldErrors = {};
-    if (titleTrim.length > TITLE_MAX)
-      errs.title = `제목은 ${TITLE_MAX}자 이하여야 합니다`;
     if (detailTrim.length > DETAIL_MAX)
       errs.detailAddress = `상세 주소는 ${DETAIL_MAX}자 이하여야 합니다`;
     setFieldErrors(errs);
@@ -214,27 +215,23 @@ export default function EditField() {
     setSubmitting(true);
 
     // 변경된 항목만 호출 — 빈 PATCH 방지.
-    const titleChanged = titleTrim !== initialRef.current.title.trim();
     const detailChanged = detailTrim !== initialRef.current.addressDetail.trim();
     const statusChanged = status !== initialRef.current.status;
+    const categoriesChanged = categoriesTrim !== initialRef.current.categories.trim();
+    const projectIdChanged = projectId !== initialRef.current.projectId;
     const addressChanged = newAddress !== null;
 
-    if (titleChanged || detailChanged || addressChanged) {
-      const body: {
-        title?: string;
-        detailAddress?: string;
-        roadAddress?: string;
-        jibunAddress?: string;
-        sido?: string;
-        sigungu?: string;
-        lat?: number;
-        lng?: number;
-      } = {};
-      if (titleChanged) body.title = titleTrim;
+    if (detailChanged || categoriesChanged || projectIdChanged || addressChanged) {
+      const body: UpdateFieldBody = {};
       if (detailChanged) body.detailAddress = detailTrim;
+      if (categoriesChanged) {
+        body.categories = categoriesTrim
+          ? categoriesTrim.split(',').map((c) => c.trim()).filter(Boolean)
+          : [];
+      }
+      if (projectIdChanged) body.projectId = projectId; // null → 해제
       if (addressChanged && newAddress) {
         body.roadAddress = newAddress.roadAddress;
-        body.jibunAddress = newAddress.jibunAddress;
         body.lat = newAddress.lat;
         body.lng = newAddress.lng;
         if (newAddress.sido) body.sido = newAddress.sido;
@@ -498,25 +495,27 @@ export default function EditField() {
           <Text style={styles.fieldError}>{fieldErrors.address}</Text>
         ) : null}
 
-        <View style={styles.labelRow}>
-          <Text style={styles.label}>제목</Text>
-          <Text style={styles.counter}>
-            {title.length} / {TITLE_MAX}
-          </Text>
-        </View>
+        <Text style={styles.label}>프로젝트 (선택)</Text>
+        <ProjectPicker
+          value={projectId}
+          onChange={setProjectId}
+          initialLabel={field.projectName}
+          disabled={submitting}
+        />
+
+        <Text style={styles.label}>분류 (쉼표로 구분)</Text>
         <TextInput
-          value={title}
+          value={categoriesStr}
           onChangeText={(v) => {
-            setTitle(v);
-            if (fieldErrors.title) clearFieldErr('title');
+            setCategoriesStr(v);
+            if (fieldErrors.categories) clearFieldErr('categories');
           }}
           editable={!submitting}
-          maxLength={TITLE_MAX}
-          style={[styles.input, fieldErrors.title && styles.inputError]}
-          placeholder="예: 1번 가로수, A동 정문"
+          style={[styles.input, fieldErrors.categories && styles.inputError]}
+          placeholder="예: 가로수, 보수, 긴급"
         />
-        {fieldErrors.title ? (
-          <Text style={styles.fieldError}>{fieldErrors.title}</Text>
+        {fieldErrors.categories ? (
+          <Text style={styles.fieldError}>{fieldErrors.categories}</Text>
         ) : null}
 
         <View style={styles.labelRow}>

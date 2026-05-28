@@ -8,15 +8,16 @@
 //   - 외래키도 동일 string
 
 export type FieldStatus = 'pending' | 'in_progress' | 'done';
-// 백엔드 canonical (handoff §5 응답 기준 — Phase 6 contract).
-// 'completed' 와 별개의 'resultStatus' (normal | abnormal) 가 응답에 따로 있음.
+// 방문 상태 enum. ERD v2 에서 visits.result_status / status_reason 컬럼이 제거되어
+// 단일 status 로 붕괴됨 — v2 실제 enum 값은 계획서 §8 확인 대상. 확정 전까지 기존 값 +
+// alias 폴백을 방어적으로 유지 (normalizeVisitStatus 가 미지값을 'completed' 로 흡수).
 export type VisitStatus =
   | 'completed'          // 완료 (resultStatus 자동 'normal')
   | 'absent'             // 부재
   | 'refused'            // 수취거절
   | 'unknown_address'    // 주소불명
   | 'revisit_needed'     // 재방문 필요
-  | 'other';             // 기타 (statusReason 10자 이상 필수)
+  | 'other';             // 기타 (검증 2026-05-28: reason 10자 이상 필수 — visit_status_reason_required)
 export type DestinationStatus = 'pending' | 'arrived' | 'skipped';
 
 export interface User {
@@ -34,6 +35,8 @@ export interface Trip {
   workerId: string;
   startedAt: string;
   endedAt: string | null;
+  // ERD v2: trips.status — 'active' | 'ended'.
+  status?: 'active' | 'ended';
   // 사용자 입력 제목 (예: "가로수 보수 공사", "동구 일상 점검").
   // 백엔드 미구현 단계에선 undefined — UI 는 시작 날짜로 fallback.
   title?: string;
@@ -48,17 +51,20 @@ export interface Trip {
 export interface Field {
   id: string;
   userId: string;
+  // ERD v2: 현장은 프로젝트에 선택적으로 소속 (fields.project_id).
+  projectId?: string | null;
+  // 백엔드 응답에 함께 오는 프로젝트 이름 — UI 표시용(편의).
+  projectName?: string | null;
   status: FieldStatus;
+  // 주소·좌표는 locations 테이블 출처 (fields.location_id 1:1). UI 표시용으로 평탄 보관.
   address: string;
   addressDetail: string;
   latitude: number;
   longitude: number;
-  tags?: string[];
+  // ERD v2: field_tags → field_categories. 분류 라벨 목록.
+  categories?: string[];
   recentVisitedAt?: string | null;
   updatedAt?: string;
-  // 사용자 입력 제목 (예: "1번 가로수", "A동 정문").
-  // 백엔드 미구현 단계에선 undefined — UI 는 주소로 fallback.
-  title?: string;
 }
 
 export interface Visit {
@@ -80,46 +86,76 @@ export interface Destination {
   status: DestinationStatus;
 }
 
+// ERD v2: memos 테이블은 현장(field) 전용 — visit 연결·좌표 컬럼 없음.
 export interface TextMemo {
   id: string;
-  visitId: string | null;
   fieldId: string;
   content: string;
-  latitude: number;
-  longitude: number;
+  createdBy?: string;
   createdAt: string;
 }
 
-export interface VoiceMemo {
-  id: string;
-  visitId: string | null;
-  fieldId: string;
-  content: string;
-  latitude: number;
-  longitude: number;
-  createdAt: string;
-}
+// ERD v2: 음성 메모(VoiceMemo) 폐기 — 오디오 테이블·API 모두 제거됨.
 
+// ERD v2: field_photos 테이블은 현장 전용 — visit 연결·좌표·caption 컬럼 없음.
 export interface Photo {
   id: string;
-  visitId: string | null;
   fieldId: string;
+  fileName?: string;
+  mimeType?: string;
   fileUrl: string;
-  latitude: number;
-  longitude: number;
+  fileSize?: number;
   createdAt: string;
 }
 
+// ERD v2: reports 는 content/summary/share/soft-delete 제거.
+// 본문은 fieldReports(현장별 전·중·후 사진)로 대체.
 export interface Report {
   id: string;
-  creatorId: string;
-  tripId: string;
+  creatorId: string;          // reports.created_by
+  tripId: string | null;
   title: string;
-  content: string;
+  outputFileUrl?: string | null;
+  fieldReports?: FieldReport[];
   createdAt: string;
   updatedAt: string | null;
-  deletedAt: string | null;
-  fileUrl?: string | null;
+}
+
+// ERD v2 신규 — 사용자별 프로젝트. 현장이 선택적으로 소속.
+export interface Project {
+  id: string;
+  userId: string;
+  name: string;
+  status: string;             // enum 값 확정 전 문자열 (계획서 §8)
+  createdAt: string;
+  updatedAt?: string;
+}
+
+// ERD v2 신규 — 현장 주소·좌표 1:1 (fields.location_id UNIQUE).
+export interface Location {
+  id: string;
+  latitude: number;
+  longitude: number;
+  sido?: string | null;
+  sigungu?: string | null;
+  roadAddress: string;
+  detailAddress?: string | null;
+}
+
+// ERD v2 신규 — 보고서 본문을 대체하는 현장별 전·중·후 사진.
+export interface FieldReport {
+  id: string;
+  reportId: string;
+  fieldId: string;
+  title?: string | null;
+  beforePhotoUrl?: string | null;
+  beforePhotoCaption?: string | null;
+  pendingPhotoUrl?: string | null;     // 작업 "중" 사진
+  pendingPhotoCaption?: string | null;
+  afterPhotoUrl?: string | null;
+  afterPhotoCaption?: string | null;
+  createdAt: string;
+  updatedAt?: string | null;
 }
 
 export const VISIT_STATUS_VALUES: VisitStatus[] = [

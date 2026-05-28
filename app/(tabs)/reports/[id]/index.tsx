@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  Image,
   Linking,
   Platform,
   Pressable,
@@ -10,9 +11,9 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
-import * as Clipboard from 'expo-clipboard';
 import { useReportStore } from '@/stores/reportStore';
 import { useTripStore } from '@/stores/tripStore';
+import { useFieldStore } from '@/stores/fieldStore';
 import { useAuthStore } from '@/stores/authStore';
 import { API_BASE_URL } from '@/api';
 import { safeBack } from '@/utils/backNavigation';
@@ -20,9 +21,66 @@ import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
+import type { FieldReport } from '@/types/entities';
 
 function fmtDateTime(iso: string) {
   return new Date(iso).toLocaleString('ko-KR');
+}
+
+// 현장별 전·중·후 사진 카드 (ERD v2: 보고서 본문 대체).
+function FieldReportCard({
+  fr,
+  fieldName,
+  onEdit,
+  onDelete,
+}: {
+  fr: FieldReport;
+  fieldName?: string;
+  onEdit?: () => void;
+  onDelete?: () => void;
+}) {
+  const slots: Array<{ label: string; url?: string | null; caption?: string | null }> = [
+    { label: '전', url: fr.beforePhotoUrl, caption: fr.beforePhotoCaption },
+    { label: '중', url: fr.pendingPhotoUrl, caption: fr.pendingPhotoCaption },
+    { label: '후', url: fr.afterPhotoUrl, caption: fr.afterPhotoCaption },
+  ];
+  const resolve = (raw: string) => (raw.startsWith('http') ? raw : `${API_BASE_URL}${raw}`);
+  return (
+    <View style={styles.frCard}>
+      <View style={styles.frHead}>
+        <Text style={styles.frTitle}>{fr.title || fieldName || '현장 보고'}</Text>
+        {onEdit || onDelete ? (
+          <View style={styles.frHeadActions}>
+            {onEdit ? (
+              <Pressable onPress={onEdit} hitSlop={8}>
+                <Text style={styles.frEdit}>수정</Text>
+              </Pressable>
+            ) : null}
+            {onDelete ? (
+              <Pressable onPress={onDelete} hitSlop={8}>
+                <Text style={styles.frDelete}>삭제</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
+      </View>
+      <View style={styles.frSlots}>
+        {slots.map((s) => (
+          <View key={s.label} style={styles.frSlot}>
+            <Text style={styles.frSlotLabel}>{s.label}</Text>
+            {s.url ? (
+              <Image source={{ uri: resolve(s.url) }} style={styles.frPhoto} resizeMode="cover" />
+            ) : (
+              <View style={[styles.frPhoto, styles.frPhotoEmpty]}>
+                <Text style={styles.frPhotoEmptyText}>없음</Text>
+              </View>
+            )}
+            {s.caption ? <Text style={styles.frCaption}>{s.caption}</Text> : null}
+          </View>
+        ))}
+      </View>
+    </View>
+  );
 }
 
 export default function ReportDetail() {
@@ -34,27 +92,20 @@ export default function ReportDetail() {
   const detailCache = useReportStore((s) => s.detailCache);
   const loadDetail = useReportStore((s) => s.loadDetail);
   const remove = useReportStore((s) => s.remove);
-  const share = useReportStore((s) => s.share);
+  const removeFieldReport = useReportStore((s) => s.removeFieldReport);
   const allTrips = useTripStore((s) => s.trips);
+  const getField = useFieldStore((s) => s.getById);
   const userId = useAuthStore((s) => s.user?.id);
 
-  const [shareUrl, setShareUrl] = useState<string | null>(null);
-  const [shareExpiresAt, setShareExpiresAt] = useState<string | null>(null);
-  const [sharing, setSharing] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const disableShare = useReportStore((s) => s.disableShare);
 
-  // 진입 시 백엔드에서 detail 페치 (목록은 contentPreview 만 갖고 있음).
-  // 단, 삭제 진행 중이면 호출하지 않음 — 삭제 후 router.replace 까지 한 프레임 동안
-  // 동일 화면이 잔존해 detail 재페치 → 404 → 비직관적 오류가 뜨던 문제 방지.
+  // 진입 시 백엔드에서 detail 페치 (목록은 fieldReports 없음).
   useEffect(() => {
     if (reportId && !deleting) void loadDetail(reportId);
   }, [reportId, loadDetail, deleting]);
 
   const report = useMemo(
-    () =>
-      detailCache[reportId] ??
-      allReports.find((r) => r.id === reportId && r.deletedAt === null),
+    () => detailCache[reportId] ?? allReports.find((r) => r.id === reportId),
     [detailCache, allReports, reportId],
   );
   const trip = useMemo(
@@ -73,19 +124,32 @@ export default function ReportDetail() {
   }
 
   const isOwner = userId === report.creatorId;
+  const fieldReports = report.fieldReports ?? [];
+
+  const handleDeleteFr = (frId: string) => {
+    const doDelete = async () => {
+      const r = await removeFieldReport(report.id, frId);
+      if (!r.ok) Alert.alert('현장 보고 삭제 실패', r.error);
+    };
+    if (Platform.OS === 'web') {
+      if (confirm('이 현장 보고를 삭제할까요?')) void doDelete();
+    } else {
+      Alert.alert('현장 보고 삭제', '이 현장 보고를 삭제할까요?', [
+        { text: '취소', style: 'cancel' },
+        { text: '삭제', style: 'destructive', onPress: () => void doDelete() },
+      ]);
+    }
+  };
 
   const handleDelete = () => {
     const doDelete = async () => {
       setDeleting(true); // race 가드 — 삭제 중 detail 재페치 차단
       const r = await remove(report.id);
       if (r.ok) {
-        // 성공 시 보고서 목록으로 이동. setDeleting(false) 는 unmount 되므로 불필요.
         router.replace('/(tabs)/reports' as never);
         return;
       }
       setDeleting(false);
-      // remove store 의 error 는 localizeError 결과 (한국어 메시지) — 그대로 노출.
-      // report_not_found 는 already-deleted 의 의미라 목록으로 자동 이동.
       const raw = r.error ?? '';
       if (/이미 삭제|찾을 수 없는/.test(raw)) {
         router.replace('/(tabs)/reports' as never);
@@ -103,41 +167,6 @@ export default function ReportDetail() {
         { text: '취소', style: 'cancel' },
         { text: '삭제', style: 'destructive', onPress: () => void doDelete() },
       ]);
-    }
-  };
-
-  const handleShare = async () => {
-    setSharing(true);
-    const r = await share(report.id);
-    setSharing(false);
-    if (!r.ok) {
-      Alert.alert('공유 링크 발급 실패', r.error);
-      return;
-    }
-    const url = `${API_BASE_URL}${r.share.shareUrl}`;
-    setShareUrl(url);
-    setShareExpiresAt(r.share.expiresAt ?? r.share.shareExpiresAt ?? null);
-    try {
-      await Clipboard.setStringAsync(url);
-      Alert.alert(
-        '공유 링크',
-        '링크가 클립보드에 복사되었습니다.\n비로그인 사용자도 이 링크로 미리보기 가능합니다.',
-      );
-    } catch {
-      Alert.alert('공유 링크', url);
-    }
-  };
-
-  const handleDisableShare = async () => {
-    setSharing(true);
-    const r = await disableShare(report.id);
-    setSharing(false);
-    if (r.ok) {
-      setShareUrl(null);
-      setShareExpiresAt(null);
-      Alert.alert('공유 해제', '이 보고서의 공유 링크가 무효화되었습니다.');
-    } else {
-      Alert.alert('공유 해제 실패', r.error);
     }
   };
 
@@ -166,14 +195,42 @@ export default function ReportDetail() {
           {report.updatedAt ? ` · 수정: ${fmtDateTime(report.updatedAt)}` : ''}
         </Text>
 
-        <View style={styles.contentBox}>
-          <Text style={styles.content}>{report.content}</Text>
+        <View style={styles.sectionHead}>
+          <Text style={styles.sectionLabel}>현장별 전·중·후</Text>
+          {isOwner ? (
+            <Pressable
+              onPress={() => router.push(`/(tabs)/reports/${report.id}/field-report` as never)}
+              style={({ pressed }) => [styles.addFrBtn, pressed && styles.pressed]}
+            >
+              <Text style={styles.addFrBtnText}>+ 현장 보고 추가</Text>
+            </Pressable>
+          ) : null}
         </View>
+        {fieldReports.length === 0 ? (
+          <Text style={styles.emptyFr}>등록된 현장 보고가 없습니다.</Text>
+        ) : (
+          fieldReports.map((fr) => (
+            <FieldReportCard
+              key={fr.id}
+              fr={fr}
+              fieldName={getField(fr.fieldId)?.address}
+              onEdit={
+                isOwner
+                  ? () =>
+                      router.push(
+                        `/(tabs)/reports/${report.id}/field-report?frId=${fr.id}` as never,
+                      )
+                  : undefined
+              }
+              onDelete={isOwner ? () => handleDeleteFr(fr.id) : undefined}
+            />
+          ))
+        )}
 
-        {report.fileUrl && report.fileUrl.trim() ? (
+        {report.outputFileUrl && report.outputFileUrl.trim() ? (
           <Pressable
             onPress={() => {
-              const raw = report.fileUrl!.trim();
+              const raw = report.outputFileUrl!.trim();
               const url = raw.startsWith('http') ? raw : `${API_BASE_URL}${raw}`;
               void Linking.openURL(url);
             }}
@@ -184,61 +241,26 @@ export default function ReportDetail() {
         ) : null}
 
         {isOwner ? (
-          <>
-            <View style={styles.actions}>
-              <Pressable
-                onPress={() =>
-                  router.push(`/(tabs)/reports/${report.id}/edit` as never)
-                }
-                style={({ pressed }) => [styles.actionBtn, pressed && styles.pressed]}
-              >
-                <Text style={styles.actionText}>수정</Text>
-              </Pressable>
-              <Pressable
-                onPress={handleShare}
-                disabled={sharing}
-                style={({ pressed }) => [
-                  styles.actionBtn,
-                  (pressed || sharing) && styles.pressed,
-                ]}
-              >
-                <Text style={styles.actionText}>{sharing ? '공유 중...' : '공유'}</Text>
-              </Pressable>
-              <Pressable
-                onPress={handleDelete}
-                style={({ pressed }) => [
-                  styles.actionBtn,
-                  styles.dangerBtn,
-                  pressed && styles.pressed,
-                ]}
-              >
-                <Text style={[styles.actionText, styles.dangerText]}>삭제</Text>
-              </Pressable>
-            </View>
-            {shareUrl ? (
-              <View style={styles.shareUrlBox}>
-                <Text style={styles.shareUrlLabel}>발급된 공유 링크</Text>
-                <Text style={styles.shareUrlText} selectable>
-                  {shareUrl}
-                </Text>
-                {shareExpiresAt ? (
-                  <Text style={styles.shareExpires}>
-                    만료: {fmtDateTime(shareExpiresAt)}
-                  </Text>
-                ) : null}
-                <Pressable
-                  onPress={() => void handleDisableShare()}
-                  disabled={sharing}
-                  style={({ pressed }) => [
-                    styles.shareDisableBtn,
-                    (pressed || sharing) && styles.pressed,
-                  ]}
-                >
-                  <Text style={styles.shareDisableText}>공유 해제</Text>
-                </Pressable>
-              </View>
-            ) : null}
-          </>
+          <View style={styles.actions}>
+            <Pressable
+              onPress={() =>
+                router.push(`/(tabs)/reports/${report.id}/edit` as never)
+              }
+              style={({ pressed }) => [styles.actionBtn, pressed && styles.pressed]}
+            >
+              <Text style={styles.actionText}>수정</Text>
+            </Pressable>
+            <Pressable
+              onPress={handleDelete}
+              style={({ pressed }) => [
+                styles.actionBtn,
+                styles.dangerBtn,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={[styles.actionText, styles.dangerText]}>삭제</Text>
+            </Pressable>
+          </View>
         ) : null}
       </BottomSheetScrollView>
     </MapSheetLayout>
@@ -266,18 +288,82 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginTop: spacing.sm,
   },
-  contentBox: {
+  sectionHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing.xl,
+    marginBottom: spacing.sm,
+  },
+  sectionLabel: {
+    fontSize: fontSize.sm,
+    color: colors.textMuted,
+    fontWeight: '700',
+  },
+  addFrBtn: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.primary + '10',
+  },
+  addFrBtnText: { fontSize: fontSize.xs, color: colors.primary, fontWeight: '700' },
+  frHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
+  frHeadActions: { flexDirection: 'row', gap: spacing.md },
+  frEdit: { fontSize: fontSize.xs, color: colors.primary, fontWeight: '700' },
+  frDelete: { fontSize: fontSize.xs, color: colors.danger, fontWeight: '700' },
+  emptyFr: {
+    fontSize: fontSize.sm,
+    color: colors.textMuted,
+    paddingVertical: spacing.lg,
+  },
+  frCard: {
     backgroundColor: colors.surface,
     borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: spacing.lg,
-    marginTop: spacing.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
   },
-  content: {
-    fontSize: fontSize.base,
+  frTitle: {
+    fontSize: fontSize.sm,
+    fontWeight: '700',
     color: colors.text,
-    lineHeight: 22,
+    marginBottom: spacing.sm,
+  },
+  frSlots: { flexDirection: 'row', gap: spacing.sm },
+  frSlot: { flex: 1, alignItems: 'center' },
+  frSlotLabel: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  frPhoto: {
+    width: '100%',
+    aspectRatio: 1,
+    borderRadius: radius.sm,
+    backgroundColor: colors.background,
+  },
+  frPhotoEmpty: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderStyle: 'dashed',
+  },
+  frPhotoEmptyText: { fontSize: fontSize.xs, color: colors.textMuted },
+  frCaption: {
+    fontSize: fontSize.xs,
+    color: colors.text,
+    marginTop: 4,
+    textAlign: 'center',
   },
   actions: {
     flexDirection: 'row',
@@ -309,41 +395,6 @@ const styles = StyleSheet.create({
   downloadBtnText: {
     fontSize: fontSize.sm,
     color: colors.primary,
-    fontWeight: '700',
-  },
-  shareUrlBox: {
-    marginTop: spacing.md,
-    backgroundColor: colors.primary + '10',
-    borderRadius: radius.md,
-    padding: spacing.md,
-  },
-  shareUrlLabel: {
-    fontSize: fontSize.xs,
-    fontWeight: '700',
-    color: colors.primary,
-  },
-  shareUrlText: {
-    fontSize: fontSize.xs,
-    color: colors.text,
-    marginTop: spacing.xs,
-  },
-  shareExpires: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
-    marginTop: spacing.xs,
-  },
-  shareDisableBtn: {
-    marginTop: spacing.sm,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.danger + '55',
-    alignSelf: 'flex-start',
-  },
-  shareDisableText: {
-    fontSize: fontSize.xs,
-    color: colors.danger,
     fontWeight: '700',
   },
 });

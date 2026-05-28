@@ -2,7 +2,8 @@ import { Alert, Platform, Linking } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
-import { Audio } from 'expo-av';
+
+// ERD v2: 음성 메모 폐기 — 녹음·재생(expo-av) 유틸 제거. 사진/문서 첨부만 유지.
 
 // 첨부 업로드 시 백엔드 multipart 가 받는 file 객체 형태.
 // RN FormData 는 { uri, name, type } 객체를 받아 동작.
@@ -16,8 +17,6 @@ function inferMime(uri: string, fallback: string): string {
   if (ext === 'png') return 'image/png';
   if (ext === 'webp') return 'image/webp';
   if (ext === 'heic') return 'image/heic';
-  if (ext === 'm4a' || ext === 'aac') return 'audio/m4a';
-  if (ext === 'mp3') return 'audio/mp3';
   return fallback;
 }
 
@@ -116,9 +115,7 @@ export function promptPhotoSource(onPick: (src: 'camera' | 'library') => void) {
 }
 
 /**
- * 일반 파일(문서·메모 등) 선택. 사용자가 취소하면 null.
- * 백엔드의 multipart 사진/음성 endpoint 가 image/audio mime 만 허용하므로,
- * 비-미디어 파일은 visit/현장 메모의 텍스트로 변환하거나 별도 endpoint 필요.
+ * 일반 파일(문서 등) 선택. 사용자가 취소하면 null.
  */
 export async function pickDocument(): Promise<UploadFile | null> {
   try {
@@ -133,135 +130,6 @@ export async function pickDocument(): Promise<UploadFile | null> {
       uri: a.uri,
       name: a.name ?? basenameFromUri(a.uri, 'file'),
       type: a.mimeType ?? inferMime(a.uri, 'application/octet-stream'),
-    };
-  } catch {
-    return null;
-  }
-}
-
-// ----- 음성 녹음 -----
-
-export interface VoiceRecorder {
-  start: () => Promise<boolean>; // 권한 OK 면 true
-  stop: () => Promise<{ file: UploadFile; durationSec: number } | null>;
-  cancel: () => Promise<void>;
-}
-
-const MAX_RECORD_SEC = 300; // 5분
-
-/** 녹음 컨트롤러 — 화면 상태와 함께 사용. */
-export function createVoiceRecorder(): VoiceRecorder {
-  let recording: Audio.Recording | null = null;
-  let startedAt = 0;
-
-  return {
-    async start() {
-      const perm = await Audio.requestPermissionsAsync();
-      if (!perm.granted) {
-        Alert.alert('마이크 권한 필요', '설정에서 마이크 권한을 허용해주세요.', [
-          { text: '취소', style: 'cancel' },
-          { text: '설정 열기', onPress: openSettings },
-        ]);
-        return false;
-      }
-      try {
-        await Audio.setAudioModeAsync({
-          allowsRecordingIOS: true,
-          playsInSilentModeIOS: true,
-        });
-        const r = new Audio.Recording();
-        await r.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-        await r.startAsync();
-        recording = r;
-        startedAt = Date.now();
-        return true;
-      } catch (e) {
-        Alert.alert('녹음 시작 실패', e instanceof Error ? e.message : String(e));
-        return false;
-      }
-    },
-
-    async stop() {
-      if (!recording) return null;
-      try {
-        await recording.stopAndUnloadAsync();
-        const uri = recording.getURI();
-        const durationSec = Math.min(
-          MAX_RECORD_SEC,
-          Math.max(1, Math.round((Date.now() - startedAt) / 1000)),
-        );
-        recording = null;
-        if (!uri) return null;
-        const name = basenameFromUri(uri, `voice-${Date.now()}.m4a`);
-        const type = inferMime(uri, 'audio/m4a');
-        return { file: { uri, name, type }, durationSec };
-      } catch {
-        recording = null;
-        return null;
-      }
-    },
-
-    async cancel() {
-      if (!recording) return;
-      try {
-        await recording.stopAndUnloadAsync();
-      } catch {
-        /* ignore */
-      }
-      recording = null;
-    },
-  };
-}
-
-export const VOICE_MAX_SECONDS = MAX_RECORD_SEC;
-
-// ----- 음성 재생 -----
-
-export interface VoicePlayer {
-  play: () => Promise<void>;
-  stop: () => Promise<void>;
-  isPlaying: () => boolean;
-  unload: () => Promise<void>;
-}
-
-/** uri 의 음성 파일을 재생하는 단일 컨트롤러 (재생/중지/정리). */
-export async function createVoicePlayer(uri: string): Promise<VoicePlayer | null> {
-  try {
-    const { sound } = await Audio.Sound.createAsync({ uri });
-    let playing = false;
-    sound.setOnPlaybackStatusUpdate((status) => {
-      if (!status.isLoaded) return;
-      playing = status.isPlaying ?? false;
-      if (status.didJustFinish) {
-        playing = false;
-        void sound.setPositionAsync(0);
-      }
-    });
-    return {
-      play: async () => {
-        try {
-          await sound.replayAsync();
-          playing = true;
-        } catch {
-          /* ignore */
-        }
-      },
-      stop: async () => {
-        try {
-          await sound.stopAsync();
-        } catch {
-          /* ignore */
-        }
-        playing = false;
-      },
-      isPlaying: () => playing,
-      unload: async () => {
-        try {
-          await sound.unloadAsync();
-        } catch {
-          /* ignore */
-        }
-      },
     };
   } catch {
     return null;

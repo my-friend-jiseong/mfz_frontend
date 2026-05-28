@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Field, FieldStatus } from '@/types/entities';
-import { fields as fieldsApi, ApiError, NetworkError, localizeError } from '@/api';
+import { fields as fieldsApi, ApiError, localizeError } from '@/api';
 import type {
   CreateFieldBody,
   UpdateFieldBody,
@@ -8,7 +8,6 @@ import type {
   FieldDirectAttachment,
 } from '@/api';
 import type { DuplicateAddressDetails, HasRelatedVisitsDetails } from '@/api/errors';
-import { useOfflineQueueStore } from './offlineQueueStore';
 
 type CreateResult =
   | { ok: true; field: Field }
@@ -26,7 +25,7 @@ type DeleteResult =
 
 interface FieldState {
   fields: Field[];
-  // 현장별 직접 첨부 캐시 (visitId=null 인 메모/사진/음성)
+  // 현장별 직접 첨부 캐시 (메모/사진 — ERD v2: field 전용)
   directAttachments: Record<string, FieldDirectAttachment[]>;
   busy: boolean;
 
@@ -41,12 +40,6 @@ interface FieldState {
   addPhoto: (
     id: string,
     file: { uri: string; name: string; type: string },
-    caption?: string,
-  ) => Promise<GenericResult>;
-  addVoiceMemo: (
-    id: string,
-    file: { uri: string; name: string; type: string },
-    durationSeconds?: number,
   ) => Promise<GenericResult>;
 
   getById: (id: string) => Field | undefined;
@@ -54,6 +47,22 @@ interface FieldState {
 }
 
 const describeError = localizeError;
+
+// v2: 현장 상세의 memos[]/photos[] 를 화면 캐시용 FieldDirectAttachment 로 정규화.
+function memoToAttachment(m: {
+  id: string; fieldId: string; content: string; createdAt: string;
+}): FieldDirectAttachment {
+  return { id: m.id, fieldId: m.fieldId, type: 'text', text: m.content, createdAt: m.createdAt };
+}
+function photoToAttachment(p: {
+  id: string; fieldId: string; fileName?: string; mimeType?: string; fileUrl: string; fileSize?: number; createdAt: string;
+}): FieldDirectAttachment {
+  return {
+    id: p.id, fieldId: p.fieldId, type: 'photo',
+    fileName: p.fileName, mimeType: p.mimeType, fileUrl: p.fileUrl,
+    fileSize: p.fileSize, byteSize: p.fileSize, createdAt: p.createdAt,
+  };
+}
 
 export const useFieldStore = create<FieldState>((set, get) => ({
   fields: [],
@@ -66,19 +75,21 @@ export const useFieldStore = create<FieldState>((set, get) => ({
 
   refresh: async (params) => {
     try {
-      const res = await fieldsApi.listMine(params ?? { visitDateScope: 'all' });
+      // v2 검증: visitDateScope 미지정 시 목록이 빈다 — 항상 기본 'all' 보장.
+      const res = await fieldsApi.listMine({ visitDateScope: 'all', ...params });
       const items: Field[] = res.items.map((it) => ({
         id: it.fieldId,
-        userId: it.assigneeUserId,
+        userId: it.userId ?? it.assigneeUserId ?? '',
+        projectId: it.projectId ?? null,
+        projectName: it.projectName ?? null,
         status: it.status,
         address: it.address,
         addressDetail: it.detailAddress ?? '',
         latitude: it.lat,
         longitude: it.lng,
-        tags: it.tags,
+        categories: it.categories ?? it.tags,
         recentVisitedAt: it.recentVisitedAt,
         updatedAt: it.updatedAt,
-        title: it.title,
       }));
       set({ fields: items });
     } catch (e) {
@@ -92,14 +103,15 @@ export const useFieldStore = create<FieldState>((set, get) => ({
       const res = await fieldsApi.create(body);
       const f: Field = {
         id: res.field.fieldId,
-        userId: res.field.assigneeUserId,
+        userId: res.field.userId ?? res.field.assigneeUserId ?? '',
+        projectId: res.field.projectId ?? body.projectId ?? null,
+        projectName: res.field.projectName ?? null,
         status: res.field.status,
         address: res.field.address,
         addressDetail: res.field.detailAddress ?? '',
         latitude: res.field.lat,
         longitude: res.field.lng,
-        // 백엔드가 echo 하지 않아도 사용자가 입력한 제목을 로컬에 보존.
-        title: res.field.title ?? body.title?.trim() ?? undefined,
+        categories: res.field.categories ?? res.field.tags ?? body.categories,
       };
       set((s) => ({
         fields: [f, ...s.fields.filter((x) => x.id !== f.id)],
@@ -108,8 +120,7 @@ export const useFieldStore = create<FieldState>((set, get) => ({
       return { ok: true, field: f };
     } catch (e) {
       set({ busy: false });
-      // Phase 7 — 중복 주소 confirm 패턴: details.duplicateCount 로 사용자에게 안내 후
-      // 호출처가 forceCreateWithDuplicate=true 로 재호출하도록 needsConfirm 노출.
+      // 중복 주소 confirm 패턴: details.duplicateCount 안내 후 forceCreateWithDuplicate 재호출.
       if (e instanceof ApiError && e.code === 'duplicate_address_warning_required') {
         const d = (e.details ?? {}) as Partial<DuplicateAddressDetails>;
         return {
@@ -133,14 +144,15 @@ export const useFieldStore = create<FieldState>((set, get) => ({
             ? {
                 ...f,
                 id: res.fieldId,
-                userId: res.assigneeUserId,
+                userId: res.userId ?? res.assigneeUserId ?? f.userId,
+                projectId: res.projectId ?? f.projectId,
+                projectName: res.projectName ?? f.projectName ?? null,
                 status: res.status,
                 address: res.address,
                 addressDetail: res.detailAddress ?? '',
                 latitude: res.lat,
                 longitude: res.lng,
-                // 응답에 title 있으면 그 값, 없으면 사용자가 보낸 값으로 로컬 보존.
-                title: res.title ?? body.title?.trim() ?? f.title,
+                categories: res.categories ?? res.tags ?? f.categories,
               }
             : f,
         ),
@@ -163,19 +175,6 @@ export const useFieldStore = create<FieldState>((set, get) => ({
       }));
       return { ok: true };
     } catch (e) {
-      // 네트워크 끊김이면 큐잉 + optimistic 상태 변경.
-      if (e instanceof NetworkError) {
-        await useOfflineQueueStore.getState().enqueue({
-          kind: 'fieldStatus',
-          path: `/api/fields/${id}/status`,
-          method: 'PATCH',
-          body: { status },
-        });
-        set((s) => ({
-          fields: s.fields.map((f) => (f.id === id ? { ...f, status } : f)),
-        }));
-        return { ok: true };
-      }
       return { ok: false, error: describeError(e) };
     }
   },
@@ -191,8 +190,7 @@ export const useFieldStore = create<FieldState>((set, get) => ({
       return { ok: true };
     } catch (e) {
       set({ busy: false });
-      // Phase 7 — has_related_visits (snake_case). 본 서비스는 단일 Actor 라 force 미사용,
-      // details.visitCount 를 메시지에 끼워 안내만 노출.
+      // has_related_visits: 단일 Actor 라 force 미사용, details.visitCount 안내만.
       if (e instanceof ApiError && e.code === 'has_related_visits') {
         const d = (e.details ?? {}) as Partial<HasRelatedVisitsDetails>;
         const count = typeof d.visitCount === 'number' ? d.visitCount : 0;
@@ -214,17 +212,25 @@ export const useFieldStore = create<FieldState>((set, get) => ({
             ? {
                 ...f,
                 id: res.fieldId,
-                userId: res.assigneeUserId,
+                userId: res.userId ?? res.assigneeUserId ?? f.userId,
+                projectId: res.projectId ?? f.projectId,
+                projectName: res.projectName ?? f.projectName ?? null,
                 status: res.status,
                 address: res.address,
                 addressDetail: res.detailAddress ?? '',
                 latitude: res.lat,
                 longitude: res.lng,
-                title: res.title ?? f.title,
+                categories: res.categories ?? res.tags ?? f.categories,
               }
             : f,
         ),
-        directAttachments: { ...s.directAttachments, [id]: res.directAttachments ?? [] },
+        directAttachments: {
+          ...s.directAttachments,
+          [id]: [
+            ...(res.memos ?? []).map(memoToAttachment),
+            ...(res.photos ?? []).map(photoToAttachment),
+          ],
+        },
       }));
     } catch {
       // ignore
@@ -237,7 +243,7 @@ export const useFieldStore = create<FieldState>((set, get) => ({
       set((s) => ({
         directAttachments: {
           ...s.directAttachments,
-          [id]: [...(s.directAttachments[id] ?? []), res.attachment],
+          [id]: [...(s.directAttachments[id] ?? []), memoToAttachment(res.memo)],
         },
       }));
       return { ok: true };
@@ -246,28 +252,13 @@ export const useFieldStore = create<FieldState>((set, get) => ({
     }
   },
 
-  addPhoto: async (id, file, caption) => {
+  addPhoto: async (id, file) => {
     try {
-      const res = await fieldsApi.addPhoto(id, file, caption);
+      const res = await fieldsApi.addPhoto(id, file);
       set((s) => ({
         directAttachments: {
           ...s.directAttachments,
-          [id]: [...(s.directAttachments[id] ?? []), res.attachment],
-        },
-      }));
-      return { ok: true };
-    } catch (e) {
-      return { ok: false, error: describeError(e) };
-    }
-  },
-
-  addVoiceMemo: async (id, file, durationSeconds) => {
-    try {
-      const res = await fieldsApi.addVoiceMemo(id, file, durationSeconds);
-      set((s) => ({
-        directAttachments: {
-          ...s.directAttachments,
-          [id]: [...(s.directAttachments[id] ?? []), res.attachment],
+          [id]: [...(s.directAttachments[id] ?? []), photoToAttachment(res.photo)],
         },
       }));
       return { ok: true };

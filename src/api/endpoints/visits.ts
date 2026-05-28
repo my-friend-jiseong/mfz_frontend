@@ -1,14 +1,12 @@
 import { request } from '../client';
 
-// 주의: memo 텍스트 필드명, status enum 값은 smoke test 시점 미확정.
-//   - memo body: `{ content }` 거부됨. `text`/`body`/`memo` 후보 — 첫 호출 시 재확인 필요.
-//   - status 한글 enum 거부됨. `resultStatus` 와 영문 값 가능성 — 백엔드 소스 확인 필요.
-// 우선 가장 가능성 높은 패턴으로 작성하고, 실 호출 시 ApiError 메시지로 정정.
+// ERD v2 정렬 — visits 는 체크인 기록(trip·field·시각·status)만.
+//   - 체크인: fieldId 만 (siteName·location 제거).
+//   - result_status·status_reason·memo·첨부 컬럼 제거 (memos/field_photos 는 현장 전용).
+//   - PATCH /api/visits/:id/status 존속 여부·body 는 §8 확인 대상 — 단일 status 로 가정.
 
 export interface CheckInBody {
   fieldId: string;
-  siteName?: string;
-  location?: { lat: number; lng: number };
 }
 
 export interface CheckInResponse {
@@ -16,86 +14,29 @@ export interface CheckInResponse {
   visitId: string;
   fieldId: string;
   visitedAt: string;
-  message: string;
-}
-
-// 방문 첨부 (smoke 캡처 + Phase 3 §2.3 schema 합집합).
-export interface VisitAttachment {
-  id: string;
-  type: 'text' | 'photo' | 'audio';
-  text?: string;
-  fileName?: string;
-  mimeType?: string;
-  fileUrl?: string;
-  url?: string;
-  thumbnailUrl?: string;
-  byteSize?: number;
-  durationSec?: number;
-  durationSeconds?: number;
-  caption?: string;
-  createdAt: string;
-  latitude?: number | null;
-  longitude?: number | null;
-  locationConsent?: boolean;
+  message?: string;       // v2 응답엔 없음 — optional
 }
 
 export interface VisitDetailResponse {
   tripId: string;
   visitId: string;
-  siteName: string;
+  fieldId: string;
+  siteName?: string;        // 현장명 (field.name)
   visitedAt: string;
-  resultStatus: string; // 영문 enum (normal 등)
-  status: string;       // 한글 표시값 (완료 등)
-  statusReason: string | null;
-  memo: string;
-  attachmentCounts: { text: number; photo: number; audio: number };
-  attachments: VisitAttachment[];
+  status: string;           // visits.status
 }
 
 export const visits = {
   checkIn: (body: CheckInBody) =>
     request<CheckInResponse>('/api/visits/check-in', { method: 'POST', body }),
 
-  // 우선 한글 status 로 시도. 거부되면 영문 enum 재매핑 필요.
-  setStatus: (visitId: string, status: string, statusReason?: string) =>
+  // v2 검증(2026-05-28): body 는 { status, reason? }. status='other' 면 reason 10자 이상 필수
+  // (visit_status_reason_required). 응답: { visitId, status, resultStatus(normal|abnormal) auto }.
+  setStatus: (visitId: string, status: string, reason?: string) =>
     request<unknown>(`/api/visits/${visitId}/status`, {
       method: 'PATCH',
-      body: { status, ...(statusReason ? { statusReason } : {}) },
+      body: { status, ...(reason ? { reason } : {}) },
     }),
-
-  // memo 필드명 추정: text. 거부되면 body/memo 로 폴백 필요 — 호출 측에서 ApiError 처리.
-  addTextMemo: (visitId: string, text: string) =>
-    request<unknown>(`/api/visits/${visitId}/memos/text`, {
-      method: 'POST',
-      body: { text },
-    }),
-
-  addPhoto: (visitId: string, file: { uri: string; name: string; type: string }, caption?: string) => {
-    const fd = new FormData();
-    // RN FormData: { uri, name, type } 객체 그대로 append 가능
-    fd.append('file', file as unknown as Blob);
-    if (caption) fd.append('caption', caption);
-    return request<unknown>(`/api/visits/${visitId}/photos`, {
-      method: 'POST',
-      body: fd,
-      multipart: true,
-    });
-  },
-
-  addVoiceMemo: (
-    visitId: string,
-    file: { uri: string; name: string; type: string },
-    durationSeconds?: number,
-  ) => {
-    const fd = new FormData();
-    fd.append('file', file as unknown as Blob);
-    if (durationSeconds !== undefined) fd.append('durationSeconds', String(durationSeconds));
-    return request<unknown>(`/api/visits/${visitId}/voice-memos`, {
-      method: 'POST',
-      body: fd,
-      multipart: true,
-    });
-  },
 
   detail: (tripId: string, visitId: string) =>
     request<VisitDetailResponse>(`/api/trips/${tripId}/visits/${visitId}`),
