@@ -17,6 +17,7 @@ import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { VISIT_STATUS_BADGE } from '@/theme/statusBadge';
+import { fmtDateTime } from '@/utils/datetime';
 import { Input } from '@/components/ui/Input';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
@@ -29,10 +30,6 @@ import {
 } from '@/types/entities';
 
 // ERD v2: 메모·사진은 현장(field) 전용. 음성 메모·방문 첨부 제거.
-
-function fmtDateTime(iso: string) {
-  return new Date(iso).toLocaleString('ko-KR');
-}
 
 export default function FieldDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();

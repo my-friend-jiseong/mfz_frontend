@@ -25,21 +25,12 @@ import { Button } from '@/components/ui/Button';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
+import { fmtDate, fmtTime } from '@/utils/datetime';
 
 // ERD v2 통합 보고서 작성 — 본문(content) 제거. 두 분기:
 //   AI 초안: POST /api/reports/generate (notes 필수, 조치 전·후 사진 활용 — fieldId 연결 시 field_report 저장)
 //   직접 저장: POST /api/reports (title 필수). 현장별 전·중·후 사진은 상세 화면에서 관리.
 
-function fmtDate(iso: string) {
-  const d = new Date(iso);
-  return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
-}
-
-function fmtTime(iso: string) {
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
 
 export default function ComposeReport() {
   const router = useRouter();

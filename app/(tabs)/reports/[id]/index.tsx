@@ -26,11 +26,8 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
+import { fmtDateTime } from '@/utils/datetime';
 import type { FieldReport } from '@/types/entities';
-
-function fmtDateTime(iso: string) {
-  return new Date(iso).toLocaleString('ko-KR');
-}
 
 // 현장별 전·중·후 사진 카드 (ERD v2: 보고서 본문 대체).
 function FieldReportCard({

@@ -17,16 +17,11 @@ import { Button } from '@/components/ui/Button';
 import { colors } from '@/theme/colors';
 import { spacing, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
+import { fmtDate } from '@/utils/datetime';
 
 const APP_VERSION = '0.1.0';
 const TERMS_URL = 'https://ilgayo.kr/terms';
 const PRIVACY_URL = 'https://ilgayo.kr/privacy';
-
-function fmtDate(iso?: string) {
-  if (!iso) return '-';
-  const d = new Date(iso);
-  return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
-}
 
 function initialOf(name: string | undefined): string {
   if (!name) return '?';

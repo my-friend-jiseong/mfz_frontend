@@ -19,6 +19,7 @@ import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { VISIT_STATUS_BADGE } from '@/theme/statusBadge';
+import { fmtTime } from '@/utils/datetime';
 import { safeBack } from '@/utils/backNavigation';
 import { colors } from '@/theme/colors';
 import { spacing, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
@@ -40,10 +41,6 @@ const DEST_COLOR: Record<Destination['status'], string> = {
   skipped: colors.textMuted,
 };
 
-function fmtTime(iso: string) {
-  const d = new Date(iso);
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-}
 
 export default function TripDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();

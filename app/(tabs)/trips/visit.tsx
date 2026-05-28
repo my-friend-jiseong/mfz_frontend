@@ -12,16 +12,13 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { VISIT_STATUS_BADGE } from '@/theme/statusBadge';
+import { fmtDateTime } from '@/utils/datetime';
 import {
   VISIT_STATUS_LABEL,
   normalizeVisitStatus,
 } from '@/types/entities';
 import { colors } from '@/theme/colors';
 import { spacing, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
-
-function fmtDateTime(iso: string) {
-  return new Date(iso).toLocaleString('ko-KR');
-}
 
 export default function VisitDetail() {
   const router = useRouter();

@@ -11,20 +11,8 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { colors } from '@/theme/colors';
 import { spacing, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
+import { fmtDate, fmtDuration } from '@/utils/datetime';
 import type { Trip } from '@/types/entities';
-
-function fmtDate(iso: string) {
-  const d = new Date(iso);
-  return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
-}
-
-function fmtDuration(a: string, b: string | null) {
-  if (!b) return '진행 중';
-  const diff = new Date(b).getTime() - new Date(a).getTime();
-  const h = Math.floor(diff / 3600000);
-  const m = Math.floor((diff % 3600000) / 60000);
-  return h > 0 ? `${h}시간 ${m}분` : `${m}분`;
-}
 
 export default function TripsList() {
   const router = useRouter();
