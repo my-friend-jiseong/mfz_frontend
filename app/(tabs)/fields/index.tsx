@@ -11,6 +11,7 @@ import { MapSheetLayout } from '@/components/MapSheetLayout';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { FilterChip } from '@/components/ui/FilterChip';
+import { StickyBottomBar } from '@/components/ui/StickyBottomBar';
 import {
   FIELD_STATUS_VALUES,
   FIELD_STATUS_LABEL,
@@ -152,7 +153,7 @@ export default function FieldsList() {
           />
         }
       />
-      <View style={styles.ctaWrap}>
+      <StickyBottomBar>
         <Button
           onPress={() => router.push('/(tabs)/fields/new' as never)}
           size="lg"
@@ -161,7 +162,7 @@ export default function FieldsList() {
         >
           새 현장
         </Button>
-      </View>
+      </StickyBottomBar>
     </MapSheetLayout>
   );
 }
@@ -180,10 +181,4 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   list: { padding: spacing.lg, paddingBottom: 120 },
-  ctaWrap: {
-    position: 'absolute',
-    bottom: spacing.xl,
-    left: spacing.xl,
-    right: spacing.xl,
-  },
 });

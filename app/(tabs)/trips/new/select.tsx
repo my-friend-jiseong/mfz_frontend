@@ -15,6 +15,7 @@ import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
 import { FilterChip } from '@/components/ui/FilterChip';
+import { StickyBottomBar } from '@/components/ui/StickyBottomBar';
 import {
   FIELD_STATUS_VALUES,
   FIELD_STATUS_LABEL,
@@ -184,7 +185,7 @@ export default function NewTripSelect() {
           />
         }
       />
-      <View style={styles.ctaWrap}>
+      <StickyBottomBar>
         <Button
           onPress={handleNext}
           disabled={selectedIds.length === 0}
@@ -194,7 +195,7 @@ export default function NewTripSelect() {
         >
           다음 ({selectedIds.length})
         </Button>
-      </View>
+      </StickyBottomBar>
     </MapSheetLayout>
   );
 }
@@ -246,10 +247,4 @@ const styles = StyleSheet.create({
     lineHeight: lineHeight.base,
   },
   detail: { fontSize: fontSize.sm, color: colors.textMuted, marginTop: 2 },
-  ctaWrap: {
-    position: 'absolute',
-    bottom: spacing.xl,
-    left: spacing.xl,
-    right: spacing.xl,
-  },
 });

@@ -12,6 +12,7 @@ import { MapSheetLayout } from '@/components/MapSheetLayout';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { StickyBottomBar } from '@/components/ui/StickyBottomBar';
 import { colors } from '@/theme/colors';
 import { spacing, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
@@ -128,7 +129,7 @@ export default function ReportsIndex() {
           />
         }
       />
-      <View style={styles.ctaWrap}>
+      <StickyBottomBar>
         <Button
           onPress={() => router.push('/(tabs)/reports/new' as never)}
           size="lg"
@@ -137,7 +138,7 @@ export default function ReportsIndex() {
         >
           보고서 작성
         </Button>
-      </View>
+      </StickyBottomBar>
     </MapSheetLayout>
   );
 }
@@ -187,11 +188,5 @@ const styles = StyleSheet.create({
   reportMeta: {
     fontSize: fontSize.xs,
     color: colors.textMuted,
-  },
-  ctaWrap: {
-    position: 'absolute',
-    bottom: spacing.xl,
-    left: spacing.xl,
-    right: spacing.xl,
   },
 });

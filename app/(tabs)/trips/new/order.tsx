@@ -12,6 +12,7 @@ import { MapSheetLayout } from '@/components/MapSheetLayout';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { StickyBottomBar } from '@/components/ui/StickyBottomBar';
 import { nearestNeighborOrder } from '@/utils/routeOptimize';
 import { trips as tripsApi } from '@/api';
 import { safeBack } from '@/utils/backNavigation';
@@ -302,7 +303,7 @@ export default function NewTripOrder() {
         renderItem={renderItem}
         contentContainerStyle={styles.list}
       />
-      <View style={styles.ctaWrap}>
+      <StickyBottomBar>
         <Button
           onPress={handleConfirm}
           disabled={list.length === 0}
@@ -315,7 +316,7 @@ export default function NewTripOrder() {
             ? '방문할 현장 없음'
             : `외근 시작 확정 (${list.length}곳)`}
         </Button>
-      </View>
+      </StickyBottomBar>
     </MapSheetLayout>
   );
 }
@@ -414,10 +415,4 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   summaryDivider: { width: 1, height: 28, backgroundColor: colors.border },
-  ctaWrap: {
-    position: 'absolute',
-    bottom: spacing.xl,
-    left: spacing.xl,
-    right: spacing.xl,
-  },
 });

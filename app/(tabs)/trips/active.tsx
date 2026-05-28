@@ -8,6 +8,7 @@ import { useFieldStore } from '@/stores/fieldStore';
 import { useVisitStore } from '@/stores/visitStore';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
 import { Button } from '@/components/ui/Button';
+import { StickyBottomBar } from '@/components/ui/StickyBottomBar';
 import {
   VISIT_STATUS_BADGE,
   DESTINATION_STATUS_BADGE,
@@ -444,7 +445,7 @@ export default function ActiveTrip() {
       </MapSheetLayout>
       {/* 종료 버튼은 BottomSheet 외부에 둔다 — 시트 내부 absolute 자식의 터치를
           @gorhom/bottom-sheet 의 pan 제스처가 가로채는 회로 차단. */}
-      <View style={styles.endWrap}>
+      <StickyBottomBar>
         <Button
           onPress={handleEnd}
           disabled={tripBusy}
@@ -456,7 +457,7 @@ export default function ActiveTrip() {
         >
           {allDone ? '외근 종료' : '외근 종료 (미완료 목적지 있음)'}
         </Button>
-      </View>
+      </StickyBottomBar>
     </View>
   );
 }
@@ -470,11 +471,5 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontWeight: fontWeight.bold,
     marginTop: spacing.lg,
-  },
-  endWrap: {
-    position: 'absolute',
-    bottom: spacing.xl,
-    left: spacing.xl,
-    right: spacing.xl,
   },
 });

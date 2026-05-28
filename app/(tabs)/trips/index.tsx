@@ -9,6 +9,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { StickyBottomBar } from '@/components/ui/StickyBottomBar';
 import { colors } from '@/theme/colors';
 import { spacing, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
 import { fmtDate, fmtDuration } from '@/utils/datetime';
@@ -71,7 +72,7 @@ export default function TripsList() {
           />
         }
       />
-      <View style={styles.ctaWrap}>
+      <StickyBottomBar>
         <Button
           onPress={() => router.push('/(tabs)/trips/new/select' as never)}
           size="lg"
@@ -80,7 +81,7 @@ export default function TripsList() {
         >
           외근 시작
         </Button>
-      </View>
+      </StickyBottomBar>
     </MapSheetLayout>
   );
 }
@@ -99,11 +100,5 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginTop: spacing.xs,
     lineHeight: lineHeight.sm,
-  },
-  ctaWrap: {
-    position: 'absolute',
-    bottom: spacing.xl,
-    left: spacing.xl,
-    right: spacing.xl,
   },
 });
