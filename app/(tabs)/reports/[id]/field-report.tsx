@@ -9,9 +9,9 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useReportStore } from '@/stores/reportStore';
 import { useFieldStore } from '@/stores/fieldStore';
@@ -19,11 +19,14 @@ import { fields as fieldsApi, API_BASE_URL } from '@/api';
 import { pickPhoto, promptPhotoSource } from '@/utils/media';
 import { safeBack } from '@/utils/backNavigation';
 import { EmptyState } from '@/components/EmptyState';
+import { Card } from '@/components/ui/Card';
+import { Input } from '@/components/ui/Input';
+import { Button } from '@/components/ui/Button';
 import { colors } from '@/theme/colors';
-import { spacing, radius, fontSize } from '@/theme/spacing';
+import { spacing, radius, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
+import { opacity } from '@/theme/motion';
 
 // ERD v2: 보고서 본문 = 현장별 전·중·후 사진+캡션(field_reports). 추가/수정 화면.
-// 사진은 현장 사진 업로드(/api/fields/:id/photos)로 URL 을 얻어 field-report 에 연결.
 
 type Phase = 'before' | 'pending' | 'after';
 const PHASES: { key: Phase; label: string }[] = [
@@ -49,7 +52,6 @@ export default function FieldReportEditor() {
   const allFields = useFieldStore((s) => s.fields);
   const refreshFields = useFieldStore((s) => s.refresh);
 
-  // 현장 목록이 비었으면(딥링크 등) 한 번 로드.
   useEffect(() => {
     if (allFields.length === 0) void refreshFields();
   }, [allFields.length, refreshFields]);
@@ -61,7 +63,9 @@ export default function FieldReportEditor() {
 
   const [fieldId, setFieldId] = useState<string | null>(null);
   const [title, setTitle] = useState('');
-  const [slots, setSlots] = useState<Record<Phase, { url: string | null; caption: string }>>({
+  const [slots, setSlots] = useState<
+    Record<Phase, { url: string | null; caption: string }>
+  >({
     before: { url: null, caption: '' },
     pending: { url: null, caption: '' },
     after: { url: null, caption: '' },
@@ -79,9 +83,18 @@ export default function FieldReportEditor() {
     setFieldId(existing.fieldId);
     setTitle(existing.title ?? '');
     setSlots({
-      before: { url: existing.beforePhotoUrl ?? null, caption: existing.beforePhotoCaption ?? '' },
-      pending: { url: existing.pendingPhotoUrl ?? null, caption: existing.pendingPhotoCaption ?? '' },
-      after: { url: existing.afterPhotoUrl ?? null, caption: existing.afterPhotoCaption ?? '' },
+      before: {
+        url: existing.beforePhotoUrl ?? null,
+        caption: existing.beforePhotoCaption ?? '',
+      },
+      pending: {
+        url: existing.pendingPhotoUrl ?? null,
+        caption: existing.pendingPhotoCaption ?? '',
+      },
+      after: {
+        url: existing.afterPhotoUrl ?? null,
+        caption: existing.afterPhotoCaption ?? '',
+      },
     });
   }, [isEdit, existing]);
 
@@ -101,7 +114,10 @@ export default function FieldReportEditor() {
       setUploading(phase);
       try {
         const res = await fieldsApi.addPhoto(fieldId, file);
-        setSlots((prev) => ({ ...prev, [phase]: { ...prev[phase], url: res.photo.fileUrl } }));
+        setSlots((prev) => ({
+          ...prev,
+          [phase]: { ...prev[phase], url: res.photo.fileUrl },
+        }));
       } catch {
         Alert.alert('사진 업로드 실패', '잠시 후 다시 시도해주세요.');
       } finally {
@@ -147,7 +163,11 @@ export default function FieldReportEditor() {
   if (isEdit && !existing) {
     return (
       <View style={styles.container}>
-        <EmptyState title="현장 보고를 찾을 수 없습니다" description="보고서 상세에서 다시 진입해주세요" />
+        <EmptyState
+          icon="document-text-outline"
+          title="현장 보고를 찾을 수 없습니다"
+          description="보고서 상세에서 다시 진입해주세요"
+        />
       </View>
     );
   }
@@ -158,42 +178,65 @@ export default function FieldReportEditor() {
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-          <Text style={styles.heading}>{isEdit ? '현장 보고 수정' : '현장 보고 추가'}</Text>
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          keyboardShouldPersistTaps="handled"
+        >
+          <Text style={styles.heading}>
+            {isEdit ? '현장 보고 수정' : '현장 보고 추가'}
+          </Text>
 
           <Text style={styles.label}>현장 *</Text>
           {isEdit ? (
-            <View style={styles.readonly}>
-              <Text style={styles.readonlyText}>{selectedField?.address ?? fieldId}</Text>
-            </View>
+            <Card padding="md" style={styles.readonly}>
+              <Text style={styles.readonlyText}>
+                {selectedField?.address ?? fieldId}
+              </Text>
+            </Card>
           ) : (
             <Pressable
               onPress={() => setFieldPickerOpen(true)}
-              style={({ pressed }) => [styles.fieldPickBtn, pressed && styles.pressed]}
+              style={({ pressed }) => [
+                styles.fieldPickBtn,
+                pressed && { opacity: opacity.pressed },
+              ]}
             >
-              <Text style={selectedField ? styles.fieldPickText : styles.fieldPickPlaceholder}>
-                {selectedField ? selectedField.address : '+ 현장 선택'}
+              <Ionicons
+                name={selectedField ? 'location' : 'add-circle-outline'}
+                size={18}
+                color={selectedField ? colors.primary : colors.textMuted}
+              />
+              <Text
+                style={
+                  selectedField ? styles.fieldPickText : styles.fieldPickPlaceholder
+                }
+              >
+                {selectedField ? selectedField.address : '현장 선택'}
               </Text>
             </Pressable>
           )}
 
-          <Text style={styles.label}>제목 (선택)</Text>
-          <TextInput
+          <Input
+            label="제목 (선택)"
             value={title}
             onChangeText={setTitle}
-            style={styles.input}
             placeholder="예: 1번 가로수 가지치기"
             maxLength={100}
+            containerStyle={styles.titleField}
           />
 
           {PHASES.map((p) => {
             const slot = slots[p.key];
             const img = resolveUrl(slot.url);
             return (
-              <View key={p.key} style={styles.phaseBox}>
+              <Card key={p.key} padding="md" style={styles.phaseBox}>
                 <Text style={styles.phaseLabel}>{p.label}</Text>
                 {img ? (
-                  <Image source={{ uri: img }} style={styles.phasePhoto} resizeMode="cover" />
+                  <Image
+                    source={{ uri: img }}
+                    style={styles.phasePhoto}
+                    resizeMode="cover"
+                  />
                 ) : (
                   <View style={[styles.phasePhoto, styles.phasePhotoEmpty]}>
                     <Text style={styles.phasePhotoEmptyText}>
@@ -202,49 +245,54 @@ export default function FieldReportEditor() {
                   </View>
                 )}
                 <View style={styles.phaseActions}>
-                  <Pressable
+                  <Button
                     onPress={() => pickPhase(p.key)}
                     disabled={uploading !== null}
-                    style={({ pressed }) => [styles.smallBtn, pressed && styles.pressed]}
+                    variant="secondary"
+                    size="sm"
+                    leftIcon="camera"
+                    style={styles.phaseBtnFlex}
                   >
-                    <Text style={styles.smallBtnText}>{slot.url ? '사진 변경' : '+ 사진'}</Text>
-                  </Pressable>
+                    {slot.url ? '사진 변경' : '사진'}
+                  </Button>
                   {slot.url ? (
-                    <Pressable
+                    <Button
                       onPress={() => clearPhoto(p.key)}
-                      style={({ pressed }) => [styles.smallBtn, styles.ghostBtn, pressed && styles.pressed]}
+                      variant="ghost"
+                      size="sm"
+                      leftIcon="trash"
                     >
-                      <Text style={styles.ghostBtnText}>제거</Text>
-                    </Pressable>
+                      제거
+                    </Button>
                   ) : null}
                 </View>
-                <TextInput
+                <Input
                   value={slot.caption}
                   onChangeText={(v) => setCaption(p.key, v)}
-                  style={styles.input}
                   placeholder={`${p.label} 캡션 (선택)`}
                   maxLength={200}
+                  containerStyle={styles.captionField}
                 />
-              </View>
+              </Card>
             );
           })}
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          <Pressable
+          <Button
             onPress={handleSave}
-            disabled={submitting || uploading !== null}
-            style={({ pressed }) => [
-              styles.btn,
-              (submitting || uploading !== null) && styles.btnDisabled,
-              pressed && styles.pressed,
-            ]}
+            disabled={uploading !== null}
+            loading={submitting}
+            size="lg"
+            fullWidth
+            leftIcon="save"
+            style={styles.submit}
           >
-            <Text style={styles.btnText}>{submitting ? '저장 중...' : '저장'}</Text>
-          </Pressable>
-          <Pressable onPress={() => safeBack(router)} style={styles.cancel}>
-            <Text style={styles.cancelText}>취소</Text>
-          </Pressable>
+            저장
+          </Button>
+          <Button onPress={() => safeBack(router)} variant="ghost" size="sm" fullWidth>
+            취소
+          </Button>
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -254,10 +302,16 @@ export default function FieldReportEditor() {
         transparent
         onRequestClose={() => setFieldPickerOpen(false)}
       >
-        <Pressable style={styles.pickerBackdrop} onPress={() => setFieldPickerOpen(false)}>
+        <Pressable
+          style={styles.pickerBackdrop}
+          onPress={() => setFieldPickerOpen(false)}
+        >
           <Pressable style={styles.pickerCard} onPress={() => undefined}>
             <Text style={styles.pickerTitle}>현장 선택</Text>
-            <ScrollView style={styles.pickerList} contentContainerStyle={styles.pickerListContent}>
+            <ScrollView
+              style={styles.pickerList}
+              contentContainerStyle={styles.pickerListContent}
+            >
               {allFields.length === 0 ? (
                 <Text style={styles.pickerEmpty}>등록된 현장이 없습니다.</Text>
               ) : (
@@ -268,9 +322,18 @@ export default function FieldReportEditor() {
                       setFieldId(f.id);
                       setFieldPickerOpen(false);
                     }}
-                    style={[styles.pickerItem, f.id === fieldId && styles.pickerItemActive]}
+                    style={({ pressed }) => [
+                      styles.pickerItem,
+                      f.id === fieldId && styles.pickerItemActive,
+                      pressed && { opacity: opacity.pressed },
+                    ]}
                   >
-                    <Text style={[styles.pickerItemText, f.id === fieldId && styles.pickerItemTextActive]}>
+                    <Text
+                      style={[
+                        styles.pickerItemText,
+                        f.id === fieldId && styles.pickerItemTextActive,
+                      ]}
+                    >
                       {f.address}
                     </Text>
                     {f.addressDetail ? (
@@ -280,12 +343,14 @@ export default function FieldReportEditor() {
                 ))
               )}
             </ScrollView>
-            <Pressable
+            <Button
               onPress={() => setFieldPickerOpen(false)}
-              style={({ pressed }) => [styles.pickerCancel, pressed && styles.pressed]}
+              variant="ghost"
+              size="sm"
+              fullWidth
             >
-              <Text style={styles.pickerCancelText}>닫기</Text>
-            </Pressable>
+              닫기
+            </Button>
           </Pressable>
         </Pressable>
       </Modal>
@@ -296,33 +361,32 @@ export default function FieldReportEditor() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   scroll: { padding: spacing.xl, paddingBottom: spacing.xxl },
-  heading: { fontSize: fontSize.xl, fontWeight: '800', color: colors.text, marginBottom: spacing.md },
+  heading: {
+    fontSize: fontSize.xl,
+    fontWeight: fontWeight.heavy,
+    color: colors.text,
+    marginBottom: spacing.md,
+    lineHeight: lineHeight.xl,
+  },
   label: {
     fontSize: fontSize.sm,
     color: colors.textMuted,
-    fontWeight: '700',
+    fontWeight: fontWeight.bold,
     marginTop: spacing.lg,
     marginBottom: spacing.sm,
   },
-  input: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+  readonly: {
+    backgroundColor: colors.surfaceMuted,
+    borderWidth: 0,
+  },
+  readonlyText: {
     fontSize: fontSize.base,
     color: colors.text,
   },
-  readonly: {
-    backgroundColor: colors.background,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.md,
-  },
-  readonlyText: { fontSize: fontSize.base, color: colors.text },
   fieldPickBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     borderRadius: radius.md,
@@ -331,23 +395,33 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
-  fieldPickText: { fontSize: fontSize.base, color: colors.text, fontWeight: '600' },
-  fieldPickPlaceholder: { fontSize: fontSize.base, color: colors.textMuted, fontWeight: '700' },
+  fieldPickText: {
+    flex: 1,
+    fontSize: fontSize.base,
+    color: colors.text,
+    fontWeight: fontWeight.semibold,
+  },
+  fieldPickPlaceholder: {
+    flex: 1,
+    fontSize: fontSize.base,
+    color: colors.textMuted,
+    fontWeight: fontWeight.bold,
+  },
+  titleField: { marginTop: spacing.md },
   phaseBox: {
     marginTop: spacing.lg,
-    padding: spacing.md,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
     gap: spacing.sm,
   },
-  phaseLabel: { fontSize: fontSize.sm, color: colors.text, fontWeight: '700' },
+  phaseLabel: {
+    fontSize: fontSize.sm,
+    color: colors.text,
+    fontWeight: fontWeight.bold,
+  },
   phasePhoto: {
     width: '100%',
     height: 160,
     borderRadius: radius.sm,
-    backgroundColor: colors.background,
+    backgroundColor: colors.surfaceMuted,
   },
   phasePhotoEmpty: {
     alignItems: 'center',
@@ -358,33 +432,14 @@ const styles = StyleSheet.create({
   },
   phasePhotoEmptyText: { fontSize: fontSize.sm, color: colors.textMuted },
   phaseActions: { flexDirection: 'row', gap: spacing.sm },
-  smallBtn: {
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    backgroundColor: colors.surface,
-  },
-  smallBtnText: { fontSize: fontSize.sm, color: colors.primary, fontWeight: '700' },
-  ghostBtn: { borderColor: colors.danger },
-  ghostBtnText: { fontSize: fontSize.sm, color: colors.danger, fontWeight: '700' },
+  phaseBtnFlex: { flex: 1 },
+  captionField: { marginTop: spacing.sm },
   error: { color: colors.danger, fontSize: fontSize.sm, marginTop: spacing.md },
-  btn: {
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.lg,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    marginTop: spacing.xl,
-  },
-  btnDisabled: { backgroundColor: colors.border },
-  btnText: { color: '#fff', fontSize: fontSize.base, fontWeight: '700' },
-  cancel: { alignItems: 'center', paddingVertical: spacing.md },
-  cancelText: { color: colors.textMuted, fontSize: fontSize.sm },
-  pressed: { opacity: 0.85 },
+  submit: { marginTop: spacing.xl },
+  // picker modal
   pickerBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.lg,
@@ -398,10 +453,18 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     gap: spacing.md,
   },
-  pickerTitle: { fontSize: fontSize.lg, fontWeight: '700', color: colors.text },
+  pickerTitle: {
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.bold,
+    color: colors.text,
+  },
   pickerList: { flexGrow: 0 },
   pickerListContent: { gap: spacing.xs, paddingVertical: spacing.xs },
-  pickerEmpty: { fontSize: fontSize.sm, color: colors.textMuted, paddingVertical: spacing.md },
+  pickerEmpty: {
+    fontSize: fontSize.sm,
+    color: colors.textMuted,
+    paddingVertical: spacing.md,
+  },
   pickerItem: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
@@ -410,10 +473,18 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
-  pickerItemActive: { borderColor: colors.primary, backgroundColor: colors.primary + '10' },
-  pickerItemText: { fontSize: fontSize.sm, color: colors.text, fontWeight: '600' },
-  pickerItemTextActive: { color: colors.primary, fontWeight: '700' },
+  pickerItemActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryMuted,
+  },
+  pickerItemText: {
+    fontSize: fontSize.sm,
+    color: colors.text,
+    fontWeight: fontWeight.semibold,
+  },
+  pickerItemTextActive: {
+    color: colors.primary,
+    fontWeight: fontWeight.bold,
+  },
   pickerItemMeta: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: 2 },
-  pickerCancel: { alignItems: 'center', paddingVertical: spacing.md },
-  pickerCancelText: { fontSize: fontSize.sm, color: colors.textMuted, fontWeight: '600' },
 });
