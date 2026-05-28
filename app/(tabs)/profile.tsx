@@ -96,6 +96,12 @@ export default function Profile() {
   };
 
   const openExternal = (url: string, fallbackTitle: string) => {
+    // web 에선 Linking.openURL 이 SPA 자체를 떠나 미저장 상태를 잃음.
+    // 새 탭으로 열어 사용자의 현재 세션을 보존.
+    if (Platform.OS === 'web') {
+      window.open(url, '_blank', 'noopener,noreferrer');
+      return;
+    }
     Linking.canOpenURL(url)
       .then((ok) => {
         if (ok) return Linking.openURL(url);

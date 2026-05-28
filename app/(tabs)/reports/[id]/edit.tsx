@@ -33,9 +33,23 @@ export default function EditReport() {
   const update = useReportStore((s) => s.update);
   const userId = useAuthStore((s) => s.user?.id);
 
+  const cacheHas = !!detailCache[reportId];
+  const [firstFetchDone, setFirstFetchDone] = useState(cacheHas);
+
   useEffect(() => {
-    if (reportId && !detailCache[reportId]) void loadDetail(reportId);
-  }, [reportId, detailCache, loadDetail]);
+    if (!reportId || cacheHas) {
+      if (cacheHas) setFirstFetchDone(true);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      await loadDetail(reportId);
+      if (!cancelled) setFirstFetchDone(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [reportId, cacheHas, loadDetail]);
 
   const report = detailCache[reportId];
   const summary = useMemo(
@@ -78,9 +92,18 @@ export default function EditReport() {
   }
 
   if (!report) {
+    // 첫 fetch 끝났는데도 null 이면 not-found, 아니면 race 보호용 LoadingState.
     return (
       <View style={styles.container}>
-        <LoadingState />
+        {firstFetchDone ? (
+          <EmptyState
+            icon="document-text-outline"
+            title="보고서를 찾을 수 없습니다"
+            description="삭제됐거나 접근 권한이 없는 보고서입니다"
+          />
+        ) : (
+          <LoadingState />
+        )}
       </View>
     );
   }

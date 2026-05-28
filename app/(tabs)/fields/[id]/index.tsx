@@ -241,7 +241,7 @@ export default function FieldDetail() {
           leftIcon="checkmark-circle"
           style={styles.actionFlex}
         >
-          {canCheckIn ? '체크인' : '외근 시작 후'}
+          {canCheckIn ? '체크인' : '외근 시작 후 체크인 가능'}
         </Button>
       </View>
 

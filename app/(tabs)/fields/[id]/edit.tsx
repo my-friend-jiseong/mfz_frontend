@@ -158,12 +158,17 @@ export default function EditField() {
   };
 
   const handleManualSubmit = () => {
-    const lat = Number(manualLatStr);
-    const lng = Number(manualLngStr);
     if (!manualRoad.trim() && !manualJibun.trim()) {
       Alert.alert('주소 입력 필요', '도로명 주소 또는 지번 주소 중 하나는 입력해주세요.');
       return;
     }
+    // Number('') === 0 함정 차단 — 빈 입력은 finite 통과하므로 raw string 단계에서 가드.
+    if (!manualLatStr.trim() || !manualLngStr.trim()) {
+      Alert.alert('좌표 입력 필요', '위도·경도를 모두 입력해주세요.');
+      return;
+    }
+    const lat = Number(manualLatStr);
+    const lng = Number(manualLngStr);
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
       Alert.alert('좌표 형식 오류', '위도·경도를 숫자로 입력해주세요.');
       return;
