@@ -77,7 +77,7 @@
 
 ### S5. 체크인 (ERD v2 — 단순화)
 1. 현장 "체크인" → [checkin](<../app/(tabs)/fields/[id]/checkin.tsx>) → 진입 시 `POST /api/visits/check-in` (**fieldId 만**) 자동 호출.
-2. **방문 결과 상태** 선택(단일 status, "기타 사유 10자" 규칙 부재 확인).
+2. **방문 결과 상태** 선택(6종). `completed`→`resultStatus:normal`, 그 외→`abnormal` (백엔드 auto). **'기타' 선택 시 reason 입력(10자 이상 필수)** — 미달 시 저장 버튼 비활성·`visit_status_reason_required` 차단(검증 2026-05-28).
 3. "메모·사진은 현장 상세에서" 링크 → 현장 상세 이동. (체크인 화면 내 메모/사진/음성/파일 입력 부재 확인)
 4. "결과 저장하고 완료" → `PATCH /api/visits/{id}/status` (body `{status}`) → destination arrived → active 복귀.
    - ⚠️ §8: 이 엔드포인트 존속·body 는 백엔드 확인 대상. 404/400 시 로그 기록.

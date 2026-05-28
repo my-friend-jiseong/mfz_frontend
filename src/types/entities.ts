@@ -17,7 +17,7 @@ export type VisitStatus =
   | 'refused'            // 수취거절
   | 'unknown_address'    // 주소불명
   | 'revisit_needed'     // 재방문 필요
-  | 'other';             // 기타 (ERD v2: status_reason 제거 — 사유 입력 없음)
+  | 'other';             // 기타 (검증 2026-05-28: reason 10자 이상 필수 — visit_status_reason_required)
 export type DestinationStatus = 'pending' | 'arrived' | 'skipped';
 
 export interface User {

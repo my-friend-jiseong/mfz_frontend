@@ -215,7 +215,7 @@ DB 는 남아있으나 요청/응답 형태가 달라진 부분. 각 항목은 �
 
 운영 백엔드가 ERD v2 로 배포돼 있어 전 플로우(signup→현장→외근→체크인→보고서→field-reports)를 실호출로 검증함.
 
-1. `PATCH /api/visits/:id/status` — **존속**. body `{status}` 수용, 응답 `{visitId, status, resultStatus}`(status='completed' 면 resultStatus 자동 'normal'). statusReason 불필요. → 프론트 `setResult(visitId, status)` 정합. ✅
+1. `PATCH /api/visits/:id/status` — **존속**. body `{ status, reason? }` (키 `reason`). 응답 `{visitId, status, resultStatus}` — `completed`→`normal`, 그 외 5종(`absent`/`refused`/`unknown_address`/`revisit_needed`/`other`)→`abnormal` (auto). **`other` 일 때만 `reason` 10자 이상 필수**(`visit_status_reason_required`). 6개 enum 값 전부 검증 완료. → 프론트 `setResult(visitId, status, reason?)` 정합. ✅
 2. `categories` — **자유 텍스트 배열**. 전송값 그대로 저장·반환, 응답에 `categories` + `tags` 둘 다 포함. ✅
 3. `projects.status` — 생성 시 미지정 → 기본 `active`. ✅
 4. `field_reports` — **JSON body**. 키 `before/pending/afterPhotoUrl`·`*Caption` 정합, 응답에 `field:{fieldId,name}` 포함. 사진은 URL 참조(업로드 후 연결). ✅

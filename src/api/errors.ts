@@ -95,8 +95,9 @@ const ERROR_MESSAGES: Record<string, string> = {
   has_related_visits: '방문 기록이 있어 삭제할 수 없습니다',
   forbidden_done_to_pending: '관리자만 변경할 수 있습니다',
   forbidden_assignee_update: '관리자만 변경할 수 있습니다',
-  // 방문 (Visit) — ERD v2: status_reason 제거.
+  // 방문 (Visit)
   visit_status_invalid: '방문 결과를 선택해주세요',
+  visit_status_reason_required: '"기타" 선택 시 사유를 10자 이상 입력해주세요',
   photo_format_invalid: '지원하지 않는 사진 형식입니다 (JPEG/PNG)',
   photo_size_exceeded: '사진 크기가 제한을 초과했습니다',
   // 보고서 (Reports) — ERD v2: title 필수, content/공유 제거.

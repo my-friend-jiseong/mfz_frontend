@@ -7,6 +7,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -37,6 +38,7 @@ export default function FieldCheckin() {
 
   const [visitId, setVisitId] = useState<string | null>(null);
   const [status, setStatus] = useState<VisitStatus>('completed');
+  const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
   // checkIn 중복 호출 가드 — StrictMode dev 더블 마운트 / 빠른 재 mount 시 visit 두 번 생성 방지
   const checkInGuardRef = useRef(false);
@@ -74,10 +76,13 @@ export default function FieldCheckin() {
     );
   }
 
+  const reasonTrim = reason.trim();
+  const otherReasonValid = status !== 'other' || reasonTrim.length >= 10;
+
   const handleSaveResult = async () => {
-    if (!visitId || saving) return;
+    if (!visitId || saving || !otherReasonValid) return;
     setSaving(true);
-    const r = await setResult(visitId, status);
+    const r = await setResult(visitId, status, status === 'other' ? reasonTrim : undefined);
     setSaving(false);
     if (!r.ok) {
       Alert.alert('상태 저장 실패', r.error);
@@ -133,6 +138,23 @@ export default function FieldCheckin() {
           })}
         </View>
 
+        {status === 'other' ? (
+          <View style={styles.reasonBox}>
+            <Text style={styles.reasonLabel}>기타 사유 (10자 이상 필수)</Text>
+            <TextInput
+              value={reason}
+              onChangeText={setReason}
+              style={styles.reasonInput}
+              placeholder="현장 상황을 10자 이상 설명해주세요"
+              maxLength={500}
+              multiline
+            />
+            <Text style={[styles.reasonCounter, reasonTrim.length < 10 && styles.reasonCounterError]}>
+              {reasonTrim.length} / 10자 이상
+            </Text>
+          </View>
+        ) : null}
+
         <Pressable
           onPress={() => router.push(`/(tabs)/fields/${fieldId}` as never)}
           style={({ pressed }) => [styles.linkBtn, pressed && styles.pressed]}
@@ -142,11 +164,11 @@ export default function FieldCheckin() {
 
         <Pressable
           onPress={handleSaveResult}
-          disabled={saving || !visitId}
+          disabled={saving || !visitId || !otherReasonValid}
           style={({ pressed }) => [
             styles.btn,
             pressed && styles.pressed,
-            (saving || !visitId) && styles.btnDisabled,
+            (saving || !visitId || !otherReasonValid) && styles.btnDisabled,
           ]}
         >
           <Text style={styles.btnText}>
@@ -191,6 +213,30 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   statusChipText: { fontSize: fontSize.sm, color: colors.textMuted },
+  reasonBox: {
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    gap: spacing.xs,
+  },
+  reasonLabel: { fontSize: fontSize.sm, color: colors.text, fontWeight: '700' },
+  reasonInput: {
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    fontSize: fontSize.sm,
+    color: colors.text,
+    minHeight: 64,
+    textAlignVertical: 'top',
+  },
+  reasonCounter: { fontSize: fontSize.xs, color: colors.textMuted, alignSelf: 'flex-end' },
+  reasonCounterError: { color: colors.danger, fontWeight: '700' },
   linkBtn: {
     marginTop: spacing.xl,
     paddingVertical: spacing.md,

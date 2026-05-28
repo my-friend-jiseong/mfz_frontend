@@ -6,7 +6,8 @@ import { visits as visitsApi, localizeError } from '@/api';
 // (memos/field_photos 는 현장 전용 — fieldStore.directAttachments 참조).
 //   - check-in: fieldId 만 (siteName·location 제거).
 //   - check-in 직후 초기 status: 'completed' (백엔드 자동 설정).
-//   - setResult: 단일 status (result_status·status_reason 컬럼 제거).
+//   - setResult: status + 'other' 일 때 reason 10자 이상 필수
+//     (검증 2026-05-28: 백엔드가 visit_status_reason_required 로 강제).
 
 type CheckInResult =
   | { ok: true; visit: Visit }
@@ -20,7 +21,7 @@ interface VisitState {
   visits: Visit[];
 
   checkIn: (tripId: string, fieldId: string) => Promise<CheckInResult>;
-  setResult: (visitId: string, status: VisitStatus) => Promise<GenericResult>;
+  setResult: (visitId: string, status: VisitStatus, reason?: string) => Promise<GenericResult>;
 
   byTrip: (tripId: string) => Visit[];
   byField: (fieldId: string) => Visit[];
@@ -49,9 +50,9 @@ export const useVisitStore = create<VisitState>((set, get) => ({
     }
   },
 
-  setResult: async (visitId, status) => {
+  setResult: async (visitId, status, reason) => {
     try {
-      await visitsApi.setStatus(visitId, status);
+      await visitsApi.setStatus(visitId, status, reason);
       set((s) => ({
         visits: s.visits.map((v) =>
           v.id === visitId ? { ...v, status } : v,
