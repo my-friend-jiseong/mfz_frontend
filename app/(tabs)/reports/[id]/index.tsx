@@ -22,6 +22,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { LoadingState } from '@/components/ui/LoadingState';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
@@ -123,12 +124,15 @@ export default function ReportDetail() {
   );
 
   if (!report) {
+    // 첫 진입 시 loadDetail 끝나기 전 race — allReports 와 detailCache 둘 다 비면
+    // 잠시 빈 상태가 됨. 그동안 EmptyState 가 깜빡이지 않도록 LoadingState 노출.
     return (
       <MapSheetLayout title="보고서 상세" onBack={() => safeBack(router)}>
-        <EmptyState
-          icon={deleting ? 'trash-outline' : 'document-text-outline'}
-          title={deleting ? '보고서를 삭제 중입니다' : '보고서를 찾을 수 없습니다'}
-        />
+        {deleting ? (
+          <EmptyState icon="trash-outline" title="보고서를 삭제 중입니다" />
+        ) : (
+          <LoadingState label="보고서 불러오는 중" />
+        )}
       </MapSheetLayout>
     );
   }
