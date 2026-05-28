@@ -1,14 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import {
-  Alert,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
+import { Ionicons } from '@expo/vector-icons';
 import { useFieldStore } from '@/stores/fieldStore';
 import { safeBack } from '@/utils/backNavigation';
 import { useVisitStore } from '@/stores/visitStore';
@@ -19,16 +13,32 @@ import { promptChoice } from '@/components/WebChoiceModal';
 import { pickPhoto, promptPhotoSource } from '@/utils/media';
 import { openKakaoRouteTo } from '@/utils/kakaoMap';
 import { PhotoGrid } from '@/components/AttachmentPreview';
+import { Card } from '@/components/ui/Card';
+import { Badge, type BadgeShape, type BadgeTone } from '@/components/ui/Badge';
+// Badge 의 fieldStatus tone 매핑은 향후 status chip 통일 시 확장.
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 import { colors } from '@/theme/colors';
-import { spacing, radius, fontSize } from '@/theme/spacing';
+import { spacing, radius, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
+import { opacity } from '@/theme/motion';
 import {
   FIELD_STATUS_VALUES,
   VISIT_STATUS_LABEL,
   FIELD_STATUS_LABEL,
   type Visit,
+  type VisitStatus,
 } from '@/types/entities';
 
 // ERD v2: 메모·사진은 현장(field) 전용. 음성 메모·방문 첨부 제거.
+
+const VISIT_BADGE: Record<VisitStatus, { tone: BadgeTone; shape: BadgeShape }> = {
+  completed: { tone: 'success', shape: 'square' },
+  absent: { tone: 'neutral', shape: 'circle' },
+  refused: { tone: 'danger', shape: 'triangle' },
+  unknown_address: { tone: 'info', shape: 'diamond' },
+  revisit_needed: { tone: 'warning', shape: 'diamond' },
+  other: { tone: 'neutral', shape: 'diamond' },
+};
 
 function fmtDateTime(iso: string) {
   return new Date(iso).toLocaleString('ko-KR');
@@ -109,35 +119,10 @@ export default function FieldDetail() {
   if (!field) {
     return (
       <MapSheetLayout title="현장 상세" onBack={() => safeBack(router)}>
-        <EmptyState title="현장을 찾을 수 없습니다" />
+        <EmptyState icon="search-outline" title="현장을 찾을 수 없습니다" />
       </MapSheetLayout>
     );
   }
-
-  const renderVisit = ({ item }: { item: Visit }) => {
-    const c = colors.visitStatus[item.status];
-    return (
-      <Pressable
-        onPress={() =>
-          router.push(
-            `/(tabs)/trips/visit?tripId=${item.tripId}&visitId=${item.id}` as never,
-          )
-        }
-        style={({ pressed }) => [styles.visitRow, pressed && styles.pressed]}
-      >
-        <View style={styles.visitRowMain}>
-          <Text style={styles.visitDate}>{fmtDateTime(item.visitedAt)}</Text>
-          <View style={[styles.statusChip, { backgroundColor: c + '22' }]}>
-            <Text style={[styles.statusText, { color: c }]}>
-              {VISIT_STATUS_LABEL[item.status]}
-            </Text>
-          </View>
-        </View>
-      </Pressable>
-    );
-  };
-
-  const canCheckIn = activeTripId !== null;
 
   // 상태 변경 — chip tap 시 3개 상태 중 선택. patchStatus 즉시 호출.
   const statusBusyRef = useRef(false);
@@ -162,132 +147,150 @@ export default function FieldDetail() {
     ]);
   };
 
+  const canCheckIn = activeTripId !== null;
+  const statusFg = colors.fieldStatus[field.status];
+
+  const renderVisit = ({ item }: { item: Visit }) => {
+    const badge = VISIT_BADGE[item.status];
+    return (
+      <Card
+        onPress={() =>
+          router.push(
+            `/(tabs)/trips/visit?tripId=${item.tripId}&visitId=${item.id}` as never,
+          )
+        }
+        padding="md"
+        style={styles.visitCard}
+      >
+        <View style={styles.visitHead}>
+          <Text style={styles.visitDate}>{fmtDateTime(item.visitedAt)}</Text>
+          <Badge label={VISIT_STATUS_LABEL[item.status]} tone={badge.tone} shape={badge.shape} />
+        </View>
+      </Card>
+    );
+  };
+
   const headerElement = (
     <View style={styles.summary}>
       <Pressable
         onPress={handleStatusTap}
+        accessibilityRole="button"
+        accessibilityLabel={`현재 상태: ${FIELD_STATUS_LABEL[field.status]}. 변경하려면 누르세요`}
         style={({ pressed }) => [
-          styles.statusChipTappable,
-          {
-            backgroundColor: colors.fieldStatus[field.status] + '22',
-            borderColor: colors.fieldStatus[field.status],
-          },
-          pressed && styles.pressed,
+          styles.statusTap,
+          { backgroundColor: statusFg + '22', borderColor: statusFg },
+          pressed && { opacity: opacity.pressed },
         ]}
       >
-        <Text
-          style={[
-            styles.statusText,
-            { color: colors.fieldStatus[field.status] },
-          ]}
-        >
-          {FIELD_STATUS_LABEL[field.status]} ▾
+        <Text style={[styles.statusText, { color: statusFg }]}>
+          {FIELD_STATUS_LABEL[field.status]}
         </Text>
+        <Ionicons name="chevron-down" size={14} color={statusFg} />
       </Pressable>
+
       <Text style={styles.addr}>{field.address}</Text>
       {field.addressDetail ? (
         <Text style={styles.detail}>{field.addressDetail}</Text>
       ) : null}
       {field.projectName ? (
-        <Text style={styles.detail}>📁 {field.projectName}</Text>
+        <View style={styles.metaRow}>
+          <Ionicons name="folder-outline" size={14} color={colors.textMuted} />
+          <Text style={styles.metaText}>{field.projectName}</Text>
+        </View>
       ) : null}
       {field.categories && field.categories.length > 0 ? (
-        <Text style={styles.detail}>분류: {field.categories.join(', ')}</Text>
+        <View style={styles.metaRow}>
+          <Ionicons name="pricetags-outline" size={14} color={colors.textMuted} />
+          <Text style={styles.metaText}>{field.categories.join(', ')}</Text>
+        </View>
       ) : null}
+
       <View style={styles.coordRow}>
         <Text style={styles.coord}>
           좌표: {field.latitude.toFixed(4)}, {field.longitude.toFixed(4)}
         </Text>
-        <Pressable
+        <Button
           onPress={() =>
             void openKakaoRouteTo(field.address, field.latitude, field.longitude)
           }
-          style={({ pressed }) => [styles.routeBtn, pressed && styles.pressed]}
+          variant="secondary"
+          size="sm"
+          leftIcon="navigate"
         >
-          <Text style={styles.routeBtnText}>길찾기</Text>
-        </Pressable>
+          길찾기
+        </Button>
       </View>
 
       <View style={styles.actions}>
-        <Pressable
-          onPress={() =>
-            router.push(`/(tabs)/fields/${field.id}/edit` as never)
-          }
-          style={({ pressed }) => [styles.actionBtn, pressed && styles.pressed]}
+        <Button
+          onPress={() => router.push(`/(tabs)/fields/${field.id}/edit` as never)}
+          variant="secondary"
+          fullWidth
+          leftIcon="create-outline"
+          style={styles.actionFlex}
         >
-          <Text style={styles.actionText}>수정 / 삭제</Text>
-        </Pressable>
-        <Pressable
+          수정 / 삭제
+        </Button>
+        <Button
           onPress={() =>
             canCheckIn &&
             router.push(`/(tabs)/fields/${field.id}/checkin` as never)
           }
           disabled={!canCheckIn}
-          style={({ pressed }) => [
-            styles.actionBtn,
-            styles.primaryBtn,
-            !canCheckIn && styles.disabledBtn,
-            pressed && styles.pressed,
-          ]}
+          fullWidth
+          leftIcon="checkmark-circle"
+          style={styles.actionFlex}
         >
-          <Text style={[styles.actionText, styles.primaryText]}>
-            {canCheckIn ? '체크인' : '외근 시작 후 체크인 가능'}
-          </Text>
-        </Pressable>
+          {canCheckIn ? '체크인' : '외근 시작 후'}
+        </Button>
       </View>
 
-      <Text style={styles.sectionTitle}>현장 직접 메모 ({directTextMemos.length})</Text>
+      <Text style={styles.sectionTitle}>
+        현장 직접 메모 ({directTextMemos.length})
+      </Text>
       <Text style={styles.directHint}>
         외근 진행 중이 아닐 때도 이 현장에 메모를 남길 수 있습니다.
       </Text>
       <View style={styles.memoInputRow}>
-        <TextInput
+        <Input
           value={memoInput}
           onChangeText={setMemoInput}
-          style={styles.memoInput}
           placeholder="현장에 남길 메모"
           maxLength={2000}
           multiline
+          numberOfLines={2}
+          containerStyle={styles.memoInputWrap}
         />
-        <Pressable
+        <Button
           onPress={handleAddDirectMemo}
-          disabled={memoSubmitting || !memoInput.trim()}
-          style={({ pressed }) => [
-            styles.memoBtn,
-            (pressed || memoSubmitting || !memoInput.trim()) && styles.pressed,
-          ]}
+          disabled={!memoInput.trim()}
+          loading={memoSubmitting}
         >
-          <Text style={styles.memoBtnText}>
-            {memoSubmitting ? '추가 중...' : '추가'}
-          </Text>
-        </Pressable>
+          추가
+        </Button>
       </View>
       {directTextMemos.length > 0 ? (
         <View style={styles.memoList}>
           {directTextMemos.map((m) => (
-            <View key={m.id} style={styles.memoItem}>
+            <Card key={m.id} padding="md" style={styles.memoItem}>
               <Text style={styles.memoText}>{m.text}</Text>
               <Text style={styles.memoMeta}>{fmtDateTime(m.createdAt)}</Text>
-            </View>
+            </Card>
           ))}
         </View>
       ) : null}
 
-      <View style={styles.directMediaRow}>
-        <Pressable
-          onPress={handleAddDirectPhoto}
-          disabled={photoBusy}
-          style={({ pressed }) => [
-            styles.mediaBtn,
-            (pressed || photoBusy) && styles.pressed,
-          ]}
-        >
-          <Text style={styles.mediaBtnText}>
-            📷 사진 {directPhotoCount > 0 ? `(${directPhotoCount})` : ''}
-            {photoBusy ? ' · 업로드 중' : ''}
-          </Text>
-        </Pressable>
-      </View>
+      <Button
+        onPress={handleAddDirectPhoto}
+        variant="secondary"
+        fullWidth
+        leftIcon="camera"
+        loading={photoBusy}
+        style={styles.photoBtn}
+      >
+        사진 추가
+        {directPhotoCount > 0 ? ` (${directPhotoCount})` : ''}
+      </Button>
 
       <PhotoGrid photos={directPhotos} />
 
@@ -307,7 +310,9 @@ export default function FieldDetail() {
         renderItem={renderVisit}
         ListHeaderComponent={headerElement}
         contentContainerStyle={styles.list}
-        ListEmptyComponent={<EmptyState title="방문 이력이 없습니다" />}
+        ListEmptyComponent={
+          <EmptyState icon="footsteps-outline" title="방문 이력이 없습니다" />
+        }
       />
     </MapSheetLayout>
   );
@@ -320,82 +325,64 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.md,
     gap: spacing.xs,
   },
-  statusChip: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radius.pill,
-  },
-  statusChipTappable: {
+  statusTap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     alignSelf: 'flex-start',
     paddingHorizontal: spacing.md,
     paddingVertical: 6,
     borderRadius: radius.pill,
     borderWidth: 1,
   },
-  statusText: { fontSize: fontSize.xs, fontWeight: '700' },
-  addr: { fontSize: fontSize.lg, fontWeight: '700', color: colors.text },
-  detail: { fontSize: fontSize.base, color: colors.text },
+  statusText: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.bold,
+  },
+  addr: {
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.bold,
+    color: colors.text,
+    marginTop: spacing.sm,
+    lineHeight: lineHeight.lg,
+  },
+  detail: {
+    fontSize: fontSize.base,
+    color: colors.text,
+    lineHeight: lineHeight.base,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: 2,
+  },
+  metaText: {
+    fontSize: fontSize.sm,
+    color: colors.textMuted,
+  },
   coordRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: spacing.xs,
+    marginTop: spacing.sm,
   },
-  coord: { fontSize: fontSize.xs, color: colors.textMuted },
-  routeBtn: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 4,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    backgroundColor: colors.surface,
-  },
-  routeBtnText: {
+  coord: {
     fontSize: fontSize.xs,
-    color: colors.primary,
-    fontWeight: '700',
+    color: colors.textMuted,
   },
   actions: {
     flexDirection: 'row',
     gap: spacing.sm,
     marginTop: spacing.md,
   },
-  actionBtn: {
-    flex: 1,
-    paddingVertical: spacing.md,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.background,
-    alignItems: 'center',
-  },
-  primaryBtn: { backgroundColor: colors.primary, borderColor: colors.primary },
-  disabledBtn: { backgroundColor: colors.border, borderColor: colors.border },
-  actionText: { fontSize: fontSize.sm, fontWeight: '700', color: colors.text },
-  primaryText: { color: '#fff' },
-  pressed: { opacity: 0.85 },
+  actionFlex: { flex: 1 },
   sectionTitle: {
     fontSize: fontSize.sm,
-    fontWeight: '700',
+    fontWeight: fontWeight.bold,
     color: colors.textMuted,
     marginTop: spacing.lg,
   },
-  list: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
-  visitRow: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    marginBottom: spacing.xs,
-    gap: 4,
-  },
-  visitRowMain: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  visitDate: { fontSize: fontSize.sm, color: colors.text },
   directHint: {
     fontSize: fontSize.xs,
     color: colors.textMuted,
@@ -407,51 +394,29 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     alignItems: 'flex-end',
   },
-  memoInput: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    padding: spacing.md,
+  memoInputWrap: { flex: 1 },
+  memoList: { marginTop: spacing.sm, gap: spacing.xs },
+  memoItem: {},
+  memoText: {
     fontSize: fontSize.sm,
     color: colors.text,
-    minHeight: 44,
+    lineHeight: lineHeight.sm,
   },
-  memoBtn: {
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    borderRadius: radius.md,
-  },
-  memoBtnText: { color: '#fff', fontSize: fontSize.sm, fontWeight: '700' },
-  memoList: { marginTop: spacing.sm, gap: spacing.xs },
-  memoItem: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.sm,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  memoText: { fontSize: fontSize.sm, color: colors.text },
   memoMeta: {
     fontSize: fontSize.xs,
     color: colors.textMuted,
     marginTop: spacing.xs,
   },
-  directMediaRow: {
+  photoBtn: { marginTop: spacing.sm },
+  list: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
+  visitCard: { marginBottom: spacing.xs },
+  visitHead: {
     flexDirection: 'row',
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-  },
-  mediaBtn: {
-    flex: 1,
-    paddingVertical: spacing.md,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
     alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  mediaBtnText: { fontSize: fontSize.sm, color: colors.text, fontWeight: '600' },
+  visitDate: {
+    fontSize: fontSize.sm,
+    color: colors.text,
+  },
 });
