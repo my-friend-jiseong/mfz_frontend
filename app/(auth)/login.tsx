@@ -173,7 +173,7 @@ export default function Login() {
             }
             style={styles.subtleLink}
           >
-            <Text variant="caption" weight="medium" color="textMuted">
+            <Text variant="caption" color="textMuted">
               비밀번호를 잊으셨나요?
             </Text>
           </Pressable>

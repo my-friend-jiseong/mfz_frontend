@@ -6,7 +6,6 @@ import { fontSize, fontWeight, lineHeight } from './spacing';
 // Android 는 fontWeight + family 둘 다 본 후 적절한 폰트를 선택.
 export const fontFamily = {
   regular: 'Pretendard-Regular',
-  medium: 'Pretendard-Medium',
   semibold: 'Pretendard-SemiBold',
   bold: 'Pretendard-Bold',
   heavy: 'Pretendard-ExtraBold',
@@ -69,10 +68,9 @@ export const typography = {
 } as const;
 
 // useFonts 에 넘길 폰트 맵. 키는 fontFamily 값과 일치.
-// otf 파일을 require 로 로드 (Metro 가 asset 으로 처리).
+// Medium 은 callsite 0 + 시각 차이 미미라 4 weight 만 로드 (~6.3MB → 4.7MB).
 export const FONTS_TO_LOAD = {
   'Pretendard-Regular': require('../../assets/fonts/Pretendard-Regular.otf'),
-  'Pretendard-Medium': require('../../assets/fonts/Pretendard-Medium.otf'),
   'Pretendard-SemiBold': require('../../assets/fonts/Pretendard-SemiBold.otf'),
   'Pretendard-Bold': require('../../assets/fonts/Pretendard-Bold.otf'),
   'Pretendard-ExtraBold': require('../../assets/fonts/Pretendard-ExtraBold.otf'),
