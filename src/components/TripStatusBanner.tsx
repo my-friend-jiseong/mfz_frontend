@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useTripStore } from '@/stores/tripStore';
+import { useDestinationStore } from '@/stores/destinationStore';
 import { colors } from '@/theme/colors';
-import { spacing, fontSize } from '@/theme/spacing';
+import { spacing, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
+import { opacity } from '@/theme/motion';
 
 function formatElapsed(startIso: string) {
   const now = Date.now();
@@ -18,6 +21,7 @@ export function TripStatusBanner() {
   const router = useRouter();
   const activeTripId = useTripStore((s) => s.activeTripId);
   const getById = useTripStore((s) => s.getById);
+  const allDestinations = useDestinationStore((s) => s.destinations);
   const [, setTick] = useState(0);
 
   useEffect(() => {
@@ -30,15 +34,27 @@ export function TripStatusBanner() {
   const trip = getById(activeTripId);
   if (!trip) return null;
 
+  const tripDests = allDestinations.filter((d) => d.tripId === activeTripId);
+  const resolved = tripDests.filter((d) => d.status !== 'pending').length;
+  const total = tripDests.length;
+
   return (
     <Pressable
       onPress={() => router.push('/(tabs)/trips/active' as never)}
-      style={({ pressed }) => [styles.banner, pressed && styles.pressed]}
+      style={({ pressed }) => [styles.banner, pressed && { opacity: opacity.pressed }]}
+      accessibilityRole="button"
+      accessibilityLabel="외근 진행 화면으로 이동"
     >
-      <View style={styles.dot} />
-      <Text style={styles.text}>
-        외근 중 · {formatElapsed(trip.startedAt)} · 탭하여 진행 보기
-      </Text>
+      <View style={styles.iconWrap}>
+        <Ionicons name="navigate" size={14} color={colors.tripBanner} />
+      </View>
+      <View style={styles.body}>
+        <Text style={styles.text}>
+          외근 중 · {formatElapsed(trip.startedAt)}
+          {total > 0 ? ` · ${resolved}/${total}` : ''}
+        </Text>
+      </View>
+      <Ionicons name="chevron-forward" size={18} color={colors.onDanger} />
     </Pressable>
   );
 }
@@ -52,17 +68,19 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     gap: spacing.sm,
   },
-  pressed: { opacity: 0.85 },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#fff',
+  iconWrap: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.onDanger,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
+  body: { flex: 1 },
   text: {
-    color: '#fff',
+    color: colors.onDanger,
     fontSize: fontSize.sm,
-    fontWeight: '600',
-    flex: 1,
+    fontWeight: fontWeight.semibold,
+    lineHeight: lineHeight.sm,
   },
 });
