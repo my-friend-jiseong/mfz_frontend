@@ -229,7 +229,8 @@ export default function ReportDetail() {
           >
             <Ionicons name="briefcase-outline" size={14} color={colors.primary} />
             <Text variant="bodySm" weight="semibold" color="primary">
-              연결 외근: #{trip.id} · {fmtDateTime(trip.startedAt)}
+              연결 외근: {trip.title ? `${trip.title} · ` : ''}
+              {fmtDateTime(trip.startedAt)}
             </Text>
             <Ionicons name="chevron-forward" size={14} color={colors.primary} />
           </Pressable>
