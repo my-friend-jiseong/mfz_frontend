@@ -7,7 +7,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFieldStore } from '@/stores/fieldStore';
 import { safeBack } from '@/utils/backNavigation';
 import { useVisitStore } from '@/stores/visitStore';
-import { useTripStore } from '@/stores/tripStore';
 import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
 import { promptChoice } from '@/components/WebChoiceModal';
@@ -45,7 +44,6 @@ export default function FieldDetail() {
   const addFieldPhoto = useFieldStore((s) => s.addPhoto);
   const patchFieldStatus = useFieldStore((s) => s.patchStatus);
   const allVisits = useVisitStore((s) => s.visits);
-  const activeTripId = useTripStore((s) => s.activeTripId);
 
   // 진입 시 detail 페치 (directAttachments 채우기)
   useEffect(() => {
@@ -136,7 +134,6 @@ export default function FieldDetail() {
     ]);
   };
 
-  const canCheckIn = activeTripId !== null;
   const statusFg = colors.fieldStatus[field.status];
 
   const renderVisit = ({ item }: { item: Visit }) => {
@@ -216,29 +213,17 @@ export default function FieldDetail() {
         </Button>
       </View>
 
-      <View style={styles.actions}>
-        <Button
-          onPress={() => router.push(`/(tabs)/fields/${field.id}/edit` as never)}
-          variant="secondary"
-          fullWidth
-          leftIcon="create-outline"
-          style={styles.actionFlex}
-        >
-          수정 / 삭제
-        </Button>
-        <Button
-          onPress={() =>
-            canCheckIn &&
-            router.push(`/(tabs)/fields/${field.id}/checkin` as never)
-          }
-          disabled={!canCheckIn}
-          fullWidth
-          leftIcon="checkmark-circle"
-          style={styles.actionFlex}
-        >
-          {canCheckIn ? '체크인' : '외근 시작 필요'}
-        </Button>
-      </View>
+      {/* 체크인은 외근 진행 화면의 currentDest 에서만 가능 — destination 경로와 일관.
+          즉석 방문은 외근 진행 화면의 '현장 추가' 로 명시적 동선. */}
+      <Button
+        onPress={() => router.push(`/(tabs)/fields/${field.id}/edit` as never)}
+        variant="secondary"
+        fullWidth
+        leftIcon="create-outline"
+        style={styles.editBtn}
+      >
+        수정 / 삭제
+      </Button>
 
       <Text variant="bodySm" weight="bold" color="textMuted" style={styles.sectionTitle}>
         현장 직접 메모 ({directTextMemos.length})
@@ -347,12 +332,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginTop: spacing.sm,
   },
-  actions: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginTop: spacing.md,
-  },
-  actionFlex: { flex: 1 },
+  editBtn: { marginTop: spacing.md },
   sectionTitle: { marginTop: spacing.lg },
   directHint: { marginTop: spacing.xs },
   memoInputRow: {
