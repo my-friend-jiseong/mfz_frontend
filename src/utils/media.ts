@@ -1,4 +1,4 @@
-import { Alert, Platform, Linking } from 'react-native';
+import { Alert, Linking, Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -26,8 +26,8 @@ function basenameFromUri(uri: string, defaultName: string): string {
 }
 
 function openSettings() {
-  if (Platform.OS === 'ios') void Linking.openURL('app-settings:');
-  else void Linking.openSettings();
+  // Linking.openSettings() 는 iOS/Android 둘 다 지원. ios 별도 'app-settings:' 분기 불필요.
+  void Linking.openSettings();
 }
 
 /**

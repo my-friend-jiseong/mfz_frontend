@@ -36,7 +36,9 @@ export function fmtDuration(
   if (!endIso) return '진행 중';
   const end = safe(endIso);
   if (!end) return '진행 중';
-  const diff = end.getTime() - start.getTime();
+  // end < start 가드 — clock skew / 백엔드 응답 inverted / 사용자 수정 등으로 음수 가능.
+  // '-1시간 -30분' 같은 깨진 출력 대신 0분.
+  const diff = Math.max(0, end.getTime() - start.getTime());
   const h = Math.floor(diff / 3600000);
   const m = Math.floor((diff % 3600000) / 60000);
   return h > 0 ? `${h}시간 ${m}분` : `${m}분`;
