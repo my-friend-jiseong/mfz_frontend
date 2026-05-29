@@ -228,7 +228,7 @@ export default function FieldReportEditor() {
           {isEdit ? (
             <Card padding="md" style={styles.readonly}>
               <Text variant="body">
-                {selectedField?.address ?? fieldId}
+                {selectedField?.address ?? '알 수 없는 현장'}
               </Text>
             </Card>
           ) : (

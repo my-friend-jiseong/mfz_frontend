@@ -9,12 +9,15 @@ export interface FieldFacets {
   categories: string[];
 }
 
+// projectName 이 비어 있을 때 chip 라벨 — raw projectId('proj-1748...') 노출 회피.
+const UNNAMED_PROJECT_LABEL = '이름 없는 프로젝트';
+
 export function collectFieldFacets(fields: readonly Field[]): FieldFacets {
   const projectsMap = new Map<string, string>();
   const categoriesSet = new Set<string>();
   for (const f of fields) {
     if (f.projectId && !projectsMap.has(f.projectId)) {
-      projectsMap.set(f.projectId, f.projectName ?? f.projectId);
+      projectsMap.set(f.projectId, f.projectName ?? UNNAMED_PROJECT_LABEL);
     }
     for (const c of f.categories ?? []) categoriesSet.add(c);
   }
