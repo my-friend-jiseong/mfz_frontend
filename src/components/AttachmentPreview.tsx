@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
+import { withAlpha } from '@/theme/withAlpha';
 
 // ERD v2: 음성 메모 폐기 — VoiceMemoRow/VoiceMemoList 및 오디오 재생 제거. 사진 그리드만 유지.
 
@@ -70,7 +71,7 @@ const photoStyles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: withAlpha(colors.shadow, 0.55),
     alignItems: 'center',
     justifyContent: 'center',
   },

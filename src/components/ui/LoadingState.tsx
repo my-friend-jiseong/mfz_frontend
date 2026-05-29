@@ -1,7 +1,7 @@
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { Text } from '@/components/ui/Text';
 import { colors } from '@/theme/colors';
-import { spacing, fontSize } from '@/theme/spacing';
-import { fontFamily } from '@/theme/typography';
+import { spacing } from '@/theme/spacing';
 
 interface Props {
   label?: string;
@@ -13,14 +13,18 @@ export function LoadingState({ label = '불러오는 중', inline = false }: Pro
     return (
       <View style={styles.inline}>
         <ActivityIndicator size="small" color={colors.primary} />
-        <Text style={styles.inlineLabel}>{label}</Text>
+        <Text variant="bodySm" color="textMuted">
+          {label}
+        </Text>
       </View>
     );
   }
   return (
     <View style={styles.block}>
       <ActivityIndicator size="large" color={colors.primary} />
-      <Text style={styles.blockLabel}>{label}</Text>
+      <Text variant="bodySm" color="textMuted">
+        {label}
+      </Text>
     </View>
   );
 }
@@ -33,19 +37,9 @@ const styles = StyleSheet.create({
     padding: spacing.xxl,
     gap: spacing.md,
   },
-  blockLabel: {
-    fontFamily: fontFamily.regular,
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-  },
   inline: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-  },
-  inlineLabel: {
-    fontFamily: fontFamily.regular,
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
   },
 });

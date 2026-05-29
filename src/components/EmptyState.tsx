@@ -1,8 +1,8 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Text } from '@/components/ui/Text';
 import { colors } from '@/theme/colors';
-import { spacing, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
-import { fontFamily } from '@/theme/typography';
+import { spacing } from '@/theme/spacing';
 
 type IonName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -21,8 +21,14 @@ export function EmptyState({ title, description, icon, action }: Props) {
           <Ionicons name={icon} size={32} color={colors.textSubtle} />
         </View>
       ) : null}
-      <Text style={styles.title}>{title}</Text>
-      {description ? <Text style={styles.desc}>{description}</Text> : null}
+      <Text variant="body" weight="semibold" align="center" style={styles.title}>
+        {title}
+      </Text>
+      {description ? (
+        <Text variant="bodySm" color="textMuted" align="center">
+          {description}
+        </Text>
+      ) : null}
       {action ? <View style={styles.action}>{action}</View> : null}
     </View>
   );
@@ -43,21 +49,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: spacing.md,
   },
-  title: {
-    fontFamily: fontFamily.semibold,
-    fontSize: fontSize.base,
-    color: colors.text,
-    fontWeight: fontWeight.semibold,
-    marginBottom: spacing.xs,
-    textAlign: 'center',
-    lineHeight: lineHeight.base,
-  },
-  desc: {
-    fontFamily: fontFamily.regular,
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    textAlign: 'center',
-    lineHeight: lineHeight.sm,
-  },
+  title: { marginBottom: spacing.xs },
   action: { marginTop: spacing.lg },
 });

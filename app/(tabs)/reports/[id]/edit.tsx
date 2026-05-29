@@ -65,10 +65,24 @@ export default function EditReport() {
     initialRef.current = report.title;
   }, [report]);
 
+  const backToReports = (
+    <Button
+      onPress={() => router.replace('/(tabs)/reports' as never)}
+      variant="secondary"
+      leftIcon="arrow-back"
+    >
+      보고서 목록으로
+    </Button>
+  );
+
   if (!summary) {
     return (
       <View style={styles.container}>
-        <EmptyState icon="document-text-outline" title="보고서를 찾을 수 없습니다" />
+        <EmptyState
+          icon="document-text-outline"
+          title="보고서를 찾을 수 없습니다"
+          action={backToReports}
+        />
       </View>
     );
   }
@@ -80,6 +94,7 @@ export default function EditReport() {
           icon="lock-closed-outline"
           title="수정 권한이 없습니다"
           description="작성자 본인만 수정 가능합니다"
+          action={backToReports}
         />
       </View>
     );
@@ -94,9 +109,10 @@ export default function EditReport() {
             icon="document-text-outline"
             title="보고서를 찾을 수 없습니다"
             description="삭제됐거나 접근 권한이 없는 보고서입니다"
+            action={backToReports}
           />
         ) : (
-          <LoadingState />
+          <LoadingState label="보고서 불러오는 중" />
         )}
       </View>
     );

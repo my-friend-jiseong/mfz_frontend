@@ -1,7 +1,6 @@
-import { StyleSheet, Text, View } from 'react-native';
-import { colors } from '@/theme/colors';
-import { spacing, fontSize, fontWeight, lineHeight } from '@/theme/spacing';
-import { fontFamily } from '@/theme/typography';
+import { StyleSheet, View } from 'react-native';
+import { Text } from '@/components/ui/Text';
+import { spacing } from '@/theme/spacing';
 
 interface Props {
   title: string;
@@ -13,8 +12,12 @@ export function SectionHeader({ title, description, action }: Props) {
   return (
     <View style={styles.row}>
       <View style={styles.text}>
-        <Text style={styles.title}>{title}</Text>
-        {description ? <Text style={styles.desc}>{description}</Text> : null}
+        <Text variant="h3">{title}</Text>
+        {description ? (
+          <Text variant="bodySm" color="textMuted" style={styles.desc}>
+            {description}
+          </Text>
+        ) : null}
       </View>
       {action ? <View style={styles.action}>{action}</View> : null}
     </View>
@@ -30,19 +33,6 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   text: { flex: 1 },
-  title: {
-    fontFamily: fontFamily.bold,
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.bold,
-    color: colors.text,
-    lineHeight: lineHeight.lg,
-  },
-  desc: {
-    fontFamily: fontFamily.regular,
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    marginTop: 2,
-    lineHeight: lineHeight.sm,
-  },
+  desc: { marginTop: 2 },
   action: { paddingTop: 2 },
 });

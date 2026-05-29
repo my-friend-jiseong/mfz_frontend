@@ -73,6 +73,14 @@ export default function TripsList() {
             icon="briefcase-outline"
             title="외근 기록이 없습니다"
             description="아래 버튼을 눌러 첫 외근을 시작하세요"
+            action={
+              <Button
+                onPress={() => router.push('/(tabs)/trips/new/select' as never)}
+                leftIcon="play-circle"
+              >
+                외근 시작
+              </Button>
+            }
           />
         }
       />

@@ -103,6 +103,14 @@ export default function NewTripSelect() {
           icon="briefcase"
           title="이미 진행 중인 외근이 있습니다"
           description="현재 외근을 종료한 뒤 새 외근을 시작해주세요"
+          action={
+            <Button
+              onPress={() => router.replace('/(tabs)/trips/active' as never)}
+              leftIcon="navigate"
+            >
+              진행 중 외근 보기
+            </Button>
+          }
         />
       </MapSheetLayout>
     );

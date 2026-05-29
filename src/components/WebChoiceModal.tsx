@@ -5,12 +5,12 @@ import {
   Platform,
   Pressable,
   StyleSheet,
-  Text,
   View,
   type AlertButton,
 } from 'react-native';
+import { Text } from '@/components/ui/Text';
 import { colors } from '@/theme/colors';
-import { spacing, radius, fontSize } from '@/theme/spacing';
+import { spacing, radius } from '@/theme/spacing';
 import { withAlpha } from '@/theme/withAlpha';
 
 // react-native-web 의 Alert 는 모듈 import 시점에 webAlertPatch 가
@@ -102,9 +102,11 @@ export function WebChoiceModalHost() {
     <Modal transparent animationType="fade" visible onRequestClose={close}>
       <Pressable style={styles.backdrop} onPress={close}>
         <Pressable style={styles.card} onPress={() => undefined}>
-          <Text style={styles.title}>{pending.title}</Text>
+          <Text variant="h3">{pending.title}</Text>
           {pending.message ? (
-            <Text style={styles.message}>{pending.message}</Text>
+            <Text variant="bodySm" color="textMuted">
+              {pending.message}
+            </Text>
           ) : null}
           <View style={styles.choices}>
             {choices.map((o, idx) => (
@@ -118,10 +120,9 @@ export function WebChoiceModalHost() {
                 ]}
               >
                 <Text
-                  style={[
-                    styles.choiceText,
-                    o.style === 'destructive' && styles.choiceDangerText,
-                  ]}
+                  variant="body"
+                  weight="bold"
+                  color={o.style === 'destructive' ? 'danger' : 'primary'}
                 >
                   {o.label}
                 </Text>
@@ -133,7 +134,9 @@ export function WebChoiceModalHost() {
               onPress={() => handlePick(cancel)}
               style={({ pressed }) => [styles.cancel, pressed && styles.pressed]}
             >
-              <Text style={styles.cancelText}>{cancel.label}</Text>
+              <Text variant="bodySm" weight="semibold" color="textMuted">
+                {cancel.label}
+              </Text>
             </Pressable>
           ) : null}
         </Pressable>
@@ -145,7 +148,7 @@ export function WebChoiceModalHost() {
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.lg,
@@ -158,8 +161,6 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     gap: spacing.md,
   },
-  title: { fontSize: fontSize.lg, fontWeight: '700', color: colors.text },
-  message: { fontSize: fontSize.sm, color: colors.textMuted },
   choices: { gap: spacing.sm, marginTop: spacing.xs },
   choice: {
     paddingVertical: spacing.md,
@@ -170,21 +171,14 @@ const styles = StyleSheet.create({
     backgroundColor: withAlpha(colors.primary, 0.06),
     alignItems: 'center',
   },
-  choiceText: {
-    fontSize: fontSize.base,
-    color: colors.primary,
-    fontWeight: '700',
-  },
   choiceDanger: {
     borderColor: colors.danger,
     backgroundColor: withAlpha(colors.danger, 0.06),
   },
-  choiceDangerText: { color: colors.danger },
   cancel: {
     alignItems: 'center',
     paddingVertical: spacing.md,
     marginTop: spacing.xs,
   },
-  cancelText: { fontSize: fontSize.sm, color: colors.textMuted, fontWeight: '600' },
   pressed: { opacity: 0.85 },
 });

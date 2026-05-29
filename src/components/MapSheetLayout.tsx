@@ -1,13 +1,13 @@
 import { useCallback, useMemo, useRef, type ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import BottomSheet from '@gorhom/bottom-sheet';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { MapDashboard } from './MapDashboard';
+import { Text } from '@/components/ui/Text';
 import { useUiStore } from '@/stores/uiStore';
 import { colors } from '@/theme/colors';
-import { spacing, fontSize } from '@/theme/spacing';
-import { fontFamily } from '@/theme/typography';
+import { spacing } from '@/theme/spacing';
 
 interface Props {
   title: string;
@@ -80,7 +80,7 @@ export function MapSheetLayout({
               <Ionicons name="chevron-back" size={22} color={colors.text} />
             </Pressable>
           ) : null}
-          <Text style={styles.title}>{title}</Text>
+          <Text variant="h3">{title}</Text>
         </View>
         <View style={styles.content}>{children}</View>
       </BottomSheet>
@@ -114,11 +114,5 @@ const styles = StyleSheet.create({
     padding: 2,
   },
   pressed: { opacity: 0.6 },
-  title: {
-    fontFamily: fontFamily.bold,
-    fontSize: fontSize.lg,
-    fontWeight: '700',
-    color: colors.text,
-  },
   content: { flex: 1 },
 });

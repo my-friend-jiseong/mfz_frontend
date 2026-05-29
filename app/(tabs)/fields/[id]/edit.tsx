@@ -174,7 +174,19 @@ export default function EditField() {
   if (!field) {
     return (
       <View style={styles.container}>
-        <EmptyState icon="search-outline" title="현장을 찾을 수 없습니다" />
+        <EmptyState
+          icon="search-outline"
+          title="현장을 찾을 수 없습니다"
+          action={
+            <Button
+              onPress={() => router.replace('/(tabs)/fields' as never)}
+              variant="secondary"
+              leftIcon="arrow-back"
+            >
+              현장 목록으로
+            </Button>
+          }
+        />
       </View>
     );
   }
