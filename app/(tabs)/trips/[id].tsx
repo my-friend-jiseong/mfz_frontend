@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/Button';
 import { VISIT_STATUS_BADGE } from '@/theme/statusBadge';
 import { fmtTime } from '@/utils/datetime';
 import { safeBack } from '@/utils/backNavigation';
+import { navigateToReview } from '@/utils/postTripFlow';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 import {
@@ -92,20 +93,9 @@ export default function TripDetail() {
     }
   };
 
+  // 종료 직후 review 화면으로 단일 진입 — active.tsx 와 같은 동선. 보고서 작성 prompt 는 review footer CTA.
   const promptReportAfterEnd = (endedTripId: string) => {
-    // IA cross-link X2 — 외근 종료 → 통합 보고서 작성(/reports/new) 진입.
-    const goCompose = () =>
-      router.replace(`/(tabs)/reports/new?tripId=${endedTripId}` as never);
-    if (Platform.OS === 'web') {
-      if (window.confirm('외근이 정상 종료되었습니다. 지금 보고서를 작성할까요?')) {
-        goCompose();
-      }
-    } else {
-      Alert.alert('외근 종료', '외근이 정상 종료되었습니다. 지금 보고서를 작성할까요?', [
-        { text: '나중에', style: 'cancel' },
-        { text: '지금 작성', onPress: goCompose },
-      ]);
-    }
+    navigateToReview(router, endedTripId);
   };
 
   const handleEnd = async () => {

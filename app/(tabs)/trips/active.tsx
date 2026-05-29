@@ -20,6 +20,7 @@ import { CurrentDestCard } from '@/components/trips/CurrentDestCard';
 import { AllDoneCard } from '@/components/trips/AllDoneCard';
 import { DestinationRow } from '@/components/trips/DestinationRow';
 import { openKakaoRouteTo } from '@/utils/kakaoMap';
+import { navigateToReview } from '@/utils/postTripFlow';
 import { trips as tripsApi, localizeError } from '@/api';
 import { VISIT_STATUS_LABEL } from '@/types/entities';
 import { nearestNeighborOrder } from '@/utils/routeOptimize';
@@ -284,20 +285,8 @@ export default function ActiveTrip() {
     if (originalTripId !== null) {
       removeByTrip(originalTripId);
     }
-    // web 에선 expo-router 의 router.replace 가 같은 trips Stack 의 active 화면을
-    // 떠나지 못하는 케이스가 관찰됨. 브라우저 직접 navigation 으로 우회.
-    if (Platform.OS === 'web') {
-      window.location.assign('/trips');
-      return;
-    }
-    router.replace('/(tabs)/trips' as never);
-    Alert.alert('외근 종료', '외근이 종료되었습니다. 지금 보고서를 작성할까요?', [
-      { text: '나중에', style: 'cancel' },
-      {
-        text: '지금 작성',
-        onPress: () => router.replace(`/(tabs)/reports/new?tripId=${endedTripId}` as never),
-      },
-    ]);
+    // 종료 직후 review 화면으로 단일 진입 — 보고서 작성 prompt 는 review 의 footer CTA 가 가져감.
+    navigateToReview(router, endedTripId);
   };
 
   const handleEnd = async () => {
