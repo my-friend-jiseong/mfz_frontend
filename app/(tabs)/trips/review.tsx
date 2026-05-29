@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
@@ -37,6 +37,7 @@ export default function TripReview() {
       : [],
   );
   const getField = useFieldStore((s) => s.getById);
+  const loadFieldDetail = useFieldStore((s) => s.loadDetail);
 
   const tripFieldIds = useMemo(
     () => destinations.map((d) => d.fieldId),
@@ -90,6 +91,14 @@ export default function TripReview() {
     () => destinations.filter((d) => d.status !== 'skipped'),
     [destinations],
   );
+
+  // 진입 시 각 visit field 의 메모/사진 캐시 페치 — directAttachments 가 비어 있을 수 있음.
+  // visit 없는 destination 은 의미 없으니 visitedDestinations 만.
+  useEffect(() => {
+    for (const d of visitedDestinations) {
+      void loadFieldDetail(d.fieldId);
+    }
+  }, [visitedDestinations, loadFieldDetail]);
 
   return (
     <MapSheetLayout
@@ -182,6 +191,7 @@ export default function TripReview() {
                       key={d.id}
                       visit={visit}
                       order={d.order}
+                      fieldId={d.fieldId}
                       fieldAddress={field?.address ?? '알 수 없는 현장'}
                       fieldAddressDetail={field?.addressDetail || undefined}
                       initiallyExpanded={idx === 0}

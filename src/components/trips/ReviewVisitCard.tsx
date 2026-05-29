@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { PhotoGrid } from '@/components/AttachmentPreview';
 import { VISIT_STATUS_BADGE } from '@/theme/statusBadge';
 import {
   VISIT_STATUS_LABEL,
@@ -14,6 +15,8 @@ import {
   type VisitStatus,
 } from '@/types/entities';
 import { useVisitStore } from '@/stores/visitStore';
+import { useFieldStore } from '@/stores/fieldStore';
+import { pickPhoto, promptPhotoSource } from '@/utils/media';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
@@ -33,6 +36,7 @@ const VISIT_SHAPE: Record<VisitStatus, string> = {
 interface Props {
   visit: Visit;
   order: number;          // destination.order — 헤더에 "N번째" 표시
+  fieldId: string;
   fieldAddress: string;
   fieldAddressDetail?: string;
   initiallyExpanded?: boolean;
@@ -41,11 +45,16 @@ interface Props {
 export function ReviewVisitCard({
   visit,
   order,
+  fieldId,
   fieldAddress,
   fieldAddressDetail,
   initiallyExpanded = false,
 }: Props) {
   const setResult = useVisitStore((s) => s.setResult);
+  const addTextMemo = useFieldStore((s) => s.addTextMemo);
+  const addPhoto = useFieldStore((s) => s.addPhoto);
+  // 좁은 selector — 이 카드의 fieldId attachments 만 구독해 다른 카드 입력으로 인한 rerender 차단.
+  const attachments = useFieldStore((s) => s.directAttachments[fieldId] ?? []);
 
   const [expanded, setExpanded] = useState(initiallyExpanded);
   const [status, setStatus] = useState<VisitStatus>(visit.status);
@@ -53,6 +62,42 @@ export function ReviewVisitCard({
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const [memoInput, setMemoInput] = useState('');
+  const [memoSubmitting, setMemoSubmitting] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState(false);
+
+  const textMemos = attachments.filter((a) => a.type === 'text');
+  const photos = attachments
+    .filter((a) => a.type === 'photo' && a.fileUrl)
+    .map((a) => ({ id: a.id, fileUrl: a.fileUrl as string }));
+
+  const handleAddMemo = async () => {
+    const t = memoInput.trim();
+    if (!t) return;
+    setMemoSubmitting(true);
+    const r = await addTextMemo(fieldId, t);
+    setMemoSubmitting(false);
+    if (r.ok) setMemoInput('');
+    else Alert.alert('메모 추가 실패', r.error);
+  };
+
+  const uploadPhoto = async (source: 'camera' | 'library') => {
+    setPhotoBusy(true);
+    try {
+      const file = await pickPhoto(source);
+      if (!file) return;
+      const r = await addPhoto(fieldId, file);
+      if (!r.ok) Alert.alert('사진 추가 실패', r.error);
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+
+  const handleAddPhoto = () => {
+    if (photoBusy) return;
+    promptPhotoSource((src) => void uploadPhoto(src));
+  };
 
   const reasonTrim = reason.trim();
   const otherReasonValid = status !== 'other' || reasonTrim.length >= 10;
@@ -197,6 +242,52 @@ export function ReviewVisitCard({
           >
             {savedAt && !dirty ? '저장됨' : '결과 저장'}
           </Button>
+
+          <View style={styles.divider} />
+
+          <Text variant="caption" weight="bold" color="textMuted" style={styles.sectionLabel}>
+            현장 메모 ({textMemos.length})
+          </Text>
+          <View style={styles.memoRow}>
+            <Input
+              value={memoInput}
+              onChangeText={setMemoInput}
+              placeholder="현장에 남길 메모"
+              maxLength={2000}
+              multiline
+              numberOfLines={2}
+              containerStyle={styles.memoInputWrap}
+            />
+            <Button
+              onPress={handleAddMemo}
+              disabled={!memoInput.trim()}
+              loading={memoSubmitting}
+              size="sm"
+            >
+              추가
+            </Button>
+          </View>
+          {textMemos.length > 0 ? (
+            <View style={styles.memoList}>
+              {textMemos.map((m) => (
+                <View key={m.id} style={styles.memoItem}>
+                  <Text variant="bodySm">{m.text}</Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+
+          <Button
+            onPress={handleAddPhoto}
+            variant="secondary"
+            size="sm"
+            leftIcon="camera"
+            loading={photoBusy}
+            style={styles.photoBtn}
+          >
+            사진 추가{photos.length > 0 ? ` (${photos.length})` : ''}
+          </Button>
+          <PhotoGrid photos={photos} />
         </View>
       ) : null}
     </Card>
@@ -252,4 +343,22 @@ const styles = StyleSheet.create({
   reasonBox: { marginTop: spacing.xs },
   error: { marginTop: 2 },
   saveBtn: { alignSelf: 'flex-start', marginTop: spacing.xs },
+  divider: {
+    height: 1,
+    backgroundColor: colors.borderMuted,
+    marginVertical: spacing.sm,
+  },
+  memoRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    alignItems: 'flex-end',
+  },
+  memoInputWrap: { flex: 1 },
+  memoList: { marginTop: spacing.xs, gap: spacing.xs },
+  memoItem: {
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radius.sm,
+    padding: spacing.sm,
+  },
+  photoBtn: { alignSelf: 'flex-start', marginTop: spacing.sm },
 });
