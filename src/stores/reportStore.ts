@@ -54,6 +54,7 @@ interface ReportState {
   updateFieldReport: (reportId: string, fieldReportId: string, body: Partial<FieldReportInput>) => Promise<GenericResult>;
   removeFieldReport: (reportId: string, fieldReportId: string) => Promise<GenericResult>;
   generate: (input: GenerateInput) => Promise<GenerateResult>;
+  clearAll: () => void;
 
   getById: (id: string) => Report | undefined;
 }
@@ -255,6 +256,10 @@ export const useReportStore = create<ReportState>((set, get) => ({
       return { ok: false, error: describeError(e) };
     }
   },
+
+  // 로그아웃 시 호출.
+  clearAll: () =>
+    set({ reports: [], detailCache: {}, detailStatus: {}, busy: false }),
 
   getById: (id) => get().reports.find((r) => r.id === id) ?? get().detailCache[id],
 }));

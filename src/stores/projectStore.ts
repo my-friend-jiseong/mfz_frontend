@@ -16,14 +16,19 @@ interface ProjectState {
   hydrate: () => Promise<void>;
   refresh: () => Promise<void>;
   create: (body: CreateProjectBody) => Promise<CreateResult>;
+  clearAll: () => void;
   getById: (id: string) => Project | undefined;
 }
 
 const describeError = localizeError;
 
-function toProject(it: ProjectItem): Project {
+// id 가 응답에서 누락된 항목은 toProject 가 null 반환 — 빈 id 의 Project 가
+// getById('') 매칭이나 filter 회로에 흡수되는 케이스 차단.
+function toProject(it: ProjectItem): Project | null {
+  const id = it.projectId ?? it.id;
+  if (!id) return null;
   return {
-    id: it.projectId ?? it.id ?? '',
+    id,
     userId: '', // 응답에 userId 없음 — 본인 목록
     name: it.name,
     status: it.status,
@@ -43,7 +48,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   refresh: async () => {
     try {
       const res = await projectsApi.list({ limit: 100 });
-      set({ projects: res.items.map(toProject) });
+      const items = res.items
+        .map(toProject)
+        .filter((p): p is Project => p !== null);
+      set({ projects: items });
     } catch (e) {
       if (__DEV__) console.error('[projectStore.refresh] failed', e);
     }
@@ -54,6 +62,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     try {
       const res = await projectsApi.create(body);
       const p = toProject(res);
+      if (!p) {
+        set({ busy: false });
+        return { ok: false, error: '프로젝트 생성 응답이 올바르지 않습니다' };
+      }
       set((s) => ({
         projects: [p, ...s.projects.filter((x) => x.id !== p.id)],
         busy: false,
@@ -64,6 +76,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       return { ok: false, error: describeError(e) };
     }
   },
+
+  // 로그아웃 시 호출 — 다음 사용자의 데이터가 짧은 윈도우 동안 잔존하지 않도록.
+  clearAll: () => set({ projects: [], busy: false }),
 
   getById: (id) => get().projects.find((p) => p.id === id),
 }));

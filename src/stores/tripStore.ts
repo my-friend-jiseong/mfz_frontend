@@ -28,6 +28,7 @@ interface TripState {
 
   getById: (id: string) => Trip | undefined;
   byWorker: (workerId: string) => Trip[];
+  clearAll: () => void;
 }
 
 function currentUserId(): string {
@@ -175,4 +176,7 @@ export const useTripStore = create<TripState>((set, get) => ({
     get()
       .trips.filter((t) => t.workerId === workerId)
       .sort((a, b) => b.startedAt.localeCompare(a.startedAt)),
+
+  // 로그아웃 시 호출.
+  clearAll: () => set({ trips: [], activeTripId: null, busy: false }),
 }));

@@ -44,6 +44,7 @@ interface FieldState {
   ) => Promise<GenericResult>;
   removeTextMemo: (fieldId: string, memoId: string) => Promise<GenericResult>;
   removePhoto: (fieldId: string, photoId: string) => Promise<GenericResult>;
+  clearAll: () => void;
 
   getById: (id: string) => Field | undefined;
   byUser: (userId: string) => Field[];
@@ -311,6 +312,9 @@ export const useFieldStore = create<FieldState>((set, get) => ({
       return { ok: false, error: describeError(e) };
     }
   },
+
+  // 로그아웃 시 호출 — 다음 사용자가 같은 디바이스에서 로그인 시 잔존 차단.
+  clearAll: () => set({ fields: [], directAttachments: {}, busy: false }),
 
   getById: (id) => get().fields.find((f) => f.id === id),
 

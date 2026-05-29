@@ -38,6 +38,7 @@ interface VisitState {
   byTrip: (tripId: string) => Visit[];
   byField: (fieldId: string) => Visit[];
   getById: (id: string) => Visit | undefined;
+  clearAll: () => void;
 }
 
 // merge 헬퍼 — 같은 visit.id 면 새 값으로 갱신, 없으면 추가. 결과는 새 array.
@@ -120,4 +121,7 @@ export const useVisitStore = create<VisitState>((set, get) => ({
       .sort((a, b) => b.visitedAt.localeCompare(a.visitedAt)),
 
   getById: (id) => get().visits.find((v) => v.id === id),
+
+  // 로그아웃 시 호출.
+  clearAll: () => set({ visits: [] }),
 }));

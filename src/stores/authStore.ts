@@ -8,6 +8,11 @@ import {
 } from '@/api/storage';
 import { useSessionGuardStore } from './sessionGuardStore';
 import { useDestinationStore } from './destinationStore';
+import { useFieldStore } from './fieldStore';
+import { useVisitStore } from './visitStore';
+import { useTripStore } from './tripStore';
+import { useReportStore } from './reportStore';
+import { useProjectStore } from './projectStore';
 
 type Result<T = void> =
   | { ok: true; value?: T }
@@ -222,7 +227,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
     }
     await clearRefreshToken();
+    // 다른 store 데이터 정리 — 다음 사용자가 같은 디바이스에서 로그인 시
+    // hydrate 가 끝나기 전 짧은 윈도우 동안 이전 사용자의 데이터가 노출되던 회로 차단.
     await useDestinationStore.getState().clearAll();
+    useFieldStore.getState().clearAll();
+    useVisitStore.getState().clearAll();
+    useTripStore.getState().clearAll();
+    useReportStore.getState().clearAll();
+    useProjectStore.getState().clearAll();
     set({
       user: null,
       accessToken: null,
