@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -25,6 +26,30 @@ interface FieldErrors {
   password?: string;
   passwordConfirm?: string;
   terms?: string;
+}
+
+// 필수 약관 — 모두 동의해야 가입 가능. 각 라벨은 사용자 화면 표시, url 은 외부 페이지.
+const REQUIRED_TERMS = [
+  { key: 'service', label: '이용약관', url: 'https://ilgayo.kr/terms' },
+  { key: 'privacy', label: '개인정보 처리방침', url: 'https://ilgayo.kr/privacy' },
+  { key: 'location', label: '위치정보 이용약관', url: 'https://ilgayo.kr/terms' },
+] as const;
+type TermKey = (typeof REQUIRED_TERMS)[number]['key'];
+
+function openExternal(url: string, fallbackTitle: string) {
+  // 외부 URL — web 에선 새 탭, 모바일은 외부 브라우저. profile.tsx 의 openExternal 과 같은 패턴.
+  if (Platform.OS === 'web') {
+    window.open(url, '_blank', 'noopener,noreferrer');
+    return;
+  }
+  Linking.canOpenURL(url)
+    .then((ok) => {
+      if (ok) return Linking.openURL(url);
+      throw new Error('not_supported');
+    })
+    .catch(() => {
+      Alert.alert(fallbackTitle, `${url}\n\n웹브라우저에서 위 주소로 접속해주세요.`);
+    });
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -66,7 +91,13 @@ export default function Signup() {
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [name, setName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [agreeRequired, setAgreeRequired] = useState(false);
+  // 약관별 동의 — 모두 true 여야 통과.
+  const [agreedTerms, setAgreedTerms] = useState<Record<TermKey, boolean>>({
+    service: false,
+    privacy: false,
+    location: false,
+  });
+  const allAgreed = REQUIRED_TERMS.every((t) => agreedTerms[t.key]);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -83,8 +114,19 @@ export default function Signup() {
     const pwErr = checkPasswordPolicy(password);
     if (pwErr) errs.password = pwErr;
     if (passwordConfirm !== password) errs.passwordConfirm = '비밀번호 확인이 일치하지 않습니다';
-    if (!agreeRequired) errs.terms = '필수 약관에 동의해주세요';
+    if (!allAgreed) errs.terms = '필수 약관 3종에 모두 동의해주세요';
     return errs;
+  };
+
+  const toggleAll = () => {
+    const next = !allAgreed;
+    setAgreedTerms({ service: next, privacy: next, location: next });
+    if (fieldErrors.terms) clearFieldErr('terms');
+  };
+
+  const toggleOne = (key: TermKey) => {
+    setAgreedTerms((p) => ({ ...p, [key]: !p[key] }));
+    if (fieldErrors.terms) clearFieldErr('terms');
   };
 
   const clearFieldErr = (key: keyof FieldErrors) =>
@@ -222,24 +264,55 @@ export default function Signup() {
             }
           />
 
-          <Pressable
-            onPress={() => {
-              setAgreeRequired((v) => !v);
-              if (fieldErrors.terms) clearFieldErr('terms');
-            }}
-            style={styles.agreeRow}
-            accessibilityRole="checkbox"
-            accessibilityState={{ checked: agreeRequired }}
-          >
-            <Ionicons
-              name={agreeRequired ? 'checkbox' : 'square-outline'}
-              size={22}
-              color={agreeRequired ? colors.primary : colors.textMuted}
-            />
-            <Text variant="bodySm" style={styles.agreeText}>
-              (필수) 이용약관·개인정보 처리방침·위치정보 이용약관에 동의합니다
-            </Text>
-          </Pressable>
+          <View style={styles.termsBox}>
+            <Pressable
+              onPress={toggleAll}
+              style={styles.agreeAllRow}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: allAgreed }}
+            >
+              <Ionicons
+                name={allAgreed ? 'checkbox' : 'square-outline'}
+                size={22}
+                color={allAgreed ? colors.primary : colors.textMuted}
+              />
+              <Text variant="bodySm" weight="bold" style={styles.agreeText}>
+                필수 약관에 모두 동의
+              </Text>
+            </Pressable>
+            <View style={styles.termsDivider} />
+            {REQUIRED_TERMS.map((t) => {
+              const checked = agreedTerms[t.key];
+              return (
+                <View key={t.key} style={styles.termRow}>
+                  <Pressable
+                    onPress={() => toggleOne(t.key)}
+                    style={styles.termCheck}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked }}
+                  >
+                    <Ionicons
+                      name={checked ? 'checkbox' : 'square-outline'}
+                      size={20}
+                      color={checked ? colors.primary : colors.textMuted}
+                    />
+                    <Text variant="bodySm" style={styles.termLabel}>
+                      (필수) {t.label}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => openExternal(t.url, t.label)}
+                    hitSlop={8}
+                    accessibilityLabel={`${t.label} 보기`}
+                  >
+                    <Text variant="caption" color="primary">
+                      보기
+                    </Text>
+                  </Pressable>
+                </View>
+              );
+            })}
+          </View>
           {fieldErrors.terms ? (
             <Text variant="caption" color="danger" style={styles.termsError}>
               {fieldErrors.terms}
@@ -281,13 +354,42 @@ const styles = StyleSheet.create({
   scroll: { padding: spacing.xl, paddingTop: spacing.xxl * 2 },
   title: { marginBottom: spacing.xl },
   form: { gap: spacing.md },
-  agreeRow: {
+  termsBox: {
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    gap: spacing.xs,
+  },
+  agreeAllRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: spacing.md,
+    paddingVertical: spacing.xs,
     gap: spacing.sm,
   },
   agreeText: { flex: 1 },
+  termsDivider: {
+    height: 1,
+    backgroundColor: colors.borderMuted,
+    marginVertical: spacing.xs,
+  },
+  termRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.xs,
+    gap: spacing.sm,
+  },
+  termCheck: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    flex: 1,
+  },
+  termLabel: { flex: 1 },
   termsError: { marginTop: spacing.xs },
   submit: { marginTop: spacing.md },
 });
