@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useReportStore } from '@/stores/reportStore';
 import { useFieldStore } from '@/stores/fieldStore';
+import { useVisitStore } from '@/stores/visitStore';
 import { fields as fieldsApi, API_BASE_URL } from '@/api';
 import { pickPhoto, promptPhotoSource } from '@/utils/media';
 import { safeBack } from '@/utils/backNavigation';
@@ -51,6 +52,13 @@ export default function FieldReportEditor() {
   const updateFieldReport = useReportStore((s) => s.updateFieldReport);
   const allFields = useFieldStore((s) => s.fields);
   const refreshFields = useFieldStore((s) => s.refresh);
+  // 이 보고서가 연결된 trip 의 visits — 그 fields 가 picker 에서 우선 노출.
+  const reportTripId = useReportStore(
+    (s) => s.detailCache[reportId]?.tripId ?? null,
+  );
+  const tripVisits = useVisitStore((s) =>
+    reportTripId ? s.visits.filter((v) => v.tripId === reportTripId) : [],
+  );
 
   useEffect(() => {
     if (allFields.length === 0) void refreshFields();
@@ -74,7 +82,24 @@ export default function FieldReportEditor() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldPickerOpen, setFieldPickerOpen] = useState(false);
+  const [pickerQuery, setPickerQuery] = useState('');
   const prefilled = useRef(false);
+
+  // picker 후보 — 이 trip 의 visit fields 우선, 나머지 그 다음. 검색 시 모두 한 줄로 흐르되 우선군은 위쪽.
+  const pickerGroups = useMemo(() => {
+    const q = pickerQuery.trim().toLowerCase();
+    const tripFieldIds = new Set(tripVisits.map((v) => v.fieldId));
+    const matches = (f: typeof allFields[number]) => {
+      if (!q) return true;
+      return (
+        f.address.toLowerCase().includes(q) ||
+        (f.addressDetail ?? '').toLowerCase().includes(q)
+      );
+    };
+    const trip = allFields.filter((f) => tripFieldIds.has(f.id) && matches(f));
+    const others = allFields.filter((f) => !tripFieldIds.has(f.id) && matches(f));
+    return { trip, others };
+  }, [allFields, tripVisits, pickerQuery]);
 
   // 수정 모드 prefill — 1회.
   useEffect(() => {
@@ -167,6 +192,17 @@ export default function FieldReportEditor() {
           icon="document-text-outline"
           title="현장 보고를 찾을 수 없습니다"
           description="보고서 상세에서 다시 진입해주세요"
+          action={
+            <Button
+              onPress={() =>
+                router.replace(`/(tabs)/reports/${reportId}` as never)
+              }
+              variant="secondary"
+              leftIcon="arrow-back"
+            >
+              보고서 상세로
+            </Button>
+          }
         />
       </View>
     );
@@ -317,6 +353,14 @@ export default function FieldReportEditor() {
         >
           <Pressable style={styles.pickerCard} onPress={() => undefined}>
             <Text variant="h3">현장 선택</Text>
+            <Input
+              value={pickerQuery}
+              onChangeText={setPickerQuery}
+              placeholder="주소·상세주소 검색"
+              autoCapitalize="none"
+              clearButtonMode="while-editing"
+              containerStyle={styles.pickerSearch}
+            />
             <ScrollView
               style={styles.pickerList}
               contentContainerStyle={styles.pickerListContent}
@@ -325,34 +369,87 @@ export default function FieldReportEditor() {
                 <Text variant="bodySm" color="textMuted" style={styles.pickerEmpty}>
                   등록된 현장이 없습니다.
                 </Text>
+              ) : pickerGroups.trip.length === 0 && pickerGroups.others.length === 0 ? (
+                <Text variant="bodySm" color="textMuted" style={styles.pickerEmpty}>
+                  검색 결과가 없습니다.
+                </Text>
               ) : (
-                allFields.map((f) => (
-                  <Pressable
-                    key={f.id}
-                    onPress={() => {
-                      setFieldId(f.id);
-                      setFieldPickerOpen(false);
-                    }}
-                    style={({ pressed }) => [
-                      styles.pickerItem,
-                      f.id === fieldId && styles.pickerItemActive,
-                      pressed && { opacity: opacity.pressed },
-                    ]}
-                  >
+                <>
+                  {pickerGroups.trip.length > 0 ? (
                     <Text
-                      variant="bodySm"
-                      weight={f.id === fieldId ? 'bold' : 'semibold'}
-                      color={f.id === fieldId ? 'primary' : 'text'}
+                      variant="caption"
+                      weight="bold"
+                      color="textMuted"
+                      style={styles.pickerGroupLabel}
                     >
-                      {f.address}
+                      이 외근에 방문한 현장
                     </Text>
-                    {f.addressDetail ? (
-                      <Text variant="caption" color="textMuted" style={styles.pickerItemMeta}>
-                        {f.addressDetail}
+                  ) : null}
+                  {pickerGroups.trip.map((f) => (
+                    <Pressable
+                      key={f.id}
+                      onPress={() => {
+                        setFieldId(f.id);
+                        setFieldPickerOpen(false);
+                      }}
+                      style={({ pressed }) => [
+                        styles.pickerItem,
+                        f.id === fieldId && styles.pickerItemActive,
+                        pressed && { opacity: opacity.pressed },
+                      ]}
+                    >
+                      <Text
+                        variant="bodySm"
+                        weight={f.id === fieldId ? 'bold' : 'semibold'}
+                        color={f.id === fieldId ? 'primary' : 'text'}
+                      >
+                        {f.address}
                       </Text>
-                    ) : null}
-                  </Pressable>
-                ))
+                      {f.addressDetail ? (
+                        <Text variant="caption" color="textMuted" style={styles.pickerItemMeta}>
+                          {f.addressDetail}
+                        </Text>
+                      ) : null}
+                    </Pressable>
+                  ))}
+                  {pickerGroups.others.length > 0 ? (
+                    <Text
+                      variant="caption"
+                      weight="bold"
+                      color="textMuted"
+                      style={styles.pickerGroupLabel}
+                    >
+                      다른 현장
+                    </Text>
+                  ) : null}
+                  {pickerGroups.others.map((f) => (
+                    <Pressable
+                      key={f.id}
+                      onPress={() => {
+                        setFieldId(f.id);
+                        setFieldPickerOpen(false);
+                      }}
+                      style={({ pressed }) => [
+                        styles.pickerItem,
+                        f.id === fieldId && styles.pickerItemActive,
+                        pressed && { opacity: opacity.pressed },
+                      ]}
+                    >
+                      <Text
+                        variant="bodySm"
+                        weight={f.id === fieldId ? 'bold' : 'semibold'}
+                        color={f.id === fieldId ? 'primary' : 'text'}
+                      >
+                        {f.address}
+                      </Text>
+                      {f.addressDetail ? (
+                        <Text variant="caption" color="textMuted" style={styles.pickerItemMeta}>
+                          {f.addressDetail}
+                        </Text>
+                      ) : null}
+                    </Pressable>
+                  ))}
+                </>
               )}
             </ScrollView>
             <Button
@@ -438,6 +535,14 @@ const styles = StyleSheet.create({
   pickerList: { flexGrow: 0 },
   pickerListContent: { gap: spacing.xs, paddingVertical: spacing.xs },
   pickerEmpty: { paddingVertical: spacing.md },
+  pickerSearch: { marginTop: spacing.sm },
+  pickerGroupLabel: {
+    marginTop: spacing.xs,
+    marginBottom: 2,
+    paddingHorizontal: spacing.xs,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
   pickerItem: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,

@@ -366,11 +366,21 @@ export default function ActiveTrip() {
       {currentDest ? (
         <CurrentDestCard
           order={currentDest.order}
+          // 상대 위치 — "전체 K곳 중 M번째" — order 가 갑자기 3 으로 점프하는 사용자 혼란 방지.
+          positionLabel={`${progress.total}곳 중 ${progress.resolved + 1}번째`}
           address={currentDestField?.address ?? '알 수 없는 현장'}
           addressDetail={currentDestField?.addressDetail ?? undefined}
           onNavigate={() => void handleNavigate()}
           onCheckIn={handleCheckIn}
           onSkip={handleSkip}
+          onShowField={
+            currentDestField
+              ? () =>
+                  router.push(
+                    `/(tabs)/fields/${currentDestField.id}` as never,
+                  )
+              : undefined
+          }
           onReoptimize={
             pendingDests.length >= 2 ? () => void handleReoptimize() : undefined
           }

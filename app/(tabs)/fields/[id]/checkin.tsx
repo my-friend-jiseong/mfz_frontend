@@ -83,16 +83,42 @@ export default function FieldCheckin() {
   }, [activeTripId, fieldId, visitId, checkIn]);
 
   if (!field) {
-    return <EmptyState icon="search-outline" title="현장을 찾을 수 없습니다" />;
+    return (
+      <View style={styles.container}>
+        <EmptyState
+          icon="search-outline"
+          title="현장을 찾을 수 없습니다"
+          action={
+            <Button
+              onPress={() => router.replace('/(tabs)/fields' as never)}
+              variant="secondary"
+              leftIcon="arrow-back"
+            >
+              현장 목록으로
+            </Button>
+          }
+        />
+      </View>
+    );
   }
 
   if (activeTripId === null) {
     return (
-      <EmptyState
-        icon="briefcase-outline"
-        title="외근 시작 후 체크인 가능합니다"
-        description="외근 탭에서 외근을 시작해주세요"
-      />
+      <View style={styles.container}>
+        <EmptyState
+          icon="briefcase-outline"
+          title="외근 시작 후 체크인 가능합니다"
+          description="외근 탭에서 외근을 시작해주세요"
+          action={
+            <Button
+              onPress={() => router.replace('/(tabs)/trips' as never)}
+              leftIcon="briefcase"
+            >
+              외근 탭으로
+            </Button>
+          }
+        />
+      </View>
     );
   }
 

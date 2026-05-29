@@ -187,7 +187,17 @@ export default function NewTripSelect() {
             description={
               search || statusFilter.length > 0
                 ? '검색어 또는 필터를 조정해보세요'
-                : '현장 탭에서 새 현장을 등록하세요'
+                : '아래 버튼으로 첫 현장을 등록하세요'
+            }
+            action={
+              !search && statusFilter.length === 0 ? (
+                <Button
+                  onPress={() => router.push('/(tabs)/fields/new' as never)}
+                  leftIcon="add-circle"
+                >
+                  새 현장 등록
+                </Button>
+              ) : undefined
             }
           />
         }

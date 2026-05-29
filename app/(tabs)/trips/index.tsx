@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
 import { StickyBottomBar } from '@/components/ui/StickyBottomBar';
 import { spacing } from '@/theme/spacing';
-import { fmtDate, fmtDuration } from '@/utils/datetime';
+import { fmtDate, fmtDuration, fmtTime } from '@/utils/datetime';
 import type { Trip } from '@/types/entities';
 
 export default function TripsList() {
@@ -43,6 +43,7 @@ export default function TripsList() {
   const renderItem = ({ item }: { item: Trip }) => {
     const visitCount = allVisits.filter((v) => v.tripId === item.id).length;
     const dateText = fmtDate(item.startedAt);
+    const startTime = fmtTime(item.startedAt);
     return (
       <Card
         onPress={() => router.push(`/(tabs)/trips/${item.id}` as never)}
@@ -52,7 +53,8 @@ export default function TripsList() {
           {item.title || dateText}
         </Text>
         <Text variant="bodySm" color="textMuted" style={styles.meta}>
-          {item.title ? `${dateText} · ` : ''}
+          {/* 시작 시각 노출 — 한 날에 외근 2번 이상이면 제목 없이는 구분 불가 회로 차단. */}
+          {item.title ? `${dateText} ${startTime}` : startTime} ·{' '}
           {fmtDuration(item.startedAt, item.endedAt)} · 방문 {visitCount}건
         </Text>
       </Card>

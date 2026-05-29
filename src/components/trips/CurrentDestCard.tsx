@@ -11,11 +11,15 @@ type IonName = React.ComponentProps<typeof Ionicons>['name'];
 
 interface Props {
   order: number;
+  // 상대 번호 — "전체 K곳 중 M번째 처리" 라는 위치감. order(절대) 와 분리해
+  // 일부 destination 을 건너뛰었을 때 사용자가 "3번째" 가 갑자기 떠 혼란하는 회로 차단.
+  positionLabel?: string;     // 예: "5곳 중 3번째"
   address: string;
   addressDetail?: string;
   onNavigate: () => void;
   onCheckIn: () => void;
   onSkip: () => void;
+  onShowField?: () => void;   // 현장 상세 진입 — '도착 전 이 현장이 어떤 곳인지' 확인용
   onReoptimize?: () => void;
   optimizing?: boolean;
   pendingCount?: number;
@@ -66,11 +70,13 @@ function UtilAction({
 
 export function CurrentDestCard({
   order,
+  positionLabel,
   address,
   addressDetail,
   onNavigate,
   onCheckIn,
   onSkip,
+  onShowField,
   onReoptimize,
   optimizing,
   pendingCount,
@@ -79,9 +85,30 @@ export function CurrentDestCard({
   return (
     <Card padding="lg" style={styles.card}>
       <Text variant="caption" weight="bold" color="primary">
-        현재 목적지 · {order}번째
+        현재 목적지 · {positionLabel ?? `${order}번째`}
       </Text>
-      <Text variant="h3">{address}</Text>
+      {onShowField ? (
+        <Pressable
+          onPress={onShowField}
+          accessibilityRole="button"
+          accessibilityLabel="현장 상세 보기"
+          style={({ pressed }) => [
+            styles.titleRow,
+            pressed && { opacity: opacity.pressed },
+          ]}
+        >
+          <Text variant="h3" style={styles.titleText}>
+            {address}
+          </Text>
+          <Ionicons
+            name="information-circle-outline"
+            size={18}
+            color={colors.primary}
+          />
+        </Pressable>
+      ) : (
+        <Text variant="h3">{address}</Text>
+      )}
       {addressDetail ? <Text variant="bodySm">{addressDetail}</Text> : null}
 
       <Button
@@ -129,6 +156,12 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
     gap: spacing.xs,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  titleText: { flex: 1 },
   checkIn: { marginTop: spacing.sm },
   utilRow: {
     flexDirection: 'row',
