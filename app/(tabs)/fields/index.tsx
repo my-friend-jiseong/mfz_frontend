@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import { Ionicons } from '@expo/vector-icons';
@@ -61,12 +61,23 @@ export default function FieldsList() {
   const [projectFilter, setProjectFilter] = useState<string[]>([]);
   const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
 
-  // 탭 진입 시 + status/기간 필터 변경 시 mine 페치
+  // 첫 진입은 즉시 페치, 이후 필터 변경은 300ms debounce.
+  // 사용자가 chip 을 빠르게 여러 번 토글해도 최종 상태로만 호출 → 백엔드 부담 + UX 깜박임 차단.
+  const fetchedOnceRef = useRef(false);
   useEffect(() => {
-    void refresh({
-      ...rangeToParams(rangePreset),
-      status: statusFilter.length > 0 ? statusFilter.join(',') : undefined,
-    });
+    const fire = () => {
+      void refresh({
+        ...rangeToParams(rangePreset),
+        status: statusFilter.length > 0 ? statusFilter.join(',') : undefined,
+      });
+    };
+    if (!fetchedOnceRef.current) {
+      fetchedOnceRef.current = true;
+      fire();
+      return;
+    }
+    const handle = setTimeout(fire, 300);
+    return () => clearTimeout(handle);
   }, [refresh, statusFilter, rangePreset]);
 
   // 본인 fields 만 — 이후 모든 파생값의 기준
@@ -108,6 +119,21 @@ export default function FieldsList() {
     rangePreset !== 'all' ||
     projectFilter.length > 0 ||
     categoryFilter.length > 0;
+
+  // FlatList renderItem — useCallback 으로 stable reference. router 만 deps.
+  const renderItem = useCallback(
+    ({ item }: { item: import('@/types/entities').Field }) => (
+      <FieldCard
+        field={item}
+        onPress={() => router.push(`/(tabs)/fields/${item.id}` as never)}
+      />
+    ),
+    [router],
+  );
+  const keyExtractor = useCallback(
+    (f: import('@/types/entities').Field) => String(f.id),
+    [],
+  );
 
   return (
     <MapSheetLayout title="현장">
@@ -187,13 +213,8 @@ export default function FieldsList() {
       </View>
       <BottomSheetFlatList
         data={fields}
-        keyExtractor={(f) => String(f.id)}
-        renderItem={({ item }) => (
-          <FieldCard
-            field={item}
-            onPress={() => router.push(`/(tabs)/fields/${item.id}` as never)}
-          />
-        )}
+        keyExtractor={keyExtractor}
+        renderItem={renderItem}
         contentContainerStyle={styles.list}
         ListEmptyComponent={
           <EmptyState
