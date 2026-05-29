@@ -241,7 +241,7 @@ export default function FieldCheckin() {
           leftIcon="save"
           style={styles.submit}
         >
-          결과 저장하고 완료
+          결과 저장
         </Button>
       </ScrollView>
     </KeyboardAvoidingView>

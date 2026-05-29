@@ -161,7 +161,7 @@ export default function Login() {
             size="sm"
             fullWidth
           >
-            처음 사용하시나요? 회원가입
+            회원가입
           </Button>
 
           <Pressable

@@ -425,7 +425,7 @@ export default function EditField() {
                 rightIcon="arrow-forward"
                 style={styles.manualLink}
               >
-                좌표 직접 입력으로 진행
+                좌표 직접 입력
               </Button>
             ) : null}
           </Card>

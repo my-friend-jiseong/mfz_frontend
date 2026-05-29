@@ -179,7 +179,7 @@ export function AddDestinationModal({
               fullWidth
               style={styles.createNewBtn}
             >
-              새 현장 등록으로 이동
+              새 현장 등록
             </Button>
           ) : null}
         </Pressable>

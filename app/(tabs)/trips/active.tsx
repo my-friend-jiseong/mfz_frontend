@@ -468,7 +468,9 @@ export default function ActiveTrip() {
           fullWidth
           leftIcon="stop-circle"
         >
-          {allDone ? '외근 종료' : '외근 종료 (미완료 목적지 있음)'}
+          {allDone
+            ? '외근 종료'
+            : `외근 종료 (미완료 ${pendingDests.length}곳)`}
         </Button>
       </StickyBottomBar>
       <AddDestinationModal

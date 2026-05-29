@@ -290,7 +290,7 @@ export default function NewTripOrder() {
           leftIcon={optimized ? 'checkmark-circle' : 'sparkles'}
           style={[styles.optimizeBtn, optimized && styles.optimizeBtnActive]}
         >
-          {optimized ? '최적 순서 적용됨 · 다시 추천' : '최적 순서 추천'}
+          {optimized ? '다시 추천' : '최적 순서 추천'}
         </Button>
         {totalDistanceKm !== null && totalEtaMin !== null ? (
           <Card padding="md" style={styles.summaryCard}>
@@ -340,7 +340,7 @@ export default function NewTripOrder() {
         >
           {list.length === 0
             ? '방문할 현장 없음'
-            : `외근 시작 확정 (${list.length}곳)`}
+            : `외근 시작 (${list.length}곳)`}
         </Button>
       </StickyBottomBar>
     </MapSheetLayout>
