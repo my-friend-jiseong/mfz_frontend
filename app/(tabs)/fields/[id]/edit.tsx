@@ -53,12 +53,21 @@ export default function EditField() {
   const router = useRouter();
 
   const field = useFieldStore((s) => s.getById(fieldId));
+  const loadFieldDetail = useFieldStore((s) => s.loadDetail);
   const update = useFieldStore((s) => s.update);
   const remove = useFieldStore((s) => s.remove);
   // 방문 이력 카운트 — 삭제 사전 안내용. 단일 actor 정책상 visit 있으면 백엔드가 삭제 거부.
+  // 진입 시 fieldStore.loadDetail → visitStore.syncFromRecentVisits 로 hydrate.
   const visitCount = useVisitStore(
     (s) => s.visits.filter((v) => v.fieldId === fieldId).length,
   );
+  const fetchedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!fieldId) return;
+    if (fetchedRef.current === fieldId) return;
+    fetchedRef.current = fieldId;
+    void loadFieldDetail(fieldId);
+  }, [fieldId, loadFieldDetail]);
 
   // Hooks must be called unconditionally — early return 후로 옮기지 않고 옵셔널 처리.
   const initial = useMemo(

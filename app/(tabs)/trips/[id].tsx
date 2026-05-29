@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   Alert,
@@ -51,6 +51,7 @@ export default function TripDetail() {
   const allTrips = useTripStore((s) => s.trips);
   const activeTripId = useTripStore((s) => s.activeTripId);
   const endTrip = useTripStore((s) => s.end);
+  const loadTripDetail = useTripStore((s) => s.loadDetail);
   const allVisits = useVisitStore((s) => s.visits);
   const getField = useFieldStore((s) => s.getById);
   const allDestinations = useDestinationStore((s) => s.destinations);
@@ -68,6 +69,15 @@ export default function TripDetail() {
     () => destinations.map((d) => d.fieldId),
     [destinations],
   );
+
+  // 진입 시 detail 페치 — visit timeline 을 visitStore 로 sync 해 새로고침 후도 방문 이력 보이게.
+  const fetchedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!tripId) return;
+    if (fetchedRef.current === tripId) return;
+    fetchedRef.current = tripId;
+    void loadTripDetail(tripId);
+  }, [tripId, loadTripDetail]);
 
   const trip = useMemo(() => allTrips.find((t) => t.id === tripId), [allTrips, tripId]);
   const visits = useMemo(

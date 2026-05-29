@@ -28,6 +28,7 @@ export default function TripReview() {
 
   const trip = useTripStore((s) => (id ? s.getById(id) : undefined));
   const activeTripId = useTripStore((s) => s.activeTripId);
+  const loadTripDetail = useTripStore((s) => s.loadDetail);
   const visits = useVisitStore((s) =>
     id
       ? s.visits
@@ -121,6 +122,16 @@ export default function TripReview() {
       displayOrder: c.order ?? i + 1,
     }));
   }, [visits, destinationByFieldId]);
+
+  // 진입 시 trip detail 페치 — visit timeline 을 visitStore 로 sync.
+  // 새로고침 / 다른 디바이스 진입 직후 visitStore 가 비어있어 카드가 안 보이는 회로 차단.
+  const fetchedTripRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!id) return;
+    if (fetchedTripRef.current === id) return;
+    fetchedTripRef.current = id;
+    void loadTripDetail(id);
+  }, [id, loadTripDetail]);
 
   // 진입 시 각 visit field 의 메모/사진 캐시 페치 — directAttachments 가 비어 있을 수 있음.
   //

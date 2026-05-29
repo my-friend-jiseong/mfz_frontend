@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Field, FieldStatus } from '@/types/entities';
 import { fields as fieldsApi, ApiError, localizeError } from '@/api';
+import { useVisitStore } from './visitStore';
 import type {
   CreateFieldBody,
   UpdateFieldBody,
@@ -234,6 +235,12 @@ export const useFieldStore = create<FieldState>((set, get) => ({
           ],
         },
       }));
+      // visit hydrate — recentVisits 를 visitStore 로 sync.
+      // 이 store 의 set 안에서 다른 store 를 변경하면 zustand subscriber 순서 문제 가능성 있어
+      // set 바깥에서 별도 호출.
+      if (res.recentVisits && res.recentVisits.length > 0) {
+        useVisitStore.getState().syncFromRecentVisits(id, res.recentVisits);
+      }
     } catch {
       // ignore
     }
