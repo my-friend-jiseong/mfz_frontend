@@ -1,8 +1,10 @@
 import { useEffect } from 'react';
 import { Redirect, Tabs, router } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Text } from '@/components/ui/Text';
 import { colors } from '@/theme/colors';
+import { spacing } from '@/theme/spacing';
 import { useAuthStore } from '@/stores/authStore';
 import { useTripStore } from '@/stores/tripStore';
 import { useFieldStore } from '@/stores/fieldStore';
@@ -23,7 +25,9 @@ function TabItem({
   return (
     <View style={styles.item}>
       <Ionicons name={icon} size={size} color={color} />
-      <Text style={[styles.label, { color }]}>{label}</Text>
+      <Text variant="caption" weight="semibold" style={[styles.label, { color }]}>
+        {label}
+      </Text>
     </View>
   );
 }
@@ -57,9 +61,10 @@ export default function TabsLayout() {
         tabBarInactiveTintColor: colors.textMuted,
         tabBarStyle: {
           borderTopColor: colors.border,
+          // height 84 는 home indicator + tab convention — RN tab 표준값으로 유지.
           height: 84,
-          paddingTop: 10,
-          paddingBottom: 10,
+          paddingTop: spacing.sm,
+          paddingBottom: spacing.sm,
         },
         tabBarShowLabel: false,
         tabBarLabelPosition: 'below-icon',
@@ -129,10 +134,7 @@ const styles = StyleSheet.create({
     minWidth: 64,
   },
   label: {
-    fontSize: 12,
-    fontWeight: '600',
     marginTop: 4,
-    lineHeight: 18,
     textAlign: 'center',
   },
 });

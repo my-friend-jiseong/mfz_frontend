@@ -41,13 +41,32 @@ function buildUrl(path: string, query?: RequestInit_['query']): string {
   return qs ? `${base}?${qs}` : base;
 }
 
+// __DEV__ 로그용 — login/refresh 응답의 token 필드를 평문으로 콘솔에 노출하지 않게 마스킹.
+// 화면 공유·screencast 시 누출 위험 차단. Sentry 의 beforeSend 와 같은 정책.
+const SECRET_KEY_RE = /(password|token|secret|auth|refresh)/i;
+function maskSecretsForLog(value: unknown): unknown {
+  if (!value || typeof value !== 'object') return value;
+  if (Array.isArray(value)) return value.map(maskSecretsForLog);
+  const masked: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    if (SECRET_KEY_RE.test(k)) masked[k] = '[REDACTED]';
+    else if (v && typeof v === 'object') masked[k] = maskSecretsForLog(v);
+    else masked[k] = v;
+  }
+  return masked;
+}
+
 async function rawRequest<T>(path: string, init: RequestInit_, accessToken: string | null): Promise<T> {
   const headers: Record<string, string> = {};
   if (!init.multipart) headers['Content-Type'] = 'application/json';
   if (!init.skipAuth && accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
 
   const ac = new AbortController();
-  const timer = setTimeout(() => ac.abort(), DEFAULT_TIMEOUT_MS);
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    ac.abort();
+  }, DEFAULT_TIMEOUT_MS);
   init.signal?.addEventListener('abort', () => ac.abort());
 
   let res: Response;
@@ -63,7 +82,9 @@ async function rawRequest<T>(path: string, init: RequestInit_, accessToken: stri
       signal: ac.signal,
     });
   } catch (e) {
-    throw new NetworkError(e);
+    // timeout 으로 abort 된 케이스 분리 — 사용자 친화 메시지.
+    // (caller 가 직접 abort 한 경우는 timedOut=false 라 network kind 로 흐름)
+    throw new NetworkError(e, timedOut ? 'timeout' : 'network');
   } finally {
     clearTimeout(timer);
   }
@@ -85,7 +106,7 @@ async function rawRequest<T>(path: string, init: RequestInit_, accessToken: stri
     const authTag = init.skipAuth ? '[skip-auth]' : accessToken ? '[auth]' : '[NO_AUTH]';
     console.log(
       `[api] ${init.method ?? 'GET'} ${path} → ${res.status} ${authTag} ${text.length === 0 ? '(empty body)' : ''}`,
-      text.length > 0 && text.length < 2000 ? body : `(${text.length} bytes)`,
+      text.length > 0 && text.length < 2000 ? maskSecretsForLog(body) : `(${text.length} bytes)`,
     );
   }
 

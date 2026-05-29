@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { Trip } from '@/types/entities';
 import { trips as tripsApi, ApiError, localizeError } from '@/api';
 import { useAuthStore } from './authStore';
+import { useVisitStore } from './visitStore';
 
 type StartResult =
   | { ok: true; trip: Trip }
@@ -20,11 +21,14 @@ interface TripState {
   hydrate: () => Promise<void>;
   refreshActive: () => Promise<void>;
   refreshList: () => Promise<void>;
+  // trips.detail 페치 + visitStore 로 timeline sync. trips/[id] / review 진입 시 호출.
+  loadDetail: (id: string) => Promise<void>;
   start: (title?: string) => Promise<StartResult>;
   end: (force?: boolean) => Promise<EndResult>;
 
   getById: (id: string) => Trip | undefined;
   byWorker: (workerId: string) => Trip[];
+  clearAll: () => void;
 }
 
 function currentUserId(): string {
@@ -70,6 +74,33 @@ export const useTripStore = create<TripState>((set, get) => ({
       set({ trips: items });
     } catch {
       // ignore
+    }
+  },
+
+  loadDetail: async (id) => {
+    try {
+      const res = await tripsApi.detail(id);
+      // timeline → visitStore. tripDetailResponse.timeline 의 entry 는 fieldId 가 없을 수도 있어
+      // visitStore 가 빈 string 으로 흡수 — UI 쪽 field lookup 에서 graceful fallback.
+      if (res.timeline && res.timeline.length > 0) {
+        useVisitStore.getState().syncFromTimeline(id, res.timeline);
+      }
+      // 자체 trips 항목의 메타 갱신 — visitCount 가 list 응답보다 최신일 수 있음.
+      set((s) => ({
+        trips: s.trips.map((t) =>
+          t.id === id
+            ? {
+                ...t,
+                visitCount: res.visitCount ?? t.visitCount,
+                endedAt: res.endedAt ?? t.endedAt,
+                status: (res.status as Trip['status']) ?? t.status,
+                title: res.title ?? t.title,
+              }
+            : t,
+        ),
+      }));
+    } catch {
+      // 비로그인·404 등 — 무시. 화면은 list 응답 기준으로 fallback 렌더.
     }
   },
 
@@ -145,4 +176,7 @@ export const useTripStore = create<TripState>((set, get) => ({
     get()
       .trips.filter((t) => t.workerId === workerId)
       .sort((a, b) => b.startedAt.localeCompare(a.startedAt)),
+
+  // 로그아웃 시 호출.
+  clearAll: () => set({ trips: [], activeTripId: null, busy: false }),
 }));

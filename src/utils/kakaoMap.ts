@@ -1,4 +1,4 @@
-import { Platform } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import * as Linking from 'expo-linking';
 
 // 카카오맵 길찾기 열기.
@@ -14,7 +14,11 @@ export async function openKakaoRouteTo(
   )},${lat},${lng}`;
 
   if (Platform.OS === 'web') {
-    await Linking.openURL(webUrl);
+    try {
+      await Linking.openURL(webUrl);
+    } catch {
+      Alert.alert('카카오맵 열기 실패', '브라우저가 외부 링크를 차단했을 수 있습니다.');
+    }
     return;
   }
 
@@ -23,6 +27,14 @@ export async function openKakaoRouteTo(
     const ok = await Linking.canOpenURL(appUrl);
     await Linking.openURL(ok ? appUrl : webUrl);
   } catch {
-    await Linking.openURL(webUrl);
+    // 1차 fallback — webUrl. 그것도 실패하면 사용자 안내.
+    try {
+      await Linking.openURL(webUrl);
+    } catch {
+      Alert.alert(
+        '카카오맵 열기 실패',
+        '카카오맵 앱과 웹 둘 다 열 수 없습니다. 잠시 후 다시 시도해주세요.',
+      );
+    }
   }
 }

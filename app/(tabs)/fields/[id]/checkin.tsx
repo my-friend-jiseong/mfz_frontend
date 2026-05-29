@@ -6,23 +6,42 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   View,
 } from 'react-native';
+import { Text } from '@/components/ui/Text';
+import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFieldStore } from '@/stores/fieldStore';
 import { safeBack } from '@/utils/backNavigation';
 import { useTripStore } from '@/stores/tripStore';
 import { useVisitStore } from '@/stores/visitStore';
 import { useDestinationStore } from '@/stores/destinationStore';
-import { VISIT_STATUS_VALUES, VISIT_STATUS_LABEL, type VisitStatus } from '@/types/entities';
+import {
+  VISIT_STATUS_VALUES,
+  VISIT_STATUS_LABEL,
+  type VisitStatus,
+} from '@/types/entities';
 import { EmptyState } from '@/components/EmptyState';
+import { Card } from '@/components/ui/Card';
+import { Input } from '@/components/ui/Input';
+import { Button } from '@/components/ui/Button';
 import { colors } from '@/theme/colors';
-import { spacing, radius, fontSize } from '@/theme/spacing';
+import { spacing, radius } from '@/theme/spacing';
+import { opacity } from '@/theme/motion';
+import { withAlpha } from '@/theme/withAlpha';
 
 // ERD v2: 체크인은 방문 기록(trip·field·시각·status)만 생성. 메모·사진·음성 첨부는
-// 현장(field) 상세에서 관리. 방문 상태는 단일 status (result_status·status_reason 제거).
+// 현장(field) 상세에서 관리.
+
+// visit status → 색·형상 매핑 (3중 인코딩).
+const VISIT_SHAPE: Record<VisitStatus, string> = {
+  completed: '■',
+  absent: '●',
+  refused: '▲',
+  unknown_address: '◆',
+  revisit_needed: '◆',
+  other: '◆',
+};
 
 export default function FieldCheckin() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -64,15 +83,42 @@ export default function FieldCheckin() {
   }, [activeTripId, fieldId, visitId, checkIn]);
 
   if (!field) {
-    return <EmptyState title="현장을 찾을 수 없습니다" />;
+    return (
+      <View style={styles.container}>
+        <EmptyState
+          icon="search-outline"
+          title="현장을 찾을 수 없습니다"
+          action={
+            <Button
+              onPress={() => router.replace('/(tabs)/fields' as never)}
+              variant="secondary"
+              leftIcon="arrow-back"
+            >
+              현장 목록으로
+            </Button>
+          }
+        />
+      </View>
+    );
   }
 
   if (activeTripId === null) {
     return (
-      <EmptyState
-        title="외근 시작 후 체크인 가능합니다"
-        description="외근 탭에서 외근을 시작해주세요"
-      />
+      <View style={styles.container}>
+        <EmptyState
+          icon="briefcase-outline"
+          title="외근 시작 후 체크인 가능합니다"
+          description="외근 탭에서 외근을 시작해주세요"
+          action={
+            <Button
+              onPress={() => router.replace('/(tabs)/trips' as never)}
+              leftIcon="briefcase"
+            >
+              외근 탭으로
+            </Button>
+          }
+        />
+      </View>
     );
   }
 
@@ -103,15 +149,26 @@ export default function FieldCheckin() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>체크인 완료</Text>
-          <Text style={styles.headerSub}>{field.address}</Text>
+        <Card padding="lg" style={styles.header}>
+          <View style={styles.headerTitleRow}>
+            <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+            <Text variant="bodySm" weight="bold" color="primary">
+              체크인 완료
+            </Text>
+          </View>
+          <Text variant="body" weight="semibold" style={styles.headerSub}>
+            {field.address}
+          </Text>
           {field.addressDetail ? (
-            <Text style={styles.headerSubMuted}>{field.addressDetail}</Text>
+            <Text variant="bodySm" color="textMuted" style={styles.headerSubMuted}>
+              {field.addressDetail}
+            </Text>
           ) : null}
-        </View>
+        </Card>
 
-        <Text style={styles.sectionTitle}>방문 결과 상태</Text>
+        <Text variant="bodySm" weight="bold" color="textMuted" style={styles.sectionTitle}>
+          방문 결과 상태
+        </Text>
         <View style={styles.statusGrid}>
           {VISIT_STATUS_VALUES.map((s) => {
             const active = status === s;
@@ -120,16 +177,27 @@ export default function FieldCheckin() {
               <Pressable
                 key={s}
                 onPress={() => setStatus(s)}
-                style={[
+                accessibilityRole="radio"
+                accessibilityState={{ selected: active }}
+                style={({ pressed }) => [
                   styles.statusChip,
-                  active && { backgroundColor: c + '22', borderColor: c },
+                  active && { backgroundColor: withAlpha(c, 0.13), borderColor: c },
+                  pressed && { opacity: opacity.pressed },
                 ]}
               >
                 <Text
+                  variant="caption"
                   style={[
-                    styles.statusChipText,
-                    active && { color: c, fontWeight: '700' },
+                    { lineHeight: 12 },
+                    active ? { color: c } : { color: colors.textSubtle },
                   ]}
+                >
+                  {VISIT_SHAPE[s]}
+                </Text>
+                <Text
+                  variant="bodySm"
+                  weight={active ? 'bold' : 'regular'}
+                  style={active ? { color: c } : { color: colors.textMuted }}
                 >
                   {VISIT_STATUS_LABEL[s]}
                 </Text>
@@ -139,42 +207,42 @@ export default function FieldCheckin() {
         </View>
 
         {status === 'other' ? (
-          <View style={styles.reasonBox}>
-            <Text style={styles.reasonLabel}>기타 사유 (10자 이상 필수)</Text>
-            <TextInput
-              value={reason}
-              onChangeText={setReason}
-              style={styles.reasonInput}
-              placeholder="현장 상황을 10자 이상 설명해주세요"
-              maxLength={500}
-              multiline
-            />
-            <Text style={[styles.reasonCounter, reasonTrim.length < 10 && styles.reasonCounterError]}>
-              {reasonTrim.length} / 10자 이상
-            </Text>
-          </View>
+          <Input
+            label="기타 사유 (10자 이상 필수)"
+            value={reason}
+            onChangeText={setReason}
+            placeholder="현장 상황을 10자 이상 설명해주세요"
+            maxLength={500}
+            multiline
+            numberOfLines={3}
+            style={styles.reasonField}
+            helperText={`${reasonTrim.length} / 10자 이상`}
+            error={reasonTrim.length > 0 && reasonTrim.length < 10 ? `${reasonTrim.length} / 10자 이상 필요` : undefined}
+            containerStyle={styles.reasonBox}
+          />
         ) : null}
 
-        <Pressable
+        <Button
           onPress={() => router.push(`/(tabs)/fields/${fieldId}` as never)}
-          style={({ pressed }) => [styles.linkBtn, pressed && styles.pressed]}
+          variant="secondary"
+          fullWidth
+          rightIcon="arrow-forward"
+          style={styles.toField}
         >
-          <Text style={styles.linkBtnText}>메모·사진은 현장 상세에서 관리 →</Text>
-        </Pressable>
+          메모·사진 추가
+        </Button>
 
-        <Pressable
+        <Button
           onPress={handleSaveResult}
-          disabled={saving || !visitId || !otherReasonValid}
-          style={({ pressed }) => [
-            styles.btn,
-            pressed && styles.pressed,
-            (saving || !visitId || !otherReasonValid) && styles.btnDisabled,
-          ]}
+          disabled={!visitId || !otherReasonValid}
+          loading={saving}
+          size="lg"
+          fullWidth
+          leftIcon="save"
+          style={styles.submit}
         >
-          <Text style={styles.btnText}>
-            {saving ? '저장 중...' : '결과 저장하고 완료'}
-          </Text>
-        </Pressable>
+          결과 저장
+        </Button>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -184,19 +252,19 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   scroll: { padding: spacing.xl, paddingBottom: spacing.xxl * 2 },
   header: {
-    backgroundColor: colors.primary + '10',
-    borderRadius: radius.md,
-    padding: spacing.lg,
+    backgroundColor: colors.primaryMuted,
+    borderWidth: 0,
     marginBottom: spacing.lg,
   },
-  headerTitle: { fontSize: fontSize.sm, color: colors.primary, fontWeight: '700' },
-  headerSub: { fontSize: fontSize.base, color: colors.text, marginTop: 2 },
-  headerSubMuted: { fontSize: fontSize.sm, color: colors.textMuted },
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  headerSub: { marginTop: spacing.xs },
+  headerSubMuted: { marginTop: 2 },
   sectionTitle: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    fontWeight: '700',
-    marginTop: spacing.xl,
+    marginTop: spacing.sm,
     marginBottom: spacing.sm,
   },
   statusGrid: {
@@ -205,6 +273,9 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   statusChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: radius.pill,
@@ -212,49 +283,8 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
-  statusChipText: { fontSize: fontSize.sm, color: colors.textMuted },
-  reasonBox: {
-    marginTop: spacing.md,
-    padding: spacing.md,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    gap: spacing.xs,
-  },
-  reasonLabel: { fontSize: fontSize.sm, color: colors.text, fontWeight: '700' },
-  reasonInput: {
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    fontSize: fontSize.sm,
-    color: colors.text,
-    minHeight: 64,
-    textAlignVertical: 'top',
-  },
-  reasonCounter: { fontSize: fontSize.xs, color: colors.textMuted, alignSelf: 'flex-end' },
-  reasonCounterError: { color: colors.danger, fontWeight: '700' },
-  linkBtn: {
-    marginTop: spacing.xl,
-    paddingVertical: spacing.md,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    backgroundColor: colors.primary + '0d',
-    alignItems: 'center',
-  },
-  linkBtnText: { fontSize: fontSize.sm, color: colors.primary, fontWeight: '700' },
-  btn: {
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.lg,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    marginTop: spacing.xl,
-  },
-  btnDisabled: { backgroundColor: colors.border },
-  pressed: { opacity: 0.85 },
-  btnText: { color: '#fff', fontSize: fontSize.base, fontWeight: '700' },
+  reasonBox: { marginTop: spacing.md },
+  reasonField: { minHeight: 72, textAlignVertical: 'top' },
+  toField: { marginTop: spacing.xl },
+  submit: { marginTop: spacing.md },
 });

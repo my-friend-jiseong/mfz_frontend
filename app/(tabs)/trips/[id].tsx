@@ -1,14 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   Alert,
   Platform,
-  Pressable,
   StyleSheet,
-  Text,
   ToastAndroid,
   View,
 } from 'react-native';
+import { Text } from '@/components/ui/Text';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import { useTripStore } from '@/stores/tripStore';
 import { useVisitStore } from '@/stores/visitStore';
@@ -16,17 +15,33 @@ import { useFieldStore } from '@/stores/fieldStore';
 import { useDestinationStore } from '@/stores/destinationStore';
 import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
+import { Card } from '@/components/ui/Card';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { VISIT_STATUS_BADGE } from '@/theme/statusBadge';
+import { fmtTime } from '@/utils/datetime';
 import { safeBack } from '@/utils/backNavigation';
+import { navigateToReview } from '@/utils/postTripFlow';
 import { colors } from '@/theme/colors';
-import { spacing, radius, fontSize } from '@/theme/spacing';
-import { VISIT_STATUS_LABEL, type Visit } from '@/types/entities';
+import { spacing } from '@/theme/spacing';
+import {
+  VISIT_STATUS_LABEL,
+  type Visit,
+  type Destination,
+} from '@/types/entities';
 
-// ERD v2: trip_status_transitions(상태 이력) 제거 — 상태 전환 이력 UI 없음.
+const DEST_LABEL: Record<Destination['status'], string> = {
+  pending: '예정',
+  arrived: '완료',
+  skipped: '건너뜀',
+};
 
-function fmtTime(iso: string) {
-  const d = new Date(iso);
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-}
+const DEST_COLOR: Record<Destination['status'], string> = {
+  pending: colors.warning,
+  arrived: colors.success,
+  skipped: colors.textMuted,
+};
+
 
 export default function TripDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -36,6 +51,7 @@ export default function TripDetail() {
   const allTrips = useTripStore((s) => s.trips);
   const activeTripId = useTripStore((s) => s.activeTripId);
   const endTrip = useTripStore((s) => s.end);
+  const loadTripDetail = useTripStore((s) => s.loadDetail);
   const allVisits = useVisitStore((s) => s.visits);
   const getField = useFieldStore((s) => s.getById);
   const allDestinations = useDestinationStore((s) => s.destinations);
@@ -54,10 +70,16 @@ export default function TripDetail() {
     [destinations],
   );
 
-  const trip = useMemo(
-    () => allTrips.find((t) => t.id === tripId),
-    [allTrips, tripId],
-  );
+  // 진입 시 detail 페치 — visit timeline 을 visitStore 로 sync 해 새로고침 후도 방문 이력 보이게.
+  const fetchedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!tripId) return;
+    if (fetchedRef.current === tripId) return;
+    fetchedRef.current = tripId;
+    void loadTripDetail(tripId);
+  }, [tripId, loadTripDetail]);
+
+  const trip = useMemo(() => allTrips.find((t) => t.id === tripId), [allTrips, tripId]);
   const visits = useMemo(
     () =>
       allVisits
@@ -68,7 +90,7 @@ export default function TripDetail() {
   if (!trip) {
     return (
       <MapSheetLayout title="외근 상세" onBack={() => safeBack(router)}>
-        <EmptyState title="외근을 찾을 수 없습니다" />
+        <EmptyState icon="search-outline" title="외근을 찾을 수 없습니다" />
       </MapSheetLayout>
     );
   }
@@ -81,21 +103,9 @@ export default function TripDetail() {
     }
   };
 
+  // 종료 직후 review 화면으로 단일 진입 — active.tsx 와 같은 동선. 보고서 작성 prompt 는 review footer CTA.
   const promptReportAfterEnd = (endedTripId: string) => {
-    // IA cross-link X2 — 외근 종료 → 통합 보고서 작성(/reports/new) 진입.
-    // react-native-web 의 Alert.alert 다중 버튼 분기가 불안정 — web 은 window.confirm 사용.
-    const goCompose = () =>
-      router.replace(`/(tabs)/reports/new?tripId=${endedTripId}` as never);
-    if (Platform.OS === 'web') {
-      if (window.confirm('외근이 정상 종료되었습니다. 지금 보고서를 작성할까요?')) {
-        goCompose();
-      }
-    } else {
-      Alert.alert('외근 종료', '외근이 정상 종료되었습니다. 지금 보고서를 작성할까요?', [
-        { text: '나중에', style: 'cancel' },
-        { text: '지금 작성', onPress: goCompose },
-      ]);
-    }
+    navigateToReview(router, endedTripId);
   };
 
   const handleEnd = async () => {
@@ -133,98 +143,120 @@ export default function TripDetail() {
 
   const renderItem = ({ item }: { item: Visit }) => {
     const field = getField(item.fieldId);
-    const statusColor = colors.visitStatus[item.status];
-
+    const badge = VISIT_STATUS_BADGE[item.status];
     return (
-      <Pressable
+      <Card
         onPress={() =>
           router.push(
             `/(tabs)/trips/visit?tripId=${tripId}&visitId=${item.id}` as never,
           )
         }
-        style={({ pressed }) => [styles.visitCard, pressed && styles.pressed]}
+        style={styles.visitCard}
       >
         <View style={styles.visitHead}>
-          <Text style={styles.visitTime}>{fmtTime(item.visitedAt)}</Text>
-          <View style={[styles.statusChip, { backgroundColor: statusColor + '22' }]}>
-            <Text style={[styles.statusText, { color: statusColor }]}>
-              {VISIT_STATUS_LABEL[item.status]}
-            </Text>
-          </View>
+          <Text variant="bodySm" weight="semibold" color="textMuted">
+            {fmtTime(item.visitedAt)}
+          </Text>
+          <Badge
+            label={VISIT_STATUS_LABEL[item.status]}
+            tone={badge.tone}
+            shape={badge.shape}
+          />
         </View>
-        <Text style={styles.fieldAddr}>
+        <Text variant="body" weight="semibold">
           {field?.address || '알 수 없는 현장'}
         </Text>
-      </Pressable>
+      </Card>
     );
   };
 
   const ListHeader = () => (
     <View style={styles.summary}>
       {trip.title ? (
-        <Text style={styles.tripTitle}>{trip.title}</Text>
+        <Text variant="h3" style={styles.tripTitle}>
+          {trip.title}
+        </Text>
       ) : null}
-      <Text style={styles.summaryLine}>
+      <Text variant="bodySm">
         {new Date(trip.startedAt).toLocaleString('ko-KR')} ~{' '}
         {trip.endedAt
           ? new Date(trip.endedAt).toLocaleString('ko-KR')
           : '진행 중'}
       </Text>
-      <Text style={styles.meta}>
+      <Text variant="bodySm" color="textMuted" style={styles.meta}>
         {/*
-         * destinationStore/visitStore 는 로컬 전용(handoff §9a — 백엔드 destinations
-         * 영속화 미진행). 다른 디바이스·세션에서 시작한 외근을 조회하면 로컬엔
-         * 0곳·0건으로 들어와 사용자가 "분명 3곳 골랐는데 0곳" 을 본다.
-         * 서버 list 응답의 siteCount/visitCount 가 있으면 그걸 우선 — backlog §11
-         * destinations endpoint 가 들어오면 fallback 도 제거.
+         * destinationStore/visitStore 는 로컬 전용 — 서버 list 응답의
+         * siteCount/visitCount 가 있으면 그걸 우선 (backlog §11).
          */}
-        계획 {trip.siteCount ?? destinations.length}곳 · 실제 방문 {trip.visitCount ?? visits.length}건
+        계획 {trip.siteCount ?? destinations.length}곳 · 실제 방문{' '}
+        {trip.visitCount ?? visits.length}건
       </Text>
       {destinations.length > 0 ? (
-        <View style={styles.planBox}>
-          <Text style={styles.planTitle}>계획된 목적지</Text>
+        <Card padding="md" style={styles.planBox}>
+          <Text
+            variant="caption"
+            weight="bold"
+            color="textMuted"
+            style={styles.planTitle}
+          >
+            계획된 목적지
+          </Text>
           {destinations.map((d) => {
             const f = getField(d.fieldId);
             return (
               <View key={d.id} style={styles.planRow}>
-                <Text style={styles.planOrder}>{d.order}.</Text>
-                <Text style={styles.planAddr} numberOfLines={1}>
+                <Text variant="bodySm" weight="bold" style={styles.planOrder}>
+                  {d.order}.
+                </Text>
+                <Text variant="bodySm" style={styles.planAddr} numberOfLines={1}>
                   {f?.address || '알 수 없는 현장'}
                 </Text>
                 <Text
-                  style={[
-                    styles.planStatus,
-                    d.status === 'arrived' && { color: colors.success },
-                    d.status === 'skipped' && { color: colors.textMuted },
-                  ]}
+                  variant="caption"
+                  weight="bold"
+                  style={{ color: DEST_COLOR[d.status] }}
                 >
-                  {d.status === 'arrived'
-                    ? '완료'
-                    : d.status === 'skipped'
-                      ? '건너뜀'
-                      : '예정'}
+                  {DEST_LABEL[d.status]}
                 </Text>
               </View>
             );
           })}
-        </View>
+        </Card>
       ) : null}
       {isActive ? (
-        <Pressable
+        <Button
           onPress={() => void handleEnd()}
-          style={({ pressed }) => [styles.endBtn, pressed && styles.pressed]}
+          variant="destructive"
+          size="lg"
+          fullWidth
+          leftIcon="stop-circle"
+          style={styles.endBtn}
         >
-          <Text style={styles.endBtnText}>외근 종료</Text>
-        </Pressable>
-      ) : null}
-      <Pressable
-        onPress={() =>
-          router.push(`/(tabs)/reports/new?tripId=${trip.id}` as never)
-        }
-        style={({ pressed }) => [styles.composeBtn, pressed && styles.pressed]}
+          외근 종료
+        </Button>
+      ) : (
+        // 종료된 외근에 한해 review 재진입로. 종료 직후 한 번만 보던 정리 화면을
+        // 나중에 다시 들어가 visit 결과 정정·메모/사진 추가를 마무리할 수 있게.
+        <Button
+          onPress={() =>
+            router.push(`/(tabs)/trips/review?tripId=${trip.id}` as never)
+          }
+          variant="secondary"
+          fullWidth
+          leftIcon="checkmark-done"
+          style={styles.reviewBtn}
+        >
+          외근 정리
+        </Button>
+      )}
+      <Button
+        onPress={() => router.push(`/(tabs)/reports/new?tripId=${trip.id}` as never)}
+        fullWidth
+        leftIcon="document-text"
+        style={styles.composeBtn}
       >
-        <Text style={styles.composeBtnText}>📝 보고서 작성</Text>
-      </Pressable>
+        보고서 작성
+      </Button>
     </View>
   );
 
@@ -241,7 +273,9 @@ export default function TripDetail() {
         renderItem={renderItem}
         ListHeaderComponent={ListHeader}
         contentContainerStyle={styles.list}
-        ListEmptyComponent={<EmptyState title="방문 기록이 없습니다" />}
+        ListEmptyComponent={
+          <EmptyState icon="footsteps-outline" title="방문 기록이 없습니다" />
+        }
       />
     </MapSheetLayout>
   );
@@ -254,121 +288,22 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.lg,
     gap: spacing.xs,
   },
-  tripTitle: {
-    fontSize: fontSize.lg,
-    color: colors.text,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  summaryLine: {
-    fontSize: fontSize.sm,
-    color: colors.text,
-  },
+  tripTitle: { marginBottom: 4 },
   list: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
-  visitCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: spacing.sm,
-  },
-  pressed: { opacity: 0.7 },
+  visitCard: { marginBottom: spacing.sm },
   visitHead: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: spacing.xs,
   },
-  visitTime: { fontSize: fontSize.sm, color: colors.textMuted, fontWeight: '600' },
-  statusChip: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radius.pill,
-  },
-  statusText: { fontSize: fontSize.xs, fontWeight: '700' },
-  fieldAddr: { fontSize: fontSize.base, color: colors.text, fontWeight: '600' },
-  meta: { fontSize: fontSize.sm, color: colors.textMuted, marginTop: 2 },
-  composeBtn: {
-    marginTop: spacing.md,
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.md,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-  },
-  composeBtnText: { color: '#fff', fontSize: fontSize.base, fontWeight: '700' },
-  endBtn: {
-    marginTop: spacing.md,
-    backgroundColor: colors.danger,
-    paddingVertical: spacing.lg,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-  },
-  endBtnText: { color: '#fff', fontSize: fontSize.base, fontWeight: '700' },
-  planBox: {
-    marginTop: spacing.sm,
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.md,
-    gap: spacing.xs,
-  },
-  planTitle: {
-    fontSize: fontSize.xs,
-    fontWeight: '700',
-    color: colors.textMuted,
-    marginBottom: 4,
-  },
-  planRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  planOrder: {
-    fontSize: fontSize.sm,
-    color: colors.text,
-    fontWeight: '700',
-    width: 20,
-  },
-  planAddr: {
-    fontSize: fontSize.sm,
-    color: colors.text,
-    flex: 1,
-  },
-  planStatus: {
-    fontSize: fontSize.xs,
-    color: colors.warning,
-    fontWeight: '700',
-  },
-  historyBox: {
-    marginTop: spacing.lg,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    gap: spacing.xs,
-  },
-  historyTitle: {
-    fontSize: fontSize.sm,
-    fontWeight: '700',
-    color: colors.textMuted,
-    marginBottom: spacing.xs,
-  },
-  historyRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-  },
-  historyTime: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
-    minWidth: 70,
-  },
-  historyText: {
-    fontSize: fontSize.xs,
-    color: colors.text,
-    flex: 1,
-  },
+  meta: { marginTop: 2 },
+  composeBtn: { marginTop: spacing.md },
+  endBtn: { marginTop: spacing.md },
+  reviewBtn: { marginTop: spacing.md },
+  planBox: { marginTop: spacing.sm, gap: spacing.xs },
+  planTitle: { marginBottom: 4 },
+  planRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  planOrder: { width: 20 },
+  planAddr: { flex: 1 },
 });

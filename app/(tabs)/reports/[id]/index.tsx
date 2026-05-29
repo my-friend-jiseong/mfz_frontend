@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Image,
@@ -6,9 +6,10 @@ import {
   Platform,
   Pressable,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
+import { Text } from '@/components/ui/Text';
+import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { useReportStore } from '@/stores/reportStore';
@@ -19,13 +20,14 @@ import { API_BASE_URL } from '@/api';
 import { safeBack } from '@/utils/backNavigation';
 import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
+import { Card } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { LoadingState } from '@/components/ui/LoadingState';
 import { colors } from '@/theme/colors';
-import { spacing, radius, fontSize } from '@/theme/spacing';
+import { spacing, radius } from '@/theme/spacing';
+import { opacity } from '@/theme/motion';
+import { fmtDateTime } from '@/utils/datetime';
 import type { FieldReport } from '@/types/entities';
-
-function fmtDateTime(iso: string) {
-  return new Date(iso).toLocaleString('ko-KR');
-}
 
 // 현장별 전·중·후 사진 카드 (ERD v2: 보고서 본문 대체).
 function FieldReportCard({
@@ -44,22 +46,25 @@ function FieldReportCard({
     { label: '중', url: fr.pendingPhotoUrl, caption: fr.pendingPhotoCaption },
     { label: '후', url: fr.afterPhotoUrl, caption: fr.afterPhotoCaption },
   ];
-  const resolve = (raw: string) => (raw.startsWith('http') ? raw : `${API_BASE_URL}${raw}`);
+  const resolve = (raw: string) =>
+    raw.startsWith('http') ? raw : `${API_BASE_URL}${raw}`;
   return (
-    <View style={styles.frCard}>
+    <Card padding="md" style={styles.frCard}>
       <View style={styles.frHead}>
-        <Text style={styles.frTitle}>{fr.title || fieldName || '현장 보고'}</Text>
+        <Text variant="bodySm" weight="bold" style={styles.frTitle}>
+          {fr.title || fieldName || '현장 보고'}
+        </Text>
         {onEdit || onDelete ? (
           <View style={styles.frHeadActions}>
             {onEdit ? (
-              <Pressable onPress={onEdit} hitSlop={8}>
-                <Text style={styles.frEdit}>수정</Text>
-              </Pressable>
+              <Button onPress={onEdit} variant="ghost" size="sm" leftIcon="create-outline">
+                수정
+              </Button>
             ) : null}
             {onDelete ? (
-              <Pressable onPress={onDelete} hitSlop={8}>
-                <Text style={styles.frDelete}>삭제</Text>
-              </Pressable>
+              <Button onPress={onDelete} variant="ghost" size="sm" leftIcon="trash">
+                삭제
+              </Button>
             ) : null}
           </View>
         ) : null}
@@ -67,19 +72,32 @@ function FieldReportCard({
       <View style={styles.frSlots}>
         {slots.map((s) => (
           <View key={s.label} style={styles.frSlot}>
-            <Text style={styles.frSlotLabel}>{s.label}</Text>
+            <Text variant="caption" weight="bold" color="textMuted" style={styles.frSlotLabel}>
+              {s.label}
+            </Text>
             {s.url ? (
-              <Image source={{ uri: resolve(s.url) }} style={styles.frPhoto} resizeMode="cover" />
+              <Image
+                source={{ uri: resolve(s.url) }}
+                style={styles.frPhoto}
+                resizeMode="cover"
+                accessibilityLabel={
+                  s.caption ? `${s.label} 사진: ${s.caption}` : `${s.label} 사진`
+                }
+              />
             ) : (
               <View style={[styles.frPhoto, styles.frPhotoEmpty]}>
-                <Text style={styles.frPhotoEmptyText}>없음</Text>
+                <Text variant="caption" color="textMuted">없음</Text>
               </View>
             )}
-            {s.caption ? <Text style={styles.frCaption}>{s.caption}</Text> : null}
+            {s.caption ? (
+              <Text variant="caption" align="center" style={styles.frCaption}>
+                {s.caption}
+              </Text>
+            ) : null}
           </View>
         ))}
       </View>
-    </View>
+    </Card>
   );
 }
 
@@ -98,11 +116,17 @@ export default function ReportDetail() {
   const userId = useAuthStore((s) => s.user?.id);
 
   const [deleting, setDeleting] = useState(false);
+  // store 가 id 별 fetch 진행 상태를 노출 — 로컬 가드 대신 단일 진실 출처 사용.
+  const detailStatus = useReportStore((s) => s.detailStatus[reportId]);
+  const fetchedRef = useRef<string | null>(null);
 
   // 진입 시 백엔드에서 detail 페치 (목록은 fieldReports 없음).
   useEffect(() => {
-    if (reportId && !deleting) void loadDetail(reportId);
-  }, [reportId, loadDetail, deleting]);
+    if (!reportId || deleting) return;
+    if (fetchedRef.current === reportId) return;
+    fetchedRef.current = reportId;
+    void loadDetail(reportId);
+  }, [reportId, deleting, loadDetail]);
 
   const report = useMemo(
     () => detailCache[reportId] ?? allReports.find((r) => r.id === reportId),
@@ -114,11 +138,20 @@ export default function ReportDetail() {
   );
 
   if (!report) {
+    // 첫 진입 race 동안 LoadingState 노출, fetch 끝났는데도 null 이면 'not found'.
     return (
       <MapSheetLayout title="보고서 상세" onBack={() => safeBack(router)}>
-        <EmptyState
-          title={deleting ? '보고서를 삭제 중입니다...' : '보고서를 찾을 수 없습니다'}
-        />
+        {deleting ? (
+          <EmptyState icon="trash-outline" title="보고서를 삭제 중입니다" />
+        ) : detailStatus === 'missing' ? (
+          <EmptyState
+            icon="document-text-outline"
+            title="보고서를 찾을 수 없습니다"
+            description="삭제됐거나 접근 권한이 없는 보고서입니다"
+          />
+        ) : (
+          <LoadingState label="보고서 불러오는 중" />
+        )}
       </MapSheetLayout>
     );
   }
@@ -143,7 +176,7 @@ export default function ReportDetail() {
 
   const handleDelete = () => {
     const doDelete = async () => {
-      setDeleting(true); // race 가드 — 삭제 중 detail 재페치 차단
+      setDeleting(true);
       const r = await remove(report.id);
       if (r.ok) {
         router.replace('/(tabs)/reports' as never);
@@ -160,10 +193,18 @@ export default function ReportDetail() {
         raw || '보고서를 삭제하지 못했습니다. 잠시 후 다시 시도해주세요.',
       );
     };
+    // 함께 사라지는 항목 안내 — 사용자가 결정 전에 무엇이 함께 삭제되는지 미리 확인.
+    const losses: string[] = [];
+    if (fieldReports.length > 0) {
+      losses.push(`현장 보고 ${fieldReports.length}건`);
+    }
+    if (report.outputFileUrl) losses.push('생성된 Word 파일');
+    const lossesNote = losses.length > 0 ? `\n\n함께 사라지는 항목: ${losses.join(' · ')}` : '';
+    const msg = `이 보고서를 정말 삭제할까요?${lossesNote}`;
     if (Platform.OS === 'web') {
-      if (confirm('이 보고서를 삭제할까요?')) void doDelete();
+      if (confirm(msg)) void doDelete();
     } else {
-      Alert.alert('보고서 삭제', '이 보고서를 정말 삭제할까요?', [
+      Alert.alert('보고서 삭제', msg, [
         { text: '취소', style: 'cancel' },
         { text: '삭제', style: 'destructive', onPress: () => void doDelete() },
       ]);
@@ -177,37 +218,53 @@ export default function ReportDetail() {
       initialIndex={2}
     >
       <BottomSheetScrollView contentContainerStyle={styles.scroll}>
-        <Text style={styles.title}>{report.title}</Text>
+        <Text variant="h2" weight="heavy">
+          {report.title}
+        </Text>
 
         {trip ? (
           <Pressable
             onPress={() => router.push(`/(tabs)/trips/${trip.id}` as never)}
-            style={styles.tripLink}
+            style={({ pressed }) => [
+              styles.tripLink,
+              pressed && { opacity: opacity.pressed },
+            ]}
           >
-            <Text style={styles.tripLinkText}>
-              연결 외근: #{trip.id} · {fmtDateTime(trip.startedAt)}
+            <Ionicons name="briefcase-outline" size={14} color={colors.primary} />
+            <Text variant="bodySm" weight="semibold" color="primary">
+              연결 외근: {trip.title ? `${trip.title} · ` : ''}
+              {fmtDateTime(trip.startedAt)}
             </Text>
+            <Ionicons name="chevron-forward" size={14} color={colors.primary} />
           </Pressable>
         ) : null}
 
-        <Text style={styles.meta}>
+        <Text variant="caption" color="textMuted" style={styles.meta}>
           작성: {fmtDateTime(report.createdAt)}
           {report.updatedAt ? ` · 수정: ${fmtDateTime(report.updatedAt)}` : ''}
         </Text>
 
         <View style={styles.sectionHead}>
-          <Text style={styles.sectionLabel}>현장별 전·중·후</Text>
+          <Text variant="bodySm" weight="bold" color="textMuted">
+            현장별 전·중·후
+          </Text>
           {isOwner ? (
-            <Pressable
-              onPress={() => router.push(`/(tabs)/reports/${report.id}/field-report` as never)}
-              style={({ pressed }) => [styles.addFrBtn, pressed && styles.pressed]}
+            <Button
+              onPress={() =>
+                router.push(`/(tabs)/reports/${report.id}/field-report` as never)
+              }
+              variant="secondary"
+              size="sm"
+              leftIcon="add"
             >
-              <Text style={styles.addFrBtnText}>+ 현장 보고 추가</Text>
-            </Pressable>
+              현장 보고 추가
+            </Button>
           ) : null}
         </View>
         {fieldReports.length === 0 ? (
-          <Text style={styles.emptyFr}>등록된 현장 보고가 없습니다.</Text>
+          <Text variant="bodySm" color="textMuted" style={styles.emptyFr}>
+            등록된 현장 보고가 없습니다.
+          </Text>
         ) : (
           fieldReports.map((fr) => (
             <FieldReportCard
@@ -228,38 +285,53 @@ export default function ReportDetail() {
         )}
 
         {report.outputFileUrl && report.outputFileUrl.trim() ? (
-          <Pressable
+          <Button
             onPress={() => {
               const raw = report.outputFileUrl!.trim();
               const url = raw.startsWith('http') ? raw : `${API_BASE_URL}${raw}`;
-              void Linking.openURL(url);
+              // web 에선 새 탭, 모바일은 외부 앱 — 실패 시 silent 종결되지 않도록 alert.
+              if (Platform.OS === 'web') {
+                window.open(url, '_blank', 'noopener,noreferrer');
+                return;
+              }
+              Linking.openURL(url).catch(() => {
+                Alert.alert(
+                  '다운로드 실패',
+                  '파일을 열 수 없습니다. 잠시 후 다시 시도해주세요.',
+                );
+              });
             }}
-            style={({ pressed }) => [styles.downloadBtn, pressed && styles.pressed]}
+            variant="secondary"
+            fullWidth
+            leftIcon="download-outline"
+            style={styles.downloadBtn}
           >
-            <Text style={styles.downloadBtnText}>📄 Word 파일 다운로드</Text>
-          </Pressable>
+            Word 파일 다운로드
+          </Button>
         ) : null}
 
         {isOwner ? (
           <View style={styles.actions}>
-            <Pressable
+            <Button
               onPress={() =>
                 router.push(`/(tabs)/reports/${report.id}/edit` as never)
               }
-              style={({ pressed }) => [styles.actionBtn, pressed && styles.pressed]}
+              variant="secondary"
+              fullWidth
+              leftIcon="create-outline"
+              style={styles.actionFlex}
             >
-              <Text style={styles.actionText}>수정</Text>
-            </Pressable>
-            <Pressable
+              수정
+            </Button>
+            <Button
               onPress={handleDelete}
-              style={({ pressed }) => [
-                styles.actionBtn,
-                styles.dangerBtn,
-                pressed && styles.pressed,
-              ]}
+              variant="ghost"
+              fullWidth
+              leftIcon="trash"
+              style={styles.actionFlex}
             >
-              <Text style={[styles.actionText, styles.dangerText]}>삭제</Text>
-            </Pressable>
+              삭제
+            </Button>
           </View>
         ) : null}
       </BottomSheetScrollView>
@@ -269,87 +341,45 @@ export default function ReportDetail() {
 
 const styles = StyleSheet.create({
   scroll: { padding: spacing.lg, paddingBottom: spacing.xxl },
-  title: {
-    fontSize: fontSize.xl,
-    fontWeight: '800',
-    color: colors.text,
-  },
   tripLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
     marginTop: spacing.sm,
-    backgroundColor: colors.primary + '10',
+    backgroundColor: colors.primaryMuted,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: radius.md,
     alignSelf: 'flex-start',
   },
-  tripLinkText: { fontSize: fontSize.sm, color: colors.primary, fontWeight: '600' },
-  meta: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
-    marginTop: spacing.sm,
-  },
+  meta: { marginTop: spacing.sm },
   sectionHead: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginTop: spacing.xl,
     marginBottom: spacing.sm,
+    gap: spacing.sm,
   },
-  sectionLabel: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    fontWeight: '700',
-  },
-  addFrBtn: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    backgroundColor: colors.primary + '10',
-  },
-  addFrBtnText: { fontSize: fontSize.xs, color: colors.primary, fontWeight: '700' },
+  emptyFr: { paddingVertical: spacing.lg },
+  frCard: { marginBottom: spacing.md },
   frHead: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: spacing.sm,
+    gap: spacing.sm,
   },
-  frHeadActions: { flexDirection: 'row', gap: spacing.md },
-  frEdit: { fontSize: fontSize.xs, color: colors.primary, fontWeight: '700' },
-  frDelete: { fontSize: fontSize.xs, color: colors.danger, fontWeight: '700' },
-  emptyFr: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    paddingVertical: spacing.lg,
-  },
-  frCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-  },
-  frTitle: {
-    fontSize: fontSize.sm,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: spacing.sm,
-  },
+  frHeadActions: { flexDirection: 'row', gap: spacing.xs },
+  frTitle: { flex: 1 },
   frSlots: { flexDirection: 'row', gap: spacing.sm },
   frSlot: { flex: 1, alignItems: 'center' },
-  frSlotLabel: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
+  frSlotLabel: { marginBottom: 4 },
   frPhoto: {
     width: '100%',
     aspectRatio: 1,
     borderRadius: radius.sm,
-    backgroundColor: colors.background,
+    backgroundColor: colors.surfaceMuted,
   },
   frPhotoEmpty: {
     alignItems: 'center',
@@ -358,43 +388,12 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderStyle: 'dashed',
   },
-  frPhotoEmptyText: { fontSize: fontSize.xs, color: colors.textMuted },
-  frCaption: {
-    fontSize: fontSize.xs,
-    color: colors.text,
-    marginTop: 4,
-    textAlign: 'center',
-  },
+  frCaption: { marginTop: 4 },
+  downloadBtn: { marginTop: spacing.md },
   actions: {
     flexDirection: 'row',
     gap: spacing.sm,
     marginTop: spacing.xl,
   },
-  actionBtn: {
-    flex: 1,
-    paddingVertical: spacing.md,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-  },
-  actionText: { fontSize: fontSize.sm, fontWeight: '700', color: colors.text },
-  dangerBtn: { borderColor: colors.danger + '40' },
-  dangerText: { color: colors.danger },
-  pressed: { opacity: 0.85 },
-  downloadBtn: {
-    marginTop: spacing.md,
-    paddingVertical: spacing.md,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    backgroundColor: colors.primary + '10',
-    alignItems: 'center',
-  },
-  downloadBtnText: {
-    fontSize: fontSize.sm,
-    color: colors.primary,
-    fontWeight: '700',
-  },
+  actionFlex: { flex: 1 },
 });

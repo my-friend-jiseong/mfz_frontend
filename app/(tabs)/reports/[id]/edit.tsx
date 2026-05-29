@@ -3,20 +3,21 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   View,
 } from 'react-native';
+import { Text } from '@/components/ui/Text';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useReportStore } from '@/stores/reportStore';
 import { useAuthStore } from '@/stores/authStore';
 import { safeBack } from '@/utils/backNavigation';
 import { EmptyState } from '@/components/EmptyState';
+import { Input } from '@/components/ui/Input';
+import { Button } from '@/components/ui/Button';
+import { LoadingState } from '@/components/ui/LoadingState';
 import { colors } from '@/theme/colors';
-import { spacing, radius, fontSize } from '@/theme/spacing';
+import { spacing } from '@/theme/spacing';
 
 // ERD v2: 보고서 본문(content) 제거 — 제목만 편집. 본문은 현장별 전·중·후 사진(field_reports).
 const TITLE_MAX = 100;
@@ -32,8 +33,16 @@ export default function EditReport() {
   const update = useReportStore((s) => s.update);
   const userId = useAuthStore((s) => s.user?.id);
 
+  // store 가 id 별 fetch 상태를 노출 — 로컬 가드 대신 단일 진실 출처 사용.
+  const detailStatus = useReportStore((s) => s.detailStatus[reportId]);
+  const fetchedRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (reportId && !detailCache[reportId]) void loadDetail(reportId);
+    if (!reportId) return;
+    if (fetchedRef.current === reportId) return;
+    if (detailCache[reportId]) return; // 이미 캐시에 있으면 fetch 생략
+    fetchedRef.current = reportId;
+    void loadDetail(reportId);
   }, [reportId, detailCache, loadDetail]);
 
   const report = detailCache[reportId];
@@ -56,10 +65,27 @@ export default function EditReport() {
     initialRef.current = report.title;
   }, [report]);
 
+  const backToReports = useMemo(
+    () => (
+      <Button
+        onPress={() => router.replace('/(tabs)/reports' as never)}
+        variant="secondary"
+        leftIcon="arrow-back"
+      >
+        보고서 목록으로
+      </Button>
+    ),
+    [router],
+  );
+
   if (!summary) {
     return (
       <View style={styles.container}>
-        <EmptyState title="보고서를 찾을 수 없습니다" />
+        <EmptyState
+          icon="document-text-outline"
+          title="보고서를 찾을 수 없습니다"
+          action={backToReports}
+        />
       </View>
     );
   }
@@ -68,23 +94,36 @@ export default function EditReport() {
     return (
       <View style={styles.container}>
         <EmptyState
+          icon="lock-closed-outline"
           title="수정 권한이 없습니다"
           description="작성자 본인만 수정 가능합니다"
+          action={backToReports}
         />
       </View>
     );
   }
 
   if (!report) {
+    // 첫 fetch 끝났는데도 null 이면 not-found, 아니면 race 보호용 LoadingState.
     return (
       <View style={styles.container}>
-        <EmptyState title="불러오는 중..." />
+        {detailStatus === 'missing' ? (
+          <EmptyState
+            icon="document-text-outline"
+            title="보고서를 찾을 수 없습니다"
+            description="삭제됐거나 접근 권한이 없는 보고서입니다"
+            action={backToReports}
+          />
+        ) : (
+          <LoadingState label="보고서 불러오는 중" />
+        )}
       </View>
     );
   }
 
   const titleTrim = title.trim();
-  const hasChanges = initialRef.current !== null && titleTrim !== initialRef.current.trim();
+  const hasChanges =
+    initialRef.current !== null && titleTrim !== initialRef.current.trim();
 
   const handleSave = async () => {
     setGlobalError(null);
@@ -132,12 +171,14 @@ export default function EditReport() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.labelRow}>
-          <Text style={styles.label}>제목 *</Text>
-          <Text style={styles.counter}>
+          <Text variant="bodySm" weight="bold" color="textMuted">
+            제목 *
+          </Text>
+          <Text variant="caption" weight="semibold" color="textMuted">
             {title.length} / {TITLE_MAX}
           </Text>
         </View>
-        <TextInput
+        <Input
           value={title}
           onChangeText={(v) => {
             userTouchedRef.current = true;
@@ -145,38 +186,31 @@ export default function EditReport() {
             if (titleErr) setTitleErr(null);
           }}
           editable={!submitting}
-          style={[styles.input, titleErr && styles.inputError]}
           maxLength={TITLE_MAX}
+          error={titleErr ?? undefined}
+          helperText={titleErr ? undefined : '현장별 전·중·후 사진은 보고서 상세 화면에서 관리합니다.'}
         />
-        {titleErr ? <Text style={styles.fieldError}>{titleErr}</Text> : null}
 
-        <Text style={styles.hint}>
-          현장별 전·중·후 사진은 보고서 상세 화면에서 관리합니다.
-        </Text>
-
-        {globalError ? <Text style={styles.error}>{globalError}</Text> : null}
-
-        <Pressable
-          onPress={handleSave}
-          disabled={submitting || !hasChanges}
-          style={({ pressed }) => [
-            styles.btn,
-            (!hasChanges || submitting) && styles.btnDisabled,
-            pressed && styles.pressed,
-          ]}
-        >
-          <Text
-            style={[
-              styles.btnText,
-              (!hasChanges || submitting) && styles.btnTextDisabled,
-            ]}
-          >
-            {submitting ? '저장 중...' : hasChanges ? '저장' : '변경 사항 없음'}
+        {globalError ? (
+          <Text variant="bodySm" color="danger" style={styles.error}>
+            {globalError}
           </Text>
-        </Pressable>
-        <Pressable onPress={handleCancel} style={styles.cancel}>
-          <Text style={styles.cancelText}>취소</Text>
-        </Pressable>
+        ) : null}
+
+        <Button
+          onPress={handleSave}
+          disabled={!hasChanges}
+          loading={submitting}
+          size="lg"
+          fullWidth
+          leftIcon="save"
+          style={styles.submit}
+        >
+          {hasChanges ? '저장' : '변경 사항 없음'}
+        </Button>
+        <Button onPress={handleCancel} variant="ghost" size="sm" fullWidth>
+          취소
+        </Button>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -192,50 +226,6 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
     marginBottom: spacing.sm,
   },
-  label: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    fontWeight: '700',
-  },
-  input: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    fontSize: fontSize.base,
-    color: colors.text,
-  },
-  inputError: { borderColor: colors.danger },
-  counter: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
-    fontWeight: '600',
-  },
-  fieldError: {
-    color: colors.danger,
-    fontSize: fontSize.xs,
-    marginTop: 4,
-    marginLeft: 4,
-  },
-  hint: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
-    marginTop: spacing.lg,
-  },
-  error: { color: colors.danger, fontSize: fontSize.sm, marginTop: spacing.md },
-  btn: {
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.lg,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    marginTop: spacing.xl,
-  },
-  btnDisabled: { backgroundColor: colors.border },
-  btnText: { color: '#fff', fontSize: fontSize.base, fontWeight: '700' },
-  btnTextDisabled: { color: colors.textMuted },
-  pressed: { opacity: 0.85 },
-  cancel: { alignItems: 'center', paddingVertical: spacing.md },
-  cancelText: { color: colors.textMuted, fontSize: fontSize.sm },
+  error: { marginTop: spacing.md },
+  submit: { marginTop: spacing.xl },
 });

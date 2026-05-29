@@ -1,35 +1,42 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   View,
 } from 'react-native';
+import { Text } from '@/components/ui/Text';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFieldStore } from '@/stores/fieldStore';
+import { useVisitStore } from '@/stores/visitStore';
 import { safeBack } from '@/utils/backNavigation';
-import { FIELD_STATUS_VALUES, FIELD_STATUS_LABEL, type FieldStatus } from '@/types/entities';
+import {
+  FIELD_STATUS_VALUES,
+  FIELD_STATUS_LABEL,
+  type FieldStatus,
+} from '@/types/entities';
 import { fields as fieldsApi, errorCode, localizeError } from '@/api';
 import type { AddressSearchItem, UpdateFieldBody } from '@/api';
 import {
   itemToSelected,
-  isInKorea,
-  KR_LAT,
-  KR_LNG,
   SEARCH_DEBOUNCE_MS,
   MIN_KEYWORD_LEN,
   type SelectedAddress,
 } from '@/utils/addressSearch';
+import { ManualCoordinateForm } from '@/components/fields/ManualCoordinateForm';
 import { EmptyState } from '@/components/EmptyState';
 import { ProjectPicker } from '@/components/ProjectPicker';
+import { Card } from '@/components/ui/Card';
+import { Input } from '@/components/ui/Input';
+import { Button } from '@/components/ui/Button';
+import { LoadingState } from '@/components/ui/LoadingState';
 import { colors } from '@/theme/colors';
-import { spacing, radius, fontSize } from '@/theme/spacing';
+import { spacing, radius } from '@/theme/spacing';
+import { opacity } from '@/theme/motion';
+import { FilterChip } from '@/components/ui/FilterChip';
 
 const DETAIL_MAX = 100;
 
@@ -46,8 +53,21 @@ export default function EditField() {
   const router = useRouter();
 
   const field = useFieldStore((s) => s.getById(fieldId));
+  const loadFieldDetail = useFieldStore((s) => s.loadDetail);
   const update = useFieldStore((s) => s.update);
   const remove = useFieldStore((s) => s.remove);
+  // 방문 이력 카운트 — 삭제 사전 안내용. 단일 actor 정책상 visit 있으면 백엔드가 삭제 거부.
+  // 진입 시 fieldStore.loadDetail → visitStore.syncFromRecentVisits 로 hydrate.
+  const visitCount = useVisitStore(
+    (s) => s.visits.filter((v) => v.fieldId === fieldId).length,
+  );
+  const fetchedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!fieldId) return;
+    if (fetchedRef.current === fieldId) return;
+    fetchedRef.current = fieldId;
+    void loadFieldDetail(fieldId);
+  }, [fieldId, loadFieldDetail]);
 
   // Hooks must be called unconditionally — early return 후로 옮기지 않고 옵셔널 처리.
   const initial = useMemo(
@@ -80,10 +100,7 @@ export default function EditField() {
   const [providerUnavailable, setProviderUnavailable] = useState(false);
   const [searching, setSearching] = useState(false);
   const [manualMode, setManualMode] = useState(false);
-  const [manualRoad, setManualRoad] = useState('');
-  const [manualJibun, setManualJibun] = useState('');
-  const [manualLatStr, setManualLatStr] = useState('');
-  const [manualLngStr, setManualLngStr] = useState('');
+  const [retryToken, setRetryToken] = useState(0);
 
   // 디바운스 검색 — fields/new.tsx 와 동일한 패턴 (latest-wins).
   const reqIdRef = useRef(0);
@@ -125,7 +142,7 @@ export default function EditField() {
       }
     }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(handle);
-  }, [query, editingAddress]);
+  }, [query, editingAddress, retryToken]);
 
   const handleStartAddressEdit = () => {
     setEditingAddress(true);
@@ -150,36 +167,6 @@ export default function EditField() {
     if (fieldErrors.address) clearFieldErr('address');
   };
 
-  const handleManualSubmit = () => {
-    const lat = Number(manualLatStr);
-    const lng = Number(manualLngStr);
-    if (!manualRoad.trim() && !manualJibun.trim()) {
-      Alert.alert('주소 입력 필요', '도로명 주소 또는 지번 주소 중 하나는 입력해주세요.');
-      return;
-    }
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-      Alert.alert('좌표 형식 오류', '위도·경도를 숫자로 입력해주세요.');
-      return;
-    }
-    if (!isInKorea(lat, lng)) {
-      Alert.alert(
-        '대한민국 영역 외 좌표',
-        `위도는 ${KR_LAT.min}~${KR_LAT.max}, 경도는 ${KR_LNG.min}~${KR_LNG.max} 범위여야 합니다.`,
-      );
-      return;
-    }
-    setNewAddress({
-      roadAddress: manualRoad.trim() || manualJibun.trim(),
-      jibunAddress: manualJibun.trim() || manualRoad.trim(),
-      buildingName: null,
-      lat,
-      lng,
-      display: manualRoad.trim() || manualJibun.trim(),
-    });
-    setEditingAddress(false);
-    setManualMode(false);
-  };
-
   const handleRevertAddress = () => {
     setNewAddress(null);
   };
@@ -187,7 +174,19 @@ export default function EditField() {
   if (!field) {
     return (
       <View style={styles.container}>
-        <EmptyState title="현장을 찾을 수 없습니다" />
+        <EmptyState
+          icon="search-outline"
+          title="현장을 찾을 수 없습니다"
+          action={
+            <Button
+              onPress={() => router.replace('/(tabs)/fields' as never)}
+              variant="secondary"
+              leftIcon="arrow-back"
+            >
+              현장 목록으로
+            </Button>
+          }
+        />
       </View>
     );
   }
@@ -229,7 +228,7 @@ export default function EditField() {
           ? categoriesTrim.split(',').map((c) => c.trim()).filter(Boolean)
           : [];
       }
-      if (projectIdChanged) body.projectId = projectId; // null → 해제
+      if (projectIdChanged) body.projectId = projectId;
       if (addressChanged && newAddress) {
         body.roadAddress = newAddress.roadAddress;
         body.lat = newAddress.lat;
@@ -291,12 +290,18 @@ export default function EditField() {
   };
 
   const handleDelete = () => {
+    // 방문 이력 있으면 백엔드가 차단함을 미리 안내 — anti-pattern '정말 삭제할까요 → 사실은 삭제 못 함' 해소.
+    if (visitCount > 0) {
+      const msg = `이 현장에는 방문 기록이 ${visitCount}건 있어 삭제할 수 없습니다.\n\n방문 기록을 정리하거나 현장 상태를 '조치 완료' 로 변경해주세요.`;
+      if (Platform.OS === 'web') window.alert(msg);
+      else Alert.alert('삭제할 수 없습니다', msg);
+      return;
+    }
+    const msg = '이 현장을 삭제할까요? 메모·사진도 함께 정리됩니다.';
     if (Platform.OS === 'web') {
-      if (confirm('이 현장을 삭제할까요? 연관된 방문·첨부는 유지됩니다.')) {
-        void performDelete();
-      }
+      if (confirm(msg)) void performDelete();
     } else {
-      Alert.alert('현장 삭제', '이 현장을 삭제할까요?', [
+      Alert.alert('현장 삭제', msg, [
         { text: '취소', style: 'cancel' },
         { text: '삭제', style: 'destructive', onPress: () => void performDelete() },
       ]);
@@ -314,6 +319,13 @@ export default function EditField() {
     ]);
   };
 
+  const noResults =
+    !searching &&
+    !providerUnavailable &&
+    !searchError &&
+    query.trim().length >= MIN_KEYWORD_LEN &&
+    results.length === 0;
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -321,88 +333,114 @@ export default function EditField() {
     >
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <View style={styles.labelRow}>
-          <Text style={styles.label}>주소</Text>
+          <Text variant="bodySm" weight="semibold" color="textMuted" style={styles.label}>주소</Text>
           {!editingAddress && !newAddress ? (
-            <Pressable
+            <Button
               onPress={handleStartAddressEdit}
               disabled={submitting}
-              style={({ pressed }) => [
-                styles.addrEditBtn,
-                pressed && styles.pressed,
-              ]}
+              variant="secondary"
+              size="sm"
+              leftIcon="create-outline"
             >
-              <Text style={styles.addrEditBtnText}>수정</Text>
-            </Pressable>
+              수정
+            </Button>
           ) : null}
           {newAddress ? (
-            <Pressable
-              onPress={handleRevertAddress}
-              disabled={submitting}
-              style={({ pressed }) => [
-                styles.addrEditBtn,
-                pressed && styles.pressed,
-              ]}
-            >
-              <Text style={styles.addrEditBtnText}>되돌리기</Text>
-            </Pressable>
+            <View style={styles.changedActions}>
+              <Button
+                onPress={() => {
+                  // 변경 예정 상태에서 '다른 주소 검색' — 되돌리기 → 수정 다시 3탭 우회로 제거.
+                  setNewAddress(null);
+                  setEditingAddress(true);
+                  setQuery('');
+                  setResults([]);
+                }}
+                disabled={submitting}
+                variant="secondary"
+                size="sm"
+                leftIcon="search"
+              >
+                다른 주소 검색
+              </Button>
+              <Button
+                onPress={handleRevertAddress}
+                disabled={submitting}
+                variant="ghost"
+                size="sm"
+                leftIcon="arrow-undo"
+              >
+                되돌리기
+              </Button>
+            </View>
           ) : null}
         </View>
-        <View
-          style={[
-            styles.readonly,
-            newAddress && styles.readonlyChanged,
-          ]}
+        <Card
+          padding="md"
+          style={[styles.readonly, newAddress ? styles.readonlyChanged : undefined]}
         >
-          <Text style={styles.readonlyText}>
+          <Text variant="body">
             {newAddress ? newAddress.display : field.address}
           </Text>
           {newAddress ? (
-            <Text style={styles.changedHint}>
-              변경 예정 — 저장 시 적용 (좌표 {newAddress.lat.toFixed(4)}, {newAddress.lng.toFixed(4)})
+            <Text variant="caption" weight="semibold" color="primary" style={styles.changedHint}>
+              변경 예정 — 저장 시 적용 (좌표 {newAddress.lat.toFixed(4)},{' '}
+              {newAddress.lng.toFixed(4)})
             </Text>
           ) : null}
-        </View>
+        </Card>
 
         {editingAddress ? (
-          <View style={styles.addrSearchBox}>
+          <Card padding="md" style={styles.addrSearchBox}>
             <View style={styles.searchHead}>
-              <Text style={styles.label}>새 주소 검색</Text>
-              <Pressable onPress={handleCancelAddressEdit} disabled={submitting}>
-                <Text style={styles.cancelLink}>취소</Text>
-              </Pressable>
+              <Text variant="bodySm" weight="semibold" color="textMuted" style={styles.label}>새 주소 검색</Text>
+              <Button
+                onPress={handleCancelAddressEdit}
+                disabled={submitting}
+                variant="ghost"
+                size="sm"
+              >
+                취소
+              </Button>
             </View>
-            <TextInput
+            <Input
               value={query}
               onChangeText={setQuery}
-              style={styles.input}
               placeholder="예: 해운대 우동, 동성로"
               autoCapitalize="none"
               returnKeyType="search"
               autoFocus
+              containerStyle={styles.searchInput}
             />
             {searching ? (
               <View style={styles.loadingRow}>
-                <ActivityIndicator color={colors.primary} size="small" />
-                <Text style={styles.loadingText}>검색 중...</Text>
+                <LoadingState inline label="검색 중" />
               </View>
             ) : null}
-            {searchError ? <Text style={styles.fieldError}>{searchError}</Text> : null}
+            {searchError ? <Text variant="caption" color="danger" style={styles.fieldError}>{searchError}</Text> : null}
             {providerUnavailable ? (
-              <View style={styles.warnBox}>
-                <Text style={styles.warnTitle}>주소 검색 일시 장애</Text>
-                <Text style={styles.warnBody}>
-                  카카오 주소 서비스가 일시적으로 응답하지 않습니다. 잠시 후 다시 시도하거나 좌표를 직접 입력하세요.
+              <Card padding="md" style={styles.warnBox}>
+                <Text variant="bodySm" weight="bold">주소 검색 일시 장애</Text>
+                <Text variant="caption" color="textMuted" style={styles.warnBody}>
+                  카카오 주소 서비스가 일시적으로 응답하지 않습니다. 다시 시도하거나 좌표를 직접 입력하세요.
                 </Text>
-              </View>
+                <Button
+                  onPress={() => {
+                    setProviderUnavailable(false);
+                    setRetryToken((t) => t + 1);
+                  }}
+                  variant="secondary"
+                  size="sm"
+                  leftIcon="refresh"
+                  style={styles.retryBtn}
+                >
+                  다시 시도
+                </Button>
+              </Card>
             ) : null}
-            {!searching &&
-            !providerUnavailable &&
-            !searchError &&
-            query.trim().length >= MIN_KEYWORD_LEN &&
-            results.length === 0 ? (
-              <Text style={styles.hint}>{emptyMessage ?? '검색 결과가 없습니다'}</Text>
+            {noResults ? (
+              <Text variant="caption" color="textMuted" style={styles.hint}>{emptyMessage ?? '검색 결과가 없습니다'}</Text>
             ) : null}
-            <View style={{ marginTop: spacing.sm }}>
+            <View style={styles.resultList}>
               {results.map((r, idx) => {
                 const key = `${r.roadAddress}|${r.jibunAddress}|${idx}`;
                 const sub = [r.sido, r.sigungu].filter(Boolean).join(' ');
@@ -410,18 +448,21 @@ export default function EditField() {
                   <Pressable
                     key={key}
                     onPress={() => handleSelectItem(r)}
-                    style={({ pressed }) => [styles.addrItem, pressed && styles.pressed]}
+                    style={({ pressed }) => [
+                      styles.addrItem,
+                      pressed && { opacity: opacity.pressed },
+                    ]}
                   >
-                    <Text style={styles.addrText}>
+                    <Text variant="body" weight="semibold">
                       {r.roadAddress || r.jibunAddress}
                       {r.buildingName ? ` (${r.buildingName})` : ''}
                     </Text>
                     {r.roadAddress &&
                     r.jibunAddress &&
                     r.roadAddress !== r.jibunAddress ? (
-                      <Text style={styles.addrJibun}>지번: {r.jibunAddress}</Text>
+                      <Text variant="caption" color="textMuted" style={styles.addrJibun}>지번: {r.jibunAddress}</Text>
                     ) : null}
-                    <Text style={styles.addrCoord}>
+                    <Text variant="caption" color="textMuted" style={styles.addrCoord}>
                       {sub ? `${sub} · ` : ''}
                       {r.lat.toFixed(4)}, {r.lng.toFixed(4)}
                     </Text>
@@ -429,73 +470,34 @@ export default function EditField() {
                 );
               })}
             </View>
-            {(providerUnavailable || manualMode) ? (
-              <View style={styles.manualBox}>
-                <Text style={styles.manualTitle}>좌표 직접 입력</Text>
-                <Text style={styles.label}>도로명 주소</Text>
-                <TextInput
-                  value={manualRoad}
-                  onChangeText={setManualRoad}
-                  style={styles.input}
-                  placeholder="예: 부산광역시 해운대구 해운대해변로 264"
-                />
-                <Text style={styles.label}>지번 주소</Text>
-                <TextInput
-                  value={manualJibun}
-                  onChangeText={setManualJibun}
-                  style={styles.input}
-                  placeholder="예: 부산광역시 해운대구 우동 1411"
-                />
-                <View style={styles.coordRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.label}>위도 (lat)</Text>
-                    <TextInput
-                      value={manualLatStr}
-                      onChangeText={setManualLatStr}
-                      style={styles.input}
-                      keyboardType="numeric"
-                      placeholder="33~43"
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.label}>경도 (lng)</Text>
-                    <TextInput
-                      value={manualLngStr}
-                      onChangeText={setManualLngStr}
-                      style={styles.input}
-                      keyboardType="numeric"
-                      placeholder="124~132"
-                    />
-                  </View>
-                </View>
-                <Pressable
-                  onPress={handleManualSubmit}
-                  style={({ pressed }) => [styles.btn, pressed && styles.pressed]}
-                >
-                  <Text style={styles.btnText}>이 좌표로 적용</Text>
-                </Pressable>
-              </View>
+            {providerUnavailable || manualMode ? (
+              <ManualCoordinateForm
+                onResolve={(addr) => {
+                  setNewAddress(addr);
+                  setEditingAddress(false);
+                  setManualMode(false);
+                }}
+              />
             ) : null}
-            {!manualMode &&
-            !providerUnavailable &&
-            !searching &&
-            query.trim().length >= MIN_KEYWORD_LEN &&
-            results.length === 0 ? (
-              <Pressable
+            {noResults && !manualMode ? (
+              <Button
                 onPress={() => setManualMode(true)}
-                style={({ pressed }) => [styles.manualLink, pressed && styles.pressed]}
+                variant="ghost"
+                size="sm"
+                rightIcon="arrow-forward"
+                style={styles.manualLink}
               >
-                <Text style={styles.manualLinkText}>좌표 직접 입력으로 진행 →</Text>
-              </Pressable>
+                좌표 직접 입력
+              </Button>
             ) : null}
-          </View>
+          </Card>
         ) : null}
 
         {fieldErrors.address ? (
-          <Text style={styles.fieldError}>{fieldErrors.address}</Text>
+          <Text variant="caption" color="danger" style={styles.fieldError}>{fieldErrors.address}</Text>
         ) : null}
 
-        <Text style={styles.label}>프로젝트 (선택)</Text>
+        <Text variant="bodySm" weight="semibold" color="textMuted" style={styles.label}>프로젝트 (선택)</Text>
         <ProjectPicker
           value={projectId}
           onChange={setProjectId}
@@ -503,28 +505,26 @@ export default function EditField() {
           disabled={submitting}
         />
 
-        <Text style={styles.label}>분류 (쉼표로 구분)</Text>
-        <TextInput
+        <Input
+          label="분류 (쉼표로 구분)"
           value={categoriesStr}
           onChangeText={(v) => {
             setCategoriesStr(v);
             if (fieldErrors.categories) clearFieldErr('categories');
           }}
           editable={!submitting}
-          style={[styles.input, fieldErrors.categories && styles.inputError]}
           placeholder="예: 가로수, 보수, 긴급"
+          error={fieldErrors.categories}
+          containerStyle={styles.fieldGap}
         />
-        {fieldErrors.categories ? (
-          <Text style={styles.fieldError}>{fieldErrors.categories}</Text>
-        ) : null}
 
         <View style={styles.labelRow}>
-          <Text style={styles.label}>상세 주소</Text>
-          <Text style={styles.counter}>
+          <Text variant="bodySm" weight="semibold" color="textMuted" style={styles.label}>상세 주소</Text>
+          <Text variant="caption" weight="semibold" color="textMuted">
             {addressDetail.length} / {DETAIL_MAX}
           </Text>
         </View>
-        <TextInput
+        <Input
           value={addressDetail}
           onChangeText={(v) => {
             setAddressDetail(v);
@@ -532,78 +532,58 @@ export default function EditField() {
           }}
           editable={!submitting}
           maxLength={DETAIL_MAX}
-          style={[styles.input, fieldErrors.detailAddress && styles.inputError]}
           placeholder="예: 101동 1203호"
+          error={fieldErrors.detailAddress}
         />
-        {fieldErrors.detailAddress ? (
-          <Text style={styles.fieldError}>{fieldErrors.detailAddress}</Text>
-        ) : null}
 
-        <Text style={styles.label}>상태</Text>
+        <Text variant="bodySm" weight="semibold" color="textMuted" style={styles.label}>상태</Text>
         <View style={styles.statusRow}>
-          {FIELD_STATUS_VALUES.map((s) => {
-            const active = status === s;
-            const c = colors.fieldStatus[s];
-            return (
-              <Pressable
-                key={s}
-                onPress={() => {
-                  setStatus(s);
-                  if (fieldErrors.status) clearFieldErr('status');
-                }}
-                disabled={submitting}
-                style={[
-                  styles.statusChip,
-                  active && { backgroundColor: c + '22', borderColor: c },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.statusChipText,
-                    active && { color: c, fontWeight: '700' },
-                  ]}
-                >
-                  {FIELD_STATUS_LABEL[s]}
-                </Text>
-              </Pressable>
-            );
-          })}
+          {FIELD_STATUS_VALUES.map((s) => (
+            <FilterChip
+              key={s}
+              label={FIELD_STATUS_LABEL[s]}
+              active={status === s}
+              activeColor={colors.fieldStatus[s]}
+              disabled={submitting}
+              onPress={() => {
+                setStatus(s);
+                if (fieldErrors.status) clearFieldErr('status');
+              }}
+            />
+          ))}
         </View>
         {fieldErrors.status ? (
-          <Text style={styles.fieldError}>{fieldErrors.status}</Text>
+          <Text variant="caption" color="danger" style={styles.fieldError}>{fieldErrors.status}</Text>
         ) : null}
 
-        {globalError ? <Text style={styles.error}>{globalError}</Text> : null}
+        {globalError ? <Text variant="bodySm" color="danger" style={styles.error}>{globalError}</Text> : null}
 
-        <Pressable
+        <Button
           onPress={handleSave}
-          disabled={submitting || !hasChanges}
-          style={({ pressed }) => [
-            styles.btn,
-            (!hasChanges || submitting) && styles.btnDisabled,
-            pressed && styles.pressed,
-          ]}
+          disabled={!hasChanges}
+          loading={submitting}
+          size="lg"
+          fullWidth
+          leftIcon="save"
+          style={styles.submit}
         >
-          <Text
-            style={[
-              styles.btnText,
-              (!hasChanges || submitting) && styles.btnTextDisabled,
-            ]}
-          >
-            {submitting ? '저장 중...' : hasChanges ? '저장' : '변경 사항 없음'}
-          </Text>
-        </Pressable>
+          {hasChanges ? '저장' : '변경 사항 없음'}
+        </Button>
 
-        <Pressable onPress={handleCancel} style={styles.cancel}>
-          <Text style={styles.cancelText}>취소</Text>
-        </Pressable>
+        <Button onPress={handleCancel} variant="ghost" size="sm" fullWidth>
+          취소
+        </Button>
 
-        <Pressable
+        <Button
           onPress={handleDelete}
-          style={({ pressed }) => [styles.dangerBtn, pressed && styles.pressed]}
+          variant="ghost"
+          size="sm"
+          fullWidth
+          leftIcon="trash"
+          style={styles.dangerBtn}
         >
-          <Text style={styles.dangerText}>현장 삭제</Text>
-        </Pressable>
+          현장 삭제
+        </Button>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -611,143 +591,58 @@ export default function EditField() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  scroll: { padding: spacing.xl },
+  scroll: { padding: spacing.xl, paddingBottom: spacing.xxl * 2 },
   labelRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginTop: spacing.md,
     marginBottom: spacing.xs,
+    gap: spacing.sm,
   },
   label: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    fontWeight: '600',
     marginTop: spacing.md,
     marginBottom: spacing.xs,
   },
-  counter: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
-    fontWeight: '600',
-  },
+  fieldGap: { marginTop: spacing.sm },
   readonly: {
-    backgroundColor: colors.background,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.md,
-  },
-  readonlyText: { fontSize: fontSize.base, color: colors.text },
-  input: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    fontSize: fontSize.base,
-    color: colors.text,
-  },
-  inputError: { borderColor: colors.danger },
-  fieldError: {
-    color: colors.danger,
-    fontSize: fontSize.xs,
-    marginTop: 4,
-    marginLeft: 4,
-  },
-  error: { color: colors.danger, fontSize: fontSize.sm, marginTop: spacing.md },
-  statusRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
-  statusChip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  statusChipText: { fontSize: fontSize.sm, color: colors.textMuted },
-  btn: {
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.lg,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    marginTop: spacing.xl,
-  },
-  btnDisabled: { backgroundColor: colors.border },
-  btnText: { color: '#fff', fontSize: fontSize.base, fontWeight: '700' },
-  btnTextDisabled: { color: colors.textMuted },
-  cancel: { alignItems: 'center', paddingVertical: spacing.md },
-  cancelText: { color: colors.textMuted, fontSize: fontSize.sm },
-  dangerBtn: {
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-    marginTop: spacing.md,
-  },
-  dangerText: { color: colors.danger, fontSize: fontSize.sm, fontWeight: '700' },
-  pressed: { opacity: 0.85 },
-  // 주소 수정 토글·검색 관련
-  addrEditBtn: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 4,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    backgroundColor: colors.surface,
-  },
-  addrEditBtnText: {
-    fontSize: fontSize.xs,
-    color: colors.primary,
-    fontWeight: '700',
+    backgroundColor: colors.surfaceMuted,
   },
   readonlyChanged: {
+    backgroundColor: colors.primaryMuted,
+    borderWidth: 1,
     borderColor: colors.primary,
-    backgroundColor: colors.primary + '08',
   },
-  changedHint: {
-    fontSize: fontSize.xs,
-    color: colors.primary,
-    marginTop: spacing.xs,
-    fontWeight: '600',
-  },
+  changedHint: { marginTop: spacing.xs },
+  changedActions: { flexDirection: 'row', gap: spacing.xs },
+  fieldError: { marginTop: 4, marginLeft: 4 },
+  error: { marginTop: spacing.md },
+  statusRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
+  submit: { marginTop: spacing.xl },
+  dangerBtn: { marginTop: spacing.md },
+  // 주소 검색 box
   addrSearchBox: {
     marginTop: spacing.md,
-    paddingTop: spacing.md,
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.md,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
   },
   searchHead: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  cancelLink: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    fontWeight: '600',
-  },
+  searchInput: { marginTop: spacing.sm },
   loadingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
     marginTop: spacing.sm,
   },
-  loadingText: { fontSize: fontSize.xs, color: colors.textMuted },
   warnBox: {
-    backgroundColor: '#fff7e6',
-    borderColor: '#f0ad4e',
+    backgroundColor: colors.warningMuted,
     borderWidth: 1,
-    borderRadius: radius.md,
-    padding: spacing.md,
+    borderColor: colors.warning,
     marginTop: spacing.sm,
   },
-  warnTitle: { fontSize: fontSize.sm, fontWeight: '700', color: colors.text },
-  warnBody: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: 4 },
-  hint: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: spacing.sm },
+  warnBody: { marginTop: 4 },
+  retryBtn: { marginTop: spacing.sm, alignSelf: 'flex-start' },
+  hint: { marginTop: spacing.sm },
+  resultList: { marginTop: spacing.sm },
   addrItem: {
     backgroundColor: colors.background,
     borderWidth: 1,
@@ -756,29 +651,7 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     marginBottom: spacing.xs,
   },
-  addrText: { fontSize: fontSize.base, color: colors.text, fontWeight: '600' },
-  addrJibun: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: 2 },
-  addrCoord: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: 2 },
-  manualBox: {
-    marginTop: spacing.md,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  manualTitle: {
-    fontSize: fontSize.base,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  manualLink: {
-    marginTop: spacing.md,
-    alignSelf: 'flex-start',
-  },
-  manualLinkText: {
-    fontSize: fontSize.sm,
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  coordRow: { flexDirection: 'row', gap: spacing.sm },
+  addrJibun: { marginTop: 2 },
+  addrCoord: { marginTop: 2 },
+  manualLink: { marginTop: spacing.md, alignSelf: 'flex-start' },
 });

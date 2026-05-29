@@ -1,11 +1,13 @@
 import { useMemo, useRef, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { buildKakaoMapHtml, type MapDisplayMode } from '@/assets/kakaoMapHtml';
 import type { Field, FieldStatus } from '@/types/entities';
 import { FIELD_STATUS_LABEL } from '@/types/entities';
+import { Text } from '@/components/ui/Text';
 import { colors } from '@/theme/colors';
-import { spacing, radius, fontSize } from '@/theme/spacing';
+import { elevation } from '@/theme/elevation';
+import { spacing, radius } from '@/theme/spacing';
 import { groupSameLocationMarkers } from '@/utils/groupSameLocationMarkers';
 
 // KWCAG 1.4.1 — 색 단독 의미 전달 금지. status 별 색 + 형상 + 라벨 3중 인코딩.
@@ -111,7 +113,7 @@ export function KakaoMapWebView({
             style={styles.modalCard}
             onPress={(e) => e.stopPropagation()}
           >
-            <Text style={styles.modalTitle}>
+            <Text variant="body" weight="bold" style={styles.modalTitle}>
               이 위치의 현장 {activeGroup?.length ?? 0}건
             </Text>
             <ScrollView style={styles.modalList}>
@@ -131,10 +133,12 @@ export function KakaoMapWebView({
                     <View
                       style={[styles.modalItemBadge, { backgroundColor: m.color }]}
                     >
-                      <Text style={styles.modalItemBadgeText}>{m.badge}</Text>
+                      <Text variant="caption" weight="bold" color="onPrimary">
+                        {m.badge}
+                      </Text>
                     </View>
                   ) : null}
-                  <Text style={styles.modalItemLabel} numberOfLines={1}>
+                  <Text variant="bodySm" style={styles.modalItemLabel} numberOfLines={1}>
                     {m.label}
                   </Text>
                 </Pressable>
@@ -147,12 +151,21 @@ export function KakaoMapWebView({
   );
 }
 
+// 주소를 라벨용 짧은 식별자로 — 마지막 2 토큰(도로명 + 번지) 우선, 길이 한도 18자.
+// Before: 마지막 1 토큰만 ('264' 같은 번지수만 라벨이 되던 회로)
+function shortLabelOf(address: string): string {
+  const tokens = address.trim().split(/\s+/);
+  if (tokens.length === 0) return '현장';
+  const tail = tokens.length >= 2 ? tokens.slice(-2).join(' ') : tokens[tokens.length - 1];
+  return tail.length > 18 ? `${tail.slice(0, 17)}…` : tail;
+}
+
 export function fieldsToMarkers(fields: Field[]): KakaoMapMarker[] {
   return fields.map((f) => ({
     id: f.id,
     lat: f.latitude,
     lng: f.longitude,
-    label: f.address.split(' ').slice(-1)[0] || '현장',
+    label: shortLabelOf(f.address),
     color: colors.fieldStatus[f.status],
     shape: STATUS_TO_SHAPE[f.status],
     badge: STATUS_TO_BADGE[f.status],
@@ -164,7 +177,7 @@ const styles = StyleSheet.create({
   web: { flex: 1, backgroundColor: 'transparent' },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.xl,
@@ -176,18 +189,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
     padding: spacing.lg,
-    shadowColor: '#000',
-    shadowOpacity: 0.18,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 8,
+    ...elevation.modal,
   },
-  modalTitle: {
-    fontSize: fontSize.base,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: spacing.md,
-  },
+  modalTitle: { marginBottom: spacing.md },
   modalList: { maxHeight: 360 },
   modalItem: {
     flexDirection: 'row',
@@ -203,14 +207,5 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: radius.pill,
   },
-  modalItemBadgeText: {
-    color: '#fff',
-    fontSize: fontSize.xs,
-    fontWeight: '700',
-  },
-  modalItemLabel: {
-    flex: 1,
-    fontSize: fontSize.sm,
-    color: colors.text,
-  },
+  modalItemLabel: { flex: 1 },
 });

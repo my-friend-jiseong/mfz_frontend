@@ -2,19 +2,23 @@ import { useRef, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   TextInput,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '@/stores/authStore';
 import { safeBack } from '@/utils/backNavigation';
 import { colors } from '@/theme/colors';
-import { spacing, radius, fontSize } from '@/theme/spacing';
+import { spacing } from '@/theme/spacing';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { Text } from '@/components/ui/Text';
 
 interface FieldErrors {
   email?: string;
@@ -24,9 +28,32 @@ interface FieldErrors {
   terms?: string;
 }
 
+// 필수 약관 — 모두 동의해야 가입 가능. 각 라벨은 사용자 화면 표시, url 은 외부 페이지.
+const REQUIRED_TERMS = [
+  { key: 'service', label: '이용약관', url: 'https://ilgayo.kr/terms' },
+  { key: 'privacy', label: '개인정보 처리방침', url: 'https://ilgayo.kr/privacy' },
+  { key: 'location', label: '위치정보 이용약관', url: 'https://ilgayo.kr/terms' },
+] as const;
+type TermKey = (typeof REQUIRED_TERMS)[number]['key'];
+
+function openExternal(url: string, fallbackTitle: string) {
+  // 외부 URL — web 에선 새 탭, 모바일은 외부 브라우저. profile.tsx 의 openExternal 과 같은 패턴.
+  if (Platform.OS === 'web') {
+    window.open(url, '_blank', 'noopener,noreferrer');
+    return;
+  }
+  Linking.canOpenURL(url)
+    .then((ok) => {
+      if (ok) return Linking.openURL(url);
+      throw new Error('not_supported');
+    })
+    .catch(() => {
+      Alert.alert(fallbackTitle, `${url}\n\n웹브라우저에서 위 주소로 접속해주세요.`);
+    });
+}
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PASSWORD_HINT =
-  '10자 이상 · 영대/영소/숫자/특수문자 중 3종 이상 조합';
+const PASSWORD_HINT = '10자 이상 · 영대/영소/숫자/특수문자 중 3종 이상 조합';
 
 // 백엔드 정책: 10자 이상 + 영대/영소/숫자/특수문자 중 3종 이상.
 // 한글은 4종 어디에도 매칭되지 않음 — 백엔드가 거부할 가능성 높아 명시적 안내.
@@ -64,7 +91,13 @@ export default function Signup() {
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [name, setName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [agreeRequired, setAgreeRequired] = useState(false);
+  // 약관별 동의 — 모두 true 여야 통과.
+  const [agreedTerms, setAgreedTerms] = useState<Record<TermKey, boolean>>({
+    service: false,
+    privacy: false,
+    location: false,
+  });
+  const allAgreed = REQUIRED_TERMS.every((t) => agreedTerms[t.key]);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -81,11 +114,21 @@ export default function Signup() {
     const pwErr = checkPasswordPolicy(password);
     if (pwErr) errs.password = pwErr;
     if (passwordConfirm !== password) errs.passwordConfirm = '비밀번호 확인이 일치하지 않습니다';
-    if (!agreeRequired) errs.terms = '필수 약관에 동의해주세요';
+    if (!allAgreed) errs.terms = '필수 약관 3종에 모두 동의해주세요';
     return errs;
   };
 
-  // 글자 변경 시 해당 필드 에러 자동 클리어 — 사용자가 즉각 수정했음을 가정.
+  const toggleAll = () => {
+    const next = !allAgreed;
+    setAgreedTerms({ service: next, privacy: next, location: next });
+    if (fieldErrors.terms) clearFieldErr('terms');
+  };
+
+  const toggleOne = (key: TermKey) => {
+    setAgreedTerms((p) => ({ ...p, [key]: !p[key] }));
+    if (fieldErrors.terms) clearFieldErr('terms');
+  };
+
   const clearFieldErr = (key: keyof FieldErrors) =>
     setFieldErrors((p) => ({ ...p, [key]: undefined }));
 
@@ -104,7 +147,6 @@ export default function Signup() {
       return;
     }
 
-    // 이미 가입된 이메일이면 로그인 화면으로 안내 (기존 흐름 유지).
     if (result.code === 'email_already_exists') {
       Alert.alert(
         '이미 가입된 이메일',
@@ -117,7 +159,6 @@ export default function Signup() {
       return;
     }
 
-    // 백엔드 코드 → 인라인 필드 에러 매핑.
     if (result.code && CODE_TO_FIELD[result.code]) {
       setFieldErrors({ [CODE_TO_FIELD[result.code]]: result.error });
       return;
@@ -126,17 +167,22 @@ export default function Signup() {
     setGlobalError(result.error);
   };
 
+  const passwordMatched =
+    passwordConfirm.length > 0 && passwordConfirm === password && !fieldErrors.passwordConfirm;
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <Text style={styles.title}>회원가입</Text>
+        <Text variant="h2" weight="heavy" style={styles.title}>
+          회원가입
+        </Text>
 
         <View style={styles.form}>
-          <Text style={styles.label}>이메일</Text>
-          <TextInput
+          <Input
+            label="이메일"
             value={email}
             onChangeText={(v) => {
               setEmail(v);
@@ -147,16 +193,13 @@ export default function Signup() {
             returnKeyType="next"
             onSubmitEditing={() => nameRef.current?.focus()}
             editable={!submitting}
-            style={[styles.input, fieldErrors.email && styles.inputError]}
             placeholder="example@domain.com"
+            error={fieldErrors.email}
           />
-          {fieldErrors.email ? (
-            <Text style={styles.fieldError}>{fieldErrors.email}</Text>
-          ) : null}
 
-          <Text style={styles.label}>이름</Text>
-          <TextInput
+          <Input
             ref={nameRef}
+            label="이름"
             value={name}
             onChangeText={(v) => {
               setName(v);
@@ -165,52 +208,44 @@ export default function Signup() {
             returnKeyType="next"
             onSubmitEditing={() => passwordRef.current?.focus()}
             editable={!submitting}
-            style={[styles.input, fieldErrors.name && styles.inputError]}
             placeholder="홍길동"
+            error={fieldErrors.name}
           />
-          {fieldErrors.name ? (
-            <Text style={styles.fieldError}>{fieldErrors.name}</Text>
-          ) : null}
 
-          <Text style={styles.label}>비밀번호</Text>
-          <View style={styles.passwordRow}>
-            <TextInput
-              ref={passwordRef}
-              value={password}
-              onChangeText={(v) => {
-                setPassword(v);
-                if (fieldErrors.password) clearFieldErr('password');
-                // 확인 필드와 일치 여부 변하면 그쪽 에러도 클리어
-                if (fieldErrors.passwordConfirm) clearFieldErr('passwordConfirm');
-              }}
-              secureTextEntry={!showPassword}
-              returnKeyType="next"
-              onSubmitEditing={() => passwordConfirmRef.current?.focus()}
-              editable={!submitting}
-              style={[
-                styles.input,
-                styles.passwordInput,
-                fieldErrors.password && styles.inputError,
-              ]}
-              placeholder="비밀번호"
-            />
-            <Pressable
-              onPress={() => setShowPassword((v) => !v)}
-              style={styles.eyeBtn}
-              accessibilityLabel={showPassword ? '비밀번호 숨기기' : '비밀번호 보기'}
-            >
-              <Text style={styles.eyeBtnText}>{showPassword ? '🙈' : '👁'}</Text>
-            </Pressable>
-          </View>
-          {fieldErrors.password ? (
-            <Text style={styles.fieldError}>{fieldErrors.password}</Text>
-          ) : (
-            <Text style={styles.hint}>{PASSWORD_HINT}</Text>
-          )}
+          <Input
+            ref={passwordRef}
+            label="비밀번호"
+            value={password}
+            onChangeText={(v) => {
+              setPassword(v);
+              if (fieldErrors.password) clearFieldErr('password');
+              if (fieldErrors.passwordConfirm) clearFieldErr('passwordConfirm');
+            }}
+            secureTextEntry={!showPassword}
+            returnKeyType="next"
+            onSubmitEditing={() => passwordConfirmRef.current?.focus()}
+            editable={!submitting}
+            placeholder="비밀번호"
+            error={fieldErrors.password}
+            helperText={fieldErrors.password ? undefined : PASSWORD_HINT}
+            rightSlot={
+              <Pressable
+                onPress={() => setShowPassword((v) => !v)}
+                accessibilityLabel={showPassword ? '비밀번호 숨기기' : '비밀번호 보기'}
+                hitSlop={8}
+              >
+                <Ionicons
+                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                  size={20}
+                  color={colors.textMuted}
+                />
+              </Pressable>
+            }
+          />
 
-          <Text style={styles.label}>비밀번호 확인</Text>
-          <TextInput
+          <Input
             ref={passwordConfirmRef}
+            label="비밀번호 확인"
             value={passwordConfirm}
             onChangeText={(v) => {
               setPasswordConfirm(v);
@@ -220,46 +255,94 @@ export default function Signup() {
             returnKeyType="done"
             onSubmitEditing={() => void handleSignup()}
             editable={!submitting}
-            style={[styles.input, fieldErrors.passwordConfirm && styles.inputError]}
             placeholder="비밀번호 확인"
+            error={fieldErrors.passwordConfirm}
+            rightSlot={
+              passwordMatched ? (
+                <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+              ) : undefined
+            }
           />
-          {fieldErrors.passwordConfirm ? (
-            <Text style={styles.fieldError}>{fieldErrors.passwordConfirm}</Text>
-          ) : passwordConfirm.length > 0 && passwordConfirm === password ? (
-            <Text style={styles.matchOk}>✓ 비밀번호 일치</Text>
-          ) : null}
 
-          <Pressable
-            onPress={() => {
-              setAgreeRequired((v) => !v);
-              if (fieldErrors.terms) clearFieldErr('terms');
-            }}
-            style={styles.agreeRow}
-          >
-            <View style={[styles.checkbox, agreeRequired && styles.checkboxActive]}>
-              {agreeRequired ? <Text style={styles.check}>✓</Text> : null}
-            </View>
-            <Text style={styles.agreeText}>
-              (필수) 이용약관·개인정보 처리방침·위치정보 이용약관에 동의합니다
-            </Text>
-          </Pressable>
+          <View style={styles.termsBox}>
+            <Pressable
+              onPress={toggleAll}
+              style={styles.agreeAllRow}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: allAgreed }}
+            >
+              <Ionicons
+                name={allAgreed ? 'checkbox' : 'square-outline'}
+                size={22}
+                color={allAgreed ? colors.primary : colors.textMuted}
+              />
+              <Text variant="bodySm" weight="bold" style={styles.agreeText}>
+                필수 약관에 모두 동의
+              </Text>
+            </Pressable>
+            <View style={styles.termsDivider} />
+            {REQUIRED_TERMS.map((t) => {
+              const checked = agreedTerms[t.key];
+              return (
+                <View key={t.key} style={styles.termRow}>
+                  <Pressable
+                    onPress={() => toggleOne(t.key)}
+                    style={styles.termCheck}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked }}
+                  >
+                    <Ionicons
+                      name={checked ? 'checkbox' : 'square-outline'}
+                      size={20}
+                      color={checked ? colors.primary : colors.textMuted}
+                    />
+                    <Text variant="bodySm" style={styles.termLabel}>
+                      (필수) {t.label}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => openExternal(t.url, t.label)}
+                    hitSlop={8}
+                    accessibilityLabel={`${t.label} 보기`}
+                  >
+                    <Text variant="caption" color="primary">
+                      보기
+                    </Text>
+                  </Pressable>
+                </View>
+              );
+            })}
+          </View>
           {fieldErrors.terms ? (
-            <Text style={styles.fieldError}>{fieldErrors.terms}</Text>
+            <Text variant="caption" color="danger" style={styles.termsError}>
+              {fieldErrors.terms}
+            </Text>
           ) : null}
 
-          {globalError ? <Text style={styles.error}>{globalError}</Text> : null}
+          {globalError ? (
+            <Text variant="bodySm" color="danger">
+              {globalError}
+            </Text>
+          ) : null}
 
-          <Pressable
+          <Button
             onPress={handleSignup}
-            disabled={submitting}
-            style={({ pressed }) => [styles.btn, (pressed || submitting) && styles.pressed]}
+            size="lg"
+            loading={submitting}
+            fullWidth
+            style={styles.submit}
           >
-            <Text style={styles.btnText}>{submitting ? '가입 중...' : '가입하고 시작하기'}</Text>
-          </Pressable>
+            가입하고 시작하기
+          </Button>
 
-          <Pressable onPress={() => safeBack(router)} style={styles.link}>
-            <Text style={styles.linkText}>이미 계정이 있어요</Text>
-          </Pressable>
+          <Button
+            onPress={() => safeBack(router)}
+            variant="ghost"
+            size="sm"
+            fullWidth
+          >
+            이미 계정이 있어요
+          </Button>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -269,91 +352,44 @@ export default function Signup() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   scroll: { padding: spacing.xl, paddingTop: spacing.xxl * 2 },
-  title: {
-    fontSize: fontSize.xl,
-    fontWeight: '800',
-    color: colors.text,
-    marginBottom: spacing.xl,
-  },
-  form: { gap: spacing.sm },
-  label: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    fontWeight: '600',
+  title: { marginBottom: spacing.xl },
+  form: { gap: spacing.md },
+  termsBox: {
     marginTop: spacing.md,
-  },
-  input: {
-    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    fontSize: fontSize.base,
-    color: colors.text,
+    backgroundColor: colors.surface,
+    gap: spacing.xs,
   },
-  inputError: { borderColor: colors.danger },
-  fieldError: {
-    color: colors.danger,
-    fontSize: fontSize.xs,
-    marginTop: 4,
-    marginLeft: 4,
-  },
-  hint: {
-    color: colors.textMuted,
-    fontSize: fontSize.xs,
-    marginTop: 4,
-    marginLeft: 4,
-  },
-  matchOk: {
-    color: colors.success,
-    fontSize: fontSize.xs,
-    marginTop: 4,
-    marginLeft: 4,
-    fontWeight: '700',
-  },
-  passwordRow: { position: 'relative' },
-  passwordInput: { paddingRight: spacing.xl * 2 },
-  eyeBtn: {
-    position: 'absolute',
-    right: spacing.md,
-    top: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.sm,
-  },
-  eyeBtnText: { fontSize: 18 },
-  agreeRow: {
+  agreeAllRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: spacing.xl,
+    paddingVertical: spacing.xs,
     gap: spacing.sm,
   },
-  checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 4,
-    borderWidth: 1.5,
-    borderColor: colors.border,
+  agreeText: { flex: 1 },
+  termsDivider: {
+    height: 1,
+    backgroundColor: colors.borderMuted,
+    marginVertical: spacing.xs,
+  },
+  termRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.xs,
+    gap: spacing.sm,
   },
-  checkboxActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  check: { color: '#fff', fontSize: 14, fontWeight: '800' },
-  agreeText: { flex: 1, fontSize: fontSize.sm, color: colors.text },
-  error: { color: colors.danger, fontSize: fontSize.sm, marginTop: spacing.sm },
-  btn: {
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.lg,
-    borderRadius: radius.md,
+  termCheck: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: spacing.xl,
+    gap: spacing.sm,
+    flex: 1,
   },
-  pressed: { opacity: 0.85 },
-  btnText: { color: '#fff', fontSize: fontSize.base, fontWeight: '700' },
-  link: { alignItems: 'center', paddingVertical: spacing.md },
-  linkText: { color: colors.primary, fontSize: fontSize.sm, fontWeight: '600' },
+  termLabel: { flex: 1 },
+  termsError: { marginTop: spacing.xs },
+  submit: { marginTop: spacing.md },
 });

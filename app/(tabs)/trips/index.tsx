@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import { Redirect, useRouter } from 'expo-router';
 import { useTripStore } from '@/stores/tripStore';
@@ -7,22 +7,13 @@ import { useAuthStore } from '@/stores/authStore';
 import { useVisitStore } from '@/stores/visitStore';
 import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
-import { colors } from '@/theme/colors';
-import { spacing, radius, fontSize } from '@/theme/spacing';
+import { Card } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { Text } from '@/components/ui/Text';
+import { StickyBottomBar } from '@/components/ui/StickyBottomBar';
+import { spacing } from '@/theme/spacing';
+import { fmtDate, fmtDuration, fmtTime } from '@/utils/datetime';
 import type { Trip } from '@/types/entities';
-
-function fmtDate(iso: string) {
-  const d = new Date(iso);
-  return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
-}
-
-function fmtDuration(a: string, b: string | null) {
-  if (!b) return '진행 중';
-  const diff = new Date(b).getTime() - new Date(a).getTime();
-  const h = Math.floor(diff / 3600000);
-  const m = Math.floor((diff % 3600000) / 60000);
-  return h > 0 ? `${h}시간 ${m}분` : `${m}분`;
-}
 
 export default function TripsList() {
   const router = useRouter();
@@ -47,36 +38,26 @@ export default function TripsList() {
     return <Redirect href="/(tabs)/trips/active" />;
   }
 
-  const handlePrimaryAction = () => {
-    if (activeTripId !== null) {
-      router.push('/(tabs)/trips/active' as never);
-    } else {
-      router.push('/(tabs)/trips/new/select' as never);
-    }
-  };
-
+  // 라인 46 의 <Redirect/> 로 activeTripId 있으면 이 화면에 도달 못함 →
+  // 'isActive Badge' 분기는 영구 dead. 진행 중 외근은 외근 탭 진입 시 active 화면이 직행으로 받음.
   const renderItem = ({ item }: { item: Trip }) => {
     const visitCount = allVisits.filter((v) => v.tripId === item.id).length;
-    const isActive = item.id === activeTripId;
     const dateText = fmtDate(item.startedAt);
+    const startTime = fmtTime(item.startedAt);
     return (
-      <Pressable
+      <Card
         onPress={() => router.push(`/(tabs)/trips/${item.id}` as never)}
-        style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+        style={styles.cardSpacing}
       >
-        <View style={styles.row}>
-          <Text style={styles.date}>{item.title || dateText}</Text>
-          {isActive ? (
-            <View style={styles.activeBadge}>
-              <Text style={styles.activeBadgeText}>진행 중</Text>
-            </View>
-          ) : null}
-        </View>
-        <Text style={styles.meta}>
-          {item.title ? `${dateText} · ` : ''}
+        <Text variant="body" weight="bold">
+          {item.title || dateText}
+        </Text>
+        <Text variant="bodySm" color="textMuted" style={styles.meta}>
+          {/* 시작 시각 노출 — 한 날에 외근 2번 이상이면 제목 없이는 구분 불가 회로 차단. */}
+          {item.title ? `${dateText} ${startTime}` : startTime} ·{' '}
           {fmtDuration(item.startedAt, item.endedAt)} · 방문 {visitCount}건
         </Text>
-      </Pressable>
+      </Card>
     );
   };
 
@@ -88,63 +69,37 @@ export default function TripsList() {
         renderItem={renderItem}
         contentContainerStyle={styles.list}
         ListEmptyComponent={
-          <EmptyState title="외근 기록이 없습니다" description="아래 버튼을 눌러 외근을 시작하세요" />
+          <EmptyState
+            icon="briefcase-outline"
+            title="외근 기록이 없습니다"
+            description="아래 버튼을 눌러 첫 외근을 시작하세요"
+            action={
+              <Button
+                onPress={() => router.push('/(tabs)/trips/new/select' as never)}
+                leftIcon="play-circle"
+              >
+                외근 시작
+              </Button>
+            }
+          />
         }
       />
-      <Pressable
-        onPress={handlePrimaryAction}
-        style={({ pressed }) => [
-          styles.fab,
-          { backgroundColor: activeTripId ? colors.danger : colors.primary },
-          pressed && styles.pressed,
-        ]}
-      >
-        <Text style={styles.fabText}>
-          {activeTripId ? '진행 중인 외근 — 종료하기' : '외근 시작'}
-        </Text>
-      </Pressable>
+      <StickyBottomBar>
+        <Button
+          onPress={() => router.push('/(tabs)/trips/new/select' as never)}
+          size="lg"
+          fullWidth
+          leftIcon="play-circle"
+        >
+          외근 시작
+        </Button>
+      </StickyBottomBar>
     </MapSheetLayout>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
   list: { padding: spacing.lg, paddingBottom: 120 },
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: spacing.sm,
-  },
-  pressed: { opacity: 0.7 },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  date: { fontSize: fontSize.base, fontWeight: '700', color: colors.text },
-  activeBadge: {
-    backgroundColor: colors.danger + '22',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radius.pill,
-  },
-  activeBadgeText: {
-    fontSize: fontSize.xs,
-    fontWeight: '700',
-    color: colors.danger,
-  },
-  meta: { fontSize: fontSize.sm, color: colors.textMuted, marginTop: spacing.xs },
-  fab: {
-    position: 'absolute',
-    bottom: spacing.xl,
-    left: spacing.xl,
-    right: spacing.xl,
-    paddingVertical: spacing.lg,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-  },
-  fabText: { color: '#fff', fontSize: fontSize.base, fontWeight: '700' },
+  cardSpacing: { marginBottom: spacing.sm },
+  meta: { marginTop: spacing.xs },
 });

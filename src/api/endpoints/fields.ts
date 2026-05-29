@@ -224,4 +224,16 @@ export const fields = {
       multipart: true,
     });
   },
+
+  // 백엔드 신설 요청 — backend-backlog §14. 응답 contract 가 확정되기 전까지는
+  // unknown 으로 받고 store 가 로컬 상태 정리만 한다.
+  removeTextMemo: (fieldId: string, memoId: string) =>
+    request<unknown>(`/api/fields/${fieldId}/memos/${memoId}`, {
+      method: 'DELETE',
+    }),
+
+  removePhoto: (fieldId: string, photoId: string) =>
+    request<unknown>(`/api/fields/${fieldId}/photos/${photoId}`, {
+      method: 'DELETE',
+    }),
 };

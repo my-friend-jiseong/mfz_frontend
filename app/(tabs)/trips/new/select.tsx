@@ -1,16 +1,29 @@
 import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '@/components/ui/Text';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useFieldStore } from '@/stores/fieldStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useTripStore } from '@/stores/tripStore';
 import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
+import { Input } from '@/components/ui/Input';
+import { Button } from '@/components/ui/Button';
 import { safeBack } from '@/utils/backNavigation';
 import { colors } from '@/theme/colors';
-import { spacing, radius, fontSize } from '@/theme/spacing';
-import { FIELD_STATUS_VALUES, FIELD_STATUS_LABEL, type Field, type FieldStatus } from '@/types/entities';
+import { spacing, radius } from '@/theme/spacing';
+import { opacity } from '@/theme/motion';
+import { FilterChip } from '@/components/ui/FilterChip';
+import { StickyBottomBar } from '@/components/ui/StickyBottomBar';
+import {
+  FIELD_STATUS_VALUES,
+  FIELD_STATUS_LABEL,
+  type Field,
+  type FieldStatus,
+} from '@/types/entities';
+import { collectFieldFacets, applyFieldFilters } from '@/utils/fieldFacets';
 
 export default function NewTripSelect() {
   const router = useRouter();
@@ -25,23 +38,25 @@ export default function NewTripSelect() {
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<FieldStatus[]>([]);
+  const [projectFilter, setProjectFilter] = useState<string[]>([]);
+  const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
-  const fields = useMemo(() => {
-    let list = myFields;
-    if (statusFilter.length > 0) {
-      list = list.filter((f) => statusFilter.includes(f.status));
-    }
-    const q = search.trim().toLowerCase();
-    if (q) {
-      list = list.filter(
-        (f) =>
-          f.address.toLowerCase().includes(q) ||
-          (f.addressDetail ?? '').toLowerCase().includes(q),
-      );
-    }
-    return list;
-  }, [myFields, statusFilter, search]);
+  const { projects: availableProjects, categories: availableCategories } = useMemo(
+    () => collectFieldFacets(myFields),
+    [myFields],
+  );
+
+  const fields = useMemo(
+    () =>
+      applyFieldFilters(myFields, {
+        search,
+        statuses: statusFilter,
+        projectIds: projectFilter,
+        categories: categoryFilter,
+      }),
+    [myFields, statusFilter, projectFilter, categoryFilter, search],
+  );
 
   const toggle = (id: string) =>
     setSelectedIds((prev) =>
@@ -52,6 +67,14 @@ export default function NewTripSelect() {
     setStatusFilter((prev) =>
       prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s],
     );
+  const toggleProject = (id: string) =>
+    setProjectFilter((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  const toggleCategory = (c: string) =>
+    setCategoryFilter((prev) =>
+      prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c],
+    );
 
   // 현재 보이는 (필터링된) 현장이 모두 선택됐는지 — 전체 선택 토글 상태
   const visibleAllSelected =
@@ -59,7 +82,6 @@ export default function NewTripSelect() {
   const toggleSelectAll = () => {
     const visibleIds = fields.map((f) => f.id);
     if (visibleAllSelected) {
-      // 보이는 현장만 선택 해제
       setSelectedIds((prev) => prev.filter((id) => !visibleIds.includes(id)));
     } else {
       setSelectedIds((prev) => Array.from(new Set([...prev, ...visibleIds])));
@@ -78,8 +100,17 @@ export default function NewTripSelect() {
     return (
       <MapSheetLayout title="외근 시작" onBack={() => safeBack(router)}>
         <EmptyState
+          icon="briefcase"
           title="이미 진행 중인 외근이 있습니다"
           description="현재 외근을 종료한 뒤 새 외근을 시작해주세요"
+          action={
+            <Button
+              onPress={() => router.replace('/(tabs)/trips/active' as never)}
+              leftIcon="navigate"
+            >
+              진행 중 외근 보기
+            </Button>
+          }
         />
       </MapSheetLayout>
     );
@@ -90,21 +121,27 @@ export default function NewTripSelect() {
     return (
       <Pressable
         onPress={() => toggle(item.id)}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked }}
         style={({ pressed }) => [
           styles.row,
           checked && styles.rowChecked,
-          pressed && styles.pressed,
+          pressed && { opacity: opacity.pressed },
         ]}
       >
-        <View
-          style={[styles.checkbox, checked && styles.checkboxChecked]}
-        >
-          {checked ? <Text style={styles.checkMark}>✓</Text> : null}
-        </View>
+        <Ionicons
+          name={checked ? 'checkbox' : 'square-outline'}
+          size={22}
+          color={checked ? colors.primary : colors.textMuted}
+        />
         <View style={styles.rowText}>
-          <Text style={styles.address}>{item.address}</Text>
+          <Text variant="body" weight="semibold">
+            {item.address}
+          </Text>
           {item.addressDetail ? (
-            <Text style={styles.detail}>{item.addressDetail}</Text>
+            <Text variant="bodySm" color="textMuted" style={styles.detail}>
+              {item.addressDetail}
+            </Text>
           ) : null}
         </View>
       </Pressable>
@@ -115,51 +152,69 @@ export default function NewTripSelect() {
     <MapSheetLayout title="방문할 현장 선택" onBack={() => safeBack(router)}>
       <View style={styles.head}>
         <View style={styles.headRow}>
-          <Text style={styles.headTitle}>방문할 현장 선택</Text>
-          <Text style={styles.headMeta}>
+          <Text variant="body" weight="bold">
+            방문할 현장 선택
+          </Text>
+          <Text variant="bodySm" weight="bold" color="primary">
             {selectedIds.length}/{myFields.length}개
           </Text>
         </View>
-        <TextInput
+        <Input
           value={search}
           onChangeText={setSearch}
-          placeholder="주소·상세주소 검색"
-          style={styles.searchInput}
+          placeholder="주소·프로젝트·분류 검색"
           autoCapitalize="none"
           clearButtonMode="while-editing"
+          leftSlot={<Ionicons name="search" size={18} color={colors.textMuted} />}
         />
         <View style={styles.chipRow}>
-          {FIELD_STATUS_VALUES.map((s) => {
-            const active = statusFilter.includes(s);
-            const c = colors.fieldStatus[s];
-            return (
-              <Pressable
-                key={s}
-                onPress={() => toggleStatus(s)}
-                style={[
-                  styles.chip,
-                  active && { backgroundColor: c + '22', borderColor: c },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.chipText,
-                    active && { color: c, fontWeight: '700' },
-                  ]}
-                >
-                  {FIELD_STATUS_LABEL[s]}
-                </Text>
-              </Pressable>
-            );
-          })}
+          {FIELD_STATUS_VALUES.map((s) => (
+            <FilterChip
+              key={s}
+              label={FIELD_STATUS_LABEL[s]}
+              active={statusFilter.includes(s)}
+              activeColor={colors.fieldStatus[s]}
+              onPress={() => toggleStatus(s)}
+            />
+          ))}
           {fields.length > 0 ? (
-            <Pressable onPress={toggleSelectAll} style={styles.chip}>
-              <Text style={styles.chipText}>
-                {visibleAllSelected ? '모두 해제' : '모두 선택'}
-              </Text>
-            </Pressable>
+            <FilterChip
+              label={visibleAllSelected ? '모두 해제' : '모두 선택'}
+              active={false}
+              dashed
+              leftIcon={
+                visibleAllSelected ? 'remove-circle-outline' : 'checkbox-outline'
+              }
+              onPress={toggleSelectAll}
+            />
           ) : null}
         </View>
+        {availableProjects.length > 0 ? (
+          <View style={styles.chipRow}>
+            {availableProjects.map((p) => (
+              <FilterChip
+                key={p.id}
+                label={p.name}
+                active={projectFilter.includes(p.id)}
+                leftIcon="folder-outline"
+                onPress={() => toggleProject(p.id)}
+              />
+            ))}
+          </View>
+        ) : null}
+        {availableCategories.length > 0 ? (
+          <View style={styles.chipRow}>
+            {availableCategories.map((c) => (
+              <FilterChip
+                key={c}
+                label={c}
+                active={categoryFilter.includes(c)}
+                leftIcon="pricetag-outline"
+                onPress={() => toggleCategory(c)}
+              />
+            ))}
+          </View>
+        ) : null}
       </View>
       <BottomSheetFlatList
         data={fields}
@@ -168,6 +223,7 @@ export default function NewTripSelect() {
         contentContainerStyle={styles.list}
         ListEmptyComponent={
           <EmptyState
+            icon={search || statusFilter.length > 0 ? 'search-outline' : 'location-outline'}
             title={
               search || statusFilter.length > 0
                 ? '검색 결과가 없습니다'
@@ -176,24 +232,32 @@ export default function NewTripSelect() {
             description={
               search || statusFilter.length > 0
                 ? '검색어 또는 필터를 조정해보세요'
-                : '현장 탭에서 새 현장을 등록하세요'
+                : '아래 버튼으로 첫 현장을 등록하세요'
+            }
+            action={
+              !search && statusFilter.length === 0 ? (
+                <Button
+                  onPress={() => router.push('/(tabs)/fields/new' as never)}
+                  leftIcon="add-circle"
+                >
+                  새 현장 등록
+                </Button>
+              ) : undefined
             }
           />
         }
       />
-      <Pressable
-        onPress={handleNext}
-        disabled={selectedIds.length === 0}
-        style={({ pressed }) => [
-          styles.fab,
-          selectedIds.length === 0 && styles.fabDisabled,
-          pressed && styles.pressed,
-        ]}
-      >
-        <Text style={styles.fabText}>
+      <StickyBottomBar>
+        <Button
+          onPress={handleNext}
+          disabled={selectedIds.length === 0}
+          size="lg"
+          fullWidth
+          rightIcon="arrow-forward"
+        >
           다음 ({selectedIds.length})
-        </Text>
-      </Pressable>
+        </Button>
+      </StickyBottomBar>
     </MapSheetLayout>
   );
 }
@@ -210,28 +274,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  headTitle: { fontSize: fontSize.base, color: colors.text, fontWeight: '700' },
-  headMeta: { fontSize: fontSize.sm, color: colors.primary, fontWeight: '700' },
-  searchInput: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    fontSize: fontSize.sm,
-    color: colors.text,
-  },
   chipRow: { flexDirection: 'row', gap: spacing.xs, flexWrap: 'wrap' },
-  chip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  chipText: { fontSize: fontSize.xs, color: colors.textMuted },
   list: { paddingHorizontal: spacing.lg, paddingBottom: 120 },
   row: {
     flexDirection: 'row',
@@ -246,36 +289,8 @@ const styles = StyleSheet.create({
   },
   rowChecked: {
     borderColor: colors.primary,
-    backgroundColor: colors.primary + '08',
+    backgroundColor: colors.primaryMuted,
   },
-  pressed: { opacity: 0.7 },
-  checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 4,
-    borderWidth: 2,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkboxChecked: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  checkMark: { color: '#fff', fontSize: 14, fontWeight: '700' },
   rowText: { flex: 1 },
-  address: { fontSize: fontSize.base, color: colors.text, fontWeight: '600' },
-  detail: { fontSize: fontSize.sm, color: colors.textMuted, marginTop: 2 },
-  fab: {
-    position: 'absolute',
-    bottom: spacing.xl,
-    left: spacing.xl,
-    right: spacing.xl,
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.lg,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-  },
-  fabDisabled: { backgroundColor: colors.border },
-  fabText: { color: '#fff', fontSize: fontSize.base, fontWeight: '700' },
+  detail: { marginTop: 2 },
 });

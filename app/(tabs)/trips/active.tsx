@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Platform, StyleSheet, View } from 'react-native';
+import { Text } from '@/components/ui/Text';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import { Redirect, useRouter } from 'expo-router';
 import { useTripStore } from '@/stores/tripStore';
@@ -7,27 +8,27 @@ import { useDestinationStore } from '@/stores/destinationStore';
 import { useFieldStore } from '@/stores/fieldStore';
 import { useVisitStore } from '@/stores/visitStore';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
+import { Button } from '@/components/ui/Button';
+import { StickyBottomBar } from '@/components/ui/StickyBottomBar';
+import {
+  VISIT_STATUS_BADGE,
+  DESTINATION_STATUS_BADGE,
+} from '@/theme/statusBadge';
+import type { Visit } from '@/types/entities';
+import { TripSummaryCard } from '@/components/trips/TripSummaryCard';
+import { CurrentDestCard } from '@/components/trips/CurrentDestCard';
+import { AllDoneCard } from '@/components/trips/AllDoneCard';
+import { DestinationRow } from '@/components/trips/DestinationRow';
+import { AddDestinationModal } from '@/components/trips/AddDestinationModal';
 import { openKakaoRouteTo } from '@/utils/kakaoMap';
+import { navigateToReview } from '@/utils/postTripFlow';
 import { trips as tripsApi, localizeError } from '@/api';
 import { VISIT_STATUS_LABEL } from '@/types/entities';
 import { nearestNeighborOrder } from '@/utils/routeOptimize';
 import * as Linking from 'expo-linking';
 import { safeBack } from '@/utils/backNavigation';
-import { colors } from '@/theme/colors';
-import { spacing, radius, fontSize } from '@/theme/spacing';
+import { spacing } from '@/theme/spacing';
 import type { Destination } from '@/types/entities';
-
-const STATUS_LABEL: Record<Destination['status'], string> = {
-  pending: '예정',
-  arrived: '방문 완료',
-  skipped: '건너뜀',
-};
-
-const STATUS_COLOR: Record<Destination['status'], string> = {
-  pending: colors.fieldStatus.pending,
-  arrived: colors.fieldStatus.done,
-  skipped: colors.textMuted,
-};
 
 export default function ActiveTrip() {
   const router = useRouter();
@@ -38,7 +39,6 @@ export default function ActiveTrip() {
 
   const allDestinations = useDestinationStore((s) => s.destinations);
   const markSkipped = useDestinationStore((s) => s.markSkipped);
-  const isAllResolved = useDestinationStore((s) => s.isAllResolved);
   const removeByTrip = useDestinationStore((s) => s.removeByTrip);
   const reorderDestinations = useDestinationStore((s) => s.reorder);
 
@@ -53,13 +53,16 @@ export default function ActiveTrip() {
 
   const [optimizing, setOptimizing] = useState(false);
   const [elapsedTick, setElapsedTick] = useState(0);
+  const [addOpen, setAddOpen] = useState(false);
 
   // 외근 진행 시간을 1분 주기로 갱신. 화면이 active 일 때만 동작.
+  // deps 를 activeTripId (스칼라) 로 좁힘 — 이전엔 activeTrip 객체 (allTrips memo 결과)
+  // 가 다른 store mutation 마다 새 reference 가 되어 인터벌이 분 단위로 리셋되는 회로.
   useEffect(() => {
-    if (!activeTrip) return;
+    if (!activeTripId) return;
     const id = setInterval(() => setElapsedTick((n) => n + 1), 60_000);
     return () => clearInterval(id);
-  }, [activeTrip]);
+  }, [activeTripId]);
 
   const destinations = useMemo<Destination[]>(() => {
     if (activeTripId === null) return [];
@@ -84,16 +87,16 @@ export default function ActiveTrip() {
     return { total, arrived, skipped, resolved, ratio };
   }, [destinations]);
 
-  // destination 의 fieldId 에 해당하는 활성 외근의 visit 찾기 (있으면 visit 결과 라벨 사용).
-  const visitForDestination = (fieldId: string) => {
-    if (!activeTripId) return null;
-    return (
-      allVisits.find((v) => v.tripId === activeTripId && v.fieldId === fieldId) ??
-      null
-    );
-  };
+  // O(1) visit lookup. 매 row 마다 allVisits.find 풀스캔하던 회로 차단.
+  const visitByFieldId = useMemo(() => {
+    const map = new Map<string, Visit>();
+    if (!activeTripId) return map;
+    for (const v of allVisits) {
+      if (v.tripId === activeTripId) map.set(v.fieldId, v);
+    }
+    return map;
+  }, [allVisits, activeTripId]);
 
-  // 외근 시작 시각·경과 시간 — elapsedTick 의존으로 1분마다 자동 갱신.
   const elapsedLabel = useMemo(() => {
     void elapsedTick;
     if (!activeTrip) return null;
@@ -116,9 +119,16 @@ export default function ActiveTrip() {
   const allDone =
     activeTripId !== null && destinations.length > 0 && !currentDest;
 
+  const pendingDests = useMemo(
+    () => destinations.filter((d) => d.status === 'pending'),
+    [destinations],
+  );
+  const lastArrivedDest = useMemo(() => {
+    const arrived = destinations.filter((d) => d.status === 'arrived');
+    return arrived.length > 0 ? arrived[arrived.length - 1] : null;
+  }, [destinations]);
+
   // 활성 외근이 없으면 이 화면에 머물 이유가 없음 — 외근 탭 메인으로 즉시 redirect.
-  // 외근 종료 직후 finalizeEnd 의 router.replace 가 어떤 이유로든 발화 못해도
-  // 사용자가 /trips/active 에 잡혀 있는 일을 막는 안전망.
   if (activeTripId === null) {
     return <Redirect href="/(tabs)/trips" />;
   }
@@ -188,22 +198,11 @@ export default function ActiveTrip() {
     ]);
   };
 
-  // 남은 (pending) 목적지가 2개 이상일 때만 재최적화 가능
-  const pendingDests = useMemo(
-    () => destinations.filter((d) => d.status === 'pending'),
-    [destinations],
-  );
-  const lastArrivedDest = useMemo(() => {
-    const arrived = destinations.filter((d) => d.status === 'arrived');
-    return arrived.length > 0 ? arrived[arrived.length - 1] : null;
-  }, [destinations]);
-
   const applyOptimizedOrder = (
     pendingOrderedIds: string[],
     summary: { algorithm: string; totalDistanceKm: number; totalEtaMinutes: number },
   ) => {
     if (!activeTripId) return;
-    // 이미 처리된(arrived/skipped) 목적지는 현재 순서를 보존, 그 뒤에 재최적화된 pending 을 이어붙임
     const resolvedIds = destinations
       .filter((d) => d.status !== 'pending')
       .map((d) => d.id);
@@ -236,10 +235,7 @@ export default function ActiveTrip() {
       return;
     }
 
-    // 출발점: 마지막으로 도착한 목적지 좌표, 없으면 첫 pending 의 좌표 (PR-α 와 동일 전략)
-    const startSource = lastArrivedDest
-      ? getField(lastArrivedDest.fieldId)
-      : null;
+    const startSource = lastArrivedDest ? getField(lastArrivedDest.fieldId) : null;
     const start = startSource
       ? { lat: startSource.latitude, lng: startSource.longitude }
       : { lat: pendingFields[0].lat, lng: pendingFields[0].lng };
@@ -256,7 +252,6 @@ export default function ActiveTrip() {
           lng: f.lng,
         })),
       });
-      // 백엔드 응답의 fieldId 순서를 destId 순서로 변환
       const fieldToDest = new Map(pendingFields.map((f) => [f.fieldId, f.destId]));
       const orderedDestIds = res.optimizedOrder
         .map((o) => fieldToDest.get(o.fieldId))
@@ -266,7 +261,6 @@ export default function ActiveTrip() {
       }
       applyOptimizedOrder(orderedDestIds, res.summary);
     } catch (e) {
-      // 백엔드 미응답·오류 시 클라이언트 fallback (PR-α 와 동일 알고리즘)
       const ordered = nearestNeighborOrder(
         start,
         pendingFields.map((f) => ({ id: f.destId, lat: f.lat, lng: f.lng })),
@@ -275,10 +269,7 @@ export default function ActiveTrip() {
         (sum, n) => sum + n.distanceFromPrevKm,
         0,
       );
-      const totalEtaMinutes = ordered.reduce(
-        (sum, n) => sum + n.etaMinutes,
-        0,
-      );
+      const totalEtaMinutes = ordered.reduce((sum, n) => sum + n.etaMinutes, 0);
       applyOptimizedOrder(
         ordered.map((n) => n.id),
         {
@@ -296,28 +287,12 @@ export default function ActiveTrip() {
     if (originalTripId !== null) {
       removeByTrip(originalTripId);
     }
-    // web 에선 expo-router 의 router.replace('/(tabs)/trips') 가 같은 trips Stack 안의
-    // active 화면을 떠나지 못하는 케이스가 관찰됨 (사용자 보고: 종료 성공 후에도 URL 이
-    // /trips/active). 브라우저 직접 navigation 으로 우회 — page 가 새로 로드되며 모든
-    // in-memory state 가 초기화되고 새 hydrate 에서 activeTripId=null 로 깨끗이 시작.
-    if (Platform.OS === 'web') {
-      window.location.assign('/trips');
-      return;
-    }
-    router.replace('/(tabs)/trips' as never);
-    Alert.alert('외근 종료', '외근이 종료되었습니다. 지금 보고서를 작성할까요?', [
-      { text: '나중에', style: 'cancel' },
-      {
-        text: '지금 작성',
-        onPress: () => router.replace(`/(tabs)/reports/new?tripId=${endedTripId}` as never),
-      },
-    ]);
+    // 종료 직후 review 화면으로 단일 진입 — 보고서 작성 prompt 는 review 의 footer CTA 가 가져감.
+    navigateToReview(router, endedTripId);
   };
 
   const handleEnd = async () => {
     if (tripBusy) {
-      // 종료 진행 중 중복 클릭 방지 — 매 클릭마다 endTrip() 가 새로 발화돼 백엔드에
-      // confirm_required 를 연속으로 받는 회로 차단.
       console.warn('[trips/end] busy — ignoring click');
       return;
     }
@@ -328,7 +303,6 @@ export default function ActiveTrip() {
       return;
     }
     if ('needsConfirm' in r) {
-      // react-native-web 의 Alert.alert 다중 버튼 분기가 불안정 — web 은 window.confirm 사용.
       const confirmEnd = async () => {
         if (__DEV__) console.log('[trips/end] confirmEnd → endTrip(true)');
         const force = await endTrip(true);
@@ -376,13 +350,72 @@ export default function ActiveTrip() {
     }
   };
 
+  // 함수 컴포넌트 (`() => JSX`) 형태로 ListHeaderComponent 에 넘기면 매 render 마다
+  // 새 컴포넌트 reference → FlatList 가 헤더 서브트리를 unmount/remount.
+  // React element 로 넘겨 일반 children 재조정만 받도록 함.
+  const currentDestField = currentDest ? getField(currentDest.fieldId) : undefined;
+  const listHeader = (
+    <View style={styles.header}>
+      <TripSummaryCard
+        startedAtLabel={elapsedLabel}
+        arrived={progress.arrived}
+        skipped={progress.skipped}
+        total={progress.total}
+        ratio={progress.ratio}
+      />
+      {currentDest ? (
+        <CurrentDestCard
+          order={currentDest.order}
+          // 상대 위치 — "전체 K곳 중 M번째" — order 가 갑자기 3 으로 점프하는 사용자 혼란 방지.
+          positionLabel={`${progress.total}곳 중 ${progress.resolved + 1}번째`}
+          address={currentDestField?.address ?? '알 수 없는 현장'}
+          addressDetail={currentDestField?.addressDetail ?? undefined}
+          onNavigate={() => void handleNavigate()}
+          onCheckIn={handleCheckIn}
+          onSkip={handleSkip}
+          onShowField={
+            currentDestField
+              ? () =>
+                  router.push(
+                    `/(tabs)/fields/${currentDestField.id}` as never,
+                  )
+              : undefined
+          }
+          onReoptimize={
+            pendingDests.length >= 2 ? () => void handleReoptimize() : undefined
+          }
+          optimizing={optimizing}
+          pendingCount={pendingDests.length}
+        />
+      ) : (
+        <AllDoneCard />
+      )}
+      <View style={styles.sectionTitleRow}>
+        <Text variant="bodySm" weight="bold" color="textMuted">
+          목적지 ({destinations.length})
+        </Text>
+        <Button
+          onPress={() => setAddOpen(true)}
+          variant="ghost"
+          size="sm"
+          leftIcon="add-circle-outline"
+        >
+          현장 추가
+        </Button>
+      </View>
+    </View>
+  );
+
   const renderItem = ({ item }: { item: Destination }) => {
     const field = getField(item.fieldId);
     const isCurrent = item.id === currentDest?.id;
-    const c = STATUS_COLOR[item.status];
-    // arrived 인 경우 visit 결과 라벨 우선 노출 (정상/부재/거절 등). pending/skipped 은 destination status 그대로.
-    const visit = item.status === 'arrived' ? visitForDestination(item.fieldId) : null;
-    const visitColor = visit ? colors.visitStatus[visit.status] : null;
+    // arrived 인 경우 visit 결과 라벨 우선 노출 (정상/부재/거절 등).
+    const visit = item.status === 'arrived' ? visitByFieldId.get(item.fieldId) ?? null : null;
+
+    const m = visit
+      ? { ...VISIT_STATUS_BADGE[visit.status], label: VISIT_STATUS_LABEL[visit.status] }
+      : DESTINATION_STATUS_BADGE[item.status];
+
     const onPress = () => {
       if (visit) {
         router.push(
@@ -392,146 +425,20 @@ export default function ActiveTrip() {
         router.push(`/(tabs)/fields/${field.id}` as never);
       }
     };
+
     return (
-      <Pressable
+      <DestinationRow
+        order={item.order}
+        address={field?.address ?? '알 수 없는 현장'}
+        addressDetail={field?.addressDetail ?? undefined}
+        statusLabel={m.label}
+        statusTone={m.tone}
+        statusShape={m.shape}
+        isCurrent={isCurrent}
         onPress={onPress}
-        style={({ pressed }) => [
-          styles.destRow,
-          isCurrent && styles.destRowCurrent,
-          pressed && styles.pressed,
-        ]}
-      >
-        <View style={styles.orderBadge}>
-          <Text style={styles.orderText}>{item.order}</Text>
-        </View>
-        <View style={styles.destText}>
-          <Text style={styles.address}>
-            {field?.address ?? '알 수 없는 현장'}
-          </Text>
-          {field?.addressDetail ? (
-            <Text style={styles.detail}>{field.addressDetail}</Text>
-          ) : null}
-        </View>
-        {visit && visitColor ? (
-          <View style={[styles.statusChip, { backgroundColor: visitColor + '22' }]}>
-            <Text style={[styles.statusText, { color: visitColor }]}>
-              {VISIT_STATUS_LABEL[visit.status]}
-            </Text>
-          </View>
-        ) : (
-          <View style={[styles.statusChip, { backgroundColor: c + '22' }]}>
-            <Text style={[styles.statusText, { color: c }]}>
-              {STATUS_LABEL[item.status]}
-            </Text>
-          </View>
-        )}
-      </Pressable>
+      />
     );
   };
-
-  const ListHeader = () => (
-    <View style={styles.header}>
-      <View style={styles.summaryCard}>
-        {elapsedLabel ? (
-          <Text style={styles.summaryTime}>{elapsedLabel}</Text>
-        ) : null}
-        <View style={styles.progressRow}>
-          <Text style={styles.progressLabel}>
-            방문 {progress.arrived}
-            {progress.skipped > 0 ? ` · 건너뜀 ${progress.skipped}` : ''}
-            {' / '}
-            총 {progress.total}곳
-          </Text>
-          <Text style={styles.progressRatio}>{progress.ratio}%</Text>
-        </View>
-        <View style={styles.progressTrack}>
-          <View
-            style={[
-              styles.progressFill,
-              { width: `${progress.ratio}%` },
-            ]}
-          />
-        </View>
-      </View>
-
-      {currentDest ? (
-        (() => {
-          const field = getField(currentDest.fieldId);
-          return (
-            <View style={styles.currentCard}>
-              <Text style={styles.currentLabel}>현재 목적지</Text>
-              <Text style={styles.currentOrder}>{currentDest.order}번째</Text>
-              <Text style={styles.currentAddress}>{field?.address}</Text>
-              {field?.addressDetail ? (
-                <Text style={styles.currentDetail}>{field.addressDetail}</Text>
-              ) : null}
-              <View style={styles.actions}>
-                <Pressable
-                  onPress={() => void handleNavigate()}
-                  style={({ pressed }) => [
-                    styles.actionBtn,
-                    styles.primaryBtn,
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <Text style={[styles.actionText, styles.primaryText]}>
-                    길찾기
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={handleCheckIn}
-                  style={({ pressed }) => [
-                    styles.actionBtn,
-                    styles.successBtn,
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <Text style={[styles.actionText, styles.primaryText]}>
-                    체크인
-                  </Text>
-                </Pressable>
-              </View>
-              <Pressable
-                onPress={handleSkip}
-                style={({ pressed }) => [
-                  styles.skipBtn,
-                  pressed && styles.pressed,
-                ]}
-              >
-                <Text style={styles.skipText}>이 목적지 건너뛰기</Text>
-              </Pressable>
-              {pendingDests.length >= 2 ? (
-                <Pressable
-                  onPress={() => void handleReoptimize()}
-                  disabled={optimizing}
-                  style={({ pressed }) => [
-                    styles.reopBtn,
-                    (pressed || optimizing) && styles.pressed,
-                  ]}
-                >
-                  <Text style={styles.reopText}>
-                    {optimizing
-                      ? '최적화 중...'
-                      : `✨ 남은 경로 재최적화 (${pendingDests.length}개)`}
-                  </Text>
-                </Pressable>
-              ) : null}
-            </View>
-          );
-        })()
-      ) : (
-        <View style={styles.doneCard}>
-          <Text style={styles.doneTitle}>모든 목적지 처리 완료</Text>
-          <Text style={styles.doneSub}>
-            아래 버튼으로 외근을 종료해주세요
-          </Text>
-        </View>
-      )}
-      <Text style={styles.sectionTitle}>
-        목적지 ({destinations.length})
-      </Text>
-    </View>
-  );
 
   return (
     <View style={styles.screenRoot}>
@@ -545,30 +452,33 @@ export default function ActiveTrip() {
           data={destinations}
           keyExtractor={(d) => String(d.id)}
           renderItem={renderItem}
-          ListHeaderComponent={ListHeader}
+          ListHeaderComponent={listHeader}
           contentContainerStyle={styles.list}
         />
       </MapSheetLayout>
-      {/* 종료 버튼은 BottomSheet 외부(스크린 루트) 에 둔다 — 시트 내부에 두면
-          @gorhom/bottom-sheet 의 pan 제스처 핸들러가 absolute 자식의 터치를
-          가로채는 케이스가 있어 onPress 가 안 도는 회로를 차단. */}
-      <Pressable
-        onPress={handleEnd}
-        disabled={tripBusy}
-        style={({ pressed }) => [
-          styles.endBtn,
-          { backgroundColor: tripBusy ? colors.border : colors.danger },
-          pressed && styles.pressed,
-        ]}
-      >
-        <Text style={styles.endText}>
-          {tripBusy
-            ? '처리 중...'
-            : allDone
-              ? '외근 종료'
-              : '외근 종료 (미완료 목적지 있음)'}
-        </Text>
-      </Pressable>
+      {/* 종료 버튼은 BottomSheet 외부에 둔다 — 시트 내부 absolute 자식의 터치를
+          @gorhom/bottom-sheet 의 pan 제스처가 가로채는 회로 차단. */}
+      <StickyBottomBar>
+        <Button
+          onPress={handleEnd}
+          disabled={tripBusy}
+          loading={tripBusy}
+          variant="destructive"
+          size="lg"
+          fullWidth
+          leftIcon="stop-circle"
+        >
+          {allDone
+            ? '외근 종료'
+            : `외근 종료 (미완료 ${pendingDests.length}곳)`}
+        </Button>
+      </StickyBottomBar>
+      <AddDestinationModal
+        visible={addOpen}
+        tripId={activeTripId}
+        onClose={() => setAddOpen(false)}
+        onCreateNew={() => router.push('/(tabs)/fields/new' as never)}
+      />
     </View>
   );
 }
@@ -577,194 +487,10 @@ const styles = StyleSheet.create({
   screenRoot: { flex: 1 },
   list: { paddingHorizontal: spacing.lg, paddingBottom: 120 },
   header: { paddingTop: spacing.md, gap: spacing.sm },
-  summaryCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    gap: spacing.xs,
-    marginBottom: spacing.sm,
-  },
-  summaryTime: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
-    fontWeight: '600',
-  },
-  progressRow: {
+  sectionTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-  },
-  progressLabel: { fontSize: fontSize.sm, color: colors.text, fontWeight: '600' },
-  progressRatio: {
-    fontSize: fontSize.sm,
-    color: colors.primary,
-    fontWeight: '800',
-  },
-  progressTrack: {
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.border,
-    overflow: 'hidden',
-    marginTop: 2,
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: colors.primary,
-    borderRadius: 3,
-  },
-  currentCard: {
-    backgroundColor: colors.primary + '0e',
-    borderRadius: radius.md,
-    padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.primary + '55',
-    gap: spacing.xs,
-  },
-  currentLabel: {
-    fontSize: fontSize.xs,
-    color: colors.primary,
-    fontWeight: '700',
-  },
-  currentOrder: { fontSize: fontSize.sm, color: colors.textMuted },
-  currentAddress: {
-    fontSize: fontSize.lg,
-    color: colors.text,
-    fontWeight: '700',
-  },
-  currentDetail: { fontSize: fontSize.sm, color: colors.text },
-  actions: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-  },
-  actionBtn: {
-    flex: 1,
-    paddingVertical: spacing.md,
-    borderRadius: radius.md,
-    alignItems: 'center',
-  },
-  primaryBtn: { backgroundColor: colors.primary },
-  successBtn: { backgroundColor: colors.success },
-  actionText: { fontSize: fontSize.sm, fontWeight: '700', color: colors.text },
-  primaryText: { color: '#fff' },
-  skipBtn: {
-    marginTop: spacing.sm,
-    paddingVertical: spacing.sm,
-    alignItems: 'center',
-  },
-  skipText: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    textDecorationLine: 'underline',
-  },
-  reopBtn: {
-    marginTop: spacing.xs,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.primary + '88',
-    backgroundColor: colors.primary + '10',
-    alignItems: 'center',
-  },
-  reopText: { fontSize: fontSize.sm, color: colors.primary, fontWeight: '700' },
-  doneCard: {
-    backgroundColor: colors.success + '12',
-    borderRadius: radius.md,
-    padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.success + '55',
-    alignItems: 'center',
-  },
-  doneTitle: {
-    fontSize: fontSize.base,
-    color: colors.success,
-    fontWeight: '700',
-  },
-  doneSub: {
-    fontSize: fontSize.sm,
-    color: colors.text,
-    marginTop: spacing.xs,
-  },
-  sectionTitle: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    fontWeight: '700',
     marginTop: spacing.lg,
   },
-  destRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: spacing.xs,
-    gap: spacing.sm,
-  },
-  destRowCurrent: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primary + '08',
-  },
-  orderBadge: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  orderText: { color: colors.text, fontSize: fontSize.xs, fontWeight: '700' },
-  destText: { flex: 1 },
-  address: { fontSize: fontSize.base, color: colors.text, fontWeight: '600' },
-  detail: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: 2 },
-  statusChip: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radius.pill,
-  },
-  statusText: { fontSize: fontSize.xs, fontWeight: '700' },
-  pressed: { opacity: 0.85 },
-  endBtn: {
-    position: 'absolute',
-    bottom: spacing.xl,
-    left: spacing.xl,
-    right: spacing.xl,
-    paddingVertical: spacing.lg,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-  },
-  endText: { color: '#fff', fontSize: fontSize.base, fontWeight: '700' },
-  noticeCard: {
-    backgroundColor: colors.warning + '15',
-    borderRadius: radius.md,
-    padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.warning + '66',
-    gap: spacing.xs,
-  },
-  noticeLabel: {
-    fontSize: fontSize.sm,
-    fontWeight: '700',
-    color: colors.warning,
-  },
-  noticeText: {
-    fontSize: fontSize.sm,
-    color: colors.text,
-    lineHeight: 20,
-  },
-  noticeBtn: {
-    marginTop: spacing.sm,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.md,
-    backgroundColor: colors.warning,
-    alignSelf: 'flex-start',
-  },
-  noticeBtnText: { color: '#fff', fontSize: fontSize.sm, fontWeight: '700' },
 });

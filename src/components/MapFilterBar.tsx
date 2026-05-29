@@ -1,8 +1,10 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Text } from '@/components/ui/Text';
 import { colors } from '@/theme/colors';
-import { spacing, radius, fontSize } from '@/theme/spacing';
+import { spacing, radius } from '@/theme/spacing';
+import { withAlpha } from '@/theme/withAlpha';
 import { FIELD_STATUS_LABEL, type FieldStatus } from '@/types/entities';
 
 export type DisplayMode = 'markers' | 'heatmap' | 'choropleth';
@@ -181,7 +183,9 @@ export function MapFilterBar({
           <ExpandedRow>
             <SubLabel>태그</SubLabel>
             {availableTags.length === 0 ? (
-              <Text style={styles.emptyHint}>등록된 태그 없음</Text>
+              <Text variant="caption" color="textMuted" style={styles.emptyHint}>
+                등록된 태그 없음
+              </Text>
             ) : (
               availableTags.map((tag) => (
                 <SubChip
@@ -222,17 +226,17 @@ function GroupChip({
       ]}
     >
       <Text
-        style={[
-          styles.groupChipLabel,
-          active && styles.groupChipLabelActive,
-          expanded && styles.groupChipLabelExpanded,
-        ]}
+        variant="bodySm"
+        weight={expanded ? 'bold' : 'semibold'}
+        color={active || expanded ? 'primary' : 'text'}
       >
         {label}
       </Text>
       {summary ? (
         <View style={styles.summaryPill}>
-          <Text style={styles.summaryText}>{summary}</Text>
+          <Text variant="caption" weight="bold" color="onPrimary">
+            {summary}
+          </Text>
         </View>
       ) : null}
       <Ionicons
@@ -265,7 +269,16 @@ function ExpandedRow({ children }: { children: React.ReactNode }) {
 }
 
 function SubLabel({ children }: { children: React.ReactNode }) {
-  return <Text style={styles.subLabel}>{children}</Text>;
+  return (
+    <Text
+      variant="caption"
+      weight="bold"
+      color="textMuted"
+      style={styles.subLabel}
+    >
+      {children}
+    </Text>
+  );
 }
 
 function SubChip({
@@ -284,18 +297,22 @@ function SubChip({
   const baseStyle = [
     styles.subChip,
     active && (accent
-      ? { backgroundColor: accent + '22', borderColor: accent }
+      ? { backgroundColor: withAlpha(accent, 0.13), borderColor: accent }
       : styles.subChipActive),
     disabled && styles.subChipDisabled,
   ];
   return (
     <Pressable onPress={disabled ? undefined : onPress} style={baseStyle}>
       <Text
-        style={[
-          styles.subChipLabel,
-          active && (accent ? { color: accent, fontWeight: '700' } : styles.subChipLabelActive),
-          disabled && styles.subChipLabelDisabled,
-        ]}
+        variant="bodySm"
+        weight={active ? 'bold' : 'regular'}
+        style={
+          active && accent
+            ? { color: accent }
+            : active
+              ? { color: colors.primary }
+              : { color: colors.textMuted }
+        }
       >
         {label}
       </Text>
@@ -329,26 +346,18 @@ const styles = StyleSheet.create({
   },
   groupChipActive: {
     borderColor: colors.primary,
-    backgroundColor: colors.primary + '10',
+    backgroundColor: withAlpha(colors.primary, 0.06),
   },
   groupChipExpanded: {
     borderColor: colors.primary,
-    backgroundColor: colors.primary + '18',
+    backgroundColor: withAlpha(colors.primary, 0.09),
   },
-  groupChipLabel: {
-    fontSize: fontSize.sm,
-    color: colors.text,
-    fontWeight: '600',
-  },
-  groupChipLabelActive: { color: colors.primary },
-  groupChipLabelExpanded: { color: colors.primary, fontWeight: '700' },
   summaryPill: {
     backgroundColor: colors.primary,
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: radius.pill,
   },
-  summaryText: { color: '#fff', fontSize: fontSize.xs, fontWeight: '700' },
   expandedWrap: {
     backgroundColor: colors.background,
     borderTopWidth: 1,
@@ -361,9 +370,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   subLabel: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
-    fontWeight: '700',
     marginRight: spacing.xs,
     minWidth: 36,
   },
@@ -377,17 +383,12 @@ const styles = StyleSheet.create({
   },
   subChipActive: {
     borderColor: colors.primary,
-    backgroundColor: colors.primary + '15',
+    backgroundColor: withAlpha(colors.primary, 0.08),
   },
   subChipDisabled: {
     opacity: 0.5,
   },
-  subChipLabel: { fontSize: fontSize.sm, color: colors.textMuted },
-  subChipLabelActive: { color: colors.primary, fontWeight: '700' },
-  subChipLabelDisabled: { color: colors.textMuted },
   emptyHint: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
     fontStyle: 'italic',
     paddingHorizontal: spacing.sm,
   },

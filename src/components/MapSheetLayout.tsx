@@ -1,12 +1,13 @@
 import { useCallback, useMemo, useRef, type ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import BottomSheet from '@gorhom/bottom-sheet';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { MapDashboard } from './MapDashboard';
+import { Text } from '@/components/ui/Text';
 import { useUiStore } from '@/stores/uiStore';
 import { colors } from '@/theme/colors';
-import { spacing, fontSize } from '@/theme/spacing';
+import { spacing } from '@/theme/spacing';
 
 interface Props {
   title: string;
@@ -48,7 +49,12 @@ export function MapSheetLayout({
     useCallback(() => {
       if (!shouldSync) return;
       const target = useUiStore.getState().sheetIndex;
-      sheetRef.current?.snapToIndex(target);
+      // mount race 차단 — sheetRef 가 ready 되기 전에 snapToIndex 가 호출되면
+      // 시트가 startIndex(18%) 에 머물러 흰 화면이 됨. 한 프레임 미뤄 ref 부착 후 호출.
+      const handle = requestAnimationFrame(() => {
+        sheetRef.current?.snapToIndex(target);
+      });
+      return () => cancelAnimationFrame(handle);
     }, [shouldSync]),
   );
 
@@ -69,12 +75,14 @@ export function MapSheetLayout({
             <Pressable
               onPress={onBack}
               hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="뒤로 가기"
               style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
             >
               <Ionicons name="chevron-back" size={22} color={colors.text} />
             </Pressable>
           ) : null}
-          <Text style={styles.title}>{title}</Text>
+          <Text variant="h3">{title}</Text>
         </View>
         <View style={styles.content}>{children}</View>
       </BottomSheet>
@@ -108,10 +116,5 @@ const styles = StyleSheet.create({
     padding: 2,
   },
   pressed: { opacity: 0.6 },
-  title: {
-    fontSize: fontSize.lg,
-    fontWeight: '700',
-    color: colors.text,
-  },
   content: { flex: 1 },
 });

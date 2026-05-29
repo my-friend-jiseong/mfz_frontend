@@ -45,12 +45,24 @@ export class ApiError extends Error {
   }
 }
 
+// kind:
+//   - 'timeout' : fetch timeout 으로 abort 됨 — 사용자에게 '응답이 너무 늦어' 안내
+//   - 'network' : DNS/연결 거부 등 진짜 끊김
+export type NetworkErrorKind = 'timeout' | 'network';
+
+const NETWORK_MESSAGE: Record<NetworkErrorKind, string> = {
+  timeout: '서버 응답이 너무 늦습니다. 잠시 후 다시 시도해주세요',
+  network: '네트워크 오류 — 서버에 연결할 수 없습니다',
+};
+
 export class NetworkError extends Error {
   readonly cause: unknown;
-  constructor(cause: unknown) {
-    super('네트워크 오류 — 서버에 연결할 수 없습니다');
+  readonly kind: NetworkErrorKind;
+  constructor(cause: unknown, kind: NetworkErrorKind = 'network') {
+    super(NETWORK_MESSAGE[kind]);
     this.name = 'NetworkError';
     this.cause = cause;
+    this.kind = kind;
   }
 }
 

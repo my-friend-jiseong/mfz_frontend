@@ -515,6 +515,77 @@ POST /api/reports/generate (multipart)  → 500 { code: "internal_server_error",
 
 ---
 
+## 14. 🟠 현장 메모/사진 개별 삭제 — `DELETE /api/fields/:id/memos/:memoId`, `DELETE /api/fields/:id/photos/:photoId`
+
+### 배경
+현장 상세(`fields/[id]/index.tsx`) 의 직접 메모·사진은 **추가만 가능, 삭제 불가**. 사용자가 잘못 올린 메모/사진을 정정할 방법이 없어 누적된 노이즈가 그대로 남는다. ERD v2 검증 시 백엔드 endpoint 가 존재하지 않음을 확인.
+
+### 백엔드가 해야 할 것
+
+```
+DELETE /api/fields/:fieldId/memos/:memoId
+DELETE /api/fields/:fieldId/photos/:photoId
+```
+
+- 본인 소유 현장의 본인 작성 메모/사진만 삭제 허용 (단일 actor 정책).
+- 성공 응답: 본문 없음(204) 또는 `{ fieldId, memoId|photoId }` 단순 echo.
+- 에러: Phase 7 단일 shape `{ code, message }`. `not_found` / `forbidden` 분기.
+- 사진 삭제 시 파일 저장소(현재 임시 또는 §10 MinIO) 의 실제 객체도 같이 정리.
+
+### 프론트엔드 영향 / 현황 (2026-05-30 기준)
+- 프론트는 호출 path/응답 contract 를 위 가정으로 **선반영** 했음:
+  - `src/api/endpoints/fields.ts` 의 `removeTextMemo` / `removePhoto`
+  - `src/stores/fieldStore.ts` 의 동명 메서드 — 성공 시 `directAttachments` 에서 해당 id 제거
+  - `app/(tabs)/fields/[id]/index.tsx` 메모 카드 우상단 ×, PhotoGrid 셀 우상단 × — 둘 다 confirm 후 호출
+- 백엔드 부재 상태에서 사용자가 시도하면 **404/405 → 사용자 친화적 에러 alert** 로 폴백. 데이터 손상 없음.
+
+### 우선순위
+🟠 중상 — 일상 운영 노이즈 정리에 필요. 외근 종료 후 review 화면에서 추가된 콘텐츠도 동일 자산.
+
+### 발견 시점
+2026-05-30 (현장 라이프사이클 UX 검토 — C9-C).
+
+### 관련 코드
+- 프론트 API: [`src/api/endpoints/fields.ts`](../src/api/endpoints/fields.ts) `removeTextMemo`, `removePhoto`
+- 프론트 스토어: [`src/stores/fieldStore.ts`](../src/stores/fieldStore.ts)
+- UI: [`app/(tabs)/fields/[id]/index.tsx`](../app/\(tabs\)/fields/\[id\]/index.tsx), [`src/components/AttachmentPreview.tsx`](../src/components/AttachmentPreview.tsx) `PhotoGrid` `onDelete`
+
+---
+
+## 15. 🟢 프로필 수정 endpoint — `PATCH /api/me`
+
+### 배경
+프로필 화면(`profile.tsx`)에 이름·비밀번호 변경 진입로가 없다. `src/api/endpoints/auth.ts` 에 `me()` GET 만 있고 수정 endpoint 부재. 사용자가 이름을 잘못 등록하거나 비밀번호 정기 변경을 원할 때 자체 처리 못 함.
+
+### 백엔드가 해야 할 것
+
+```
+PATCH /api/me
+  body: { name?: string }                           // 이름 변경
+PATCH /api/me/password
+  body: { currentPassword: string, newPassword: string, newPasswordConfirm: string }
+```
+
+- 이메일은 PK 정합 + 인증 식별자라 변경 불가가 합리적 (선택).
+- 비밀번호 변경 시 `currentPassword` 검증 + 정책 (signup 과 동일: 10자 + 4종 중 3종).
+- 응답: `{ user: ApiUser }` (이름 변경) 또는 `{ updated: true }` (비밀번호).
+- 에러: Phase 7 shape. `current_password_invalid` / `password_policy_violation` 등.
+
+### 프론트엔드 영향 / 현황 (2026-05-30 기준)
+- 프론트는 현재 fallback 으로 "관리자에게 문의" 안내만 노출.
+- endpoint 가 들어오면 `profile.tsx` 에 "내 정보 수정" 진입로 + 폼.
+
+### 우선순위
+🟢 낮음 — 일가요는 운영 초기, 단일 actor 정책상 관리자 경로로 충분. 사용자 자체 처리 의지가 누적되면 격상.
+
+### 발견 시점
+2026-05-30 (인증/프로필 UX 검토 — B-5).
+
+### 관련 코드
+- 프론트 [`src/api/endpoints/auth.ts`](../src/api/endpoints/auth.ts), [`app/(tabs)/profile.tsx`](../app/\(tabs\)/profile.tsx)
+
+---
+
 ## 변경 이력
 
 - **2026-05-08**: 백로그 신설. §1 길찾기 카카오-only 정책 반영. (이전 §1 title 은 백엔드 처리 완료로 제거)
@@ -525,3 +596,5 @@ POST /api/reports/generate (multipart)  → 500 { code: "internal_server_error",
 - **2026-05-11**: §11 추가 — destinations 영속화 + GET endpoint (중상). 다른 디바이스·세션에서 "계획 0곳" 회로 발견. 프론트는 1차 회피로 `TripListItem.siteCount` 사용.
 - **2026-05-11**: §12 추가 — ERD 파악 및 최신화 (중상·프론트 합동). §6~§11 데이터 모델 변경의 선행 워크.
 - **2026-05-28**: §13 추가 — ERD v2 프론트 정합 작업 중 운영 실호출에서 `POST /api/reports/generate` 500 발견(높음). 그 외 v2 엔드포인트는 정상 검증됨.
+- **2026-05-30**: §14 추가 — 현장 라이프사이클 UX 검토(C9-C) 중 발견. 현장 메모/사진 개별 삭제 endpoint 부재(중상). 프론트는 호출 path/응답 contract 가정으로 선반영.
+- **2026-05-30**: §15 추가 — 인증/프로필 UX 검토(B-5) 중 발견. 프로필 수정 endpoint 부재(낮). 단일 actor 정책상 우선순위 낮음, 자체 처리 의지 누적 시 격상.

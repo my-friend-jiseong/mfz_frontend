@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { Visit, VisitStatus } from '@/types/entities';
+import { normalizeVisitStatus } from '@/types/entities';
 import { visits as visitsApi, localizeError } from '@/api';
 
 // ERD v2: visits 는 체크인 기록(trip·field·시각·status)만. 메모·사진·음성 첨부 제거됨
@@ -23,9 +24,29 @@ interface VisitState {
   checkIn: (tripId: string, fieldId: string) => Promise<CheckInResult>;
   setResult: (visitId: string, status: VisitStatus, reason?: string) => Promise<GenericResult>;
 
+  // 백엔드 list endpoint 가 없어 trip/field detail 응답의 timeline·recentVisits 로 hydrate.
+  // 같은 visit id 면 status 만 갱신 (기존 행 보존), 새 id 면 추가.
+  syncFromTimeline: (
+    tripId: string,
+    timeline: ReadonlyArray<{ visitId: string; fieldId?: string; visitedAt: string; status?: string }>,
+  ) => void;
+  syncFromRecentVisits: (
+    fieldId: string,
+    visits: ReadonlyArray<{ visitId: string; tripId: string; visitedAt: string; status?: string }>,
+  ) => void;
+
   byTrip: (tripId: string) => Visit[];
   byField: (fieldId: string) => Visit[];
   getById: (id: string) => Visit | undefined;
+  clearAll: () => void;
+}
+
+// merge 헬퍼 — 같은 visit.id 면 새 값으로 갱신, 없으면 추가. 결과는 새 array.
+function mergeVisits(existing: Visit[], incoming: Visit[]): Visit[] {
+  if (incoming.length === 0) return existing;
+  const byId = new Map(existing.map((v) => [v.id, v]));
+  for (const v of incoming) byId.set(v.id, v);
+  return Array.from(byId.values());
 }
 
 const describeError = localizeError;
@@ -64,6 +85,31 @@ export const useVisitStore = create<VisitState>((set, get) => ({
     }
   },
 
+  // trips.detail.timeline → visits hydrate. timeline entry 는 fieldId 가 optional 인데,
+  // 없으면 fieldId 자리에 빈 string 으로 채워 store 에 적재 (UI 쪽 field lookup 은 ?? '알 수 없는 현장').
+  syncFromTimeline: (tripId, timeline) => {
+    const incoming: Visit[] = timeline.map((t) => ({
+      id: t.visitId,
+      status: normalizeVisitStatus(t.status),
+      tripId,
+      fieldId: t.fieldId ?? '',
+      visitedAt: t.visitedAt,
+    }));
+    set((s) => ({ visits: mergeVisits(s.visits, incoming) }));
+  },
+
+  // fields.detail.recentVisits → visits hydrate. recentVisits 는 tripId·fieldId 모두 정상 제공.
+  syncFromRecentVisits: (fieldId, list) => {
+    const incoming: Visit[] = list.map((r) => ({
+      id: r.visitId,
+      status: normalizeVisitStatus(r.status),
+      tripId: r.tripId,
+      fieldId,
+      visitedAt: r.visitedAt,
+    }));
+    set((s) => ({ visits: mergeVisits(s.visits, incoming) }));
+  },
+
   byTrip: (tripId) =>
     get()
       .visits.filter((v) => v.tripId === tripId)
@@ -75,4 +121,7 @@ export const useVisitStore = create<VisitState>((set, get) => ({
       .sort((a, b) => b.visitedAt.localeCompare(a.visitedAt)),
 
   getById: (id) => get().visits.find((v) => v.id === id),
+
+  // 로그아웃 시 호출.
+  clearAll: () => set({ visits: [] }),
 }));

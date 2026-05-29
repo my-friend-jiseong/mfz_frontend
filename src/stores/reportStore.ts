@@ -38,6 +38,9 @@ interface ReportState {
   reports: Report[];
   // 상세 화면 진입 시 채워지는 캐시 (fieldReports 포함)
   detailCache: Record<string, Report>;
+  // id 별 detail fetch 진행 상태 — 화면이 not-found EmptyState 와 LoadingState 를
+  // 구분할 수 있게. 'success' 면 detailCache 에 데이터 있음, 'missing' 이면 영구 not-found.
+  detailStatus: Record<string, 'loading' | 'success' | 'missing'>;
   busy: boolean;
 
   hydrate: () => Promise<void>;
@@ -51,6 +54,7 @@ interface ReportState {
   updateFieldReport: (reportId: string, fieldReportId: string, body: Partial<FieldReportInput>) => Promise<GenericResult>;
   removeFieldReport: (reportId: string, fieldReportId: string) => Promise<GenericResult>;
   generate: (input: GenerateInput) => Promise<GenerateResult>;
+  clearAll: () => void;
 
   getById: (id: string) => Report | undefined;
 }
@@ -85,6 +89,7 @@ function detailToReport(d: ReportDetailResponse): Report {
 export const useReportStore = create<ReportState>((set, get) => ({
   reports: [],
   detailCache: {},
+  detailStatus: {},
   busy: false,
 
   hydrate: async () => {
@@ -103,15 +108,22 @@ export const useReportStore = create<ReportState>((set, get) => ({
   },
 
   loadDetail: async (reportId) => {
+    set((s) => ({
+      detailStatus: { ...s.detailStatus, [reportId]: 'loading' },
+    }));
     try {
       const res = await reportsApi.detail(reportId);
       const r = detailToReport(res);
       set((s) => ({
         detailCache: { ...s.detailCache, [reportId]: r },
+        detailStatus: { ...s.detailStatus, [reportId]: 'success' },
         reports: s.reports.map((x) => (x.id === reportId ? r : x)),
       }));
       return r;
     } catch {
+      set((s) => ({
+        detailStatus: { ...s.detailStatus, [reportId]: 'missing' },
+      }));
       return null;
     }
   },
@@ -132,6 +144,7 @@ export const useReportStore = create<ReportState>((set, get) => ({
       set((s) => ({
         reports: [r, ...s.reports.filter((x) => x.id !== r.id)],
         detailCache: { ...s.detailCache, [r.id]: r },
+        detailStatus: { ...s.detailStatus, [r.id]: 'success' },
         busy: false,
       }));
       return { ok: true, report: r };
@@ -149,6 +162,7 @@ export const useReportStore = create<ReportState>((set, get) => ({
       set((s) => ({
         reports: s.reports.map((x) => (x.id === id ? r : x)),
         detailCache: { ...s.detailCache, [id]: r },
+        detailStatus: { ...s.detailStatus, [id]: 'success' },
         busy: false,
       }));
       return { ok: true };
@@ -167,6 +181,7 @@ export const useReportStore = create<ReportState>((set, get) => ({
         detailCache: Object.fromEntries(
           Object.entries(s.detailCache).filter(([k]) => k !== id),
         ),
+        detailStatus: { ...s.detailStatus, [id]: 'missing' },
         busy: false,
       }));
       return { ok: true };
@@ -241,6 +256,10 @@ export const useReportStore = create<ReportState>((set, get) => ({
       return { ok: false, error: describeError(e) };
     }
   },
+
+  // 로그아웃 시 호출.
+  clearAll: () =>
+    set({ reports: [], detailCache: {}, detailStatus: {}, busy: false }),
 
   getById: (id) => get().reports.find((r) => r.id === id) ?? get().detailCache[id],
 }));

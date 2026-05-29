@@ -17,6 +17,9 @@ interface DestinationState {
 
   hydrate: () => Promise<void>;
   bulkCreate: (tripId: string, fieldIds: string[]) => Destination[];
+  // 진행 중 외근에 destination 단건 추가. 이미 같은 field 가 있거나 (어떤 status 든)
+  // pending 이 아닌 destination 으로 들어가야 할 case 는 없으므로 중복은 거부 (null 반환).
+  add: (tripId: string, fieldId: string) => Destination | null;
   byTrip: (tripId: string) => Destination[];
   current: (tripId: string) => Destination | undefined;
   findByTripField: (
@@ -75,6 +78,23 @@ export const useDestinationStore = create<DestinationState>((set, get) => ({
       status: 'pending',
     }));
     const next = [...get().destinations, ...created];
+    set({ destinations: next });
+    void persist(next);
+    return created;
+  },
+
+  add: (tripId, fieldId) => {
+    const existing = get().destinations.filter((d) => d.tripId === tripId);
+    if (existing.some((d) => d.fieldId === fieldId)) return null;
+    const maxOrder = existing.reduce((m, d) => Math.max(m, d.order), 0);
+    const created: Destination = {
+      id: nextDestId(),
+      tripId,
+      fieldId,
+      order: maxOrder + 1,
+      status: 'pending',
+    };
+    const next = [...get().destinations, created];
     set({ destinations: next });
     void persist(next);
     return created;

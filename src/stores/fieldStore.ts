@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Field, FieldStatus } from '@/types/entities';
 import { fields as fieldsApi, ApiError, localizeError } from '@/api';
+import { useVisitStore } from './visitStore';
 import type {
   CreateFieldBody,
   UpdateFieldBody,
@@ -41,6 +42,9 @@ interface FieldState {
     id: string,
     file: { uri: string; name: string; type: string },
   ) => Promise<GenericResult>;
+  removeTextMemo: (fieldId: string, memoId: string) => Promise<GenericResult>;
+  removePhoto: (fieldId: string, photoId: string) => Promise<GenericResult>;
+  clearAll: () => void;
 
   getById: (id: string) => Field | undefined;
   byUser: (userId: string) => Field[];
@@ -232,6 +236,12 @@ export const useFieldStore = create<FieldState>((set, get) => ({
           ],
         },
       }));
+      // visit hydrate — recentVisits 를 visitStore 로 sync.
+      // 이 store 의 set 안에서 다른 store 를 변경하면 zustand subscriber 순서 문제 가능성 있어
+      // set 바깥에서 별도 호출.
+      if (res.recentVisits && res.recentVisits.length > 0) {
+        useVisitStore.getState().syncFromRecentVisits(id, res.recentVisits);
+      }
     } catch {
       // ignore
     }
@@ -266,6 +276,45 @@ export const useFieldStore = create<FieldState>((set, get) => ({
       return { ok: false, error: describeError(e) };
     }
   },
+
+  // 메모 개별 삭제. 백엔드 신설 요청 — backend-backlog §14.
+  // 호출 실패 시 로컬 상태는 그대로 두고 에러 반환 — 사용자가 다시 시도 가능.
+  removeTextMemo: async (fieldId, memoId) => {
+    try {
+      await fieldsApi.removeTextMemo(fieldId, memoId);
+      set((s) => ({
+        directAttachments: {
+          ...s.directAttachments,
+          [fieldId]: (s.directAttachments[fieldId] ?? []).filter(
+            (a) => !(a.type === 'text' && a.id === memoId),
+          ),
+        },
+      }));
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: describeError(e) };
+    }
+  },
+
+  removePhoto: async (fieldId, photoId) => {
+    try {
+      await fieldsApi.removePhoto(fieldId, photoId);
+      set((s) => ({
+        directAttachments: {
+          ...s.directAttachments,
+          [fieldId]: (s.directAttachments[fieldId] ?? []).filter(
+            (a) => !(a.type === 'photo' && a.id === photoId),
+          ),
+        },
+      }));
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: describeError(e) };
+    }
+  },
+
+  // 로그아웃 시 호출 — 다음 사용자가 같은 디바이스에서 로그인 시 잔존 차단.
+  clearAll: () => set({ fields: [], directAttachments: {}, busy: false }),
 
   getById: (id) => get().fields.find((f) => f.id === id),
 

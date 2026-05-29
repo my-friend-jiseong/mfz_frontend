@@ -1,9 +1,11 @@
 import { useEffect } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSessionGuardStore } from '@/stores/sessionGuardStore';
+import { Text } from '@/components/ui/Text';
+import { Button } from '@/components/ui/Button';
 import { colors } from '@/theme/colors';
-import { spacing, radius, fontSize } from '@/theme/spacing';
+import { spacing, radius } from '@/theme/spacing';
 
 const TITLE: Record<'superseded' | 'revoked', string> = {
   superseded: '다른 기기에서 로그인되었습니다',
@@ -31,14 +33,15 @@ export function SessionGuardModal() {
     <Modal transparent animationType="fade" visible={!!notice} onRequestClose={handleConfirm}>
       <View style={styles.backdrop}>
         <View style={styles.box}>
-          <Text style={styles.title}>{TITLE[notice.type]}</Text>
-          <Text style={styles.message}>{notice.message}</Text>
-          <Pressable
-            onPress={handleConfirm}
-            style={({ pressed }) => [styles.btn, pressed && styles.btnPressed]}
-          >
-            <Text style={styles.btnText}>다시 로그인</Text>
-          </Pressable>
+          <Text variant="h3" style={styles.title}>
+            {TITLE[notice.type]}
+          </Text>
+          <Text variant="body" color="textMuted" style={styles.message}>
+            {notice.message}
+          </Text>
+          <Button onPress={handleConfirm} size="lg" fullWidth>
+            다시 로그인
+          </Button>
         </View>
       </View>
     </Modal>
@@ -48,7 +51,7 @@ export function SessionGuardModal() {
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: colors.overlay,
     justifyContent: 'center',
     alignItems: 'center',
     padding: spacing.xl,
@@ -60,24 +63,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     padding: spacing.xl,
   },
-  title: {
-    fontSize: fontSize.lg,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: spacing.sm,
-  },
-  message: {
-    fontSize: fontSize.base,
-    color: colors.textMuted,
-    lineHeight: 22,
-    marginBottom: spacing.xl,
-  },
-  btn: {
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.md,
-    borderRadius: radius.md,
-    alignItems: 'center',
-  },
-  btnPressed: { opacity: 0.85 },
-  btnText: { color: '#fff', fontSize: fontSize.base, fontWeight: '700' },
+  title: { marginBottom: spacing.sm },
+  message: { marginBottom: spacing.xl },
 });
