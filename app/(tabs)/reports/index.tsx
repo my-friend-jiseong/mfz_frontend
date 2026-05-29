@@ -58,9 +58,36 @@ export default function ReportsIndex() {
       byTripId.set(r.tripId, arr);
     });
 
+    // 2) 외근별 그룹 — trips 최신순. trips store 에 있는 trip 만 매칭.
+    const matchedTripIds = new Set<string>();
+    const tripGroups: Group[] = [];
+    allTrips
+      .filter((t) => t.workerId === userId)
+      .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
+      .forEach((t) => {
+        const reports = byTripId.get(t.id);
+        if (reports && reports.length > 0) {
+          matchedTripIds.add(t.id);
+          tripGroups.push({
+            trip: t,
+            reports: reports.sort((a, b) =>
+              b.createdAt.localeCompare(a.createdAt),
+            ),
+          });
+        }
+      });
+
+    // 3) tripId 가 있는데 trips store 에 없는 보고서들 — orphan 으로 흡수.
+    //    trips 페이지네이션이 한정적이거나, trip 이 별도 사용자 캐시에서 사라진 케이스.
+    for (const [tripId, reports] of byTripId) {
+      if (!matchedTripIds.has(tripId)) {
+        orphan.push(...reports);
+      }
+    }
+
     const result: Group[] = [];
 
-    // 1) 외근 없이 작성한 보고서 — 항상 최상단. 사용자가 의도해서 외근 분리한 케이스라 가시성 우선.
+    // 1) 외근 없이 작성한 보고서 (+ trip 정보 누락 폴백) — 항상 최상단.
     if (orphan.length > 0) {
       result.push({
         trip: null,
@@ -69,22 +96,7 @@ export default function ReportsIndex() {
         ),
       });
     }
-
-    // 2) 외근별 그룹 — trips 최신순.
-    allTrips
-      .filter((t) => t.workerId === userId)
-      .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
-      .forEach((t) => {
-        const reports = byTripId.get(t.id);
-        if (reports && reports.length > 0) {
-          result.push({
-            trip: t,
-            reports: reports.sort((a, b) =>
-              b.createdAt.localeCompare(a.createdAt),
-            ),
-          });
-        }
-      });
+    result.push(...tripGroups);
     return result;
   }, [allReports, allTrips, userId, search]);
 

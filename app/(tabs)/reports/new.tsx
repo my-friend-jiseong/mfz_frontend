@@ -71,26 +71,24 @@ export default function ComposeReport() {
     };
   }, []);
 
-  // R4-A 드래프트 보존 — title + notes + tripId 만 (사진 file uri 는 휘발).
-  // 진입 시 1회 hydrate, 저장 성공 시 clear, 변경 시 debounce 저장.
-  const DRAFT_KEY = 'mfz.reports.draft.v1';
-  const draftHydratedRef = useRef(false);
+  // R4-A 드래프트 보존 — title + notes 만 (사진 file uri 는 휘발).
+  // tripId 별 분리 (G4) — 두 외근 작성을 번갈아 해도 서로 덮어쓰지 않음.
+  //   trip 있는 케이스: mfz.reports.draft.v1.{tripId}
+  //   trip 없는 케이스: mfz.reports.draft.v1.orphan
+  const draftKey = useMemo(
+    () => `mfz.reports.draft.v1.${tripId ?? 'orphan'}`,
+    [tripId],
+  );
+  // 마지막으로 hydrate 한 key — 사용자가 trip picker 로 tripId 변경 시 새 key 의 draft 재읽기.
+  const lastHydratedKeyRef = useRef<string | null>(null);
   useEffect(() => {
-    if (draftHydratedRef.current) return;
-    draftHydratedRef.current = true;
+    if (lastHydratedKeyRef.current === draftKey) return;
+    lastHydratedKeyRef.current = draftKey;
     void (async () => {
       try {
-        const raw = await AsyncStorage.getItem(DRAFT_KEY);
+        const raw = await AsyncStorage.getItem(draftKey);
         if (!raw) return;
-        const parsed = JSON.parse(raw) as {
-          tripId?: string | null;
-          title?: string;
-          notes?: string;
-        };
-        // tripId 정합 — params 로 받은 trip 과 같거나 둘 다 없을 때만 복원.
-        const sameTrip =
-          (parsed.tripId ?? null) === (params.tripId ?? null);
-        if (!sameTrip) return;
+        const parsed = JSON.parse(raw) as { title?: string; notes?: string };
         if (parsed.title) setTitle(parsed.title);
         if (parsed.notes) {
           setNotes(parsed.notes);
@@ -100,25 +98,26 @@ export default function ComposeReport() {
         /* ignore */
       }
     })();
-  }, [params.tripId]);
+  }, [draftKey]);
 
   const draftSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    if (!draftHydratedRef.current) return;
+    // hydrate 가 한 번도 안 끝났으면 첫 mount 의 useState 초기값을 저장하면 안 됨 — 기존 draft 덮어쓰기.
+    if (lastHydratedKeyRef.current !== draftKey) return;
     if (draftSaveTimerRef.current) clearTimeout(draftSaveTimerRef.current);
     draftSaveTimerRef.current = setTimeout(() => {
       void AsyncStorage.setItem(
-        DRAFT_KEY,
-        JSON.stringify({ tripId, title, notes }),
+        draftKey,
+        JSON.stringify({ title, notes }),
       ).catch(() => undefined);
     }, 500);
     return () => {
       if (draftSaveTimerRef.current) clearTimeout(draftSaveTimerRef.current);
     };
-  }, [tripId, title, notes]);
+  }, [draftKey, title, notes]);
 
   const clearDraft = () => {
-    void AsyncStorage.removeItem(DRAFT_KEY).catch(() => undefined);
+    void AsyncStorage.removeItem(draftKey).catch(() => undefined);
   };
 
   // F-G AI 생성 중 화면 이탈 차단 — back/tap 둘 다 잡고 사용자 confirm.
@@ -207,13 +206,12 @@ export default function ComposeReport() {
     title?: string | null;
     id: string;
   }) => {
-    // 시작 시각을 head 에도 노출 — 같은 날 외근 2건 구별 (외근 F-4 와 같은 회로).
+    // head 에 날짜 + 시작 시각 (같은 날 외근 2건 구별). meta 는 끝 시각·진행시간 + 방문 카운트만 —
+    // head 와 시각 중복을 피한다.
     const head = `${fmtDate(t.startedAt)} ${fmtTime(t.startedAt)}${t.title ? ` · ${t.title}` : ''}`;
     const visitCount = visitsByTrip(t.id).length;
-    const meta =
-      `${fmtTime(t.startedAt)}` +
-      (t.endedAt ? `–${fmtTime(t.endedAt)}` : ' · 진행 중') +
-      (visitCount > 0 ? ` · 방문 ${visitCount}건` : ' · 방문 없음');
+    const tail = t.endedAt ? `~ ${fmtTime(t.endedAt)}` : '진행 중';
+    const meta = `${tail}${visitCount > 0 ? ` · 방문 ${visitCount}건` : ' · 방문 없음'}`;
     return { head, meta };
   };
 
@@ -345,6 +343,8 @@ export default function ComposeReport() {
     return { idx: 3, text: '문서 작성' };
   })();
   const remainEstSec = Math.max(0, 30 - elapsedSec);
+  // 60s 넘으면 평소보다 오래 — 사용자에게 단순히 '마무리 중' 으로 영원히 두지 않음.
+  const aiTakingTooLong = busy === 'ai' && elapsedSec >= 60;
   const isBusy = busy !== null;
 
   return (
@@ -563,6 +563,12 @@ export default function ComposeReport() {
                 {elapsedSec}초 경과
                 {remainEstSec > 0 ? ` · 약 ${remainEstSec}초 남음 (예상)` : ' · 마무리 중'}
               </Text>
+              {aiTakingTooLong ? (
+                <Text variant="caption" color="warning" style={styles.progressMeta}>
+                  평소보다 오래 걸리고 있습니다. 응답을 기다리거나 화면을 떠나
+                  잠시 후 다시 시도해도 됩니다.
+                </Text>
+              ) : null}
             </Card>
           ) : null}
 
