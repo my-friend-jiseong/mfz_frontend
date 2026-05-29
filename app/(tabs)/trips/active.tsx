@@ -19,6 +19,7 @@ import { TripSummaryCard } from '@/components/trips/TripSummaryCard';
 import { CurrentDestCard } from '@/components/trips/CurrentDestCard';
 import { AllDoneCard } from '@/components/trips/AllDoneCard';
 import { DestinationRow } from '@/components/trips/DestinationRow';
+import { AddDestinationModal } from '@/components/trips/AddDestinationModal';
 import { openKakaoRouteTo } from '@/utils/kakaoMap';
 import { navigateToReview } from '@/utils/postTripFlow';
 import { trips as tripsApi, localizeError } from '@/api';
@@ -52,6 +53,7 @@ export default function ActiveTrip() {
 
   const [optimizing, setOptimizing] = useState(false);
   const [elapsedTick, setElapsedTick] = useState(0);
+  const [addOpen, setAddOpen] = useState(false);
 
   // 외근 진행 시간을 1분 주기로 갱신. 화면이 active 일 때만 동작.
   // deps 를 activeTripId (스칼라) 로 좁힘 — 이전엔 activeTrip 객체 (allTrips memo 결과)
@@ -378,9 +380,19 @@ export default function ActiveTrip() {
       ) : (
         <AllDoneCard />
       )}
-      <Text variant="bodySm" weight="bold" color="textMuted" style={styles.sectionTitle}>
-        목적지 ({destinations.length})
-      </Text>
+      <View style={styles.sectionTitleRow}>
+        <Text variant="bodySm" weight="bold" color="textMuted">
+          목적지 ({destinations.length})
+        </Text>
+        <Button
+          onPress={() => setAddOpen(true)}
+          variant="ghost"
+          size="sm"
+          leftIcon="add-circle-outline"
+        >
+          현장 추가
+        </Button>
+      </View>
     </View>
   );
 
@@ -449,6 +461,12 @@ export default function ActiveTrip() {
           {allDone ? '외근 종료' : '외근 종료 (미완료 목적지 있음)'}
         </Button>
       </StickyBottomBar>
+      <AddDestinationModal
+        visible={addOpen}
+        tripId={activeTripId}
+        onClose={() => setAddOpen(false)}
+        onCreateNew={() => router.push('/(tabs)/fields/new' as never)}
+      />
     </View>
   );
 }
@@ -457,7 +475,10 @@ const styles = StyleSheet.create({
   screenRoot: { flex: 1 },
   list: { paddingHorizontal: spacing.lg, paddingBottom: 120 },
   header: { paddingTop: spacing.md, gap: spacing.sm },
-  sectionTitle: {
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginTop: spacing.lg,
   },
 });
