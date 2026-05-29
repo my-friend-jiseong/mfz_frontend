@@ -37,19 +37,24 @@ export function AddDestinationModal({
 }: Props) {
   const userId = useAuthStore((s) => s.user?.id);
   const allFields = useFieldStore((s) => s.fields);
-  const allDestinations = useDestinationStore((s) => s.destinations);
+  // selector 는 tripId 로 좁힌 stable string key (sort 후 join) — zustand 의 === 비교가
+  // 동작하도록 primitive 반환. 이 trip 의 destinations 가 실제로 변할 때만 rerender.
+  // 새 객체 (Set/Array) 를 selector 에서 반환하면 매번 reference inequality 라 rerender.
+  const usedFieldIdsKey = useDestinationStore((s) => {
+    const ids: string[] = [];
+    for (const d of s.destinations) {
+      if (d.tripId === tripId) ids.push(d.fieldId);
+    }
+    return ids.sort().join(',');
+  });
   const add = useDestinationStore((s) => s.add);
 
   const [query, setQuery] = useState('');
 
-  // 이번 trip 의 destinations 에 이미 포함된 fieldId — 추가 후보에서 제외.
-  const usedFieldIds = useMemo(() => {
-    const set = new Set<string>();
-    for (const d of allDestinations) {
-      if (d.tripId === tripId) set.add(d.fieldId);
-    }
-    return set;
-  }, [allDestinations, tripId]);
+  const usedFieldIds = useMemo(
+    () => new Set(usedFieldIdsKey ? usedFieldIdsKey.split(',') : []),
+    [usedFieldIdsKey],
+  );
 
   const candidates = useMemo(() => {
     if (!userId) return [];

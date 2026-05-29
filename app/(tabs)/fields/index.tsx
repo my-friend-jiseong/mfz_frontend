@@ -18,6 +18,7 @@ import {
   FIELD_STATUS_LABEL,
   type FieldStatus,
 } from '@/types/entities';
+import { collectFieldFacets, applyFieldFilters } from '@/utils/fieldFacets';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 
@@ -74,57 +75,20 @@ export default function FieldsList() {
     [allFields, userId],
   );
 
-  // 사용 가능한 프로젝트·카테고리 — 본인 fields 에서 모집. id↔name 매핑은 first-seen 기준.
-  const availableProjects = useMemo(() => {
-    const seen = new Map<string, string>(); // id → name
-    for (const f of myFields) {
-      if (f.projectId && !seen.has(f.projectId)) {
-        seen.set(f.projectId, f.projectName ?? f.projectId);
-      }
-    }
-    return Array.from(seen, ([id, name]) => ({ id, name })).sort((a, b) =>
-      a.name.localeCompare(b.name),
-    );
-  }, [myFields]);
+  const { projects: availableProjects, categories: availableCategories } = useMemo(
+    () => collectFieldFacets(myFields),
+    [myFields],
+  );
 
-  const availableCategories = useMemo(() => {
-    const set = new Set<string>();
-    for (const f of myFields) {
-      for (const c of f.categories ?? []) set.add(c);
-    }
-    return Array.from(set).sort();
-  }, [myFields]);
-
-  const fields = useMemo(() => {
-    let list = myFields;
-    // 프로젝트 필터
-    if (projectFilter.length > 0) {
-      const allow = new Set(projectFilter);
-      list = list.filter((f) => f.projectId && allow.has(f.projectId));
-    }
-    // 카테고리 필터 — AND (모든 선택 카테고리를 가진 현장만)
-    if (categoryFilter.length > 0) {
-      list = list.filter((f) =>
-        categoryFilter.every((c) => (f.categories ?? []).includes(c)),
-      );
-    }
-    // 검색 — address + addressDetail + projectName + categories 매칭
-    const q = search.trim().toLowerCase();
-    if (q) {
-      list = list.filter((f) => {
-        const haystack = [
-          f.address,
-          f.addressDetail ?? '',
-          f.projectName ?? '',
-          ...(f.categories ?? []),
-        ]
-          .join(' ')
-          .toLowerCase();
-        return haystack.includes(q);
-      });
-    }
-    return list;
-  }, [myFields, projectFilter, categoryFilter, search]);
+  const fields = useMemo(
+    () =>
+      applyFieldFilters(myFields, {
+        search,
+        projectIds: projectFilter,
+        categories: categoryFilter,
+      }),
+    [myFields, projectFilter, categoryFilter, search],
+  );
 
   const toggleStatus = (s: FieldStatus) =>
     setStatusFilter((prev) =>

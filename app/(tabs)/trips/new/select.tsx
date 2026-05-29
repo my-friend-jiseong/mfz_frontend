@@ -23,6 +23,7 @@ import {
   type Field,
   type FieldStatus,
 } from '@/types/entities';
+import { collectFieldFacets, applyFieldFilters } from '@/utils/fieldFacets';
 
 export default function NewTripSelect() {
   const router = useRouter();
@@ -41,55 +42,21 @@ export default function NewTripSelect() {
   const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
-  // 사용 가능한 프로젝트·카테고리 — fields/index 와 동일 모집 패턴.
-  const availableProjects = useMemo(() => {
-    const seen = new Map<string, string>();
-    for (const f of myFields) {
-      if (f.projectId && !seen.has(f.projectId)) {
-        seen.set(f.projectId, f.projectName ?? f.projectId);
-      }
-    }
-    return Array.from(seen, ([id, name]) => ({ id, name })).sort((a, b) =>
-      a.name.localeCompare(b.name),
-    );
-  }, [myFields]);
+  const { projects: availableProjects, categories: availableCategories } = useMemo(
+    () => collectFieldFacets(myFields),
+    [myFields],
+  );
 
-  const availableCategories = useMemo(() => {
-    const set = new Set<string>();
-    for (const f of myFields) for (const c of f.categories ?? []) set.add(c);
-    return Array.from(set).sort();
-  }, [myFields]);
-
-  const fields = useMemo(() => {
-    let list = myFields;
-    if (statusFilter.length > 0) {
-      list = list.filter((f) => statusFilter.includes(f.status));
-    }
-    if (projectFilter.length > 0) {
-      const allow = new Set(projectFilter);
-      list = list.filter((f) => f.projectId && allow.has(f.projectId));
-    }
-    if (categoryFilter.length > 0) {
-      list = list.filter((f) =>
-        categoryFilter.every((c) => (f.categories ?? []).includes(c)),
-      );
-    }
-    const q = search.trim().toLowerCase();
-    if (q) {
-      list = list.filter((f) => {
-        const haystack = [
-          f.address,
-          f.addressDetail ?? '',
-          f.projectName ?? '',
-          ...(f.categories ?? []),
-        ]
-          .join(' ')
-          .toLowerCase();
-        return haystack.includes(q);
-      });
-    }
-    return list;
-  }, [myFields, statusFilter, projectFilter, categoryFilter, search]);
+  const fields = useMemo(
+    () =>
+      applyFieldFilters(myFields, {
+        search,
+        statuses: statusFilter,
+        projectIds: projectFilter,
+        categories: categoryFilter,
+      }),
+    [myFields, statusFilter, projectFilter, categoryFilter, search],
+  );
 
   const toggle = (id: string) =>
     setSelectedIds((prev) =>

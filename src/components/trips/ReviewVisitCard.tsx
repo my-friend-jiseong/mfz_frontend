@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from '@/components/ui/Card';
@@ -62,6 +62,12 @@ export function ReviewVisitCard({
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // 외부에서 visit.status 가 바뀌면 chip 의 active 도 따라가도록 sync.
+  // (단일 actor 환경이라 발생 가능성 낮지만 카드가 살아있는 동안 store mutation 발생 시 stale 차단.)
+  useEffect(() => {
+    setStatus(visit.status);
+  }, [visit.status]);
 
   const [memoInput, setMemoInput] = useState('');
   const [memoSubmitting, setMemoSubmitting] = useState(false);
