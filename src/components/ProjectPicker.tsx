@@ -5,11 +5,12 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   TextInput,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useProjectStore } from '@/stores/projectStore';
+import { Text } from '@/components/ui/Text';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
 import { withAlpha } from '@/theme/withAlpha';
@@ -71,16 +72,30 @@ export function ProjectPicker({ value, onChange, disabled, initialLabel }: Props
           pressed && styles.pressed,
         ]}
       >
-        <Text style={value ? styles.triggerText : styles.placeholder}>
-          {label ? `📁 ${label}` : '+ 프로젝트 선택 (선택)'}
-        </Text>
+        <View style={styles.triggerInner}>
+          <Ionicons
+            name={value ? 'folder' : 'add-circle-outline'}
+            size={16}
+            color={value ? colors.primary : colors.textMuted}
+          />
+          <Text
+            variant="body"
+            weight={value ? 'semibold' : 'bold'}
+            color={value ? 'text' : 'textMuted'}
+            style={styles.triggerText}
+          >
+            {label ?? '프로젝트 선택 (선택)'}
+          </Text>
+        </View>
         {value ? (
           <Pressable
             onPress={() => onChange(null)}
             hitSlop={8}
             style={styles.clearBtn}
           >
-            <Text style={styles.clearBtnText}>해제</Text>
+            <Text variant="caption" weight="bold" color="textMuted">
+              해제
+            </Text>
           </Pressable>
         ) : null}
       </Pressable>
@@ -93,7 +108,7 @@ export function ProjectPicker({ value, onChange, disabled, initialLabel }: Props
       >
         <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
           <Pressable style={styles.card} onPress={() => undefined}>
-            <Text style={styles.cardTitle}>프로젝트 선택</Text>
+            <Text variant="h3">프로젝트 선택</Text>
 
             <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
               <Pressable
@@ -103,14 +118,22 @@ export function ProjectPicker({ value, onChange, disabled, initialLabel }: Props
                 }}
                 style={[styles.item, !value && styles.itemActive]}
               >
-                <Text style={[styles.itemText, !value && styles.itemTextActive]}>
+                <Text
+                  variant="bodySm"
+                  weight={!value ? 'bold' : 'semibold'}
+                  color={!value ? 'primary' : 'text'}
+                >
                   프로젝트 없음
                 </Text>
               </Pressable>
               {busy && projects.length === 0 ? (
-                <Text style={styles.emptyHint}>불러오는 중...</Text>
+                <Text variant="bodySm" color="textMuted" style={styles.emptyHint}>
+                  불러오는 중...
+                </Text>
               ) : projects.length === 0 ? (
-                <Text style={styles.emptyHint}>등록된 프로젝트가 없습니다.</Text>
+                <Text variant="bodySm" color="textMuted" style={styles.emptyHint}>
+                  등록된 프로젝트가 없습니다.
+                </Text>
               ) : (
                 projects.map((p) => {
                   const active = p.id === value;
@@ -123,11 +146,17 @@ export function ProjectPicker({ value, onChange, disabled, initialLabel }: Props
                       }}
                       style={[styles.item, active && styles.itemActive]}
                     >
-                      <Text style={[styles.itemText, active && styles.itemTextActive]}>
+                      <Text
+                        variant="bodySm"
+                        weight={active ? 'bold' : 'semibold'}
+                        color={active ? 'primary' : 'text'}
+                      >
                         {p.name}
                       </Text>
                       {p.status && p.status !== 'active' ? (
-                        <Text style={styles.itemMeta}>{p.status}</Text>
+                        <Text variant="caption" color="textMuted" style={styles.itemMeta}>
+                          {p.status}
+                        </Text>
                       ) : null}
                     </Pressable>
                   );
@@ -136,7 +165,9 @@ export function ProjectPicker({ value, onChange, disabled, initialLabel }: Props
             </ScrollView>
 
             <View style={styles.createBox}>
-              <Text style={styles.createLabel}>새 프로젝트</Text>
+              <Text variant="caption" weight="bold" color="textMuted">
+                새 프로젝트
+              </Text>
               <View style={styles.createRow}>
                 <TextInput
                   value={newName}
@@ -154,7 +185,7 @@ export function ProjectPicker({ value, onChange, disabled, initialLabel }: Props
                     pressed && styles.pressed,
                   ]}
                 >
-                  <Text style={styles.createBtnText}>
+                  <Text variant="bodySm" weight="bold" color="onPrimary">
                     {creating ? '...' : '추가'}
                   </Text>
                 </Pressable>
@@ -165,7 +196,9 @@ export function ProjectPicker({ value, onChange, disabled, initialLabel }: Props
               onPress={() => setOpen(false)}
               style={({ pressed }) => [styles.cancel, pressed && styles.pressed]}
             >
-              <Text style={styles.cancelText}>닫기</Text>
+              <Text variant="bodySm" weight="semibold" color="textMuted">
+                닫기
+              </Text>
             </Pressable>
           </Pressable>
         </Pressable>
@@ -193,8 +226,13 @@ const styles = StyleSheet.create({
     borderStyle: 'solid',
     backgroundColor: withAlpha(colors.primary, 0.06),
   },
-  triggerText: { fontSize: fontSize.base, color: colors.text, fontWeight: '600' },
-  placeholder: { fontSize: fontSize.base, color: colors.textMuted, fontWeight: '700' },
+  triggerInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    flex: 1,
+  },
+  triggerText: { flex: 1 },
   clearBtn: {
     paddingHorizontal: spacing.sm,
     paddingVertical: 4,
@@ -203,7 +241,6 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.background,
   },
-  clearBtnText: { fontSize: fontSize.xs, color: colors.textMuted, fontWeight: '700' },
   disabled: { opacity: 0.5 },
   pressed: { opacity: 0.85 },
 
@@ -223,7 +260,6 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     gap: spacing.md,
   },
-  cardTitle: { fontSize: fontSize.lg, fontWeight: '700', color: colors.text },
   list: { flexGrow: 0 },
   listContent: { gap: spacing.xs, paddingVertical: spacing.xs },
   item: {
@@ -235,10 +271,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   itemActive: { borderColor: colors.primary, backgroundColor: withAlpha(colors.primary, 0.06) },
-  itemText: { fontSize: fontSize.sm, color: colors.text, fontWeight: '600' },
-  itemTextActive: { color: colors.primary, fontWeight: '700' },
-  itemMeta: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: 2 },
-  emptyHint: { fontSize: fontSize.sm, color: colors.textMuted, padding: spacing.md },
+  itemMeta: { marginTop: 2 },
+  emptyHint: { padding: spacing.md },
 
   createBox: {
     borderTopWidth: 1,
@@ -246,7 +280,6 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
     gap: spacing.xs,
   },
-  createLabel: { fontSize: fontSize.xs, color: colors.textMuted, fontWeight: '700' },
   createRow: { flexDirection: 'row', gap: spacing.sm },
   createInput: {
     flex: 1,
@@ -267,8 +300,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  createBtnText: { color: '#fff', fontSize: fontSize.sm, fontWeight: '700' },
 
   cancel: { alignItems: 'center', paddingVertical: spacing.sm },
-  cancelText: { fontSize: fontSize.sm, color: colors.textMuted, fontWeight: '600' },
 });

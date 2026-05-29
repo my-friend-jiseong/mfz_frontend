@@ -11,6 +11,7 @@ import {
 import { Text } from '@/components/ui/Text';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFieldStore } from '@/stores/fieldStore';
+import { useVisitStore } from '@/stores/visitStore';
 import { safeBack } from '@/utils/backNavigation';
 import {
   FIELD_STATUS_VALUES,
@@ -54,6 +55,10 @@ export default function EditField() {
   const field = useFieldStore((s) => s.getById(fieldId));
   const update = useFieldStore((s) => s.update);
   const remove = useFieldStore((s) => s.remove);
+  // 방문 이력 카운트 — 삭제 사전 안내용. 단일 actor 정책상 visit 있으면 백엔드가 삭제 거부.
+  const visitCount = useVisitStore(
+    (s) => s.visits.filter((v) => v.fieldId === fieldId).length,
+  );
 
   // Hooks must be called unconditionally — early return 후로 옮기지 않고 옵셔널 처리.
   const initial = useMemo(
@@ -263,12 +268,18 @@ export default function EditField() {
   };
 
   const handleDelete = () => {
+    // 방문 이력 있으면 백엔드가 차단함을 미리 안내 — anti-pattern '정말 삭제할까요 → 사실은 삭제 못 함' 해소.
+    if (visitCount > 0) {
+      const msg = `이 현장에는 방문 기록이 ${visitCount}건 있어 삭제할 수 없습니다.\n\n방문 기록을 정리하거나 현장 상태를 '조치 완료' 로 변경해주세요.`;
+      if (Platform.OS === 'web') window.alert(msg);
+      else Alert.alert('삭제할 수 없습니다', msg);
+      return;
+    }
+    const msg = '이 현장을 삭제할까요? 메모·사진도 함께 정리됩니다.';
     if (Platform.OS === 'web') {
-      if (confirm('이 현장을 삭제할까요? 연관된 방문·첨부는 유지됩니다.')) {
-        void performDelete();
-      }
+      if (confirm(msg)) void performDelete();
     } else {
-      Alert.alert('현장 삭제', '이 현장을 삭제할까요?', [
+      Alert.alert('현장 삭제', msg, [
         { text: '취소', style: 'cancel' },
         { text: '삭제', style: 'destructive', onPress: () => void performDelete() },
       ]);

@@ -248,10 +248,7 @@ export default function FieldDetail() {
         </View>
       ) : null}
 
-      <View style={styles.coordRow}>
-        <Text variant="caption" color="textMuted">
-          좌표: {field.latitude.toFixed(4)}, {field.longitude.toFixed(4)}
-        </Text>
+      <View style={styles.navRow}>
         <Button
           onPress={() =>
             void openKakaoRouteTo(field.address, field.latitude, field.longitude)
@@ -265,7 +262,8 @@ export default function FieldDetail() {
       </View>
 
       {/* 체크인은 외근 진행 화면의 currentDest 에서만 가능 — destination 경로와 일관.
-          즉석 방문은 외근 진행 화면의 '현장 추가' 로 명시적 동선. */}
+          즉석 방문은 외근 진행 화면의 '현장 추가' 로 명시적 동선.
+          삭제 액션은 수정 화면 안에 있음 — 라벨은 단순화. */}
       <Button
         onPress={() => router.push(`/(tabs)/fields/${field.id}/edit` as never)}
         variant="secondary"
@@ -273,14 +271,11 @@ export default function FieldDetail() {
         leftIcon="create-outline"
         style={styles.editBtn}
       >
-        수정 / 삭제
+        수정
       </Button>
 
       <Text variant="bodySm" weight="bold" color="textMuted" style={styles.sectionTitle}>
-        현장 직접 메모 ({directTextMemos.length})
-      </Text>
-      <Text variant="caption" color="textMuted" style={styles.directHint}>
-        외근 진행 중이 아닐 때도 이 현장에 메모를 남길 수 있습니다.
+        메모 ({directTextMemos.length})
       </Text>
       <View style={styles.memoInputRow}>
         <Input
@@ -393,15 +388,14 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     marginTop: 2,
   },
-  coordRow: {
+  navRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     marginTop: spacing.sm,
+    alignSelf: 'flex-start',
   },
   editBtn: { marginTop: spacing.md },
   sectionTitle: { marginTop: spacing.lg },
-  directHint: { marginTop: spacing.xs },
   memoInputRow: {
     flexDirection: 'row',
     gap: spacing.sm,

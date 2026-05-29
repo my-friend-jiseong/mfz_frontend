@@ -236,7 +236,17 @@ export default function FieldsList() {
             description={
               search || hasFilter
                 ? '검색어 또는 필터를 조정해보세요'
-                : '아래 버튼으로 새 현장을 등록하세요'
+                : '아래 버튼으로 첫 현장을 등록하세요'
+            }
+            action={
+              !search && !hasFilter ? (
+                <Button
+                  onPress={() => router.push('/(tabs)/fields/new' as never)}
+                  leftIcon="add-circle"
+                >
+                  새 현장 등록
+                </Button>
+              ) : undefined
             }
           />
         }
