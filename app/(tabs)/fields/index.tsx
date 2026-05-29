@@ -10,6 +10,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { Text } from '@/components/ui/Text';
 import { FilterChip } from '@/components/ui/FilterChip';
 import { StickyBottomBar } from '@/components/ui/StickyBottomBar';
 import {
@@ -206,7 +207,10 @@ export default function FieldsList() {
             ))}
           </View>
         ) : null}
-        <View style={styles.chipRow}>
+        <View style={styles.chipRowWithLabel}>
+          <Text variant="caption" weight="bold" color="textMuted" style={styles.rangeLabel}>
+            방문일
+          </Text>
           {RANGE_ORDER.map((p) => (
             <FilterChip
               key={p}
@@ -277,6 +281,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.xs,
     flexWrap: 'wrap',
+  },
+  chipRowWithLabel: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+    flexWrap: 'wrap',
+    alignItems: 'center',
+  },
+  rangeLabel: {
+    marginRight: spacing.xs,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   list: { padding: spacing.lg, paddingBottom: 120 },
 });

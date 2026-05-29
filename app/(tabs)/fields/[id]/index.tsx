@@ -222,7 +222,11 @@ export default function FieldDetail() {
         <Text variant="caption" weight="bold" style={{ color: statusFg }}>
           {FIELD_STATUS_LABEL[field.status]}
         </Text>
-        <Ionicons name="chevron-down" size={14} color={statusFg} />
+        <View style={styles.statusDivider} />
+        <Ionicons name="swap-horizontal" size={12} color={statusFg} />
+        <Text variant="caption" weight="semibold" style={{ color: statusFg }}>
+          변경
+        </Text>
       </Pressable>
 
       <Text variant="h3" style={styles.addr}>
@@ -380,6 +384,12 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: radius.pill,
     borderWidth: 1,
+  },
+  statusDivider: {
+    width: 1,
+    height: 10,
+    backgroundColor: colors.borderMuted,
+    marginHorizontal: 2,
   },
   addr: { marginTop: spacing.sm },
   metaRow: {

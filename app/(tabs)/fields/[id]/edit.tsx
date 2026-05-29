@@ -91,6 +91,7 @@ export default function EditField() {
   const [providerUnavailable, setProviderUnavailable] = useState(false);
   const [searching, setSearching] = useState(false);
   const [manualMode, setManualMode] = useState(false);
+  const [retryToken, setRetryToken] = useState(0);
 
   // 디바운스 검색 — fields/new.tsx 와 동일한 패턴 (latest-wins).
   const reqIdRef = useRef(0);
@@ -132,7 +133,7 @@ export default function EditField() {
       }
     }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(handle);
-  }, [query, editingAddress]);
+  }, [query, editingAddress, retryToken]);
 
   const handleStartAddressEdit = () => {
     setEditingAddress(true);
@@ -324,15 +325,32 @@ export default function EditField() {
             </Button>
           ) : null}
           {newAddress ? (
-            <Button
-              onPress={handleRevertAddress}
-              disabled={submitting}
-              variant="ghost"
-              size="sm"
-              leftIcon="arrow-undo"
-            >
-              되돌리기
-            </Button>
+            <View style={styles.changedActions}>
+              <Button
+                onPress={() => {
+                  // 변경 예정 상태에서 '다른 주소 검색' — 되돌리기 → 수정 다시 3탭 우회로 제거.
+                  setNewAddress(null);
+                  setEditingAddress(true);
+                  setQuery('');
+                  setResults([]);
+                }}
+                disabled={submitting}
+                variant="secondary"
+                size="sm"
+                leftIcon="search"
+              >
+                다른 주소 검색
+              </Button>
+              <Button
+                onPress={handleRevertAddress}
+                disabled={submitting}
+                variant="ghost"
+                size="sm"
+                leftIcon="arrow-undo"
+              >
+                되돌리기
+              </Button>
+            </View>
           ) : null}
         </View>
         <Card
@@ -382,8 +400,20 @@ export default function EditField() {
               <Card padding="md" style={styles.warnBox}>
                 <Text variant="bodySm" weight="bold">주소 검색 일시 장애</Text>
                 <Text variant="caption" color="textMuted" style={styles.warnBody}>
-                  카카오 주소 서비스가 일시적으로 응답하지 않습니다. 잠시 후 다시 시도하거나 좌표를 직접 입력하세요.
+                  카카오 주소 서비스가 일시적으로 응답하지 않습니다. 다시 시도하거나 좌표를 직접 입력하세요.
                 </Text>
+                <Button
+                  onPress={() => {
+                    setProviderUnavailable(false);
+                    setRetryToken((t) => t + 1);
+                  }}
+                  variant="secondary"
+                  size="sm"
+                  leftIcon="refresh"
+                  style={styles.retryBtn}
+                >
+                  다시 시도
+                </Button>
               </Card>
             ) : null}
             {noResults ? (
@@ -563,6 +593,7 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
   },
   changedHint: { marginTop: spacing.xs },
+  changedActions: { flexDirection: 'row', gap: spacing.xs },
   fieldError: { marginTop: 4, marginLeft: 4 },
   error: { marginTop: spacing.md },
   statusRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
@@ -588,6 +619,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   warnBody: { marginTop: 4 },
+  retryBtn: { marginTop: spacing.sm, alignSelf: 'flex-start' },
   hint: { marginTop: spacing.sm },
   resultList: { marginTop: spacing.sm },
   addrItem: {

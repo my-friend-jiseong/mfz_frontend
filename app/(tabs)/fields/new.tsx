@@ -73,6 +73,8 @@ export default function NewField() {
   const [providerUnavailable, setProviderUnavailable] = useState(false);
   const [searching, setSearching] = useState(false);
   const [manualMode, setManualMode] = useState(false);
+  // 카카오 장애 시 retry 트리거 — query 가 그대로면 effect 가 다시 안 돌므로 토큰 증가로 재실행.
+  const [retryToken, setRetryToken] = useState(0);
 
   const [selected, setSelected] = useState<SelectedAddress | null>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
@@ -121,7 +123,7 @@ export default function NewField() {
       }
     }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(handle);
-  }, [query]);
+  }, [query, retryToken]);
 
   const handleSelectItem = (item: AddressSearchItem) => {
     setSelected(itemToSelected(item));
@@ -263,8 +265,20 @@ export default function NewField() {
                   주소 검색 일시 장애
                 </Text>
                 <Text variant="caption" color="textMuted" style={styles.warnBody}>
-                  카카오 주소 서비스가 일시적으로 응답하지 않습니다. 잠시 후 다시 시도하거나 좌표를 직접 입력하세요.
+                  카카오 주소 서비스가 일시적으로 응답하지 않습니다. 다시 시도하거나 좌표를 직접 입력하세요.
                 </Text>
+                <Button
+                  onPress={() => {
+                    setProviderUnavailable(false);
+                    setRetryToken((t) => t + 1);
+                  }}
+                  variant="secondary"
+                  size="sm"
+                  leftIcon="refresh"
+                  style={styles.retryBtn}
+                >
+                  다시 시도
+                </Button>
               </Card>
             ) : null}
 
@@ -449,6 +463,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   warnBody: { marginTop: 4 },
+  retryBtn: { marginTop: spacing.sm, alignSelf: 'flex-start' },
   resultList: { marginTop: spacing.md },
   addrItem: {
     backgroundColor: colors.surface,
