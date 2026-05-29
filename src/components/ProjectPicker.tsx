@@ -65,6 +65,9 @@ export function ProjectPicker({ value, onChange, disabled, initialLabel }: Props
       <Pressable
         onPress={() => setOpen(true)}
         disabled={disabled}
+        accessibilityRole="button"
+        accessibilityLabel={label ? `프로젝트: ${label}` : '프로젝트 선택'}
+        accessibilityState={{ disabled: !!disabled }}
         style={({ pressed }) => [
           styles.trigger,
           value ? styles.triggerSelected : null,
@@ -91,6 +94,8 @@ export function ProjectPicker({ value, onChange, disabled, initialLabel }: Props
           <Pressable
             onPress={() => onChange(null)}
             hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="프로젝트 해제"
             style={styles.clearBtn}
           >
             <Text variant="caption" weight="bold" color="textMuted">
@@ -116,6 +121,9 @@ export function ProjectPicker({ value, onChange, disabled, initialLabel }: Props
                   onChange(null);
                   setOpen(false);
                 }}
+                accessibilityRole="button"
+                accessibilityState={{ selected: !value }}
+                accessibilityLabel="프로젝트 없음"
                 style={[styles.item, !value && styles.itemActive]}
               >
                 <Text
@@ -144,6 +152,9 @@ export function ProjectPicker({ value, onChange, disabled, initialLabel }: Props
                         onChange(p.id);
                         setOpen(false);
                       }}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: active }}
+                      accessibilityLabel={`프로젝트 ${p.name}`}
                       style={[styles.item, active && styles.itemActive]}
                     >
                       <Text
@@ -179,6 +190,9 @@ export function ProjectPicker({ value, onChange, disabled, initialLabel }: Props
                 <Pressable
                   onPress={() => void handleCreate()}
                   disabled={creating || !newName.trim()}
+                  accessibilityRole="button"
+                  accessibilityLabel="새 프로젝트 추가"
+                  accessibilityState={{ disabled: creating || !newName.trim() }}
                   style={({ pressed }) => [
                     styles.createBtn,
                     (creating || !newName.trim()) && styles.disabled,
@@ -194,6 +208,8 @@ export function ProjectPicker({ value, onChange, disabled, initialLabel }: Props
 
             <Pressable
               onPress={() => setOpen(false)}
+              accessibilityRole="button"
+              accessibilityLabel="닫기"
               style={({ pressed }) => [styles.cancel, pressed && styles.pressed]}
             >
               <Text variant="bodySm" weight="semibold" color="textMuted">

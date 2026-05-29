@@ -80,6 +80,9 @@ function FieldReportCard({
                 source={{ uri: resolve(s.url) }}
                 style={styles.frPhoto}
                 resizeMode="cover"
+                accessibilityLabel={
+                  s.caption ? `${s.label} 사진: ${s.caption}` : `${s.label} 사진`
+                }
               />
             ) : (
               <View style={[styles.frPhoto, styles.frPhotoEmpty]}>

@@ -48,6 +48,8 @@ function MenuRow({
     <Pressable
       onPress={onPress}
       disabled={!interactive}
+      accessibilityRole={interactive ? 'button' : 'text'}
+      accessibilityLabel={value ? `${label}: ${value}` : label}
       style={({ pressed }) => [
         styles.menuRow,
         pressed && interactive && { opacity: opacity.pressed },

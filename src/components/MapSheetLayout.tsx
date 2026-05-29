@@ -75,6 +75,8 @@ export function MapSheetLayout({
             <Pressable
               onPress={onBack}
               hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="뒤로 가기"
               style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
             >
               <Ionicons name="chevron-back" size={22} color={colors.text} />

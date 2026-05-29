@@ -234,6 +234,10 @@ export default function FieldReportEditor() {
           ) : (
             <Pressable
               onPress={() => setFieldPickerOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel={
+                selectedField ? `현장: ${selectedField.address}` : '현장 선택'
+              }
               style={({ pressed }) => [
                 styles.fieldPickBtn,
                 pressed && { opacity: opacity.pressed },
@@ -277,6 +281,7 @@ export default function FieldReportEditor() {
                     source={{ uri: img }}
                     style={styles.phasePhoto}
                     resizeMode="cover"
+                    accessibilityLabel={`${p.label} 사진`}
                   />
                 ) : (
                   <View style={[styles.phasePhoto, styles.phasePhotoEmpty]}>
@@ -392,6 +397,13 @@ export default function FieldReportEditor() {
                         setFieldId(f.id);
                         setFieldPickerOpen(false);
                       }}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: f.id === fieldId }}
+                      accessibilityLabel={
+                        f.addressDetail
+                          ? `${f.address}, ${f.addressDetail}`
+                          : f.address
+                      }
                       style={({ pressed }) => [
                         styles.pickerItem,
                         f.id === fieldId && styles.pickerItemActive,
@@ -429,6 +441,13 @@ export default function FieldReportEditor() {
                         setFieldId(f.id);
                         setFieldPickerOpen(false);
                       }}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: f.id === fieldId }}
+                      accessibilityLabel={
+                        f.addressDetail
+                          ? `${f.address}, ${f.addressDetail}`
+                          : f.address
+                      }
                       style={({ pressed }) => [
                         styles.pickerItem,
                         f.id === fieldId && styles.pickerItemActive,

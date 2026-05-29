@@ -142,6 +142,11 @@ export function AddDestinationModal({
                   key={f.id}
                   onPress={() => handlePick(f.id)}
                   accessibilityRole="button"
+                  accessibilityLabel={
+                    f.addressDetail
+                      ? `${f.address} 추가, ${f.addressDetail}`
+                      : `${f.address} 추가`
+                  }
                   style={({ pressed }) => [
                     styles.row,
                     pressed && { opacity: opacity.pressed },

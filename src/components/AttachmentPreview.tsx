@@ -28,7 +28,12 @@ export function PhotoGrid({
     <View style={photoStyles.grid}>
       {photos.map((p) => (
         <View key={p.id} style={photoStyles.cell}>
-          <Image source={{ uri: p.fileUrl }} style={photoStyles.image} resizeMode="cover" />
+          <Image
+            source={{ uri: p.fileUrl }}
+            style={photoStyles.image}
+            resizeMode="cover"
+            accessibilityLabel="첨부 사진"
+          />
           {onDelete ? (
             <Pressable
               onPress={() => onDelete(p.id)}

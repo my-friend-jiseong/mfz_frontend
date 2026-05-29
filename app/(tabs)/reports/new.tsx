@@ -402,6 +402,8 @@ export default function ComposeReport() {
           ) : (
             <Pressable
               onPress={() => setTripPickerOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel="연결할 외근 선택"
               style={({ pressed }) => [
                 styles.tripPickerBtn,
                 pressed && { opacity: opacity.pressed },
@@ -471,7 +473,11 @@ export default function ComposeReport() {
           </Text>
           <View style={styles.photoBox}>
             {beforePhoto ? (
-              <Image source={{ uri: beforePhoto.uri }} style={styles.photoPreview} />
+              <Image
+                source={{ uri: beforePhoto.uri }}
+                style={styles.photoPreview}
+                accessibilityLabel="조치 전 사진"
+              />
             ) : null}
             <View style={styles.photoActions}>
               <Button
@@ -500,7 +506,11 @@ export default function ComposeReport() {
           </Text>
           <View style={styles.photoBox}>
             {afterPhoto ? (
-              <Image source={{ uri: afterPhoto.uri }} style={styles.photoPreview} />
+              <Image
+                source={{ uri: afterPhoto.uri }}
+                style={styles.photoPreview}
+                accessibilityLabel="조치 후 사진"
+              />
             ) : null}
             <View style={styles.photoActions}>
               <Button
@@ -630,6 +640,9 @@ export default function ComposeReport() {
                       setTripId(active ? null : t.id);
                       setTripPickerOpen(false);
                     }}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    accessibilityLabel={`${head}, ${meta}`}
                     style={({ pressed }) => [
                       styles.tripItem,
                       active && styles.tripItemActive,

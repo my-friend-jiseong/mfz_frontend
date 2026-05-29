@@ -13,6 +13,8 @@ interface Props {
   padding?: Padding;
   variant?: Variant;
   style?: StyleProp<ViewStyle>;
+  // onPress 있을 때 screen reader 에 읽힐 라벨. 미지정 시 children 의 Text 가 자동 합성.
+  accessibilityLabel?: string;
 }
 
 const PADDING: Record<Padding, number> = {
@@ -28,6 +30,7 @@ export function Card({
   padding = 'lg',
   variant = 'outline',
   style,
+  accessibilityLabel,
 }: Props) {
   const base: StyleProp<ViewStyle>[] = [
     styles.base,
@@ -47,6 +50,8 @@ export function Card({
   return (
     <Pressable
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
       style={({ pressed }) => [
         ...base,
         pressed && { opacity: opacity.pressed },
