@@ -65,14 +65,17 @@ export default function EditReport() {
     initialRef.current = report.title;
   }, [report]);
 
-  const backToReports = (
-    <Button
-      onPress={() => router.replace('/(tabs)/reports' as never)}
-      variant="secondary"
-      leftIcon="arrow-back"
-    >
-      보고서 목록으로
-    </Button>
+  const backToReports = useMemo(
+    () => (
+      <Button
+        onPress={() => router.replace('/(tabs)/reports' as never)}
+        variant="secondary"
+        leftIcon="arrow-back"
+      >
+        보고서 목록으로
+      </Button>
+    ),
+    [router],
   );
 
   if (!summary) {
