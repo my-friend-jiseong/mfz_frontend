@@ -21,6 +21,7 @@ import { useVisitStore } from '@/stores/visitStore';
 import { useFieldStore } from '@/stores/fieldStore';
 import { pickPhoto, promptPhotoSource, type UploadFile } from '@/utils/media';
 import { buildReportNotesFromTrip } from '@/utils/reportPrefill';
+import { promptChoice } from '@/components/WebChoiceModal';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -205,7 +206,7 @@ export default function ComposeReport() {
     }
   };
 
-  const handleManualSave = async () => {
+  const performManualSave = async () => {
     setError(null);
     if (!userId) return;
     const t = title.trim();
@@ -225,6 +226,29 @@ export default function ComposeReport() {
     } else {
       Alert.alert('보고서 저장 실패', result.error);
     }
+  };
+
+  const handleManualSave = () => {
+    // 직접 저장은 title + tripId 만 보냄 — notes/사진은 백엔드에 안 감.
+    // 사용자가 그것들을 채워뒀으면 사일런트 데이터 손실이라 한 번 확인.
+    const hasUnsavedInputs =
+      notes.trim().length > 0 || beforePhoto !== null || afterPhoto !== null;
+    if (!hasUnsavedInputs) {
+      void performManualSave();
+      return;
+    }
+    const lost: string[] = [];
+    if (notes.trim().length > 0) lost.push('현장 메모');
+    if (beforePhoto !== null) lost.push('조치 전 사진');
+    if (afterPhoto !== null) lost.push('조치 후 사진');
+    promptChoice(
+      '직접 저장 — 일부 입력이 적용되지 않습니다',
+      `${lost.join(' · ')} 은(는) 제목만 저장되는 직접 저장에서 사용되지 않습니다.\nAI 초안으로 받으면 함께 활용됩니다. 계속할까요?`,
+      [
+        { label: '취소', style: 'cancel' as const },
+        { label: '제목만 저장', onPress: () => void performManualSave() },
+      ],
+    );
   };
 
   const stepLabel = (() => {
