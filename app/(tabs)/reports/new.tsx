@@ -18,7 +18,9 @@ import { safeBack } from '@/utils/backNavigation';
 import { useTripStore } from '@/stores/tripStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useVisitStore } from '@/stores/visitStore';
+import { useFieldStore } from '@/stores/fieldStore';
 import { pickPhoto, promptPhotoSource, type UploadFile } from '@/utils/media';
+import { buildReportNotesFromTrip } from '@/utils/reportPrefill';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -40,12 +42,18 @@ export default function ComposeReport() {
   const create = useReportStore((s) => s.create);
   const allReports = useReportStore((s) => s.reports);
   const allTrips = useTripStore((s) => s.trips);
+  const loadTripDetail = useTripStore((s) => s.loadDetail);
   const userId = useAuthStore((s) => s.user?.id);
   const visitsByTrip = useVisitStore((s) => s.byTrip);
+  const getField = useFieldStore((s) => s.getById);
+  const directAttachmentsMap = useFieldStore((s) => s.directAttachments);
+  const loadFieldDetail = useFieldStore((s) => s.loadDetail);
 
   const [tripId, setTripId] = useState<string | null>(params.tripId ?? null);
   const [title, setTitle] = useState('');
   const [notes, setNotes] = useState('');
+  // notes 가 사용자가 한 번이라도 직접 손댄 적 있는지 — true 면 prefill 덮어쓰기 금지.
+  const notesTouchedRef = useRef(false);
   const [beforePhoto, setBeforePhoto] = useState<UploadFile | null>(null);
   const [afterPhoto, setAfterPhoto] = useState<UploadFile | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -59,6 +67,42 @@ export default function ComposeReport() {
       mountedRef.current = false;
     };
   }, []);
+
+  // tripId 결정되면 그 trip detail 페치 → visit/field 정보 hydrate → notes prefill.
+  // 사용자가 한 번이라도 직접 손댔으면 (notesTouchedRef) 덮어쓰지 않음.
+  const prefilledForTripRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!tripId) return;
+    void loadTripDetail(tripId);
+  }, [tripId, loadTripDetail]);
+
+  // visit 들의 field 메모도 hydrate — buildReportNotesFromTrip 이 attachments 참조.
+  const tripVisits = useMemo(
+    () => (tripId ? visitsByTrip(tripId) : []),
+    [tripId, visitsByTrip],
+  );
+  useEffect(() => {
+    for (const v of tripVisits) {
+      void loadFieldDetail(v.fieldId);
+    }
+  }, [tripVisits, loadFieldDetail]);
+
+  // 실제 prefill — tripId 별 1회. visits 가 채워진 시점에 적용.
+  useEffect(() => {
+    if (!tripId) return;
+    if (prefilledForTripRef.current === tripId) return;
+    if (tripVisits.length === 0) return;       // hydrate 아직 안 됨 — 채워지면 다시 발화
+    if (notesTouchedRef.current) return;        // 사용자 입력 있으면 보존
+    const draft = buildReportNotesFromTrip({
+      visits: tripVisits,
+      getField,
+      attachmentsByField: directAttachmentsMap,
+    });
+    if (draft) {
+      setNotes(draft);
+      prefilledForTripRef.current = tripId;
+    }
+  }, [tripId, tripVisits, getField, directAttachmentsMap]);
 
   const myTrips = useMemo(() => {
     if (!userId) return [];
@@ -292,7 +336,10 @@ export default function ComposeReport() {
           </View>
           <Input
             value={notes}
-            onChangeText={setNotes}
+            onChangeText={(v) => {
+              notesTouchedRef.current = true;
+              setNotes(v);
+            }}
             placeholder="현장에서 관찰한 내용·조치 사항 — AI 초안 생성에 사용됩니다."
             multiline
             maxLength={50000}
