@@ -11,6 +11,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
 import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
+import { ReviewVisitCard } from '@/components/trips/ReviewVisitCard';
 import { safeBack } from '@/utils/backNavigation';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
@@ -77,6 +78,19 @@ export default function TripReview() {
   const visitCount = visits.length;
   const skippedCount = destinations.filter((d) => d.status === 'skipped').length;
 
+  // O(1) visit lookup by fieldId — destination 순회하면서 매번 .find 풀스캔 차단.
+  const visitByFieldId = useMemo(() => {
+    const map = new Map<string, typeof visits[number]>();
+    for (const v of visits) map.set(v.fieldId, v);
+    return map;
+  }, [visits]);
+
+  // 방문한 (또는 방문 의도가 있었던) destination — skipped 는 별도 섹션에서 처리.
+  const visitedDestinations = useMemo(
+    () => destinations.filter((d) => d.status !== 'skipped'),
+    [destinations],
+  );
+
   return (
     <MapSheetLayout
       title="외근 정리"
@@ -136,15 +150,47 @@ export default function TripReview() {
             description="현장에 들르지 않았거나, 강제 종료된 외근입니다"
           />
         ) : (
-          <View style={styles.placeholder}>
-            <Text variant="bodySm" color="textMuted" align="center">
-              방문 카드 목록은 다음 단계에서 추가됩니다.
-            </Text>
-            <Text variant="caption" color="textSubtle" align="center">
-              현재: visit {visitCount}건 · skipped {skippedCount}곳 · fields 캐시{' '}
-              {tripFieldIds.filter((fid) => getField(fid)).length}/{tripFieldIds.length}
-            </Text>
-          </View>
+          <>
+            {visitedDestinations.length > 0 ? (
+              <>
+                <Text
+                  variant="bodySm"
+                  weight="bold"
+                  color="textMuted"
+                  style={styles.sectionTitle}
+                >
+                  방문한 현장 정리 ({visitedDestinations.length})
+                </Text>
+                {visitedDestinations.map((d, idx) => {
+                  const visit = visitByFieldId.get(d.fieldId);
+                  const field = getField(d.fieldId);
+                  if (!visit) {
+                    // arrived destination 인데 visit 없음 — 로컬 race. 단순 안내 카드.
+                    return (
+                      <Card key={d.id} padding="md" style={styles.missingCard}>
+                        <Text variant="bodySm" weight="semibold">
+                          {field?.address ?? '알 수 없는 현장'}
+                        </Text>
+                        <Text variant="caption" color="textMuted">
+                          방문 기록을 불러오는 중입니다
+                        </Text>
+                      </Card>
+                    );
+                  }
+                  return (
+                    <ReviewVisitCard
+                      key={d.id}
+                      visit={visit}
+                      order={d.order}
+                      fieldAddress={field?.address ?? '알 수 없는 현장'}
+                      fieldAddressDetail={field?.addressDetail || undefined}
+                      initiallyExpanded={idx === 0}
+                    />
+                  );
+                })}
+              </>
+            ) : null}
+          </>
         )}
       </BottomSheetScrollView>
     </MapSheetLayout>
@@ -166,9 +212,6 @@ const styles = StyleSheet.create({
   },
   statRow: { flex: 1, alignItems: 'center', gap: 2 },
   statDivider: { width: 1, height: 28, backgroundColor: colors.border },
-  placeholder: {
-    padding: spacing.xl,
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
+  sectionTitle: { marginBottom: spacing.sm },
+  missingCard: { marginBottom: spacing.sm },
 });
