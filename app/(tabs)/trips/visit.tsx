@@ -103,7 +103,7 @@ export default function VisitDetail() {
             leftIcon="arrow-forward-circle"
             style={styles.toField}
           >
-            현장 상세로 이동 (메모·사진 관리)
+            메모·사진 추가
           </Button>
         ) : null}
       </ScrollView>

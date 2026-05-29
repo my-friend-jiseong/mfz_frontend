@@ -229,7 +229,7 @@ export default function FieldCheckin() {
           rightIcon="arrow-forward"
           style={styles.toField}
         >
-          메모·사진은 현장 상세에서 관리
+          메모·사진 추가
         </Button>
 
         <Button
