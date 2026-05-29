@@ -190,10 +190,18 @@ export default function ReportDetail() {
         raw || '보고서를 삭제하지 못했습니다. 잠시 후 다시 시도해주세요.',
       );
     };
+    // 함께 사라지는 항목 안내 — 사용자가 결정 전에 무엇이 함께 삭제되는지 미리 확인.
+    const losses: string[] = [];
+    if (fieldReports.length > 0) {
+      losses.push(`현장 보고 ${fieldReports.length}건`);
+    }
+    if (report.outputFileUrl) losses.push('생성된 Word 파일');
+    const lossesNote = losses.length > 0 ? `\n\n함께 사라지는 항목: ${losses.join(' · ')}` : '';
+    const msg = `이 보고서를 정말 삭제할까요?${lossesNote}`;
     if (Platform.OS === 'web') {
-      if (confirm('이 보고서를 삭제할까요?')) void doDelete();
+      if (confirm(msg)) void doDelete();
     } else {
-      Alert.alert('보고서 삭제', '이 보고서를 정말 삭제할까요?', [
+      Alert.alert('보고서 삭제', msg, [
         { text: '취소', style: 'cancel' },
         { text: '삭제', style: 'destructive', onPress: () => void doDelete() },
       ]);

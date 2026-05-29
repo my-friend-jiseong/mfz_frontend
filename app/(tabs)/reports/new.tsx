@@ -12,7 +12,8 @@ import {
 } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useReportStore } from '@/stores/reportStore';
 import { safeBack } from '@/utils/backNavigation';
 import { useTripStore } from '@/stores/tripStore';
@@ -37,6 +38,7 @@ import { fmtDate, fmtTime } from '@/utils/datetime';
 
 export default function ComposeReport() {
   const router = useRouter();
+  const navigation = useNavigation();
   const params = useLocalSearchParams<{ tripId?: string }>();
 
   const generate = useReportStore((s) => s.generate);
@@ -68,6 +70,88 @@ export default function ComposeReport() {
       mountedRef.current = false;
     };
   }, []);
+
+  // R4-A 드래프트 보존 — title + notes + tripId 만 (사진 file uri 는 휘발).
+  // 진입 시 1회 hydrate, 저장 성공 시 clear, 변경 시 debounce 저장.
+  const DRAFT_KEY = 'mfz.reports.draft.v1';
+  const draftHydratedRef = useRef(false);
+  useEffect(() => {
+    if (draftHydratedRef.current) return;
+    draftHydratedRef.current = true;
+    void (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(DRAFT_KEY);
+        if (!raw) return;
+        const parsed = JSON.parse(raw) as {
+          tripId?: string | null;
+          title?: string;
+          notes?: string;
+        };
+        // tripId 정합 — params 로 받은 trip 과 같거나 둘 다 없을 때만 복원.
+        const sameTrip =
+          (parsed.tripId ?? null) === (params.tripId ?? null);
+        if (!sameTrip) return;
+        if (parsed.title) setTitle(parsed.title);
+        if (parsed.notes) {
+          setNotes(parsed.notes);
+          notesTouchedRef.current = true; // 사용자 입력으로 간주 → prefill 안 덮음
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
+  }, [params.tripId]);
+
+  const draftSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!draftHydratedRef.current) return;
+    if (draftSaveTimerRef.current) clearTimeout(draftSaveTimerRef.current);
+    draftSaveTimerRef.current = setTimeout(() => {
+      void AsyncStorage.setItem(
+        DRAFT_KEY,
+        JSON.stringify({ tripId, title, notes }),
+      ).catch(() => undefined);
+    }, 500);
+    return () => {
+      if (draftSaveTimerRef.current) clearTimeout(draftSaveTimerRef.current);
+    };
+  }, [tripId, title, notes]);
+
+  const clearDraft = () => {
+    void AsyncStorage.removeItem(DRAFT_KEY).catch(() => undefined);
+  };
+
+  // F-G AI 생성 중 화면 이탈 차단 — back/tap 둘 다 잡고 사용자 confirm.
+  // 텍스트 입력은 draft 가 보존하니 별도 차단 X (AI 진행은 비가역 호출이라 cancel 불가 → 보호).
+  useEffect(() => {
+    if (busy !== 'ai') return;
+    const unsub = (
+      navigation as unknown as {
+        addListener: (
+          ev: 'beforeRemove',
+          fn: (e: { preventDefault: () => void; data: { action: unknown } }) => void,
+        ) => () => void;
+      }
+    ).addListener?.('beforeRemove', (e) => {
+      e.preventDefault();
+      Alert.alert(
+        'AI 초안 생성 중',
+        '생성이 완료될 때까지 화면을 떠나면 진행 내용이 사라집니다.\n계속 머무를까요?',
+        [
+          { text: '계속 머무름', style: 'cancel' },
+          {
+            text: '나가기',
+            style: 'destructive',
+            onPress: () =>
+              navigation.dispatch(
+                (e.data.action ?? { type: 'GO_BACK' }) as never,
+              ),
+          },
+        ],
+      );
+    });
+    return unsub;
+  }, [busy, navigation]);
 
   // tripId 결정되면 그 trip detail 페치 → visit/field 정보 hydrate → notes prefill.
   // 사용자가 한 번이라도 직접 손댔으면 (notesTouchedRef) 덮어쓰지 않음.
@@ -123,7 +207,8 @@ export default function ComposeReport() {
     title?: string | null;
     id: string;
   }) => {
-    const head = `${fmtDate(t.startedAt)}${t.title ? ` · ${t.title}` : ''}`;
+    // 시작 시각을 head 에도 노출 — 같은 날 외근 2건 구별 (외근 F-4 와 같은 회로).
+    const head = `${fmtDate(t.startedAt)} ${fmtTime(t.startedAt)}${t.title ? ` · ${t.title}` : ''}`;
     const visitCount = visitsByTrip(t.id).length;
     const meta =
       `${fmtTime(t.startedAt)}` +
@@ -191,6 +276,7 @@ export default function ComposeReport() {
       });
       if (!mountedRef.current) return;
       if (r.ok) {
+        clearDraft();
         router.replace(`/(tabs)/reports/${r.data.reportId ?? r.data.id}` as never);
       } else {
         setError(r.error);
@@ -222,6 +308,7 @@ export default function ComposeReport() {
     if (!mountedRef.current) return;
     setBusy(null);
     if (result.ok) {
+      clearDraft();
       router.replace(`/(tabs)/reports/${result.report.id}` as never);
     } else {
       Alert.alert('보고서 저장 실패', result.error);
@@ -251,10 +338,11 @@ export default function ComposeReport() {
     );
   };
 
+  // 단계 라벨은 시간 기반 시뮬레이션 — 실제 백엔드 진행과 무관해 '예상' 명시.
   const stepLabel = (() => {
-    if (elapsedSec < 3) return { idx: 1, text: '메모·사진 업로드 중' };
-    if (elapsedSec < 12) return { idx: 2, text: 'AI 분석 중' };
-    return { idx: 3, text: '문서 작성 중' };
+    if (elapsedSec < 3) return { idx: 1, text: '메모·사진 업로드' };
+    if (elapsedSec < 12) return { idx: 2, text: 'AI 분석' };
+    return { idx: 3, text: '문서 작성' };
   })();
   const remainEstSec = Math.max(0, 30 - elapsedSec);
   const isBusy = busy !== null;
@@ -273,7 +361,7 @@ export default function ComposeReport() {
             보고서 작성
           </Text>
           <Text variant="bodySm" color="textMuted" style={styles.subtitle}>
-            제목을 입력하고 'AI 초안 받기' 또는 '직접 저장' 을 선택하세요. 현장별 전·중·후 사진은 저장 후 상세 화면에서 추가합니다.
+            제목을 입력하고 'AI 초안 받기' 또는 '직접 저장' 을 선택하세요. Word 파일은 AI 초안에서만 자동 생성됩니다. 현장별 전·중·후 사진은 저장 후 상세 화면에서 추가합니다.
           </Text>
 
           <Text variant="bodySm" weight="bold" color="textMuted" style={styles.label}>
@@ -469,11 +557,11 @@ export default function ComposeReport() {
                 })}
               </View>
               <Text variant="bodySm" weight="bold">
-                {stepLabel.idx}/3 · {stepLabel.text}
+                예상 단계 {stepLabel.idx}/3 · {stepLabel.text}
               </Text>
               <Text variant="caption" color="textMuted" style={styles.progressMeta}>
                 {elapsedSec}초 경과
-                {remainEstSec > 0 ? ` · 약 ${remainEstSec}초 남음` : ' · 마무리 중'}
+                {remainEstSec > 0 ? ` · 약 ${remainEstSec}초 남음 (예상)` : ' · 마무리 중'}
               </Text>
             </Card>
           ) : null}
