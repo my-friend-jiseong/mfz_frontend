@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
@@ -100,11 +100,30 @@ export default function TripReview() {
 
   // 진입 시 각 visit field 의 메모/사진 캐시 페치 — directAttachments 가 비어 있을 수 있음.
   // visit 없는 destination 은 의미 없으니 visitedDestinations 만.
+  //
+  // 무한 루프 차단 — 2중 가드:
+  //   1) deps 는 fieldIds 의 stable string key (같은 ids 면 effect 안 재실행)
+  //   2) ref guard 로 이미 페치한 fieldId 중복 호출 X
+  // 원래 회로: destinations selector 가 매 render 마다 새 array reference 를 반환 +
+  // loadFieldDetail 내부 set(...) 이 fieldStore 를 변경 → 이 컴포넌트 rerender →
+  // 새 array → useEffect 재실행 → 다시 set → ... Maximum update depth.
+  const fieldIdsKey = useMemo(
+    () =>
+      visitedDestinations
+        .map((d) => d.fieldId)
+        .sort()
+        .join(','),
+    [visitedDestinations],
+  );
+  const fetchedRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    for (const d of visitedDestinations) {
-      void loadFieldDetail(d.fieldId);
+    if (!fieldIdsKey) return;
+    for (const fid of fieldIdsKey.split(',')) {
+      if (fetchedRef.current.has(fid)) continue;
+      fetchedRef.current.add(fid);
+      void loadFieldDetail(fid);
     }
-  }, [visitedDestinations, loadFieldDetail]);
+  }, [fieldIdsKey, loadFieldDetail]);
 
   return (
     <View style={styles.screenRoot}>
