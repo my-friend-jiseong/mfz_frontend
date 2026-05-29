@@ -552,6 +552,40 @@ DELETE /api/fields/:fieldId/photos/:photoId
 
 ---
 
+## 15. 🟢 프로필 수정 endpoint — `PATCH /api/me`
+
+### 배경
+프로필 화면(`profile.tsx`)에 이름·비밀번호 변경 진입로가 없다. `src/api/endpoints/auth.ts` 에 `me()` GET 만 있고 수정 endpoint 부재. 사용자가 이름을 잘못 등록하거나 비밀번호 정기 변경을 원할 때 자체 처리 못 함.
+
+### 백엔드가 해야 할 것
+
+```
+PATCH /api/me
+  body: { name?: string }                           // 이름 변경
+PATCH /api/me/password
+  body: { currentPassword: string, newPassword: string, newPasswordConfirm: string }
+```
+
+- 이메일은 PK 정합 + 인증 식별자라 변경 불가가 합리적 (선택).
+- 비밀번호 변경 시 `currentPassword` 검증 + 정책 (signup 과 동일: 10자 + 4종 중 3종).
+- 응답: `{ user: ApiUser }` (이름 변경) 또는 `{ updated: true }` (비밀번호).
+- 에러: Phase 7 shape. `current_password_invalid` / `password_policy_violation` 등.
+
+### 프론트엔드 영향 / 현황 (2026-05-30 기준)
+- 프론트는 현재 fallback 으로 "관리자에게 문의" 안내만 노출.
+- endpoint 가 들어오면 `profile.tsx` 에 "내 정보 수정" 진입로 + 폼.
+
+### 우선순위
+🟢 낮음 — 일가요는 운영 초기, 단일 actor 정책상 관리자 경로로 충분. 사용자 자체 처리 의지가 누적되면 격상.
+
+### 발견 시점
+2026-05-30 (인증/프로필 UX 검토 — B-5).
+
+### 관련 코드
+- 프론트 [`src/api/endpoints/auth.ts`](../src/api/endpoints/auth.ts), [`app/(tabs)/profile.tsx`](../app/\(tabs\)/profile.tsx)
+
+---
+
 ## 변경 이력
 
 - **2026-05-08**: 백로그 신설. §1 길찾기 카카오-only 정책 반영. (이전 §1 title 은 백엔드 처리 완료로 제거)
@@ -563,3 +597,4 @@ DELETE /api/fields/:fieldId/photos/:photoId
 - **2026-05-11**: §12 추가 — ERD 파악 및 최신화 (중상·프론트 합동). §6~§11 데이터 모델 변경의 선행 워크.
 - **2026-05-28**: §13 추가 — ERD v2 프론트 정합 작업 중 운영 실호출에서 `POST /api/reports/generate` 500 발견(높음). 그 외 v2 엔드포인트는 정상 검증됨.
 - **2026-05-30**: §14 추가 — 현장 라이프사이클 UX 검토(C9-C) 중 발견. 현장 메모/사진 개별 삭제 endpoint 부재(중상). 프론트는 호출 path/응답 contract 가정으로 선반영.
+- **2026-05-30**: §15 추가 — 인증/프로필 UX 검토(B-5) 중 발견. 프로필 수정 endpoint 부재(낮). 단일 actor 정책상 우선순위 낮음, 자체 처리 의지 누적 시 격상.

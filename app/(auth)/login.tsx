@@ -167,8 +167,8 @@ export default function Login() {
           <Pressable
             onPress={() =>
               Alert.alert(
-                '비밀번호 찾기',
-                '비밀번호 재설정은 현재 관리자에게 요청해주세요. 이메일로 임시 비밀번호를 발급해드립니다.',
+                '비밀번호 재설정',
+                '운영자 이메일 support@ilgayo.kr 로 가입 이메일을 알려주시면 임시 비밀번호를 발급해드립니다. (자동 재설정 기능은 준비 중입니다)',
               )
             }
             style={styles.subtleLink}
