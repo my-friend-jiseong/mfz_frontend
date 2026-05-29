@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
@@ -13,6 +13,7 @@ import { MapSheetLayout } from '@/components/MapSheetLayout';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { Input } from '@/components/ui/Input';
 import { StickyBottomBar } from '@/components/ui/StickyBottomBar';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
@@ -20,8 +21,8 @@ import { opacity } from '@/theme/motion';
 import { fmtDate, fmtTime } from '@/utils/datetime';
 import type { Report, Trip } from '@/types/entities';
 
-
-type Group = { trip: Trip; reports: Report[] };
+// trip === null 인 그룹은 '외근 없이 작성' 별도 섹션 — 이전엔 누락되어 보이지 않던 회로.
+type Group = { trip: Trip | null; reports: Report[] };
 
 export default function ReportsIndex() {
   const router = useRouter();
@@ -31,6 +32,8 @@ export default function ReportsIndex() {
   const allTrips = useTripStore((s) => s.trips);
   const visitsByTrip = useVisitStore((s) => s.byTrip);
 
+  const [search, setSearch] = useState('');
+
   useEffect(() => {
     void refresh();
   }, [refresh]);
@@ -38,15 +41,36 @@ export default function ReportsIndex() {
   const groups = useMemo<Group[]>(() => {
     if (!userId) return [];
     const mine = allReports.filter((r) => r.creatorId === userId);
+    const q = search.trim().toLowerCase();
+    const matches = (r: Report) =>
+      !q || r.title.toLowerCase().includes(q);
+
     const byTripId = new Map<string, Report[]>();
+    const orphan: Report[] = [];
     mine.forEach((r) => {
-      if (!r.tripId) return;
+      if (!matches(r)) return;
+      if (!r.tripId) {
+        orphan.push(r);
+        return;
+      }
       const arr = byTripId.get(r.tripId) ?? [];
       arr.push(r);
       byTripId.set(r.tripId, arr);
     });
+
     const result: Group[] = [];
-    // 외근을 최신순으로 정렬하고, 보고서가 있는 것만 포함
+
+    // 1) 외근 없이 작성한 보고서 — 항상 최상단. 사용자가 의도해서 외근 분리한 케이스라 가시성 우선.
+    if (orphan.length > 0) {
+      result.push({
+        trip: null,
+        reports: orphan.sort((a, b) =>
+          b.createdAt.localeCompare(a.createdAt),
+        ),
+      });
+    }
+
+    // 2) 외근별 그룹 — trips 최신순.
     allTrips
       .filter((t) => t.workerId === userId)
       .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
@@ -62,43 +86,61 @@ export default function ReportsIndex() {
         }
       });
     return result;
-  }, [allReports, allTrips, userId]);
+  }, [allReports, allTrips, userId, search]);
 
   return (
-    // sheet 공유 모드 — MapSheetLayout 의 race 가 근원에서 해결됐으므로 initialIndex 생략.
     <MapSheetLayout title="보고서">
+      <View style={styles.toolbar}>
+        <Input
+          value={search}
+          onChangeText={setSearch}
+          placeholder="제목 검색"
+          autoCapitalize="none"
+          clearButtonMode="while-editing"
+          leftSlot={<Ionicons name="search" size={18} color={colors.textMuted} />}
+        />
+      </View>
       <BottomSheetFlatList
         data={groups}
-        keyExtractor={(g) => String(g.trip.id)}
+        keyExtractor={(g) => (g.trip ? `trip-${g.trip.id}` : 'orphan')}
         renderItem={({ item }) => (
           <View style={styles.group}>
-            <Pressable
-              onPress={() =>
-                router.push(`/(tabs)/trips/${item.trip.id}` as never)
-              }
-              accessibilityRole="button"
-              accessibilityLabel={`${fmtDate(item.trip.startedAt)} 외근 상세로 이동`}
-              style={({ pressed }) => [
-                styles.tripHeaderRow,
-                pressed && { opacity: opacity.pressed },
-              ]}
-            >
-              <Ionicons name="briefcase-outline" size={16} color={colors.primary} />
-              <View style={styles.tripHeaderTextWrap}>
-                <Text variant="bodySm" weight="bold" color="primary">
-                  외근 · {fmtDate(item.trip.startedAt)}
-                </Text>
-                <Text variant="caption" color="textMuted" style={styles.tripHeaderMeta}>
-                  {fmtTime(item.trip.startedAt)}
-                  {item.trip.endedAt
-                    ? `–${fmtTime(item.trip.endedAt)}`
-                    : ' · 진행 중'}
-                  {' · 방문 '}
-                  {visitsByTrip(item.trip.id).length}건
+            {item.trip ? (
+              <Pressable
+                onPress={() =>
+                  router.push(`/(tabs)/trips/${item.trip!.id}` as never)
+                }
+                accessibilityRole="button"
+                accessibilityLabel={`${fmtDate(item.trip.startedAt)} 외근 상세로 이동`}
+                style={({ pressed }) => [
+                  styles.tripHeaderRow,
+                  pressed && { opacity: opacity.pressed },
+                ]}
+              >
+                <Ionicons name="briefcase-outline" size={16} color={colors.primary} />
+                <View style={styles.tripHeaderTextWrap}>
+                  <Text variant="bodySm" weight="bold" color="primary">
+                    외근 · {fmtDate(item.trip.startedAt)}
+                  </Text>
+                  <Text variant="caption" color="textMuted" style={styles.tripHeaderMeta}>
+                    {fmtTime(item.trip.startedAt)}
+                    {item.trip.endedAt
+                      ? `–${fmtTime(item.trip.endedAt)}`
+                      : ' · 진행 중'}
+                    {' · 방문 '}
+                    {visitsByTrip(item.trip.id).length}건
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+              </Pressable>
+            ) : (
+              <View style={styles.orphanHeader}>
+                <Ionicons name="folder-open-outline" size={16} color={colors.textMuted} />
+                <Text variant="bodySm" weight="bold" color="textMuted">
+                  외근 없이 작성
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-            </Pressable>
+            )}
             {item.reports.map((r) => (
               <Card
                 key={r.id}
@@ -124,9 +166,23 @@ export default function ReportsIndex() {
         contentContainerStyle={styles.list}
         ListEmptyComponent={
           <EmptyState
-            icon="document-text-outline"
-            title="작성된 보고서가 없습니다"
-            description="아래 버튼으로 외근에 연결된 보고서를 작성하세요"
+            icon={search ? 'search-outline' : 'document-text-outline'}
+            title={search ? '검색 결과가 없습니다' : '작성된 보고서가 없습니다'}
+            description={
+              search
+                ? '제목을 다시 입력해보세요'
+                : '아래 버튼으로 첫 보고서를 작성하세요'
+            }
+            action={
+              !search ? (
+                <Button
+                  onPress={() => router.push('/(tabs)/reports/new' as never)}
+                  leftIcon="document-text"
+                >
+                  보고서 작성
+                </Button>
+              ) : undefined
+            }
           />
         }
       />
@@ -145,6 +201,12 @@ export default function ReportsIndex() {
 }
 
 const styles = StyleSheet.create({
+  toolbar: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.sm,
+    backgroundColor: colors.background,
+  },
   list: { padding: spacing.lg, paddingBottom: 120 },
   group: { marginBottom: spacing.lg },
   tripHeaderRow: {
@@ -157,6 +219,14 @@ const styles = StyleSheet.create({
   },
   tripHeaderTextWrap: { flex: 1 },
   tripHeaderMeta: { marginTop: 2 },
+  orphanHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.xs,
+  },
   reportCard: { marginBottom: spacing.sm },
   reportHead: {
     flexDirection: 'row',
