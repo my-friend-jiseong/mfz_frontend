@@ -224,7 +224,21 @@ export default function TripDetail() {
         >
           외근 종료
         </Button>
-      ) : null}
+      ) : (
+        // 종료된 외근에 한해 review 재진입로. 종료 직후 한 번만 보던 정리 화면을
+        // 나중에 다시 들어가 visit 결과 정정·메모/사진 추가를 마무리할 수 있게.
+        <Button
+          onPress={() =>
+            router.push(`/(tabs)/trips/review?tripId=${trip.id}` as never)
+          }
+          variant="secondary"
+          fullWidth
+          leftIcon="checkmark-done"
+          style={styles.reviewBtn}
+        >
+          외근 정리
+        </Button>
+      )}
       <Button
         onPress={() => router.push(`/(tabs)/reports/new?tripId=${trip.id}` as never)}
         fullWidth
@@ -276,6 +290,7 @@ const styles = StyleSheet.create({
   meta: { marginTop: 2 },
   composeBtn: { marginTop: spacing.md },
   endBtn: { marginTop: spacing.md },
+  reviewBtn: { marginTop: spacing.md },
   planBox: { marginTop: spacing.sm, gap: spacing.xs },
   planTitle: { marginBottom: 4 },
   planRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },

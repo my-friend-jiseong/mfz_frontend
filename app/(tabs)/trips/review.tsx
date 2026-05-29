@@ -29,7 +29,11 @@ export default function TripReview() {
   const trip = useTripStore((s) => (id ? s.getById(id) : undefined));
   const activeTripId = useTripStore((s) => s.activeTripId);
   const visits = useVisitStore((s) =>
-    id ? s.visits.filter((v) => v.tripId === id) : [],
+    id
+      ? s.visits
+          .filter((v) => v.tripId === id)
+          .sort((a, b) => a.visitedAt.localeCompare(b.visitedAt))
+      : [],
   );
   const destinations = useDestinationStore((s) =>
     id
@@ -77,43 +81,62 @@ export default function TripReview() {
     return <Redirect href="/(tabs)/trips/active" />;
   }
 
-  const totalDest = destinations.length;
   const visitCount = visits.length;
-  const skippedCount = destinations.filter((d) => d.status === 'skipped').length;
-
-  // O(1) visit lookup by fieldId — destination 순회하면서 매번 .find 풀스캔 차단.
-  const visitByFieldId = useMemo(() => {
-    const map = new Map<string, typeof visits[number]>();
-    for (const v of visits) map.set(v.fieldId, v);
-    return map;
-  }, [visits]);
-
-  // 방문한 (또는 방문 의도가 있었던) destination — skipped 는 별도 섹션에서 처리.
-  const visitedDestinations = useMemo(
-    () => destinations.filter((d) => d.status !== 'skipped'),
-    [destinations],
-  );
   const skippedDestinations = useMemo(
     () => destinations.filter((d) => d.status === 'skipped'),
     [destinations],
   );
+  const skippedCount = skippedDestinations.length;
+  // 계획 totalDest — destination 살아있으면 그 길이, 없으면 visit + skipped 합계로 추정.
+  // active.finalizeEnd 가 종료 직후 removeByTrip 으로 destinations 를 정리하므로
+  // 종료 후 review 재진입에선 destinations 가 비어있을 수 있음 — visit 으로 폴백.
+  const totalDest = destinations.length || visitCount + skippedCount;
+
+  // visit 을 카드 데이터의 진실값으로. destination 이 살아있으면 order 만 그쪽에서 가져옴.
+  const destinationByFieldId = useMemo(() => {
+    const map = new Map<string, typeof destinations[number]>();
+    for (const d of destinations) map.set(d.fieldId, d);
+    return map;
+  }, [destinations]);
+
+  // visit-기반 카드 — 정렬은 destination.order 우선, 없으면 visitedAt.
+  const visitCards = useMemo(() => {
+    const annotated = visits.map((v) => {
+      const d = destinationByFieldId.get(v.fieldId);
+      return {
+        visit: v,
+        fieldId: v.fieldId,
+        order: d?.order ?? null,
+      };
+    });
+    annotated.sort((a, b) => {
+      if (a.order != null && b.order != null) return a.order - b.order;
+      if (a.order != null) return -1;
+      if (b.order != null) return 1;
+      return a.visit.visitedAt.localeCompare(b.visit.visitedAt);
+    });
+    // order 가 없는 카드는 그 자리 순번을 부여.
+    return annotated.map((c, i) => ({
+      ...c,
+      displayOrder: c.order ?? i + 1,
+    }));
+  }, [visits, destinationByFieldId]);
 
   // 진입 시 각 visit field 의 메모/사진 캐시 페치 — directAttachments 가 비어 있을 수 있음.
-  // visit 없는 destination 은 의미 없으니 visitedDestinations 만.
   //
   // 무한 루프 차단 — 2중 가드:
   //   1) deps 는 fieldIds 의 stable string key (같은 ids 면 effect 안 재실행)
   //   2) ref guard 로 이미 페치한 fieldId 중복 호출 X
-  // 원래 회로: destinations selector 가 매 render 마다 새 array reference 를 반환 +
+  // 원래 회로: store selector 가 매 render 마다 새 array reference 를 반환 +
   // loadFieldDetail 내부 set(...) 이 fieldStore 를 변경 → 이 컴포넌트 rerender →
   // 새 array → useEffect 재실행 → 다시 set → ... Maximum update depth.
   const fieldIdsKey = useMemo(
     () =>
-      visitedDestinations
-        .map((d) => d.fieldId)
+      visitCards
+        .map((c) => c.fieldId)
         .sort()
         .join(','),
-    [visitedDestinations],
+    [visitCards],
   );
   const fetchedRef = useRef<Set<string>>(new Set());
   useEffect(() => {
@@ -186,7 +209,7 @@ export default function TripReview() {
           />
         ) : (
           <>
-            {visitedDestinations.length > 0 ? (
+            {visitCards.length > 0 ? (
               <>
                 <Text
                   variant="bodySm"
@@ -194,31 +217,16 @@ export default function TripReview() {
                   color="textMuted"
                   style={styles.sectionTitle}
                 >
-                  방문한 현장 정리 ({visitedDestinations.length})
+                  방문한 현장 정리 ({visitCards.length})
                 </Text>
-                {/* 본문 visit 카드 */}
-                {visitedDestinations.map((d, idx) => {
-                  const visit = visitByFieldId.get(d.fieldId);
-                  const field = getField(d.fieldId);
-                  if (!visit) {
-                    // arrived destination 인데 visit 없음 — 로컬 race. 단순 안내 카드.
-                    return (
-                      <Card key={d.id} padding="md" style={styles.missingCard}>
-                        <Text variant="bodySm" weight="semibold">
-                          {field?.address ?? '알 수 없는 현장'}
-                        </Text>
-                        <Text variant="caption" color="textMuted">
-                          방문 기록을 불러오는 중입니다
-                        </Text>
-                      </Card>
-                    );
-                  }
+                {visitCards.map((c, idx) => {
+                  const field = getField(c.fieldId);
                   return (
                     <ReviewVisitCard
-                      key={d.id}
-                      visit={visit}
-                      order={d.order}
-                      fieldId={d.fieldId}
+                      key={c.visit.id}
+                      visit={c.visit}
+                      order={c.displayOrder}
+                      fieldId={c.fieldId}
                       fieldAddress={field?.address ?? '알 수 없는 현장'}
                       fieldAddressDetail={field?.addressDetail || undefined}
                       initiallyExpanded={idx === 0}
@@ -318,7 +326,6 @@ const styles = StyleSheet.create({
   statRow: { flex: 1, alignItems: 'center', gap: 2 },
   statDivider: { width: 1, height: 28, backgroundColor: colors.border },
   sectionTitle: { marginBottom: spacing.sm },
-  missingCard: { marginBottom: spacing.sm },
   skippedSection: { marginTop: spacing.lg },
   skippedCard: {
     marginBottom: spacing.xs,
