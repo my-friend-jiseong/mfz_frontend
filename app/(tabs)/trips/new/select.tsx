@@ -37,23 +37,59 @@ export default function NewTripSelect() {
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<FieldStatus[]>([]);
+  const [projectFilter, setProjectFilter] = useState<string[]>([]);
+  const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  // 사용 가능한 프로젝트·카테고리 — fields/index 와 동일 모집 패턴.
+  const availableProjects = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const f of myFields) {
+      if (f.projectId && !seen.has(f.projectId)) {
+        seen.set(f.projectId, f.projectName ?? f.projectId);
+      }
+    }
+    return Array.from(seen, ([id, name]) => ({ id, name })).sort((a, b) =>
+      a.name.localeCompare(b.name),
+    );
+  }, [myFields]);
+
+  const availableCategories = useMemo(() => {
+    const set = new Set<string>();
+    for (const f of myFields) for (const c of f.categories ?? []) set.add(c);
+    return Array.from(set).sort();
+  }, [myFields]);
 
   const fields = useMemo(() => {
     let list = myFields;
     if (statusFilter.length > 0) {
       list = list.filter((f) => statusFilter.includes(f.status));
     }
-    const q = search.trim().toLowerCase();
-    if (q) {
-      list = list.filter(
-        (f) =>
-          f.address.toLowerCase().includes(q) ||
-          (f.addressDetail ?? '').toLowerCase().includes(q),
+    if (projectFilter.length > 0) {
+      const allow = new Set(projectFilter);
+      list = list.filter((f) => f.projectId && allow.has(f.projectId));
+    }
+    if (categoryFilter.length > 0) {
+      list = list.filter((f) =>
+        categoryFilter.every((c) => (f.categories ?? []).includes(c)),
       );
     }
+    const q = search.trim().toLowerCase();
+    if (q) {
+      list = list.filter((f) => {
+        const haystack = [
+          f.address,
+          f.addressDetail ?? '',
+          f.projectName ?? '',
+          ...(f.categories ?? []),
+        ]
+          .join(' ')
+          .toLowerCase();
+        return haystack.includes(q);
+      });
+    }
     return list;
-  }, [myFields, statusFilter, search]);
+  }, [myFields, statusFilter, projectFilter, categoryFilter, search]);
 
   const toggle = (id: string) =>
     setSelectedIds((prev) =>
@@ -63,6 +99,14 @@ export default function NewTripSelect() {
   const toggleStatus = (s: FieldStatus) =>
     setStatusFilter((prev) =>
       prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s],
+    );
+  const toggleProject = (id: string) =>
+    setProjectFilter((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  const toggleCategory = (c: string) =>
+    setCategoryFilter((prev) =>
+      prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c],
     );
 
   // 현재 보이는 (필터링된) 현장이 모두 선택됐는지 — 전체 선택 토글 상태
@@ -143,7 +187,7 @@ export default function NewTripSelect() {
         <Input
           value={search}
           onChangeText={setSearch}
-          placeholder="주소·상세주소 검색"
+          placeholder="주소·프로젝트·분류 검색"
           autoCapitalize="none"
           clearButtonMode="while-editing"
           leftSlot={<Ionicons name="search" size={18} color={colors.textMuted} />}
@@ -170,6 +214,32 @@ export default function NewTripSelect() {
             />
           ) : null}
         </View>
+        {availableProjects.length > 0 ? (
+          <View style={styles.chipRow}>
+            {availableProjects.map((p) => (
+              <FilterChip
+                key={p.id}
+                label={p.name}
+                active={projectFilter.includes(p.id)}
+                leftIcon="folder-outline"
+                onPress={() => toggleProject(p.id)}
+              />
+            ))}
+          </View>
+        ) : null}
+        {availableCategories.length > 0 ? (
+          <View style={styles.chipRow}>
+            {availableCategories.map((c) => (
+              <FilterChip
+                key={c}
+                label={c}
+                active={categoryFilter.includes(c)}
+                leftIcon="pricetag-outline"
+                onPress={() => toggleCategory(c)}
+              />
+            ))}
+          </View>
+        ) : null}
       </View>
       <BottomSheetFlatList
         data={fields}

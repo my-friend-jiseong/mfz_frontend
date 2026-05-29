@@ -56,6 +56,8 @@ export default function FieldsList() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<FieldStatus[]>([]);
   const [rangePreset, setRangePreset] = useState<RangePreset>('all');
+  const [projectFilter, setProjectFilter] = useState<string[]>([]);
+  const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
 
   // 탭 진입 시 + status/기간 필터 변경 시 mine 페치
   useEffect(() => {
@@ -65,24 +67,82 @@ export default function FieldsList() {
     });
   }, [refresh, statusFilter, rangePreset]);
 
-  const fields = useMemo(() => {
-    if (!userId) return [];
-    const mine = allFields.filter((f) => f.userId === userId);
-    const q = search.trim().toLowerCase();
-    if (!q) return mine;
-    return mine.filter(
-      (f) =>
-        f.address.toLowerCase().includes(q) ||
-        (f.addressDetail ?? '').toLowerCase().includes(q),
+  // 본인 fields 만 — 이후 모든 파생값의 기준
+  const myFields = useMemo(
+    () => (userId ? allFields.filter((f) => f.userId === userId) : []),
+    [allFields, userId],
+  );
+
+  // 사용 가능한 프로젝트·카테고리 — 본인 fields 에서 모집. id↔name 매핑은 first-seen 기준.
+  const availableProjects = useMemo(() => {
+    const seen = new Map<string, string>(); // id → name
+    for (const f of myFields) {
+      if (f.projectId && !seen.has(f.projectId)) {
+        seen.set(f.projectId, f.projectName ?? f.projectId);
+      }
+    }
+    return Array.from(seen, ([id, name]) => ({ id, name })).sort((a, b) =>
+      a.name.localeCompare(b.name),
     );
-  }, [allFields, userId, search]);
+  }, [myFields]);
+
+  const availableCategories = useMemo(() => {
+    const set = new Set<string>();
+    for (const f of myFields) {
+      for (const c of f.categories ?? []) set.add(c);
+    }
+    return Array.from(set).sort();
+  }, [myFields]);
+
+  const fields = useMemo(() => {
+    let list = myFields;
+    // 프로젝트 필터
+    if (projectFilter.length > 0) {
+      const allow = new Set(projectFilter);
+      list = list.filter((f) => f.projectId && allow.has(f.projectId));
+    }
+    // 카테고리 필터 — AND (모든 선택 카테고리를 가진 현장만)
+    if (categoryFilter.length > 0) {
+      list = list.filter((f) =>
+        categoryFilter.every((c) => (f.categories ?? []).includes(c)),
+      );
+    }
+    // 검색 — address + addressDetail + projectName + categories 매칭
+    const q = search.trim().toLowerCase();
+    if (q) {
+      list = list.filter((f) => {
+        const haystack = [
+          f.address,
+          f.addressDetail ?? '',
+          f.projectName ?? '',
+          ...(f.categories ?? []),
+        ]
+          .join(' ')
+          .toLowerCase();
+        return haystack.includes(q);
+      });
+    }
+    return list;
+  }, [myFields, projectFilter, categoryFilter, search]);
 
   const toggleStatus = (s: FieldStatus) =>
     setStatusFilter((prev) =>
       prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s],
     );
+  const toggleProject = (id: string) =>
+    setProjectFilter((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  const toggleCategory = (c: string) =>
+    setCategoryFilter((prev) =>
+      prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c],
+    );
 
-  const hasFilter = statusFilter.length > 0 || rangePreset !== 'all';
+  const hasFilter =
+    statusFilter.length > 0 ||
+    rangePreset !== 'all' ||
+    projectFilter.length > 0 ||
+    categoryFilter.length > 0;
 
   return (
     <MapSheetLayout title="현장">
@@ -90,7 +150,7 @@ export default function FieldsList() {
         <Input
           value={search}
           onChangeText={setSearch}
-          placeholder="주소·상세주소 검색"
+          placeholder="주소·프로젝트·분류 검색"
           autoCapitalize="none"
           clearButtonMode="while-editing"
           leftSlot={<Ionicons name="search" size={18} color={colors.textMuted} />}
@@ -112,12 +172,40 @@ export default function FieldsList() {
               onPress={() => {
                 setStatusFilter([]);
                 setRangePreset('all');
+                setProjectFilter([]);
+                setCategoryFilter([]);
               }}
               dashed
               leftIcon="close"
             />
           ) : null}
         </View>
+        {availableProjects.length > 0 ? (
+          <View style={styles.chipRow}>
+            {availableProjects.map((p) => (
+              <FilterChip
+                key={p.id}
+                label={p.name}
+                active={projectFilter.includes(p.id)}
+                leftIcon="folder-outline"
+                onPress={() => toggleProject(p.id)}
+              />
+            ))}
+          </View>
+        ) : null}
+        {availableCategories.length > 0 ? (
+          <View style={styles.chipRow}>
+            {availableCategories.map((c) => (
+              <FilterChip
+                key={c}
+                label={c}
+                active={categoryFilter.includes(c)}
+                leftIcon="pricetag-outline"
+                onPress={() => toggleCategory(c)}
+              />
+            ))}
+          </View>
+        ) : null}
         <View style={styles.chipRow}>
           {RANGE_ORDER.map((p) => (
             <FilterChip
