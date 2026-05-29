@@ -65,7 +65,13 @@ export function Badge({
           {SHAPE[shape]}
         </Text>
       ) : null}
-      <Text style={[styles.label, { color: t.fg, fontSize: fs }]}>{label}</Text>
+      <Text
+        style={[styles.label, { color: t.fg, fontSize: fs }]}
+        numberOfLines={1}
+        ellipsizeMode="tail"
+      >
+        {label}
+      </Text>
     </View>
   );
 }

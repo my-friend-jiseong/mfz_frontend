@@ -57,7 +57,14 @@ export function FilterChip({
       <Text
         style={[
           styles.label,
-          active && { color: activeColor, fontWeight: fontWeight.bold },
+          // active 시 fontFamily 도 bold 로 함께 — fontWeight 만 변경하면 iOS 에서
+          // fontFamily.regular(=Pretendard-Regular) 위에 weight 강제라 폰트가 weight 와
+          // mismatch (Pretendard 는 weight 별 별도 family). Android 도 일관 적용.
+          active && {
+            color: activeColor,
+            fontFamily: fontFamily.bold,
+            fontWeight: fontWeight.bold,
+          },
         ]}
       >
         {label}
