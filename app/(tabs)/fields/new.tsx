@@ -14,7 +14,7 @@ import { useFieldStore } from '@/stores/fieldStore';
 import { useAuthStore } from '@/stores/authStore';
 import { fields as fieldsApi, errorCode, localizeError } from '@/api';
 import type { AddressSearchItem } from '@/api';
-import type { FieldStatus } from '@/types/entities';
+import type { Field, FieldStatus } from '@/types/entities';
 import { FIELD_STATUS_VALUES, FIELD_STATUS_LABEL } from '@/types/entities';
 import {
   itemToSelected,
@@ -33,10 +33,37 @@ import { spacing, radius } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
 import { FilterChip } from '@/components/ui/FilterChip';
 
+// 중복 주소 미리보기 — 본인 fields 중 같은 roadAddress 매칭, alert message 에 fmt.
+// 백엔드 응답 details 는 duplicateCount 만 주므로 (backend-backlog 별도 항목 아님 — 로컬로 충분),
+// 본인 fields 는 이미 store 에 hydrate 되어 있어 즉시 매칭 가능. 타 사용자 중복은 단일 actor 정책상 의미 적음.
+function buildDuplicatePreview(
+  roadAddress: string | undefined,
+  myFields: readonly Field[],
+  duplicateCount: number,
+): { count: number; lines: string[] } {
+  if (!roadAddress) return { count: duplicateCount, lines: [] };
+  const norm = roadAddress.trim().toLowerCase();
+  const matches = myFields.filter(
+    (f) => f.address.trim().toLowerCase() === norm,
+  );
+  const lines = matches.slice(0, 5).map((f) => {
+    const detail = f.addressDetail ? ` "${f.addressDetail}"` : '';
+    return `· ${FIELD_STATUS_LABEL[f.status]}${detail}`;
+  });
+  if (matches.length > 5) lines.push(`· 외 ${matches.length - 5}건…`);
+  // 백엔드가 알린 카운트가 더 크면 (타 사용자 등록 포함 가능) 그 값을 우선.
+  return { count: Math.max(duplicateCount, matches.length), lines };
+}
+
 export default function NewField() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const createField = useFieldStore((s) => s.create);
+  // 중복 매칭용 — 본인 fields 만.
+  const userId = user?.id;
+  const myFields = useFieldStore((s) =>
+    userId ? s.fields.filter((f) => f.userId === userId) : [],
+  );
 
   const [step, setStep] = useState<1 | 2>(1);
   const [query, setQuery] = useState('');
@@ -145,10 +172,17 @@ export default function NewField() {
           }
         })();
       };
-      const msg =
-        result.duplicateCount > 0
-          ? `같은 주소의 기존 현장이 ${result.duplicateCount}건 있습니다.\n계속 진행할까요?`
-          : `${result.message}\n계속 진행할까요?`;
+      const preview = buildDuplicatePreview(
+        selected?.roadAddress,
+        myFields,
+        result.duplicateCount,
+      );
+      const head =
+        preview.count > 0
+          ? `같은 주소의 기존 현장이 ${preview.count}건 있습니다.`
+          : result.message;
+      const body = preview.lines.length > 0 ? `\n\n${preview.lines.join('\n')}` : '';
+      const msg = `${head}${body}\n\n계속 진행할까요?`;
       if (Platform.OS === 'web') {
         if (confirm(msg)) proceed(true);
       } else {
