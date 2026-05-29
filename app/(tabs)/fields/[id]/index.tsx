@@ -42,6 +42,8 @@ export default function FieldDetail() {
   const loadFieldDetail = useFieldStore((s) => s.loadDetail);
   const addFieldTextMemo = useFieldStore((s) => s.addTextMemo);
   const addFieldPhoto = useFieldStore((s) => s.addPhoto);
+  const removeTextMemo = useFieldStore((s) => s.removeTextMemo);
+  const removePhoto = useFieldStore((s) => s.removePhoto);
   const patchFieldStatus = useFieldStore((s) => s.patchStatus);
   const allVisits = useVisitStore((s) => s.visits);
 
@@ -93,6 +95,34 @@ export default function FieldDetail() {
   const handleAddDirectPhoto = () => {
     if (photoBusy) return;
     promptPhotoSource((src) => void uploadDirectPhoto(src));
+  };
+
+  const handleRemoveMemo = (memoId: string) => {
+    promptChoice('메모 삭제', '이 메모를 삭제할까요?', [
+      { label: '취소', style: 'cancel' as const },
+      {
+        label: '삭제',
+        style: 'destructive' as const,
+        onPress: async () => {
+          const r = await removeTextMemo(fieldId, memoId);
+          if (!r.ok) Alert.alert('메모 삭제 실패', r.error);
+        },
+      },
+    ]);
+  };
+
+  const handleRemovePhoto = (photoId: string) => {
+    promptChoice('사진 삭제', '이 사진을 삭제할까요?', [
+      { label: '취소', style: 'cancel' as const },
+      {
+        label: '삭제',
+        style: 'destructive' as const,
+        onPress: async () => {
+          const r = await removePhoto(fieldId, photoId);
+          if (!r.ok) Alert.alert('사진 삭제 실패', r.error);
+        },
+      },
+    ]);
   };
 
   const visits = useMemo(
@@ -274,7 +304,23 @@ export default function FieldDetail() {
         <View style={styles.memoList}>
           {directTextMemos.map((m) => (
             <Card key={m.id} padding="md" style={styles.memoItem}>
-              <Text variant="bodySm">{m.text}</Text>
+              <View style={styles.memoHead}>
+                <Text variant="bodySm" style={styles.memoText}>
+                  {m.text}
+                </Text>
+                <Pressable
+                  onPress={() => handleRemoveMemo(m.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel="메모 삭제"
+                  hitSlop={8}
+                  style={({ pressed }) => [
+                    styles.memoDeleteBtn,
+                    pressed && { opacity: opacity.pressed },
+                  ]}
+                >
+                  <Ionicons name="close" size={14} color={colors.textMuted} />
+                </Pressable>
+              </View>
               <Text variant="caption" color="textMuted" style={styles.memoMeta}>
                 {fmtDateTime(m.createdAt)}
               </Text>
@@ -295,7 +341,7 @@ export default function FieldDetail() {
         {directPhotoCount > 0 ? ` (${directPhotoCount})` : ''}
       </Button>
 
-      <PhotoGrid photos={directPhotos} />
+      <PhotoGrid photos={directPhotos} onDelete={handleRemovePhoto} />
 
       <Text variant="bodySm" weight="bold" color="textMuted" style={styles.sectionTitle}>
         방문 이력 ({visits.length})
@@ -365,6 +411,20 @@ const styles = StyleSheet.create({
   memoInputWrap: { flex: 1 },
   memoList: { marginTop: spacing.sm, gap: spacing.xs },
   memoItem: {},
+  memoHead: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+  },
+  memoText: { flex: 1 },
+  memoDeleteBtn: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.surfaceMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   memoMeta: { marginTop: spacing.xs },
   photoBtn: { marginTop: spacing.sm },
   list: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },

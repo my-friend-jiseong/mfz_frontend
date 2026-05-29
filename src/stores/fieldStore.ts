@@ -41,6 +41,8 @@ interface FieldState {
     id: string,
     file: { uri: string; name: string; type: string },
   ) => Promise<GenericResult>;
+  removeTextMemo: (fieldId: string, memoId: string) => Promise<GenericResult>;
+  removePhoto: (fieldId: string, photoId: string) => Promise<GenericResult>;
 
   getById: (id: string) => Field | undefined;
   byUser: (userId: string) => Field[];
@@ -259,6 +261,42 @@ export const useFieldStore = create<FieldState>((set, get) => ({
         directAttachments: {
           ...s.directAttachments,
           [id]: [...(s.directAttachments[id] ?? []), photoToAttachment(res.photo)],
+        },
+      }));
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: describeError(e) };
+    }
+  },
+
+  // 메모 개별 삭제. 백엔드 신설 요청 — backend-backlog §14.
+  // 호출 실패 시 로컬 상태는 그대로 두고 에러 반환 — 사용자가 다시 시도 가능.
+  removeTextMemo: async (fieldId, memoId) => {
+    try {
+      await fieldsApi.removeTextMemo(fieldId, memoId);
+      set((s) => ({
+        directAttachments: {
+          ...s.directAttachments,
+          [fieldId]: (s.directAttachments[fieldId] ?? []).filter(
+            (a) => !(a.type === 'text' && a.id === memoId),
+          ),
+        },
+      }));
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: describeError(e) };
+    }
+  },
+
+  removePhoto: async (fieldId, photoId) => {
+    try {
+      await fieldsApi.removePhoto(fieldId, photoId);
+      set((s) => ({
+        directAttachments: {
+          ...s.directAttachments,
+          [fieldId]: (s.directAttachments[fieldId] ?? []).filter(
+            (a) => !(a.type === 'photo' && a.id === photoId),
+          ),
         },
       }));
       return { ok: true };

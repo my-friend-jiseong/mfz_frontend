@@ -515,6 +515,43 @@ POST /api/reports/generate (multipart)  → 500 { code: "internal_server_error",
 
 ---
 
+## 14. 🟠 현장 메모/사진 개별 삭제 — `DELETE /api/fields/:id/memos/:memoId`, `DELETE /api/fields/:id/photos/:photoId`
+
+### 배경
+현장 상세(`fields/[id]/index.tsx`) 의 직접 메모·사진은 **추가만 가능, 삭제 불가**. 사용자가 잘못 올린 메모/사진을 정정할 방법이 없어 누적된 노이즈가 그대로 남는다. ERD v2 검증 시 백엔드 endpoint 가 존재하지 않음을 확인.
+
+### 백엔드가 해야 할 것
+
+```
+DELETE /api/fields/:fieldId/memos/:memoId
+DELETE /api/fields/:fieldId/photos/:photoId
+```
+
+- 본인 소유 현장의 본인 작성 메모/사진만 삭제 허용 (단일 actor 정책).
+- 성공 응답: 본문 없음(204) 또는 `{ fieldId, memoId|photoId }` 단순 echo.
+- 에러: Phase 7 단일 shape `{ code, message }`. `not_found` / `forbidden` 분기.
+- 사진 삭제 시 파일 저장소(현재 임시 또는 §10 MinIO) 의 실제 객체도 같이 정리.
+
+### 프론트엔드 영향 / 현황 (2026-05-30 기준)
+- 프론트는 호출 path/응답 contract 를 위 가정으로 **선반영** 했음:
+  - `src/api/endpoints/fields.ts` 의 `removeTextMemo` / `removePhoto`
+  - `src/stores/fieldStore.ts` 의 동명 메서드 — 성공 시 `directAttachments` 에서 해당 id 제거
+  - `app/(tabs)/fields/[id]/index.tsx` 메모 카드 우상단 ×, PhotoGrid 셀 우상단 × — 둘 다 confirm 후 호출
+- 백엔드 부재 상태에서 사용자가 시도하면 **404/405 → 사용자 친화적 에러 alert** 로 폴백. 데이터 손상 없음.
+
+### 우선순위
+🟠 중상 — 일상 운영 노이즈 정리에 필요. 외근 종료 후 review 화면에서 추가된 콘텐츠도 동일 자산.
+
+### 발견 시점
+2026-05-30 (현장 라이프사이클 UX 검토 — C9-C).
+
+### 관련 코드
+- 프론트 API: [`src/api/endpoints/fields.ts`](../src/api/endpoints/fields.ts) `removeTextMemo`, `removePhoto`
+- 프론트 스토어: [`src/stores/fieldStore.ts`](../src/stores/fieldStore.ts)
+- UI: [`app/(tabs)/fields/[id]/index.tsx`](../app/\(tabs\)/fields/\[id\]/index.tsx), [`src/components/AttachmentPreview.tsx`](../src/components/AttachmentPreview.tsx) `PhotoGrid` `onDelete`
+
+---
+
 ## 변경 이력
 
 - **2026-05-08**: 백로그 신설. §1 길찾기 카카오-only 정책 반영. (이전 §1 title 은 백엔드 처리 완료로 제거)
