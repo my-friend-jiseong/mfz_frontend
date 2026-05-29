@@ -113,20 +113,41 @@ export default function FieldDetail() {
 
   // 상태 변경 — chip tap 시 3개 상태 중 선택. patchStatus 즉시 호출.
   const statusBusyRef = useRef(false);
+  const applyStatus = async (s: typeof field.status) => {
+    if (statusBusyRef.current) return;
+    statusBusyRef.current = true;
+    try {
+      const r = await patchFieldStatus(field.id, s);
+      if (!r.ok) Alert.alert('상태 변경 실패', r.error);
+    } finally {
+      statusBusyRef.current = false;
+    }
+  };
   const handleStatusTap = () => {
     if (statusBusyRef.current) return;
     const others = FIELD_STATUS_VALUES.filter((s) => s !== field.status);
     promptChoice('상태 변경', `현재: ${FIELD_STATUS_LABEL[field.status]}`, [
       ...others.map((s) => ({
         label: FIELD_STATUS_LABEL[s],
-        onPress: async () => {
-          if (statusBusyRef.current) return;
-          statusBusyRef.current = true;
-          try {
-            const r = await patchFieldStatus(field.id, s);
-            if (!r.ok) Alert.alert('상태 변경 실패', r.error);
-          } finally {
-            statusBusyRef.current = false;
+        onPress: () => {
+          // done 으로 가는 전환만 한 번 더 confirm — '완료' 는 종결 상태라 실수 보호.
+          // 자연 진행(pending→in_progress, in_progress→done 의 중간 흐름) 도 done 만
+          // 한 번 더 확인. 그 외 전환은 즉시 적용 (promptChoice 자체가 1차 선택).
+          if (s === 'done') {
+            promptChoice(
+              '조치 완료 처리',
+              '이 현장을 조치 완료로 변경할까요?',
+              [
+                { label: '취소', style: 'cancel' as const },
+                {
+                  label: '완료',
+                  style: 'destructive' as const,
+                  onPress: () => void applyStatus(s),
+                },
+              ],
+            );
+          } else {
+            void applyStatus(s);
           }
         },
       })),

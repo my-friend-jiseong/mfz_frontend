@@ -130,9 +130,7 @@ export function CurrentDestCard({
         {showReop ? (
           <UtilAction
             icon="sparkles"
-            label={
-              optimizing ? '최적화 중' : `재최적화 ${pendingCount}곳`
-            }
+            label={optimizing ? '최적화 중' : '다시 최적화'}
             tone="warning"
             onPress={onReoptimize}
             loading={optimizing}
