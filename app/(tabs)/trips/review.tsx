@@ -11,6 +11,8 @@ import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
 import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
+import { Button } from '@/components/ui/Button';
+import { StickyBottomBar } from '@/components/ui/StickyBottomBar';
 import { ReviewVisitCard } from '@/components/trips/ReviewVisitCard';
 import { safeBack } from '@/utils/backNavigation';
 import { colors } from '@/theme/colors';
@@ -105,13 +107,14 @@ export default function TripReview() {
   }, [visitedDestinations, loadFieldDetail]);
 
   return (
-    <MapSheetLayout
-      title="외근 정리"
-      onBack={() => safeBack(router)}
-      initialIndex={2}
-      mapFieldIds={tripFieldIds}
-    >
-      <BottomSheetScrollView contentContainerStyle={styles.scroll}>
+    <View style={styles.screenRoot}>
+      <MapSheetLayout
+        title="외근 정리"
+        onBack={() => safeBack(router)}
+        initialIndex={2}
+        mapFieldIds={tripFieldIds}
+      >
+        <BottomSheetScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.header}>
           <Text variant="h2" weight="heavy">
             {trip.title || `${fmtDate(trip.startedAt)} 외근`}
@@ -247,13 +250,41 @@ export default function TripReview() {
             ) : null}
           </>
         )}
-      </BottomSheetScrollView>
-    </MapSheetLayout>
+        </BottomSheetScrollView>
+      </MapSheetLayout>
+      {/* StickyBottomBar 는 BottomSheet 외부에 — 시트 내부 absolute 자식의 터치를
+          @gorhom/bottom-sheet 의 pan 제스처가 가로채는 회로 차단. (active.tsx 와 동일 패턴) */}
+      <StickyBottomBar>
+        <View style={styles.ctaRow}>
+          <Button
+            onPress={() => router.replace('/(tabs)/trips' as never)}
+            variant="ghost"
+            size="lg"
+            style={styles.ctaFlex}
+          >
+            나중에
+          </Button>
+          <Button
+            onPress={() =>
+              router.replace(`/(tabs)/reports/new?tripId=${id}` as never)
+            }
+            size="lg"
+            leftIcon="document-text"
+            style={styles.ctaFlex}
+          >
+            보고서 작성
+          </Button>
+        </View>
+      </StickyBottomBar>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  screenRoot: { flex: 1 },
   scroll: { padding: spacing.lg, paddingBottom: spacing.xxl * 2 },
+  ctaRow: { flexDirection: 'row', gap: spacing.sm },
+  ctaFlex: { flex: 1 },
   header: { gap: spacing.sm, marginBottom: spacing.lg },
   metaRow: {
     flexDirection: 'row',
