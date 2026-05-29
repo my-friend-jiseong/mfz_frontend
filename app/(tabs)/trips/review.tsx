@@ -91,6 +91,10 @@ export default function TripReview() {
     () => destinations.filter((d) => d.status !== 'skipped'),
     [destinations],
   );
+  const skippedDestinations = useMemo(
+    () => destinations.filter((d) => d.status === 'skipped'),
+    [destinations],
+  );
 
   // 진입 시 각 visit field 의 메모/사진 캐시 페치 — directAttachments 가 비어 있을 수 있음.
   // visit 없는 destination 은 의미 없으니 visitedDestinations 만.
@@ -170,6 +174,7 @@ export default function TripReview() {
                 >
                   방문한 현장 정리 ({visitedDestinations.length})
                 </Text>
+                {/* 본문 visit 카드 */}
                 {visitedDestinations.map((d, idx) => {
                   const visit = visitByFieldId.get(d.fieldId);
                   const field = getField(d.fieldId);
@@ -200,6 +205,46 @@ export default function TripReview() {
                 })}
               </>
             ) : null}
+
+            {skippedDestinations.length > 0 ? (
+              <View style={styles.skippedSection}>
+                <Text
+                  variant="bodySm"
+                  weight="bold"
+                  color="textMuted"
+                  style={styles.sectionTitle}
+                >
+                  건너뛴 현장 ({skippedDestinations.length})
+                </Text>
+                {skippedDestinations.map((d) => {
+                  const field = getField(d.fieldId);
+                  return (
+                    <Card key={d.id} padding="md" style={styles.skippedCard}>
+                      <View style={styles.skippedHead}>
+                        <View style={styles.skippedOrderBadge}>
+                          <Text variant="caption" weight="bold" color="textMuted">
+                            {d.order}
+                          </Text>
+                        </View>
+                        <View style={styles.skippedBody}>
+                          <Text variant="body" weight="semibold" numberOfLines={1}>
+                            {field?.address ?? '알 수 없는 현장'}
+                          </Text>
+                          {field?.addressDetail ? (
+                            <Text variant="caption" color="textMuted" numberOfLines={1}>
+                              {field.addressDetail}
+                            </Text>
+                          ) : null}
+                        </View>
+                        <Text variant="caption" weight="bold" color="textMuted">
+                          건너뜀
+                        </Text>
+                      </View>
+                    </Card>
+                  );
+                })}
+              </View>
+            ) : null}
           </>
         )}
       </BottomSheetScrollView>
@@ -224,4 +269,26 @@ const styles = StyleSheet.create({
   statDivider: { width: 1, height: 28, backgroundColor: colors.border },
   sectionTitle: { marginBottom: spacing.sm },
   missingCard: { marginBottom: spacing.sm },
+  skippedSection: { marginTop: spacing.lg },
+  skippedCard: {
+    marginBottom: spacing.xs,
+    backgroundColor: colors.surfaceMuted,
+    borderWidth: 0,
+  },
+  skippedHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  skippedOrderBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  skippedBody: { flex: 1 },
 });
