@@ -133,22 +133,23 @@ export default function FieldReportEditor() {
   const fieldAttachments = useFieldStore(
     (s) => (fieldId ? s.directAttachments[fieldId] : undefined),
   );
-  const phasePrefilledForRef = useRef<string | null>(null);
+  // Set 으로 fieldId 별 1회 가드 (F8) — 단일 ref 였을 때 A→B→A 전환에서 A 의 prefill 이
+  // 재실행되어 사용자가 clear 한 슬롯이 부활하던 회로 차단.
+  const phasePrefilledFieldsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (isEdit) return;
     if (!fieldId || !fieldAttachments) return;
-    if (phasePrefilledForRef.current === fieldId) return;
-    const byPhase: Partial<Record<Phase, string>> = {};
+    if (phasePrefilledFieldsRef.current.has(fieldId)) return;
+    const byPhase: { before?: string; pending?: string; after?: string } = {};
     for (const a of fieldAttachments) {
       if (a.type !== 'photo' || !a.fileUrl) continue;
-      // attachment.phase 는 §9 머지 후 들어옴. before/after 그대로, 'during' → 'pending' 매핑.
-      const apiPhase = (a as { phase?: 'before' | 'during' | 'after' }).phase;
-      if (!apiPhase) continue;
-      const slotKey: Phase = apiPhase === 'during' ? 'pending' : apiPhase;
+      // attachment.phase: §9 머지 후 들어옴. before/after 그대로, 'during' → 'pending' 매핑.
+      if (!a.phase) continue;
+      const slotKey: Phase = a.phase === 'during' ? 'pending' : a.phase;
       if (!byPhase[slotKey]) byPhase[slotKey] = a.fileUrl;
     }
     if (Object.keys(byPhase).length === 0) return; // §9 미해소 — 회로 정상
-    phasePrefilledForRef.current = fieldId;
+    phasePrefilledFieldsRef.current.add(fieldId);
     setSlots((prev) => ({
       before: { ...prev.before, url: prev.before.url ?? byPhase.before ?? null },
       pending: { ...prev.pending, url: prev.pending.url ?? byPhase.pending ?? null },

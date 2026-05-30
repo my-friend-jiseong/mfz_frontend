@@ -43,11 +43,8 @@ export default function ComposeReport() {
   const [submitting, setSubmitting] = useState(false);
   const [tripPickerOpen, setTripPickerOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // 선택된 외근의 detail (visits) 동기화 — 스캐폴드 fieldId 정확도를 위해.
-  useEffect(() => {
-    if (tripId) void loadTripDetail(tripId);
-  }, [tripId, loadTripDetail]);
+  // 선택된 외근의 detail 페치 진행 상태 — submit 차단 가드 (F3).
+  const [tripHydrating, setTripHydrating] = useState(false);
 
   const myTrips = useMemo(() => {
     if (!userId) return [];
@@ -55,6 +52,25 @@ export default function ComposeReport() {
       .filter((t) => t.workerId === userId)
       .sort((a, b) => b.startedAt.localeCompare(a.startedAt));
   }, [allTrips, userId]);
+
+  // 무결성 검증 (F6) — params.tripId 가 본인 외근이 아니면 reset.
+  // myTrips 가 비어있을 동안엔 보류 (refreshList race) — 한 번이라도 로드된 뒤 검증.
+  useEffect(() => {
+    if (!params.tripId) return;
+    if (myTrips.length === 0) return;
+    if (!myTrips.some((t) => t.id === params.tripId)) {
+      setTripId(null);
+      setError('전달된 외근이 본인 소유가 아니어서 선택을 해제했습니다. 외근을 직접 선택해주세요.');
+    }
+  }, [params.tripId, myTrips]);
+
+  // 선택된 외근의 detail (visits) 동기화 — 스캐폴드 fieldId 정확도를 위해.
+  // tripHydrating 으로 진행 상태 추적, submit 차단 가드의 단일 진실 출처.
+  useEffect(() => {
+    if (!tripId) return;
+    setTripHydrating(true);
+    void loadTripDetail(tripId).finally(() => setTripHydrating(false));
+  }, [tripId, loadTripDetail]);
 
   const selectedTrip = useMemo(
     () => (tripId ? myTrips.find((t) => t.id === tripId) ?? null : null),
@@ -69,10 +85,10 @@ export default function ComposeReport() {
       .sort((a, b) => a.visitedAt.localeCompare(b.visitedAt));
   }, [tripId, allVisits]);
 
-  const scaffoldFieldIds = useMemo(
-    () => tripVisits.map((v) => v.fieldId).filter(Boolean),
-    [tripVisits],
-  );
+  const scaffoldFieldIds = tripVisits.map((v) => v.fieldId).filter(Boolean);
+
+  // submit 가드 — 외근 없는 사용자 동선 안내 (F5).
+  const noTripsAtAll = myTrips.length === 0;
 
   const handleSubmit = async () => {
     setError(null);
@@ -85,14 +101,24 @@ export default function ComposeReport() {
       setError('외근을 선택해주세요');
       return;
     }
+    if (tripHydrating) {
+      // race 차단 (F3) — disabled prop 이 막지만 한 번 더 명시.
+      setError('외근 정보를 불러오는 중입니다. 잠시 후 다시 시도해주세요.');
+      return;
+    }
     setSubmitting(true);
     const r = await createWithVisitScaffold({ title: t, tripId }, scaffoldFieldIds);
     setSubmitting(false);
-    if (r.ok) {
-      router.replace(`/(tabs)/reports/${r.report.id}` as never);
-    } else {
+    if (!r.ok) {
       Alert.alert('보고서 생성 실패', r.error);
+      return;
     }
+    // 부분 실패 안내 (F4). attempted=0 (visit 0건) 은 정상 케이스 — 알림 X.
+    if (r.failed > 0) {
+      const msg = `현장 보고 ${r.attempted}건 중 ${r.failed}건 자동 생성에 실패했습니다.\n상세 화면에서 빠진 현장을 수동으로 추가할 수 있어요.`;
+      Alert.alert('일부 현장 보고 누락', msg);
+    }
+    router.replace(`/(tabs)/reports/${r.report.id}` as never);
   };
 
   return (
@@ -166,7 +192,11 @@ export default function ComposeReport() {
           </Button>
         )}
 
-        {selectedTrip && scaffoldFieldIds.length > 0 ? (
+        {selectedTrip && tripHydrating ? (
+          <Text variant="caption" color="textMuted" style={styles.scaffoldHint}>
+            외근 정보를 불러오는 중…
+          </Text>
+        ) : selectedTrip && scaffoldFieldIds.length > 0 ? (
           <Text variant="caption" color="textMuted" style={styles.scaffoldHint}>
             보고서 생성 시 방문한 현장 {scaffoldFieldIds.length}곳에 대한 빈 현장 보고가
             자동으로 만들어집니다. 사진·캡션은 상세 화면에서 채울 수 있어요.
@@ -178,6 +208,28 @@ export default function ComposeReport() {
           </Text>
         ) : null}
 
+        {/* 외근 없는 사용자 — 보고서 생성 자체가 불가하므로 외근부터 시작하도록 안내 (F5) */}
+        {noTripsAtAll ? (
+          <Card padding="md" style={styles.noTripsCard}>
+            <Text variant="bodySm" weight="bold">
+              아직 작성된 외근이 없어요
+            </Text>
+            <Text variant="caption" color="textMuted" style={styles.noTripsBody}>
+              보고서는 외근 단위로 만들어집니다. 먼저 외근을 시작하고 현장을 방문하면
+              그 외근에 대한 보고서를 작성할 수 있어요.
+            </Text>
+            <Button
+              onPress={() => router.replace('/(tabs)/trips/new/select' as never)}
+              variant="secondary"
+              size="sm"
+              leftIcon="play-circle"
+              style={styles.noTripsCta}
+            >
+              외근 시작
+            </Button>
+          </Card>
+        ) : null}
+
         {error ? (
           <Text variant="bodySm" color="danger" style={styles.error}>
             {error}
@@ -186,8 +238,10 @@ export default function ComposeReport() {
 
         <Button
           onPress={handleSubmit}
-          disabled={!tripId || !title.trim() || submitting}
-          loading={submitting}
+          disabled={
+            !tripId || !title.trim() || submitting || tripHydrating || noTripsAtAll
+          }
+          loading={submitting || tripHydrating}
           size="lg"
           fullWidth
           leftIcon="document-text"
@@ -296,6 +350,14 @@ const styles = StyleSheet.create({
   changeBtn: { alignSelf: 'flex-start', marginTop: spacing.xs },
   pickTripBtn: { marginTop: spacing.xs },
   scaffoldHint: { marginTop: spacing.md },
+  noTripsCard: {
+    marginTop: spacing.md,
+    backgroundColor: colors.surfaceMuted,
+    borderWidth: 0,
+    gap: spacing.xs,
+  },
+  noTripsBody: { marginTop: 2 },
+  noTripsCta: { alignSelf: 'flex-start', marginTop: spacing.sm },
   error: { marginTop: spacing.sm },
   submitBtn: { marginTop: spacing.xl },
   modalBackdrop: {

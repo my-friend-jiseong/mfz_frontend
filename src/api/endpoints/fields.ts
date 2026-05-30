@@ -83,6 +83,9 @@ export interface FieldMemoItem {
 export interface FieldPhotoItem {
   id: string;
   fieldId: string;
+  // backend-backlog §9 — visit 단계 모델. 응답에 phase 가 포함되면 보고서 슬롯 prefill.
+  // §9 머지 전엔 undefined 만 옴.
+  phase?: AttachmentPhase;
   fileName?: string;
   mimeType?: string;
   fileUrl: string;

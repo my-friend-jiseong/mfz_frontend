@@ -62,10 +62,14 @@ function memoToAttachment(m: {
   return { id: m.id, fieldId: m.fieldId, type: 'text', text: m.content, createdAt: m.createdAt };
 }
 function photoToAttachment(p: {
-  id: string; fieldId: string; fileName?: string; mimeType?: string; fileUrl: string; fileSize?: number; createdAt: string;
+  id: string; fieldId: string;
+  // backend-backlog §9 — phase 가 들어오면 normalizer 가 그대로 보존해야
+  // 보고서 편집기의 prefill 이 동작 (F2 회로 차단, 기존엔 phase 가 잘려 dead code 였음).
+  phase?: 'before' | 'during' | 'after';
+  fileName?: string; mimeType?: string; fileUrl: string; fileSize?: number; createdAt: string;
 }): FieldDirectAttachment {
   return {
-    id: p.id, fieldId: p.fieldId, type: 'photo',
+    id: p.id, fieldId: p.fieldId, type: 'photo', phase: p.phase,
     fileName: p.fileName, mimeType: p.mimeType, fileUrl: p.fileUrl,
     fileSize: p.fileSize, byteSize: p.fileSize, createdAt: p.createdAt,
   };

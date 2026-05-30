@@ -15,6 +15,12 @@ type CreateResult =
   | { ok: true; report: Report }
   | { ok: false; error: string };
 
+// 스캐폴드 후 부분 실패를 호출 측에 전달 (F4). attemptedCount > 0 이고 failedCount > 0 이면
+// 사용자에게 안내 권장.
+export type CreateWithScaffoldResult =
+  | { ok: true; report: Report; attempted: number; failed: number }
+  | { ok: false; error: string };
+
 type GenericResult =
   | { ok: true }
   | { ok: false; error: string; code?: string };
@@ -35,10 +41,11 @@ interface ReportState {
   create: (body: CreateReportBody) => Promise<CreateResult>;
   // 보고서 생성 + 그 외근 visits 별 빈 FieldReport 자동 스캐폴드 (결정 §3).
   // visits 의 fieldId 가 빈 string 이면 skip (timeline.fieldId 누락 — backlog §16).
+  // 부분 실패 시 attempted/failed 카운트 반환, 호출 측이 사용자 안내 (F4).
   createWithVisitScaffold: (
     body: CreateReportBody,
     visitFieldIds: string[],
-  ) => Promise<CreateResult>;
+  ) => Promise<CreateWithScaffoldResult>;
   update: (id: string, body: UpdateReportBody) => Promise<GenericResult>;
   remove: (id: string) => Promise<GenericResult>;
   // 현장별 전·중·후 보고(field_reports) CRUD — 성공 시 상세 재로드로 fieldReports 갱신.
@@ -146,26 +153,45 @@ export const useReportStore = create<ReportState>((set, get) => ({
   },
 
   createWithVisitScaffold: async (body, visitFieldIds) => {
-    const created = await get().create(body);
-    if (!created.ok) return created;
-    // unique fieldId 만, 빈 string 제외 (timeline.fieldId 누락 — backlog §16).
-    const seen = new Set<string>();
-    const targets = visitFieldIds.filter((id) => {
-      if (!id || seen.has(id)) return false;
-      seen.add(id);
-      return true;
-    });
-    // 순차 호출 — 백엔드 race 회피 + 한 건 실패해도 나머지 계속.
-    for (const fieldId of targets) {
-      try {
-        await reportsApi.addFieldReport(created.report.id, { fieldId });
-      } catch {
-        // 개별 실패는 silently skip — 사용자가 상세에서 수동 추가 가능.
+    // busy 는 create + scaffold + loadDetail 끝까지 유지 (F10) — 헤더/네비 가드가
+    // 'idle' 로 잘못 판단해 사용자 이탈을 허용하던 회로 차단.
+    set({ busy: true });
+    try {
+      // create 가 자체 busy=false flip 하지 않도록 직접 api 호출 + 캐시 반영.
+      const data = await reportsApi.create(body);
+      const created: Report = {
+        id: data.id,
+        creatorId: data.authorUserId,
+        tripId: data.tripId,
+        title: data.title,
+        outputFileUrl: data.outputFileUrl,
+        createdAt: data.createdAt,
+        updatedAt: data.updatedAt,
+      };
+      set((s) => ({
+        reports: [created, ...s.reports.filter((x) => x.id !== created.id)],
+        detailCache: { ...s.detailCache, [created.id]: created },
+        detailStatus: { ...s.detailStatus, [created.id]: 'success' },
+      }));
+      // unique fieldId 만, 빈 string 제외 (timeline.fieldId 누락 — backlog §16).
+      const targets = Array.from(new Set(visitFieldIds.filter(Boolean)));
+      // 순차 호출 — 백엔드 race 회피 + 한 건 실패해도 나머지 계속. 실패 카운트는 호출 측에 전달 (F4).
+      let failed = 0;
+      for (const fieldId of targets) {
+        try {
+          await reportsApi.addFieldReport(created.id, { fieldId });
+        } catch {
+          failed += 1;
+        }
       }
+      // 스캐폴드 결과 동기화.
+      await get().loadDetail(created.id);
+      set({ busy: false });
+      return { ok: true, report: created, attempted: targets.length, failed };
+    } catch (e) {
+      set({ busy: false });
+      return { ok: false, error: describeError(e) };
     }
-    // 스캐폴드 결과 동기화.
-    await get().loadDetail(created.report.id);
-    return created;
   },
 
   update: async (id, body) => {
