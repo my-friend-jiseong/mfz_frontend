@@ -56,11 +56,18 @@ export function MapDashboard({ scopeFieldIds }: MapDashboardProps = {}) {
 
   // scopeFieldIds 가 주어진 화면(외근 상세/진행 중)에선 그 외근의 현장만 통과.
   // undefined 면 전체 노출, 빈 배열이면 0개 (목적지 없는 외근의 의도적 빈 상태).
+  // 스코프 모드에선 userId 필터를 우회하고 allFields 에서 id 직접 lookup —
+  // 외근에 묶인 현장이 userId 동기 race 로 myFields 에서 빠져 마커가 안 보이던 회로 차단.
   const scopedFields = useMemo(() => {
     if (!scopeFieldIds) return myFields;
-    const allow = new Set(scopeFieldIds);
-    return myFields.filter((f) => allow.has(f.id));
-  }, [myFields, scopeFieldIds]);
+    const byId = new Map(allFields.map((f) => [f.id, f]));
+    const out = [];
+    for (const id of scopeFieldIds) {
+      const f = byId.get(id);
+      if (f) out.push(f);
+    }
+    return out;
+  }, [myFields, allFields, scopeFieldIds]);
 
   // 가용 분류 — 스코프된 현장에 등록된 분류(field_categories) 합집합 (정렬)
   const availableTags = useMemo(() => {

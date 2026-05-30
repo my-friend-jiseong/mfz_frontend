@@ -217,32 +217,35 @@ export const useFieldStore = create<FieldState>((set, get) => ({
       const currentUserId = useAuthStore.getState().user?.id ?? null;
       const stillAuthed = useAuthStore.getState().isAuthenticated;
       if (!stillAuthed || currentUserId !== startUserId) return;
-      set((s) => ({
-        fields: s.fields.map((f) =>
-          f.id === id
-            ? {
-                ...f,
-                id: res.fieldId,
-                userId: res.userId ?? res.assigneeUserId ?? f.userId,
-                projectId: res.projectId ?? f.projectId,
-                projectName: res.projectName ?? f.projectName ?? null,
-                status: res.status,
-                address: res.address,
-                addressDetail: res.detailAddress ?? '',
-                latitude: res.lat,
-                longitude: res.lng,
-                categories: res.categories ?? res.tags ?? f.categories,
-              }
-            : f,
-        ),
-        directAttachments: {
-          ...s.directAttachments,
-          [id]: [
-            ...(res.memos ?? []).map(memoToAttachment),
-            ...(res.photos ?? []).map(photoToAttachment),
-          ],
-        },
-      }));
+      set((s) => {
+        const existing = s.fields.find((f) => f.id === id);
+        const next = {
+          id: res.fieldId,
+          userId: res.userId ?? res.assigneeUserId ?? existing?.userId ?? '',
+          projectId: res.projectId ?? existing?.projectId ?? null,
+          projectName: res.projectName ?? existing?.projectName ?? null,
+          status: res.status,
+          address: res.address,
+          addressDetail: res.detailAddress ?? '',
+          latitude: res.lat,
+          longitude: res.lng,
+          categories: res.categories ?? res.tags ?? existing?.categories,
+        };
+        // upsert — 외근 상세 진입 시 다른 사용자의 현장이거나 list 응답에 없던 현장도
+        // 지도/카드에서 graceful 하게 노출되도록 store 에 추가.
+        return {
+          fields: existing
+            ? s.fields.map((f) => (f.id === id ? { ...f, ...next } : f))
+            : [...s.fields, next as typeof s.fields[number]],
+          directAttachments: {
+            ...s.directAttachments,
+            [id]: [
+              ...(res.memos ?? []).map(memoToAttachment),
+              ...(res.photos ?? []).map(photoToAttachment),
+            ],
+          },
+        };
+      });
       // visit hydrate — recentVisits 를 visitStore 로 sync.
       // 이 store 의 set 안에서 다른 store 를 변경하면 zustand subscriber 순서 문제 가능성 있어
       // set 바깥에서 별도 호출.

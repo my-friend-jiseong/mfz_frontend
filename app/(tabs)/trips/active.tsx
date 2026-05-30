@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Platform, StyleSheet, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
@@ -43,6 +43,7 @@ export default function ActiveTrip() {
   const reorderDestinations = useDestinationStore((s) => s.reorder);
 
   const getField = useFieldStore((s) => s.getById);
+  const loadFieldDetail = useFieldStore((s) => s.loadDetail);
   const allVisits = useVisitStore((s) => s.visits);
 
   const allTrips = useTripStore((s) => s.trips);
@@ -76,6 +77,19 @@ export default function ActiveTrip() {
     () => destinations.map((d) => d.fieldId),
     [destinations],
   );
+
+  // 진입 시 destination field 별 detail upsert — 새 세션/재진입 후 fieldStore 가
+  // 비어있어 지도 마커가 0개로 보이던 회로 차단. ref guard 로 중복 호출 방지.
+  const fieldIdsKey = useMemo(() => [...tripFieldIds].sort().join(','), [tripFieldIds]);
+  const fetchedFieldsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!fieldIdsKey) return;
+    for (const fid of fieldIdsKey.split(',')) {
+      if (!fid || fetchedFieldsRef.current.has(fid)) continue;
+      fetchedFieldsRef.current.add(fid);
+      void loadFieldDetail(fid);
+    }
+  }, [fieldIdsKey, loadFieldDetail]);
 
   // 진행률 통계 — arrived + skipped 가 처리됨, pending 만 남음.
   const progress = useMemo(() => {
