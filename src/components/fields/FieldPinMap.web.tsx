@@ -13,11 +13,12 @@ interface Props {
 const SDK_SCRIPT_ID = '__kakao_maps_sdk__';
 
 type Overlay = { setMap: (m: unknown | null) => void; setPosition: (p: unknown) => void; getPosition: () => { getLat: () => number; getLng: () => number } };
+type KakaoMap = { setCenter: (latlng: unknown) => void };
 type KakaoGlobal = {
   maps: {
     load: (cb: () => void) => void;
     LatLng: new (lat: number, lng: number) => unknown;
-    Map: new (container: HTMLElement, options: { center: unknown; level: number }) => unknown;
+    Map: new (container: HTMLElement, options: { center: unknown; level: number }) => KakaoMap;
     Marker: new (options: { position: unknown; map: unknown; draggable?: boolean }) => Overlay;
     event: {
       addListener: (target: unknown, type: string, handler: (e?: { latLng: { getLat: () => number; getLng: () => number } }) => void) => void;
@@ -69,8 +70,14 @@ export function FieldPinMap({ lat, lng, onDragEnd, height = 220 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const kakaoJsKey = process.env.EXPO_PUBLIC_KAKAO_JS_KEY ?? '';
   const markerRef = useRef<Overlay | null>(null);
+  const mapRef = useRef<KakaoMap | null>(null);
 
-  // 마운트 1회 — 좌표 변경은 RN state 가 진실값, 마커는 자체 위치 유지.
+  const safeLat = Number.isFinite(lat) ? lat : 0;
+  const safeLng = Number.isFinite(lng) ? lng : 0;
+  const initialLatRef = useRef(safeLat);
+  const initialLngRef = useRef(safeLng);
+
+  // 마운트 1회 — 후속 lat/lng prop 변경은 아래 useEffect 가 in-place 처리.
   useEffect(() => {
     if (!kakaoJsKey || !containerRef.current) return;
     let cancelled = false;
@@ -79,11 +86,12 @@ export function FieldPinMap({ lat, lng, onDragEnd, height = 220 }: Props) {
       const k = getKakao();
       if (!k) return;
       const map = new k.maps.Map(containerRef.current, {
-        center: new k.maps.LatLng(lat, lng),
+        center: new k.maps.LatLng(initialLatRef.current, initialLngRef.current),
         level: 3,
       });
+      mapRef.current = map;
       const marker = new k.maps.Marker({
-        position: new k.maps.LatLng(lat, lng),
+        position: new k.maps.LatLng(initialLatRef.current, initialLngRef.current),
         map,
         draggable: true,
       });
@@ -104,6 +112,16 @@ export function FieldPinMap({ lat, lng, onDragEnd, height = 220 }: Props) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kakaoJsKey]);
+
+  // 후속 lat/lng prop 변경 — marker + map in-place 이동.
+  useEffect(() => {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    const k = getKakao();
+    if (!k || !mapRef.current || !markerRef.current) return;
+    const p = new k.maps.LatLng(lat, lng);
+    markerRef.current.setPosition(p);
+    mapRef.current.setCenter(p);
+  }, [lat, lng]);
 
   if (!kakaoJsKey) return null;
 

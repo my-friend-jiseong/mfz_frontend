@@ -3,6 +3,7 @@ import type { Trip } from '@/types/entities';
 import { trips as tripsApi, ApiError, localizeError } from '@/api';
 import { useAuthStore } from './authStore';
 import { useVisitStore } from './visitStore';
+import { useDestinationStore } from './destinationStore';
 
 type StartResult =
   | { ok: true; trip: Trip }
@@ -181,10 +182,11 @@ export const useTripStore = create<TripState>((set, get) => ({
     try {
       await tripsApi.remove(id);
       set((s) => ({ trips: s.trips.filter((t) => t.id !== id) }));
-      // 외근 삭제 시 그 외근에 묶인 visit 들은 백엔드가 cascade 처리한다 가정.
-      // 로컬 visitStore 의 잔존도 함께 정리해 UI 회로 차단.
-      const visitState = useVisitStore.getState();
-      visitState.removeByTrip?.(id);
+      // 그 외근에 묶인 visit·destination 둘 다 로컬 정리.
+      // optional chain 제거 — 인터페이스가 required 라 ?. 는 dead code 였고,
+      // 미래에 메서드가 사라지면 silently 빠지는 footgun 이었음.
+      useVisitStore.getState().removeByTrip(id);
+      useDestinationStore.getState().removeByTrip(id);
       return { ok: true };
     } catch (e) {
       return { ok: false, error: describeError(e) };

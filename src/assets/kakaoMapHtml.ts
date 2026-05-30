@@ -111,6 +111,8 @@ MARKERS.forEach(function(m){
       center: new kakao.maps.LatLng(CENTER.lat, CENTER.lng),
       level: 8,
     });
+    // RN 측 injectJavaScript 에서 in-place 갱신을 위해 전역에 노출.
+    window.__mfzMap = map;
 
     // KWCAG 1.4.1 — status 별 색 + 형상 + 라벨 3중 인코딩 SVG.
     // count>1: 우상단 카운트 뱃지 + 라벨 absolute(좌표 정확도 무손실).
@@ -247,13 +249,16 @@ MARKERS.forEach(function(m){
         .catch(function(e){ console.error('boundary/choropleth load failed', e); });
     }
 
-    function renderMyLocation(){
-      if (!MY_LOCATION) return;
+    // 현재 위치 마커 — RN 측 in-place 갱신을 위해 overlay ref 보존.
+    var myLocOverlay = null;
+    function applyMyLocation(loc){
+      if (myLocOverlay) { myLocOverlay.setMap(null); myLocOverlay = null; }
+      if (!loc) return;
       var content = document.createElement('div');
       content.style.cssText = 'position:relative;width:22px;height:22px;pointer-events:none;';
       content.innerHTML = '<div class="mfz-me-ring"></div><div class="mfz-me-dot"></div>';
-      new kakao.maps.CustomOverlay({
-        position: new kakao.maps.LatLng(MY_LOCATION.lat, MY_LOCATION.lng),
+      myLocOverlay = new kakao.maps.CustomOverlay({
+        position: new kakao.maps.LatLng(loc.lat, loc.lng),
         content: content,
         map: map,
         xAnchor: 0.5,
@@ -261,6 +266,7 @@ MARKERS.forEach(function(m){
         zIndex: 5,
       });
     }
+    window.__mfzSetMyLocation = applyMyLocation;
 
     if (MODE === 'heatmap') {
       renderHeatmap();
@@ -269,7 +275,7 @@ MARKERS.forEach(function(m){
       renderMarkers();
     }
 
-    renderMyLocation();
+    applyMyLocation(MY_LOCATION);
     renderPolygons();
 
     postMsg({ type: 'ready' });

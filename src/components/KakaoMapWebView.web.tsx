@@ -78,11 +78,12 @@ function ensureMyLocPulseStyle() {
 }
 
 type Overlay = { setMap: (m: unknown | null) => void };
+type KakaoMap = { setCenter: (latlng: unknown) => void };
 type KakaoGlobal = {
   maps: {
     load: (cb: () => void) => void;
     LatLng: new (lat: number, lng: number) => unknown;
-    Map: new (container: HTMLElement, options: { center: unknown; level: number }) => unknown;
+    Map: new (container: HTMLElement, options: { center: unknown; level: number }) => KakaoMap;
     Marker: new (options: { position: unknown; map: unknown; title?: string }) => Overlay;
     Circle: new (options: {
       center: unknown;
@@ -155,7 +156,7 @@ export function KakaoMapWebView({
   onMarkerPress,
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<unknown>(null);
+  const mapRef = useRef<KakaoMap | null>(null);
   const overlaysRef = useRef<Overlay[]>([]);
   const myLocOverlayRef = useRef<Overlay | null>(null);
   const boundaryOverlaysRef = useRef<Overlay[]>([]);
@@ -192,9 +193,17 @@ export function KakaoMapWebView({
     return () => {
       cancelled = true;
     };
-    // 초기 center로만 생성. 이후 center 변경은 별도 useEffect에서 처리 가능 (현재는 불필요)
+    // 초기 center로만 생성. 후속 변경은 아래 useEffect 가 in-place 처리.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kakaoJsKey]);
+
+  // mount 후 center prop 변경 — map.setCenter 로 in-place 갱신 (init useEffect 가 무시하던 회로 차단).
+  useEffect(() => {
+    if (!ready || !mapRef.current || !center) return;
+    const k = getKakao();
+    if (!k) return;
+    mapRef.current.setCenter(new k.maps.LatLng(center.lat, center.lng));
+  }, [ready, center?.lat, center?.lng]);
 
   // myLocation 오버레이 — ready 후 한 번 / myLocation 변경 시 재배치.
   useEffect(() => {

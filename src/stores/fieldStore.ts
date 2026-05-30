@@ -42,7 +42,9 @@ interface FieldState {
   addPhoto: (
     id: string,
     file: { uri: string; name: string; type: string },
-  ) => Promise<GenericResult>;
+  ) => Promise<
+    { ok: true; photoId: string } | { ok: false; error: string }
+  >;
   removeTextMemo: (fieldId: string, memoId: string) => Promise<GenericResult>;
   removePhoto: (fieldId: string, photoId: string) => Promise<GenericResult>;
   clearAll: () => void;
@@ -217,11 +219,16 @@ export const useFieldStore = create<FieldState>((set, get) => ({
       const currentUserId = useAuthStore.getState().user?.id ?? null;
       const stillAuthed = useAuthStore.getState().isAuthenticated;
       if (!stillAuthed || currentUserId !== startUserId) return;
+      // 응답·기존 모두 userId 누락 시 currentUserId 로 fallback —
+      // loadDetail 은 외근 destination/현장 상세 진입에서만 호출 = 본인 동선 가정.
+      // userId='' 으로 적재되면 `myFields = filter(f => f.userId === currentUserId)` 모든 곳에서
+      // 빠져 사용자가 자기 현장에 접근 불가하게 되는 회로 차단.
+      const fallbackUserId = useAuthStore.getState().user?.id ?? '';
       set((s) => {
         const existing = s.fields.find((f) => f.id === id);
         const next = {
           id: res.fieldId,
-          userId: res.userId ?? res.assigneeUserId ?? existing?.userId ?? '',
+          userId: res.userId ?? res.assigneeUserId ?? existing?.userId ?? fallbackUserId,
           projectId: res.projectId ?? existing?.projectId ?? null,
           projectName: res.projectName ?? existing?.projectName ?? null,
           status: res.status,
@@ -275,13 +282,14 @@ export const useFieldStore = create<FieldState>((set, get) => ({
   addPhoto: async (id, file) => {
     try {
       const res = await fieldsApi.addPhoto(id, file);
+      const attachment = photoToAttachment(res.photo);
       set((s) => ({
         directAttachments: {
           ...s.directAttachments,
-          [id]: [...(s.directAttachments[id] ?? []), photoToAttachment(res.photo)],
+          [id]: [...(s.directAttachments[id] ?? []), attachment],
         },
       }));
-      return { ok: true };
+      return { ok: true, photoId: attachment.id };
     } catch (e) {
       return { ok: false, error: describeError(e) };
     }

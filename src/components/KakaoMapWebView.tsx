@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { buildKakaoMapHtml, type MapDisplayMode } from '@/assets/kakaoMapHtml';
@@ -65,18 +65,40 @@ export function KakaoMapWebView({
     }));
   }, [markers]);
 
+  // html 빌더 deps 에서 center·myLocation 제거 — 비동기 도착(권한 응답) 시 source 전체
+  // 재주입으로 사용자의 pan/zoom/InfoWindow 가 reset 되던 회로 차단. 초기 1회만 HTML 에 박고,
+  // 이후 변경은 injectJavaScript 로 in-place 업데이트.
+  // initialCenter/initialMyLocation 은 mount 시점 값으로만 의미 — ref 에 박아 deps 에서 제외.
+  const initialCenterRef = useRef(center ?? myLocation ?? DEFAULT_CENTER);
+  const initialMyLocationRef = useRef(myLocation);
   const html = useMemo(
     () =>
       buildKakaoMapHtml({
         kakaoJsKey,
         markers: groupedMarkers,
-        center: center ?? myLocation ?? DEFAULT_CENTER,
+        center: initialCenterRef.current,
         displayMode,
         showBoundary,
-        myLocation,
+        myLocation: initialMyLocationRef.current,
       }),
-    [kakaoJsKey, groupedMarkers, center, displayMode, showBoundary, myLocation],
+    [kakaoJsKey, groupedMarkers, displayMode, showBoundary],
   );
+
+  // 후속 center 변경 → in-place setCenter (pan/zoom 보존).
+  useEffect(() => {
+    if (!center) return;
+    const js = `if(window.__mfzMap){window.__mfzMap.setCenter(new kakao.maps.LatLng(${center.lat},${center.lng}));}true;`;
+    webRef.current?.injectJavaScript(js);
+  }, [center?.lat, center?.lng]);
+
+  // 후속 myLocation 변경 → in-place 마커 갱신.
+  useEffect(() => {
+    const payload = myLocation
+      ? `{lat:${myLocation.lat},lng:${myLocation.lng}}`
+      : 'null';
+    const js = `if(window.__mfzSetMyLocation){window.__mfzSetMyLocation(${payload});}true;`;
+    webRef.current?.injectJavaScript(js);
+  }, [myLocation?.lat, myLocation?.lng]);
 
   return (
     <View style={styles.container}>

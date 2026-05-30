@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Alert, Platform, StyleSheet, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
@@ -77,17 +77,17 @@ export default function ActiveTrip() {
   );
 
   // 진입 시 destination field 별 detail upsert — 새 세션/재진입 후 fieldStore 가
-  // 비어있어 지도 마커가 0개로 보이던 회로 차단. ref guard 로 중복 호출 방지.
-  const fieldIdsKey = useMemo(() => [...tripFieldIds].sort().join(','), [tripFieldIds]);
-  const fetchedFieldsRef = useRef<Set<string>>(new Set());
+  // 비어있어 지도 마커가 0개로 보이던 회로 차단. tripFieldIds 가 변할 때만 재실행 (memo),
+  // 이미 store 에 있는 field 는 건너뜀 (사이클 내 중복 호출도 자연스럽게 차단).
+  // 이전 sort+join+split 우회·ref Set 방식 제거 — Set 이 영원히 누적되어
+  // 같은 id 가 reorder/재추가됐을 때 stale 데이터가 박히던 회로도 함께 차단.
   useEffect(() => {
-    if (!fieldIdsKey) return;
-    for (const fid of fieldIdsKey.split(',')) {
-      if (!fid || fetchedFieldsRef.current.has(fid)) continue;
-      fetchedFieldsRef.current.add(fid);
+    for (const fid of tripFieldIds) {
+      if (!fid) continue;
+      if (useFieldStore.getState().getById(fid)) continue;
       void loadFieldDetail(fid);
     }
-  }, [fieldIdsKey, loadFieldDetail]);
+  }, [tripFieldIds, loadFieldDetail]);
 
   // 진행률 통계 — arrived + skipped 가 처리됨, pending 만 남음.
   const progress = useMemo(() => {
@@ -149,8 +149,21 @@ export default function ActiveTrip() {
     if (!currentDest) return;
     const field = getField(currentDest.fieldId);
     if (!field) return;
-    // 인앱 카카오 길안내 — 외부 앱 강제 분기 차단. providers 다이얼로그/Linking.openURL 모두 제거.
-    // backend-backlog §1 카카오-only 정책과 일관 (응답 shape 미정 상태에서도 동작).
+    // 백엔드 분석/사이드이펙트(handoff §6c — 길찾기 트리거 시 destination 전이·감사 로그)
+    // 보존을 위해 fire-and-forget POST. 응답은 사용하지 않음 (인앱 길안내는 아래 router.push).
+    if (activeTripId) {
+      void tripsApi
+        .navigationDeepLinks(activeTripId, {
+          fieldId: field.id,
+          destinationName: field.address,
+          destinationLat: field.latitude,
+          destinationLng: field.longitude,
+        })
+        .catch(() => {
+          // 분석 호출 실패는 사용자 흐름 차단 X.
+        });
+    }
+    // 인앱 카카오 길안내 — 외부 앱 강제 분기 차단.
     router.push({
       pathname: '/(tabs)/trips/navigate',
       params: {

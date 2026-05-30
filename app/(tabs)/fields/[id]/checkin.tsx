@@ -55,6 +55,7 @@ export default function FieldCheckin() {
   const checkIn = useVisitStore((s) => s.checkIn);
   const setResult = useVisitStore((s) => s.setResult);
   const addPhoto = useFieldStore((s) => s.addPhoto);
+  const removePhoto = useFieldStore((s) => s.removePhoto);
   const findDestination = useDestinationStore((s) => s.findByTripField);
   const markDestinationArrived = useDestinationStore((s) => s.markArrived);
 
@@ -66,12 +67,14 @@ export default function FieldCheckin() {
   const checkInGuardRef = useRef(false);
 
   // 단계별 사진 슬롯 — 백엔드 단계 메타(backlog §9) 도착 전, 세션 내 시각 유도용.
-  // 슬롯에 사진을 첨부하면 fields/.../photos 로 일반 사진 업로드 + 미리보기 URI 보관.
+  // 슬롯별 prior photoId 를 보관 — 재선택 시 removePhoto 선행으로 서버 중복 누적 차단.
   type Phase = 'before' | 'during' | 'after';
-  const [phaseUri, setPhaseUri] = useState<Record<Phase, string | null>>({
-    before: null,
-    during: null,
-    after: null,
+  interface PhaseSlotState { uri: string | null; photoId: string | null; }
+  const emptySlot: PhaseSlotState = { uri: null, photoId: null };
+  const [phaseSlots, setPhaseSlots] = useState<Record<Phase, PhaseSlotState>>({
+    before: emptySlot,
+    during: emptySlot,
+    after: emptySlot,
   });
   const [phaseBusy, setPhaseBusy] = useState<Phase | null>(null);
 
@@ -83,9 +86,18 @@ export default function FieldCheckin() {
         try {
           const file = await pickPhoto(source);
           if (!file) return;
+          // 같은 슬롯에 이전에 업로드한 사진이 있으면 서버에서도 먼저 제거.
+          // 실패해도 새 업로드는 시도 — 사용자 입력이 막히지 않도록.
+          const prior = phaseSlots[phase].photoId;
+          if (prior) {
+            void removePhoto(fieldId, prior);
+          }
           const r = await addPhoto(fieldId, file);
           if (r.ok) {
-            setPhaseUri((p) => ({ ...p, [phase]: file.uri }));
+            setPhaseSlots((p) => ({
+              ...p,
+              [phase]: { uri: file.uri, photoId: r.photoId },
+            }));
           } else {
             Alert.alert('사진 추가 실패', r.error);
           }
@@ -262,7 +274,7 @@ export default function FieldCheckin() {
         <View style={styles.phaseRow}>
           {(['before', 'during', 'after'] as const).map((phase) => {
             const label = phase === 'before' ? '작업 전' : phase === 'during' ? '작업 중' : '작업 후';
-            const uri = phaseUri[phase];
+            const uri = phaseSlots[phase].uri;
             const busy = phaseBusy === phase;
             return (
               <Pressable

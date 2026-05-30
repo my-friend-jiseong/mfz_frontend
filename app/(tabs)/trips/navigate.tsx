@@ -9,7 +9,8 @@ import { Button } from '@/components/ui/Button';
 import { openKakaoRouteTo } from '@/utils/kakaoMap';
 import { safeBack } from '@/utils/backNavigation';
 import { colors } from '@/theme/colors';
-import { spacing } from '@/theme/spacing';
+import { spacing, radius } from '@/theme/spacing';
+import { opacity } from '@/theme/motion';
 
 // 인앱 카카오 길안내 — 외부 앱(카카오맵/Linking.openURL) 의존 차단.
 // `https://map.kakao.com/link/to/...` web URL 은 WebView 안에서 정상 렌더되며
@@ -19,7 +20,9 @@ export default function TripNavigate() {
   const params = useLocalSearchParams<{ name?: string; lat?: string; lng?: string }>();
   const lat = Number(params.lat);
   const lng = Number(params.lng);
-  const name = params.name ?? '목적지';
+  // useLocalSearchParams 는 동일 키 중복 시 string[] 도 돌려줌 — 첫 토큰 우선.
+  const rawName = params.name;
+  const name = (Array.isArray(rawName) ? rawName[0] : rawName) ?? '목적지';
   const [error, setError] = useState<string | null>(null);
 
   const url = useMemo(() => {
@@ -65,8 +68,30 @@ export default function TripNavigate() {
         originWhitelist={['*']}
         javaScriptEnabled
         domStorageEnabled
-        // WebView 실패 시 카카오맵 직링크(앱→웹 폴백) 로 escape hatch.
+        // onError 는 renderer/network 실패에만 발화 — kakao 가 200 으로 dead page 를 돌려주는
+        // case 까지는 못 잡음. onHttpError 도 함께 등록 + 항상 노출되는 'open in app' 폴백 CTA 유지.
         onError={() => setError('지도 로드 실패')}
+        onHttpError={(syntheticEvent) => {
+          const code = syntheticEvent.nativeEvent.statusCode;
+          if (code >= 400) setError(`지도 응답 오류 (HTTP ${code})`);
+        }}
+        renderError={() => (
+          <View style={styles.errorOverlay} pointerEvents="box-none">
+            <EmptyState
+              icon="warning-outline"
+              title="인앱 길안내를 불러올 수 없습니다"
+              description="카카오맵 앱 또는 외부 브라우저로 열어보세요"
+              action={
+                <Button
+                  onPress={() => void openKakaoRouteTo(name, lat, lng)}
+                  leftIcon="open-outline"
+                >
+                  카카오맵으로 열기
+                </Button>
+              }
+            />
+          </View>
+        )}
         style={styles.web}
       />
       {error ? (
@@ -74,7 +99,7 @@ export default function TripNavigate() {
           <EmptyState
             icon="warning-outline"
             title="인앱 길안내를 불러올 수 없습니다"
-            description="카카오맵 앱 또는 외부 브라우저로 열어보세요"
+            description={error}
             action={
               <Button
                 onPress={() => void openKakaoRouteTo(name, lat, lng)}
@@ -85,7 +110,21 @@ export default function TripNavigate() {
             }
           />
         </View>
-      ) : null}
+      ) : (
+        // 침묵 실패(kakao 가 200 으로 dead page 를 돌려주는 경우) 대비 — 사용자가 항상 외부로
+        // 탈출할 수 있도록 하단 작은 칩 CTA 를 상시 노출. 정상 동선이면 무시 가능.
+        <Pressable
+          onPress={() => void openKakaoRouteTo(name, lat, lng)}
+          accessibilityRole="button"
+          accessibilityLabel="카카오맵 앱으로 열기"
+          style={({ pressed }) => [styles.fallbackChip, pressed && { opacity: opacity.pressed }]}
+        >
+          <Ionicons name="open-outline" size={14} color={colors.text} />
+          <Text variant="caption" weight="bold">
+            카카오맵 앱으로 열기
+          </Text>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -114,5 +153,19 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  fallbackChip: {
+    position: 'absolute',
+    bottom: spacing.lg,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
 });

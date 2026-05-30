@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { colors } from '@/theme/colors';
@@ -17,13 +17,23 @@ export function FieldPinMap({ lat, lng, onDragEnd, height = 220 }: Props) {
   const webRef = useRef<WebView>(null);
   const kakaoJsKey = process.env.EXPO_PUBLIC_KAKAO_JS_KEY ?? '';
 
-  // 좌표가 바뀔 때마다 HTML 을 새로 만들지 않도록 — initial center 만 의미. drag end 후
-  // RN 측은 onDragEnd 로 상태 갱신, WebView 안 마커는 자체 위치 유지.
+  // initial 좌표는 ref 로 박아 html deps 에서 제외 — 후속 prop 변경은 injectJavaScript 로 in-place.
+  // NaN 가드 — 호출 측 race 로 NaN 이 들어와도 WebView 내부에서 silent throw 되지 않도록.
+  const safeLat = Number.isFinite(lat) ? lat : 0;
+  const safeLng = Number.isFinite(lng) ? lng : 0;
+  const initialLatRef = useRef(safeLat);
+  const initialLngRef = useRef(safeLng);
   const html = useMemo(
-    () => buildHtml(kakaoJsKey, lat, lng),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    () => buildHtml(kakaoJsKey, initialLatRef.current, initialLngRef.current),
     [kakaoJsKey],
   );
+
+  // 후속 lat/lng prop 변경 → marker + center in-place 이동.
+  useEffect(() => {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    const js = `if(window.__mfzPin){window.__mfzPin(${lat},${lng});}true;`;
+    webRef.current?.injectJavaScript(js);
+  }, [lat, lng]);
 
   if (!kakaoJsKey) return null;
 
@@ -82,6 +92,12 @@ function buildHtml(kakaoJsKey: string, lat: number, lng: number): string {
       marker.setPosition(p);
       postMsg({ type: 'pinDragEnd', lat: p.getLat(), lng: p.getLng() });
     });
+    // RN 측 injectJavaScript 가 prop 변경을 in-place 반영하기 위한 핸들.
+    window.__mfzPin = function(la, ln){
+      var p = new kakao.maps.LatLng(la, ln);
+      marker.setPosition(p);
+      map.setCenter(p);
+    };
   });
 })();
 </script>
