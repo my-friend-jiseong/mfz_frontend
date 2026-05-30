@@ -69,6 +69,9 @@ export interface TripListResponse {
 // ERD v2: visit 첨부·result_status 제거 → timeline 은 방문 기록만. 잔여 필드는 방어적 optional.
 export interface TripTimelineEntry {
   visitId: string;
+  // backend-backlog §16 — 응답에 fieldId 가 들어오기 시작하면 visitStore 가 곧장 사용.
+  // 현재(2026-05-31)는 미포함 → syncFromTimeline 이 빈 fieldId 로 흡수.
+  fieldId?: string;
   siteName?: string;        // 현장명 (field.name)
   visitedAt: string;
   status?: string;          // visits.status

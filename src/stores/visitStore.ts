@@ -96,6 +96,7 @@ export const useVisitStore = create<VisitState>((set, get) => ({
 
   // trips.detail.timeline → visits hydrate. timeline entry 는 fieldId 가 optional 인데,
   // 없으면 fieldId 자리에 빈 string 으로 채워 store 에 적재 (UI 쪽 field lookup 은 ?? '알 수 없는 현장').
+  // backend-backlog §16: 응답에 fieldId 가 정식 포함되면 세션 재진입 시에도 카드/마커가 정상 노출됨.
   syncFromTimeline: (tripId, timeline) => {
     const incoming: Visit[] = timeline.map((t) => ({
       id: t.visitId,

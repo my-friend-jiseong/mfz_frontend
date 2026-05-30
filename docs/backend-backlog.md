@@ -586,6 +586,56 @@ PATCH /api/me/password
 
 ---
 
+## 16. 🟠 `GET /api/trips/:tripId` — `timeline[].fieldId` 정식 포함
+
+### 배경
+2차 QA(2026-05-30) #10 — "외근 방문 여부가 제대로 저장되지 않음". 디버깅 결과 backend
+는 visit 자체를 정상 저장하지만, `TripDetailResponse.timeline` 응답에 `fieldId` 가
+누락되어 세션 재진입 시 visitStore 에 `fieldId: ''` 로 흡수됨.
+
+```ts
+// 현재
+export interface TripTimelineEntry {
+  visitId: string;
+  siteName?: string;   // 현장명 — 표시는 가능하지만 lookup key 가 되긴 부족
+  visitedAt: string;
+  status?: string;
+  memoPreview?: string;
+}
+```
+
+같은 세션에서는 `checkIn()` 호출 응답의 `fieldId` 가 visitStore 에 들어가 카드/마커가
+정상이지만, 앱 재기동 후엔 timeline 만 남고 fieldId 가 비어 외근 정리 화면 / 외근
+상세 지도에서 visit 이 "알 수 없는 현장" 으로 빠짐.
+
+### 백엔드가 해야 할 것
+timeline 응답에 `fieldId` 를 정식 포함:
+
+```ts
+export interface TripTimelineEntry {
+  visitId: string;
+  fieldId: string;   // ← 추가
+  siteName?: string;
+  visitedAt: string;
+  status?: string;
+  memoPreview?: string;
+}
+```
+
+### 프론트엔드 영향
+- `TripTimelineEntry` 에 `fieldId?: string` optional 로 미리 추가 (2026-05-31 반영).
+- `useVisitStore.syncFromTimeline` 가 `t.fieldId ?? ''` 로 그대로 흡수.
+- 백엔드가 정식 포함 시작하면 추가 프론트 변경 없이 동작.
+
+### 발견 시점
+2026-05-30 (2차 QA — #10).
+
+### 관련 코드
+- 프론트 [`src/api/endpoints/trips.ts`](../src/api/endpoints/trips.ts),
+  [`src/stores/visitStore.ts`](../src/stores/visitStore.ts)
+
+---
+
 ## 변경 이력
 
 - **2026-05-08**: 백로그 신설. §1 길찾기 카카오-only 정책 반영. (이전 §1 title 은 백엔드 처리 완료로 제거)
@@ -598,3 +648,4 @@ PATCH /api/me/password
 - **2026-05-28**: §13 추가 — ERD v2 프론트 정합 작업 중 운영 실호출에서 `POST /api/reports/generate` 500 발견(높음). 그 외 v2 엔드포인트는 정상 검증됨.
 - **2026-05-30**: §14 추가 — 현장 라이프사이클 UX 검토(C9-C) 중 발견. 현장 메모/사진 개별 삭제 endpoint 부재(중상). 프론트는 호출 path/응답 contract 가정으로 선반영.
 - **2026-05-30**: §15 추가 — 인증/프로필 UX 검토(B-5) 중 발견. 프로필 수정 endpoint 부재(낮). 단일 actor 정책상 우선순위 낮음, 자체 처리 의지 누적 시 격상.
+- **2026-05-31**: §16 추가 — 2차 QA(#10) 디버깅 중 발견. `timeline[].fieldId` 누락(중상). 세션 재진입 후 visit 이 카드/지도에서 빠지는 회로. 프론트는 optional 선반영.
