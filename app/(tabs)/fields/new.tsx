@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -60,9 +60,14 @@ export default function NewField() {
   const user = useAuthStore((s) => s.user);
   const createField = useFieldStore((s) => s.create);
   // 중복 매칭용 — 본인 fields 만.
+  // selector 안에서 .filter() 호출하면 매 render 마다 새 array reference → Zustand 가
+  // store changed 로 판정 → 무한 re-render → React error #185 (Maximum update depth).
+  // raw 배열 구독 + useMemo 로 도출.
   const userId = user?.id;
-  const myFields = useFieldStore((s) =>
-    userId ? s.fields.filter((f) => f.userId === userId) : [],
+  const allFields = useFieldStore((s) => s.fields);
+  const myFields = useMemo(
+    () => (userId ? allFields.filter((f) => f.userId === userId) : []),
+    [allFields, userId],
   );
 
   const [step, setStep] = useState<1 | 2>(1);
