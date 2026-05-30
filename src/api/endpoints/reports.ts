@@ -80,32 +80,9 @@ export interface FieldReportInput {
   afterPhotoCaption?: string;
 }
 
-// ----- AI 보고서 생성 -----
-// ERD v2: 본문 content 컬럼 없음. fieldId 제공 시 field_report 에 before/after 저장.
-// 응답 형태가 재정의됐을 수 있어 방어적 optional (§8).
-export interface ReportAnalysis {
-  summary?: string;
-  keypoints?: string[];
-  recommendations?: string[];
-  sentiment?: 'positive' | 'neutral' | 'negative' | string;
-  raw?: string;
-  [key: string]: unknown;
-}
-
-export interface ReportGenerateData {
-  id: string;
-  reportId?: string;
-  tripId: string | null;
-  title: string;
-  outputFileUrl?: string;
-  fileUrl?: string;
-  downloadUrl?: string;
-  outputFileName?: string;
-  fieldReport?: FieldReport;
-  analysis?: ReportAnalysis;
-  generationMetadata?: { model?: string; tokens?: number | null; elapsedMs?: number };
-  message?: string;
-}
+// AI 보고서 생성 (POST /api/reports/generate) — 2026-05-31 결정 §1: 완전 제거.
+// 사유: QA #14·#15 + 운영 500 (backlog §13) + 새 양식엔 본문 자체가 없음.
+// ReportGenerateData / ReportAnalysis / reports.generate 모두 본 사이클에서 삭제.
 
 export const reports = {
   list: (params?: ListReportsParams) =>
@@ -146,13 +123,5 @@ export const reports = {
   removeFieldReport: (reportId: string, fieldReportId: string) =>
     request<null>(`/api/reports/${reportId}/field-reports/${fieldReportId}`, {
       method: 'DELETE',
-    }),
-
-  /** AI 보고서 생성·저장. multipart body: notes(필수), title, tripId, fieldId, before_photo, after_photo */
-  generate: (form: FormData) =>
-    request<ReportGenerateData>('/api/reports/generate', {
-      method: 'POST',
-      body: form,
-      multipart: true,
     }),
 };

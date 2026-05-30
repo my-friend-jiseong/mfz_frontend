@@ -666,6 +666,64 @@ export interface TripTimelineEntry {
 
 ---
 
+## 18. 🟢 `POST /api/reports/from-trip/:tripId` — 보고서+현장보고 단축 생성
+
+### 배경
+새 보고서 양식(2026-05-31, [`docs/report-format-revision-plan.md`](report-format-revision-plan.md))에서
+보고서 생성 = 그 외근의 visits 별 FieldReport 자동 스캐폴드. 프론트는 현재 `POST /api/reports`
+1회 + `POST /api/reports/:id/field-reports` N회 (순차) 로 처리. N 회 round-trip 비용 절감용 단축 endpoint.
+
+### 백엔드가 해야 할 것
+```
+POST /api/reports/from-trip/:tripId
+body: { title }
+response: { reportId, fieldReports: [...] }
+```
+서버가 그 trip 의 visits 를 조회해 fieldId 별 FieldReport 1개씩 일괄 생성.
+skipped destination 은 제외.
+
+### 프론트엔드 영향
+- `reportStore.createWithVisitScaffold` 가 1회 호출로 단순화.
+- 본 endpoint 도착 전에는 N회 호출 폴백 (이미 구현).
+
+### 발견 시점
+2026-05-31 (보고서 양식 변경 — RP2).
+
+### 관련 코드
+- 프론트 [`src/stores/reportStore.ts`](../src/stores/reportStore.ts) `createWithVisitScaffold`
+
+---
+
+## 19. 🟠 `POST /api/reports/:id/export?format=pdf` — PDF 출력
+
+### 배경
+새 양식의 다운로드 결정 §6 (2026-05-31): Word 유지 + PDF 추가. 현재 `outputFileUrl` 은 Word 만.
+사용자 요구가 인쇄/공유에 PDF 가 더 적합한 케이스가 많음 (현장 보고에 사진 다수 포함되는 새 양식 특히).
+
+### 백엔드가 해야 할 것
+```
+POST /api/reports/:id/export?format=pdf
+response: { url, expiresAt? }
+```
+또는 다중 포맷 지원:
+```
+POST /api/reports/:id/export
+body: { format: 'word' | 'pdf' }
+```
+보고서 개요 위치도(자동 생성) + 현장 보고 N개를 단일 문서로 렌더.
+
+### 프론트엔드 영향
+- 보고서 상세 화면에 "PDF 다운로드" 버튼 추가 (현재 'Word 파일 다운로드' 옆).
+- endpoint 도착 전 UI 는 hidden.
+
+### 발견 시점
+2026-05-31 (보고서 양식 변경 — 결정 §6).
+
+### 관련 코드
+- 프론트 [`app/(tabs)/reports/[id]/index.tsx`](../app/\(tabs\)/reports/\[id\]/index.tsx)
+
+---
+
 ## 변경 이력
 
 - **2026-05-08**: 백로그 신설. §1 길찾기 카카오-only 정책 반영. (이전 §1 title 은 백엔드 처리 완료로 제거)
@@ -680,3 +738,4 @@ export interface TripTimelineEntry {
 - **2026-05-30**: §15 추가 — 인증/프로필 UX 검토(B-5) 중 발견. 프로필 수정 endpoint 부재(낮). 단일 actor 정책상 우선순위 낮음, 자체 처리 의지 누적 시 격상.
 - **2026-05-31**: §16 추가 — 2차 QA(#10) 디버깅 중 발견. `timeline[].fieldId` 누락(중상). 세션 재진입 후 visit 이 카드/지도에서 빠지는 회로. 프론트는 optional 선반영.
 - **2026-05-31**: §17 추가 — 2차 QA 기타. 더미 데이터 보강 요청(낮). 시연 시각화(히트맵/마커 그룹/외근 카드) 가능치 확보.
+- **2026-05-31**: §18·§19 추가 — 보고서 양식 변경 사이클. §18 보고서+현장보고 단축 생성(낮·round-trip 절감), §19 PDF export(중상·새 양식 인쇄/공유). 결정 §1~§7 은 [`report-format-revision-plan.md`](report-format-revision-plan.md).

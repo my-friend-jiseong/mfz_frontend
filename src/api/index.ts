@@ -65,8 +65,6 @@ export type {
   UpdateReportBody,
   ListReportsParams,
   FieldReportInput,
-  ReportGenerateData,
-  ReportAnalysis,
 } from './endpoints/reports';
 export { map } from './endpoints/map';
 export { system } from './endpoints/system';

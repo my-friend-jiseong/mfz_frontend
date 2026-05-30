@@ -43,10 +43,16 @@ export interface FieldListResponse {
 
 // ERD v2: memos(텍스트) + field_photos(사진) 만. 음성 제거, caption·좌표·visit 연결 없음.
 // 응답 형태가 v2 에서 단순화될 수 있어 미디어 필드는 방어적 optional (§8).
+//
+// phase: backend-backlog §9 visit 단계 모델 — 응답에 phase 가 포함되면
+// 보고서 편집기가 자동으로 슬롯 prefill (decision §4 / 2026-05-31).
+// §9 머지 전엔 undefined 만 옴 → 모든 슬롯이 빈 상태로 시작 (회로 정상).
+export type AttachmentPhase = 'before' | 'during' | 'after';
 export interface FieldDirectAttachment {
   id: string;
   fieldId: string;
   type: 'text' | 'photo';
+  phase?: AttachmentPhase;
   text?: string;
   fileName?: string;
   mimeType?: string;

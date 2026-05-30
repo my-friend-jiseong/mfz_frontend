@@ -21,7 +21,9 @@ import { opacity } from '@/theme/motion';
 import { fmtDate, fmtTime } from '@/utils/datetime';
 import type { Report, Trip } from '@/types/entities';
 
-// trip === null 인 그룹은 '외근 없이 작성' 별도 섹션 — 이전엔 누락되어 보이지 않던 회로.
+// 새 양식(2026-05-31 결정 §2): 외근 없이 작성 그룹 폐지. 모든 보고서는 tripId 필수.
+// orphan(tripId 없거나 trips store 에 매칭 안 되는 경우) 도 동일한 trip-block 으로 흡수하되
+// trip 정보 없으면 'trip 정보 없음' 헤더로 graceful 표시 (백엔드 race 안전망).
 type Group = { trip: Trip | null; reports: Report[] };
 
 export default function ReportsIndex() {
@@ -46,11 +48,12 @@ export default function ReportsIndex() {
       !q || r.title.toLowerCase().includes(q);
 
     const byTripId = new Map<string, Report[]>();
-    const orphan: Report[] = [];
+    const unresolved: Report[] = [];
     mine.forEach((r) => {
       if (!matches(r)) return;
       if (!r.tripId) {
-        orphan.push(r);
+        // 신 양식에선 tripId 필수 — 과거 보고서만 이 분기. 'trip 정보 없음' 헤더로 흡수.
+        unresolved.push(r);
         return;
       }
       const arr = byTripId.get(r.tripId) ?? [];
@@ -58,7 +61,7 @@ export default function ReportsIndex() {
       byTripId.set(r.tripId, arr);
     });
 
-    // 2) 외근별 그룹 — trips 최신순. trips store 에 있는 trip 만 매칭.
+    // 외근별 그룹 — trips 최신순. trips store 에 있는 trip 만 매칭.
     const matchedTripIds = new Set<string>();
     const tripGroups: Group[] = [];
     allTrips
@@ -77,26 +80,23 @@ export default function ReportsIndex() {
         }
       });
 
-    // 3) tripId 가 있는데 trips store 에 없는 보고서들 — orphan 으로 흡수.
-    //    trips 페이지네이션이 한정적이거나, trip 이 별도 사용자 캐시에서 사라진 케이스.
+    // tripId 는 있는데 trips store 에 없는 보고서들 — unresolved 로 흡수 (페이지네이션·캐시 race).
     for (const [tripId, reports] of byTripId) {
       if (!matchedTripIds.has(tripId)) {
-        orphan.push(...reports);
+        unresolved.push(...reports);
       }
     }
 
-    const result: Group[] = [];
-
-    // 1) 외근 없이 작성한 보고서 (+ trip 정보 누락 폴백) — 항상 최상단.
-    if (orphan.length > 0) {
+    const result: Group[] = [...tripGroups];
+    if (unresolved.length > 0) {
+      // trip 정보 없는 보고서들 — 그룹 맨 아래로 (의도된 흐름 아닌 폴백이므로 눈에 덜 띄게).
       result.push({
         trip: null,
-        reports: orphan.sort((a, b) =>
+        reports: unresolved.sort((a, b) =>
           b.createdAt.localeCompare(a.createdAt),
         ),
       });
     }
-    result.push(...tripGroups);
     return result;
   }, [allReports, allTrips, userId, search]);
 
@@ -146,10 +146,11 @@ export default function ReportsIndex() {
                 <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
               </Pressable>
             ) : (
+              // 신 양식에선 외근 필수 — 이 헤더는 trip 정보 race / 과거 데이터 폴백.
               <View style={styles.orphanHeader}>
-                <Ionicons name="folder-open-outline" size={16} color={colors.textMuted} />
+                <Ionicons name="alert-circle-outline" size={16} color={colors.textMuted} />
                 <Text variant="bodySm" weight="bold" color="textMuted">
-                  외근 없이 작성
+                  외근 정보 없음
                 </Text>
               </View>
             )}

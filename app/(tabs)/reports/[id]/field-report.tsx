@@ -127,6 +127,35 @@ export default function FieldReportEditor() {
     });
   }, [isEdit, existing]);
 
+  // 새 보고 모드 + fieldId 선택됨 → 그 field 의 phase 사진을 슬롯에 자동 prefill.
+  // 결정 §4 (2026-05-31): backend-backlog §9 응답에 phase 가 포함되면 자동 동작.
+  // §9 머지 전엔 attachment.phase 가 모두 undefined → 슬롯은 빈 상태 유지 (회로 정상).
+  const fieldAttachments = useFieldStore(
+    (s) => (fieldId ? s.directAttachments[fieldId] : undefined),
+  );
+  const phasePrefilledForRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (isEdit) return;
+    if (!fieldId || !fieldAttachments) return;
+    if (phasePrefilledForRef.current === fieldId) return;
+    const byPhase: Partial<Record<Phase, string>> = {};
+    for (const a of fieldAttachments) {
+      if (a.type !== 'photo' || !a.fileUrl) continue;
+      // attachment.phase 는 §9 머지 후 들어옴. before/after 그대로, 'during' → 'pending' 매핑.
+      const apiPhase = (a as { phase?: 'before' | 'during' | 'after' }).phase;
+      if (!apiPhase) continue;
+      const slotKey: Phase = apiPhase === 'during' ? 'pending' : apiPhase;
+      if (!byPhase[slotKey]) byPhase[slotKey] = a.fileUrl;
+    }
+    if (Object.keys(byPhase).length === 0) return; // §9 미해소 — 회로 정상
+    phasePrefilledForRef.current = fieldId;
+    setSlots((prev) => ({
+      before: { ...prev.before, url: prev.before.url ?? byPhase.before ?? null },
+      pending: { ...prev.pending, url: prev.pending.url ?? byPhase.pending ?? null },
+      after: { ...prev.after, url: prev.after.url ?? byPhase.after ?? null },
+    }));
+  }, [isEdit, fieldId, fieldAttachments]);
+
   const selectedField = useMemo(
     () => allFields.find((f) => f.id === fieldId),
     [allFields, fieldId],

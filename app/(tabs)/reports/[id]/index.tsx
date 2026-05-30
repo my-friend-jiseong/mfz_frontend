@@ -15,11 +15,13 @@ import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { useReportStore } from '@/stores/reportStore';
 import { useTripStore } from '@/stores/tripStore';
 import { useFieldStore } from '@/stores/fieldStore';
+import { useVisitStore } from '@/stores/visitStore';
 import { useAuthStore } from '@/stores/authStore';
 import { API_BASE_URL } from '@/api';
 import { safeBack } from '@/utils/backNavigation';
 import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
+import { KakaoMapWebView, fieldsToMarkers } from '@/components/KakaoMapWebView';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -112,7 +114,9 @@ export default function ReportDetail() {
   const remove = useReportStore((s) => s.remove);
   const removeFieldReport = useReportStore((s) => s.removeFieldReport);
   const allTrips = useTripStore((s) => s.trips);
+  const allFields = useFieldStore((s) => s.fields);
   const getField = useFieldStore((s) => s.getById);
+  const allVisits = useVisitStore((s) => s.visits);
   const userId = useAuthStore((s) => s.user?.id);
 
   const [deleting, setDeleting] = useState(false);
@@ -158,6 +162,44 @@ export default function ReportDetail() {
 
   const isOwner = userId === report.creatorId;
   const fieldReports = report.fieldReports ?? [];
+
+  // '현장 전반 위치도 (자동 생성)' — 결정 §5: 인앱 Kakao 지도 embed.
+  // 우선 fieldReports 의 fieldId 합집합으로 마커 구성 (보고서가 어떤 현장을 다루는지 명시),
+  // 비어있으면 그 외근의 visits 로 폴백 (스캐폴드 전 빈 보고서 케이스).
+  const overviewFieldIds = useMemo(() => {
+    const set = new Set<string>();
+    fieldReports.forEach((fr) => fr.fieldId && set.add(fr.fieldId));
+    if (set.size === 0 && trip) {
+      allVisits
+        .filter((v) => v.tripId === trip.id && v.fieldId)
+        .forEach((v) => set.add(v.fieldId));
+    }
+    return Array.from(set);
+  }, [fieldReports, trip, allVisits]);
+  const overviewFields = useMemo(() => {
+    if (overviewFieldIds.length === 0) return [];
+    const byId = new Map(allFields.map((f) => [f.id, f]));
+    const out: typeof allFields = [];
+    for (const id of overviewFieldIds) {
+      const f = byId.get(id);
+      if (f) out.push(f);
+    }
+    return out;
+  }, [overviewFieldIds, allFields]);
+  const overviewMarkers = useMemo(
+    () => fieldsToMarkers(overviewFields),
+    [overviewFields],
+  );
+  const overviewCenter = useMemo(() => {
+    if (overviewFields.length === 0) return undefined;
+    let lat = 0;
+    let lng = 0;
+    for (const f of overviewFields) {
+      lat += f.latitude;
+      lng += f.longitude;
+    }
+    return { lat: lat / overviewFields.length, lng: lng / overviewFields.length };
+  }, [overviewFields]);
 
   const handleDeleteFr = (frId: string) => {
     const doDelete = async () => {
@@ -243,6 +285,24 @@ export default function ReportDetail() {
           작성: {fmtDateTime(report.createdAt)}
           {report.updatedAt ? ` · 수정: ${fmtDateTime(report.updatedAt)}` : ''}
         </Text>
+
+        {overviewFields.length > 0 ? (
+          <Card padding="md" style={styles.overviewCard}>
+            <View style={styles.overviewHead}>
+              <Ionicons name="map-outline" size={14} color={colors.textMuted} />
+              <Text variant="caption" weight="bold" color="textMuted">
+                현장 전반 위치도 ({overviewFields.length}곳)
+              </Text>
+            </View>
+            <View style={styles.overviewMap}>
+              <KakaoMapWebView
+                markers={overviewMarkers}
+                center={overviewCenter}
+                onMarkerPress={(fid) => router.push(`/(tabs)/fields/${fid}` as never)}
+              />
+            </View>
+          </Card>
+        ) : null}
 
         <View style={styles.sectionHead}>
           <Text variant="bodySm" weight="bold" color="textMuted">
@@ -353,6 +413,18 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   meta: { marginTop: spacing.sm },
+  overviewCard: { marginTop: spacing.lg, gap: spacing.sm },
+  overviewHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  overviewMap: {
+    height: 220,
+    borderRadius: radius.md,
+    overflow: 'hidden',
+    backgroundColor: colors.surfaceMuted,
+  },
   sectionHead: {
     flexDirection: 'row',
     alignItems: 'center',

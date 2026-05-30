@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
-  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -12,17 +11,12 @@ import {
 } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useReportStore } from '@/stores/reportStore';
-import { safeBack } from '@/utils/backNavigation';
 import { useTripStore } from '@/stores/tripStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useVisitStore } from '@/stores/visitStore';
-import { useFieldStore } from '@/stores/fieldStore';
-import { pickPhoto, promptPhotoSource, type UploadFile } from '@/utils/media';
-import { buildReportNotesFromTrip } from '@/utils/reportPrefill';
-import { promptChoice } from '@/components/WebChoiceModal';
+import { safeBack } from '@/utils/backNavigation';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -31,167 +25,29 @@ import { spacing, radius } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
 import { fmtDate, fmtTime } from '@/utils/datetime';
 
-// ERD v2 통합 보고서 작성 — 본문(content) 제거. 두 분기:
-//   AI 초안: POST /api/reports/generate (notes 필수, 조치 전·후 사진 활용 — fieldId 연결 시 field_report 저장)
-//   직접 저장: POST /api/reports (title 필수). 현장별 전·중·후 사진은 상세 화면에서 관리.
-
+// 새 양식(2026-05-31 결정) — 본문/AI/보고서 레벨 사진 제거.
+// 제목 + 외근 선택 → 그 외근의 visits 마다 빈 FieldReport 자동 스캐폴드 → 상세로 이동.
 
 export default function ComposeReport() {
   const router = useRouter();
-  const navigation = useNavigation();
   const params = useLocalSearchParams<{ tripId?: string }>();
 
-  const generate = useReportStore((s) => s.generate);
-  const create = useReportStore((s) => s.create);
-  const allReports = useReportStore((s) => s.reports);
+  const createWithVisitScaffold = useReportStore((s) => s.createWithVisitScaffold);
   const allTrips = useTripStore((s) => s.trips);
   const loadTripDetail = useTripStore((s) => s.loadDetail);
   const userId = useAuthStore((s) => s.user?.id);
-  // 안정 함수 ref 대신 raw visits 배열을 구독 — syncFromTimeline mutation 시 rerender 보장.
   const allVisits = useVisitStore((s) => s.visits);
-  const getField = useFieldStore((s) => s.getById);
-  const directAttachmentsMap = useFieldStore((s) => s.directAttachments);
-  const loadFieldDetail = useFieldStore((s) => s.loadDetail);
 
   const [tripId, setTripId] = useState<string | null>(params.tripId ?? null);
   const [title, setTitle] = useState('');
-  const [notes, setNotes] = useState('');
-  // notes 가 사용자가 한 번이라도 직접 손댄 적 있는지 — true 면 prefill 덮어쓰기 금지.
-  const notesTouchedRef = useRef(false);
-  const [beforePhoto, setBeforePhoto] = useState<UploadFile | null>(null);
-  const [afterPhoto, setAfterPhoto] = useState<UploadFile | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<'ai' | 'manual' | null>(null);
-  const [lastAiFailed, setLastAiFailed] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [tripPickerOpen, setTripPickerOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const mountedRef = useRef(true);
+  // 선택된 외근의 detail (visits) 동기화 — 스캐폴드 fieldId 정확도를 위해.
   useEffect(() => {
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
-
-  // R4-A 드래프트 보존 — title + notes 만 (사진 file uri 는 휘발).
-  // tripId 별 분리 (G4) — 두 외근 작성을 번갈아 해도 서로 덮어쓰지 않음.
-  //   trip 있는 케이스: mfz.reports.draft.v1.{tripId}
-  //   trip 없는 케이스: mfz.reports.draft.v1.orphan
-  const draftKey = useMemo(
-    () => `mfz.reports.draft.v1.${tripId ?? 'orphan'}`,
-    [tripId],
-  );
-  // 마지막으로 hydrate 한 key — 사용자가 trip picker 로 tripId 변경 시 새 key 의 draft 재읽기.
-  const lastHydratedKeyRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (lastHydratedKeyRef.current === draftKey) return;
-    lastHydratedKeyRef.current = draftKey;
-    void (async () => {
-      try {
-        const raw = await AsyncStorage.getItem(draftKey);
-        if (!raw) return;
-        const parsed = JSON.parse(raw) as { title?: string; notes?: string };
-        if (parsed.title) setTitle(parsed.title);
-        if (parsed.notes) {
-          setNotes(parsed.notes);
-          notesTouchedRef.current = true; // 사용자 입력으로 간주 → prefill 안 덮음
-        }
-      } catch {
-        /* ignore */
-      }
-    })();
-  }, [draftKey]);
-
-  const draftSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    // hydrate 가 한 번도 안 끝났으면 첫 mount 의 useState 초기값을 저장하면 안 됨 — 기존 draft 덮어쓰기.
-    if (lastHydratedKeyRef.current !== draftKey) return;
-    if (draftSaveTimerRef.current) clearTimeout(draftSaveTimerRef.current);
-    draftSaveTimerRef.current = setTimeout(() => {
-      void AsyncStorage.setItem(
-        draftKey,
-        JSON.stringify({ title, notes }),
-      ).catch(() => undefined);
-    }, 500);
-    return () => {
-      if (draftSaveTimerRef.current) clearTimeout(draftSaveTimerRef.current);
-    };
-  }, [draftKey, title, notes]);
-
-  const clearDraft = () => {
-    void AsyncStorage.removeItem(draftKey).catch(() => undefined);
-  };
-
-  // F-G AI 생성 중 화면 이탈 차단 — back/tap 둘 다 잡고 사용자 confirm.
-  // 텍스트 입력은 draft 가 보존하니 별도 차단 X (AI 진행은 비가역 호출이라 cancel 불가 → 보호).
-  useEffect(() => {
-    if (busy !== 'ai') return;
-    const unsub = (
-      navigation as unknown as {
-        addListener: (
-          ev: 'beforeRemove',
-          fn: (e: { preventDefault: () => void; data: { action: unknown } }) => void,
-        ) => () => void;
-      }
-    ).addListener?.('beforeRemove', (e) => {
-      e.preventDefault();
-      Alert.alert(
-        'AI 초안 생성 중',
-        '생성이 완료될 때까지 화면을 떠나면 진행 내용이 사라집니다.\n계속 머무를까요?',
-        [
-          { text: '계속 머무름', style: 'cancel' },
-          {
-            text: '나가기',
-            style: 'destructive',
-            onPress: () =>
-              navigation.dispatch(
-                (e.data.action ?? { type: 'GO_BACK' }) as never,
-              ),
-          },
-        ],
-      );
-    });
-    return unsub;
-  }, [busy, navigation]);
-
-  // tripId 결정되면 그 trip detail 페치 → visit/field 정보 hydrate → notes prefill.
-  // 사용자가 한 번이라도 직접 손댔으면 (notesTouchedRef) 덮어쓰지 않음.
-  const prefilledForTripRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!tripId) return;
-    void loadTripDetail(tripId);
+    if (tripId) void loadTripDetail(tripId);
   }, [tripId, loadTripDetail]);
-
-  // visit 들의 field 메모도 hydrate — buildReportNotesFromTrip 이 attachments 참조.
-  const tripVisits = useMemo(() => {
-    if (!tripId) return [];
-    return allVisits
-      .filter((v) => v.tripId === tripId)
-      .sort((a, b) => a.visitedAt.localeCompare(b.visitedAt));
-  }, [tripId, allVisits]);
-  useEffect(() => {
-    for (const v of tripVisits) {
-      // 백엔드 timeline 이 fieldId 없이 오는 케이스 — 빈 id 로 detail 호출하면 404. 건너뜀.
-      if (!v.fieldId) continue;
-      void loadFieldDetail(v.fieldId);
-    }
-  }, [tripVisits, loadFieldDetail]);
-
-  // 실제 prefill — tripId 별 1회. visits 가 채워진 시점에 적용.
-  useEffect(() => {
-    if (!tripId) return;
-    if (prefilledForTripRef.current === tripId) return;
-    if (tripVisits.length === 0) return;       // hydrate 아직 안 됨 — 채워지면 다시 발화
-    if (notesTouchedRef.current) return;        // 사용자 입력 있으면 보존
-    const draft = buildReportNotesFromTrip({
-      visits: tripVisits,
-      getField,
-      attachmentsByField: directAttachmentsMap,
-    });
-    if (draft) {
-      setNotes(draft);
-      prefilledForTripRef.current = tripId;
-    }
-  }, [tripId, tripVisits, getField, directAttachmentsMap]);
 
   const myTrips = useMemo(() => {
     if (!userId) return [];
@@ -201,642 +57,284 @@ export default function ComposeReport() {
   }, [allTrips, userId]);
 
   const selectedTrip = useMemo(
-    () => (tripId ? (myTrips.find((t) => t.id === tripId) ?? null) : null),
+    () => (tripId ? myTrips.find((t) => t.id === tripId) ?? null : null),
     [myTrips, tripId],
   );
 
-  const tripLabel = (t: {
-    startedAt: string;
-    endedAt: string | null;
-    title?: string | null;
-    id: string;
-  }) => {
-    // head 에 날짜 + 시작 시각 (같은 날 외근 2건 구별). meta 는 끝 시각·진행시간 + 방문 카운트만 —
-    // head 와 시각 중복을 피한다.
-    const head = `${fmtDate(t.startedAt)} ${fmtTime(t.startedAt)}${t.title ? ` · ${t.title}` : ''}`;
-    const visitCount = allVisits.reduce((n, v) => (v.tripId === t.id ? n + 1 : n), 0);
-    const tail = t.endedAt ? `~ ${fmtTime(t.endedAt)}` : '진행 중';
-    const meta = `${tail}${visitCount > 0 ? ` · 방문 ${visitCount}건` : ' · 방문 없음'}`;
-    return { head, meta };
-  };
+  // 선택 외근의 visits — 자동 스캐폴드 대상.
+  const tripVisits = useMemo(() => {
+    if (!tripId) return [];
+    return allVisits
+      .filter((v) => v.tripId === tripId)
+      .sort((a, b) => a.visitedAt.localeCompare(b.visitedAt));
+  }, [tripId, allVisits]);
 
-  // 같은 외근 안 동일 제목 경고 — 직접 저장 분기에서만 의미.
-  const dupWarning = useMemo(() => {
-    if (!tripId || !title.trim()) return null;
-    const dup = allReports.some(
-      (r) => r.tripId === tripId && r.title.trim() === title.trim(),
-    );
-    return dup ? '이 외근에 같은 제목의 보고서가 이미 있습니다.' : null;
-  }, [allReports, tripId, title]);
+  const scaffoldFieldIds = useMemo(
+    () => tripVisits.map((v) => v.fieldId).filter(Boolean),
+    [tripVisits],
+  );
 
-  const pickBefore = () =>
-    promptPhotoSource(async (src) => {
-      const f = await pickPhoto(src);
-      if (f && mountedRef.current) setBeforePhoto(f);
-    });
-
-  const pickAfter = () =>
-    promptPhotoSource(async (src) => {
-      const f = await pickPhoto(src);
-      if (f && mountedRef.current) setAfterPhoto(f);
-    });
-
-  // AI 진행 시각화 — 백엔드 streaming 미지원이라 시간 cutoff 시뮬레이션.
-  const [elapsedSec, setElapsedSec] = useState(0);
-  const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const startTickerRef = useRef<((reset: boolean) => void) | null>(null);
-  startTickerRef.current = (reset: boolean) => {
-    if (tickRef.current) clearInterval(tickRef.current);
-    if (reset) setElapsedSec(0);
-    tickRef.current = setInterval(() => {
-      setElapsedSec((s) => s + 1);
-    }, 1000);
-  };
-  const stopTicker = () => {
-    if (tickRef.current) {
-      clearInterval(tickRef.current);
-      tickRef.current = null;
-    }
-  };
-  useEffect(() => () => stopTicker(), []);
-
-  const handleAiGenerate = async () => {
+  const handleSubmit = async () => {
     setError(null);
-    setLastAiFailed(false);
-    if (!notes.trim()) {
-      setError('현장 메모를 입력해주세요');
-      return;
-    }
-    setBusy('ai');
-    startTickerRef.current?.(true);
-    try {
-      const r = await generate({
-        notes: notes.trim(),
-        title: title.trim() || undefined,
-        tripId: tripId ?? undefined,
-        beforePhoto: beforePhoto ?? undefined,
-        afterPhoto: afterPhoto ?? undefined,
-      });
-      if (!mountedRef.current) return;
-      if (r.ok) {
-        clearDraft();
-        router.replace(`/(tabs)/reports/${r.data.reportId ?? r.data.id}` as never);
-      } else {
-        setError(r.error);
-        setLastAiFailed(true);
-      }
-    } finally {
-      if (mountedRef.current) {
-        setBusy(null);
-        stopTicker();
-      } else {
-        stopTicker();
-      }
-    }
-  };
-
-  const performManualSave = async () => {
-    setError(null);
-    if (!userId) return;
     const t = title.trim();
     if (t.length < 1 || t.length > 100) {
       setError('제목은 1~100자로 입력해주세요');
       return;
     }
-    setBusy('manual');
-    const result = await create({
-      title: t,
-      tripId: tripId ?? undefined,
-    });
-    if (!mountedRef.current) return;
-    setBusy(null);
-    if (result.ok) {
-      clearDraft();
-      router.replace(`/(tabs)/reports/${result.report.id}` as never);
-    } else {
-      Alert.alert('보고서 저장 실패', result.error);
-    }
-  };
-
-  const handleManualSave = () => {
-    // 직접 저장은 title + tripId 만 보냄 — notes/사진은 백엔드에 안 감.
-    // 사용자가 그것들을 채워뒀으면 사일런트 데이터 손실이라 한 번 확인.
-    const hasUnsavedInputs =
-      notes.trim().length > 0 || beforePhoto !== null || afterPhoto !== null;
-    if (!hasUnsavedInputs) {
-      void performManualSave();
+    if (!tripId) {
+      setError('외근을 선택해주세요');
       return;
     }
-    const lost: string[] = [];
-    if (notes.trim().length > 0) lost.push('현장 메모');
-    if (beforePhoto !== null) lost.push('조치 전 사진');
-    if (afterPhoto !== null) lost.push('조치 후 사진');
-    promptChoice(
-      '직접 저장 — 일부 입력이 적용되지 않습니다',
-      `${lost.join(' · ')} 은(는) 제목만 저장되는 직접 저장에서 사용되지 않습니다.\nAI 초안으로 받으면 함께 활용됩니다. 계속할까요?`,
-      [
-        { label: '취소', style: 'cancel' as const },
-        { label: '제목만 저장', onPress: () => void performManualSave() },
-      ],
-    );
+    setSubmitting(true);
+    const r = await createWithVisitScaffold({ title: t, tripId }, scaffoldFieldIds);
+    setSubmitting(false);
+    if (r.ok) {
+      router.replace(`/(tabs)/reports/${r.report.id}` as never);
+    } else {
+      Alert.alert('보고서 생성 실패', r.error);
+    }
   };
 
-  // 단계 라벨은 시간 기반 시뮬레이션 — 실제 백엔드 진행과 무관해 '예상' 명시.
-  const stepLabel = (() => {
-    if (elapsedSec < 3) return { idx: 1, text: '메모·사진 업로드' };
-    if (elapsedSec < 12) return { idx: 2, text: 'AI 분석' };
-    return { idx: 3, text: '문서 작성' };
-  })();
-  const remainEstSec = Math.max(0, 30 - elapsedSec);
-  // 60s 넘으면 평소보다 오래 — 사용자에게 단순히 '마무리 중' 으로 영원히 두지 않음.
-  const aiTakingTooLong = busy === 'ai' && elapsedSec >= 60;
-  const isBusy = busy !== null;
-
   return (
-    <>
-      <KeyboardAvoidingView
-        style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <ScrollView
-          contentContainerStyle={styles.scroll}
-          keyboardShouldPersistTaps="handled"
-        >
-          <Text variant="h2" weight="heavy">
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        <View style={styles.headerRow}>
+          <Pressable
+            onPress={() => safeBack(router)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="뒤로 가기"
+            style={({ pressed }) => [styles.backBtn, pressed && { opacity: opacity.pressed }]}
+          >
+            <Ionicons name="chevron-back" size={22} color={colors.text} />
+          </Pressable>
+          <Text variant="h3" weight="heavy">
             보고서 작성
           </Text>
-          <Text variant="bodySm" color="textMuted" style={styles.subtitle}>
-            제목을 입력하고 'AI 초안 받기' 또는 '직접 저장' 을 선택하세요. Word 파일은 AI 초안에서만 자동 생성됩니다. 현장별 전·중·후 사진은 저장 후 상세 화면에서 추가합니다.
-          </Text>
+        </View>
 
-          <Text variant="bodySm" weight="bold" color="textMuted" style={styles.label}>
-            연결할 외근 (선택)
-          </Text>
-          {myTrips.length === 0 ? (
-            <Text variant="caption" color="textMuted" style={styles.hint}>
-              등록된 외근이 없습니다.
-            </Text>
-          ) : selectedTrip ? (
-            <Card padding="md" style={styles.tripCardSelected}>
-              <View style={styles.tripCardBody}>
-                <Text variant="bodySm" weight="bold" color="primary">
-                  {tripLabel(selectedTrip).head}
-                </Text>
-                <Text variant="caption" color="primary" style={styles.tripItemMetaActive}>
-                  {tripLabel(selectedTrip).meta}
-                </Text>
-              </View>
-              <View style={styles.tripCardActions}>
-                <Button
-                  onPress={() => setTripPickerOpen(true)}
-                  variant="secondary"
-                  size="sm"
-                  leftIcon="swap-horizontal"
-                >
-                  변경
-                </Button>
-                <Button
-                  onPress={() => setTripId(null)}
-                  variant="ghost"
-                  size="sm"
-                >
-                  해제
-                </Button>
-              </View>
-            </Card>
-          ) : (
-            <Pressable
-              onPress={() => setTripPickerOpen(true)}
-              accessibilityRole="button"
-              accessibilityLabel="연결할 외근 선택"
-              style={({ pressed }) => [
-                styles.tripPickerBtn,
-                pressed && { opacity: opacity.pressed },
-              ]}
-            >
-              <Ionicons name="add-circle-outline" size={18} color={colors.textMuted} />
-              <Text variant="bodySm" weight="bold" color="textMuted">
-                외근 선택
-              </Text>
-            </Pressable>
-          )}
+        <Input
+          label="제목"
+          value={title}
+          onChangeText={setTitle}
+          placeholder="예: 2026-05-31 사하구 가로수 보수"
+          maxLength={100}
+          containerStyle={styles.titleField}
+        />
 
-          <View style={styles.notesHeader}>
-            <Text variant="bodySm" weight="bold" color="textMuted">
-              제목 *
-            </Text>
-            <Text variant="caption" weight="semibold" color="textMuted">
-              {title.length} / 100
-            </Text>
-          </View>
-          <Input
-            value={title}
-            onChangeText={setTitle}
-            placeholder="예: 4/27 해운대 배수구 점검"
-            maxLength={100}
-            helperText="AI 초안 시 미입력하면 AI 가 제목을 제안합니다."
-          />
-          {dupWarning ? (
-            <View style={styles.warnRow}>
-              <Ionicons name="warning-outline" size={14} color={colors.warning} />
-              <Text variant="bodySm" color="warning">
-                {dupWarning}
+        <Text variant="bodySm" weight="bold" color="textMuted" style={styles.label}>
+          연결 외근
+        </Text>
+        {selectedTrip ? (
+          <Card padding="md" style={styles.tripCard}>
+            <View style={styles.tripCardHead}>
+              <Ionicons name="briefcase" size={16} color={colors.primary} />
+              <Text variant="body" weight="semibold" style={styles.tripCardTitle}>
+                {selectedTrip.title || `${fmtDate(selectedTrip.startedAt)} 외근`}
               </Text>
             </View>
-          ) : null}
-
-          <View style={styles.notesHeader}>
-            <Text variant="bodySm" weight="bold" color="textMuted">
-              현장 메모 (AI 초안용)
+            <Text variant="caption" color="textMuted" style={styles.tripCardMeta}>
+              {fmtDate(selectedTrip.startedAt)} {fmtTime(selectedTrip.startedAt)}
+              {selectedTrip.endedAt ? ` ~ ${fmtTime(selectedTrip.endedAt)}` : ' · 진행 중'}
+              {' · 방문 '}{tripVisits.length}건
             </Text>
-            <Text variant="caption" weight="semibold" color="textMuted">
-              {notes.length} / 50,000
-            </Text>
-          </View>
-          <Input
-            value={notes}
-            onChangeText={(v) => {
-              notesTouchedRef.current = true;
-              setNotes(v);
-            }}
-            placeholder="현장에서 관찰한 내용·조치 사항 — AI 초안 생성에 사용됩니다."
-            multiline
-            maxLength={50000}
-            style={styles.multiline}
-          />
-
-          <View style={styles.sectionDivider}>
-            <View style={styles.dividerLine} />
-            <Text variant="caption" weight="bold" color="textMuted">
-              조치 전·후 사진 (AI 초안용)
-            </Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          <Text variant="bodySm" weight="bold" color="textMuted" style={styles.label}>
-            조치 전 사진
-          </Text>
-          <View style={styles.photoBox}>
-            {beforePhoto ? (
-              <Image
-                source={{ uri: beforePhoto.uri }}
-                style={styles.photoPreview}
-                accessibilityLabel="조치 전 사진"
-              />
-            ) : null}
-            <View style={styles.photoActions}>
+            {/* params.tripId 가 있으면 외근이 외부에서 지정된 동선 — picker 잠금. 아니면 변경 가능. */}
+            {!params.tripId ? (
               <Button
-                onPress={pickBefore}
-                variant="secondary"
-                fullWidth
-                leftIcon="camera"
-                style={styles.photoBtnFlex}
+                onPress={() => setTripPickerOpen(true)}
+                variant="ghost"
+                size="sm"
+                leftIcon="swap-horizontal"
+                style={styles.changeBtn}
               >
-                {beforePhoto ? '다시 선택' : '사진 첨부'}
+                외근 변경
               </Button>
-              {beforePhoto ? (
-                <Button
-                  onPress={() => setBeforePhoto(null)}
-                  variant="ghost"
-                  leftIcon="trash"
-                >
-                  제거
-                </Button>
-              ) : null}
-            </View>
-          </View>
-
-          <Text variant="bodySm" weight="bold" color="textMuted" style={styles.label}>
-            조치 후 사진
-          </Text>
-          <View style={styles.photoBox}>
-            {afterPhoto ? (
-              <Image
-                source={{ uri: afterPhoto.uri }}
-                style={styles.photoPreview}
-                accessibilityLabel="조치 후 사진"
-              />
             ) : null}
-            <View style={styles.photoActions}>
-              <Button
-                onPress={pickAfter}
-                variant="secondary"
-                fullWidth
-                leftIcon="camera"
-                style={styles.photoBtnFlex}
-              >
-                {afterPhoto ? '다시 선택' : '사진 첨부'}
-              </Button>
-              {afterPhoto ? (
-                <Button
-                  onPress={() => setAfterPhoto(null)}
-                  variant="ghost"
-                  leftIcon="trash"
-                >
-                  제거
-                </Button>
-              ) : null}
-            </View>
-          </View>
-
-          {error ? (
-            <Text variant="bodySm" color="danger" style={styles.error}>
-              {error}
-            </Text>
-          ) : null}
-
-          {busy === 'ai' ? (
-            <Card padding="md" style={styles.progressBox}>
-              <View style={styles.progressSteps}>
-                {[1, 2, 3].map((i) => {
-                  const done = i < stepLabel.idx;
-                  const active = i === stepLabel.idx;
-                  return (
-                    <View
-                      key={i}
-                      style={[
-                        styles.progressDot,
-                        done && styles.progressDotDone,
-                        active && styles.progressDotActive,
-                      ]}
-                    >
-                      <Text
-                        variant="caption"
-                        weight="bold"
-                        style={(done || active) ? { color: colors.primary } : { color: colors.textMuted }}
-                      >
-                        {i}
-                      </Text>
-                    </View>
-                  );
-                })}
-              </View>
-              <Text variant="bodySm" weight="bold">
-                예상 단계 {stepLabel.idx}/3 · {stepLabel.text}
-              </Text>
-              <Text variant="caption" color="textMuted" style={styles.progressMeta}>
-                {elapsedSec}초 경과
-                {remainEstSec > 0 ? ` · 약 ${remainEstSec}초 남음 (예상)` : ' · 마무리 중'}
-              </Text>
-              {aiTakingTooLong ? (
-                <Text variant="caption" color="warning" style={styles.progressMeta}>
-                  평소보다 오래 걸리고 있습니다. 응답을 기다리거나 화면을 떠나
-                  잠시 후 다시 시도해도 됩니다.
-                </Text>
-              ) : null}
-            </Card>
-          ) : null}
-
-          <View style={styles.actionRow}>
-            <Button
-              onPress={handleAiGenerate}
-              disabled={isBusy}
-              loading={busy === 'ai'}
-              size="lg"
-              leftIcon={lastAiFailed ? 'refresh' : 'sparkles'}
-              style={styles.actionFlex}
-            >
-              {lastAiFailed ? 'AI 다시 시도' : 'AI 초안 받기'}
-            </Button>
-            <Button
-              onPress={handleManualSave}
-              disabled={isBusy}
-              loading={busy === 'manual'}
-              variant="secondary"
-              size="lg"
-              leftIcon="save"
-              style={styles.actionFlex}
-            >
-              직접 저장
-            </Button>
-          </View>
-
-          <Button onPress={() => safeBack(router)} variant="ghost" size="sm" fullWidth>
-            취소
+          </Card>
+        ) : (
+          <Button
+            onPress={() => setTripPickerOpen(true)}
+            variant="secondary"
+            fullWidth
+            leftIcon="briefcase-outline"
+            style={styles.pickTripBtn}
+          >
+            외근 선택
           </Button>
+        )}
 
-          {busy === 'ai' ? (
-            <View style={styles.footRow}>
-              <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} />
-              <Text variant="caption" color="textMuted" align="center">
-                AI 생성에 시간이 걸릴 수 있습니다. 화면을 떠나지 마세요.
-              </Text>
-            </View>
-          ) : null}
-        </ScrollView>
-      </KeyboardAvoidingView>
+        {selectedTrip && scaffoldFieldIds.length > 0 ? (
+          <Text variant="caption" color="textMuted" style={styles.scaffoldHint}>
+            보고서 생성 시 방문한 현장 {scaffoldFieldIds.length}곳에 대한 빈 현장 보고가
+            자동으로 만들어집니다. 사진·캡션은 상세 화면에서 채울 수 있어요.
+          </Text>
+        ) : selectedTrip ? (
+          <Text variant="caption" color="textMuted" style={styles.scaffoldHint}>
+            이 외근은 방문 기록이 없어 현장 보고가 자동 생성되지 않습니다.
+            보고서 생성 후 상세 화면에서 직접 추가할 수 있어요.
+          </Text>
+        ) : null}
+
+        {error ? (
+          <Text variant="bodySm" color="danger" style={styles.error}>
+            {error}
+          </Text>
+        ) : null}
+
+        <Button
+          onPress={handleSubmit}
+          disabled={!tripId || !title.trim() || submitting}
+          loading={submitting}
+          size="lg"
+          fullWidth
+          leftIcon="document-text"
+          style={styles.submitBtn}
+        >
+          보고서 만들기
+        </Button>
+      </ScrollView>
+
       <Modal
         visible={tripPickerOpen}
-        animationType="fade"
         transparent
+        animationType="fade"
         onRequestClose={() => setTripPickerOpen(false)}
       >
-        <Pressable style={styles.pickerBackdrop} onPress={() => setTripPickerOpen(false)}>
-          <Pressable style={styles.pickerCard} onPress={() => undefined}>
-            <Text variant="h3">외근 선택</Text>
-            <ScrollView style={styles.pickerList} contentContainerStyle={styles.pickerListContent}>
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => setTripPickerOpen(false)}
+        >
+          <Pressable
+            style={styles.modalCard}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <Text variant="body" weight="bold" style={styles.modalTitle}>
+              연결할 외근 선택
+            </Text>
+            <ScrollView style={styles.modalList}>
               {myTrips.map((t) => {
+                const visitCount = allVisits.reduce(
+                  (n, v) => (v.tripId === t.id ? n + 1 : n),
+                  0,
+                );
                 const active = t.id === tripId;
-                const { head, meta } = tripLabel(t);
                 return (
                   <Pressable
                     key={t.id}
                     onPress={() => {
-                      setTripId(active ? null : t.id);
+                      setTripId(t.id);
                       setTripPickerOpen(false);
                     }}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: active }}
-                    accessibilityLabel={`${head}, ${meta}`}
                     style={({ pressed }) => [
-                      styles.tripItem,
-                      active && styles.tripItemActive,
+                      styles.modalItem,
+                      active && styles.modalItemActive,
                       pressed && { opacity: opacity.pressed },
                     ]}
                   >
-                    <Text
-                      variant="bodySm"
-                      weight={active ? 'bold' : 'semibold'}
-                      color={active ? 'primary' : 'text'}
-                    >
-                      {head}
-                    </Text>
-                    <Text
-                      variant="caption"
-                      color={active ? 'primary' : 'textMuted'}
-                      style={styles.tripItemMetaSpacing}
-                    >
-                      {meta}
+                    <View style={styles.modalItemHead}>
+                      <Ionicons
+                        name={active ? 'radio-button-on' : 'radio-button-off'}
+                        size={16}
+                        color={active ? colors.primary : colors.textMuted}
+                      />
+                      <Text variant="body" weight="semibold" style={styles.modalItemTitle}>
+                        {t.title || `${fmtDate(t.startedAt)} 외근`}
+                      </Text>
+                    </View>
+                    <Text variant="caption" color="textMuted" style={styles.modalItemMeta}>
+                      {fmtDate(t.startedAt)} {fmtTime(t.startedAt)}
+                      {t.endedAt ? ` ~ ${fmtTime(t.endedAt)}` : ' · 진행 중'}
+                      {' · 방문 '}{visitCount}건
                     </Text>
                   </Pressable>
                 );
               })}
+              {myTrips.length === 0 ? (
+                <Text variant="bodySm" color="textMuted" style={styles.modalEmpty}>
+                  작성된 외근이 없습니다.
+                </Text>
+              ) : null}
             </ScrollView>
             <Button
               onPress={() => setTripPickerOpen(false)}
               variant="ghost"
-              size="sm"
               fullWidth
+              style={styles.modalClose}
             >
-              취소
+              닫기
             </Button>
           </Pressable>
         </Pressable>
       </Modal>
-    </>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  scroll: { padding: spacing.xl, paddingBottom: spacing.xxl },
-  subtitle: { marginTop: spacing.xs },
-  label: {
-    marginTop: spacing.lg,
-    marginBottom: spacing.sm,
-  },
-  hint: { marginTop: spacing.xs },
-  warnRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginTop: spacing.xs,
-  },
-  // 외근 선택 — 선택된 카드
-  tripCardSelected: {
+  scroll: { padding: spacing.xl, paddingBottom: spacing.xxl * 2 },
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    backgroundColor: colors.primaryMuted,
-    borderWidth: 1,
-    borderColor: colors.primary,
+    marginBottom: spacing.lg,
   },
-  tripCardBody: { flex: 1, gap: 2 },
-  tripCardActions: { flexDirection: 'row', gap: spacing.xs },
-  // 외근 선택 — 미선택 dashed 진입
-  tripPickerBtn: {
+  backBtn: { padding: 2 },
+  titleField: { marginBottom: spacing.md },
+  label: { marginTop: spacing.md, marginBottom: spacing.xs },
+  tripCard: { gap: spacing.xs },
+  tripCardHead: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     gap: spacing.xs,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
   },
-  // 외근 picker modal
-  pickerBackdrop: {
+  tripCardTitle: { flex: 1 },
+  tripCardMeta: { marginTop: 2 },
+  changeBtn: { alignSelf: 'flex-start', marginTop: spacing.xs },
+  pickTripBtn: { marginTop: spacing.xs },
+  scaffoldHint: { marginTop: spacing.md },
+  error: { marginTop: spacing.sm },
+  submitBtn: { marginTop: spacing.xl },
+  modalBackdrop: {
     flex: 1,
     backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: spacing.lg,
+    padding: spacing.xl,
   },
-  pickerCard: {
+  modalCard: {
     width: '100%',
     maxWidth: 420,
     maxHeight: '80%',
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
     borderRadius: radius.lg,
-    padding: spacing.xl,
-    gap: spacing.md,
+    padding: spacing.lg,
   },
-  pickerList: { flexGrow: 0 },
-  pickerListContent: { gap: spacing.xs, paddingVertical: spacing.xs },
-  tripItem: {
-    paddingHorizontal: spacing.md,
+  modalTitle: { marginBottom: spacing.md },
+  modalList: { maxHeight: 420 },
+  modalItem: {
     paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
     borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.border,
-    backgroundColor: colors.surface,
+    marginBottom: spacing.xs,
+    gap: 4,
   },
-  tripItemActive: {
+  modalItemActive: {
     borderColor: colors.primary,
     backgroundColor: colors.primaryMuted,
   },
-  tripItemMetaSpacing: { marginTop: 2 },
-  tripItemMetaActive: { marginTop: 2 },
-  // 입력
-  multiline: { minHeight: 160, textAlignVertical: 'top' },
-  notesHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: spacing.lg,
-    marginBottom: spacing.sm,
-  },
-  sectionDivider: {
+  modalItemHead: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    marginTop: spacing.xl,
   },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: colors.border,
-  },
-  // 사진
-  photoBox: { gap: spacing.sm },
-  photoPreview: {
-    width: '100%',
-    height: 180,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceMuted,
-  },
-  photoActions: { flexDirection: 'row', gap: spacing.sm },
-  photoBtnFlex: { flex: 1 },
-  // 에러
-  error: { marginTop: spacing.md },
-  // AI 진행 박스
-  progressBox: {
-    marginTop: spacing.md,
-    backgroundColor: colors.primaryMuted,
-    borderWidth: 1,
-    borderColor: colors.primary,
-  },
-  progressSteps: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    alignItems: 'center',
-    marginBottom: spacing.sm,
-  },
-  progressDot: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  progressDotDone: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  progressDotActive: {
-    borderColor: colors.primary,
-    backgroundColor: colors.surface,
-  },
-  progressMeta: { marginTop: 2 },
-  // 액션
-  actionRow: {
-    marginTop: spacing.xl,
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  actionFlex: { flex: 1 },
-  // 푸터
-  footRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    marginTop: spacing.sm,
-  },
+  modalItemTitle: { flex: 1 },
+  modalItemMeta: { paddingLeft: 24 },
+  modalEmpty: { padding: spacing.lg, textAlign: 'center' },
+  modalClose: { marginTop: spacing.sm },
 });

@@ -7,7 +7,6 @@ import type {
   CreateReportBody,
   UpdateReportBody,
   ListReportsParams,
-  ReportGenerateData,
   FieldReportInput,
 } from '@/api';
 import { useAuthStore } from './authStore';
@@ -19,19 +18,6 @@ type CreateResult =
 type GenericResult =
   | { ok: true }
   | { ok: false; error: string; code?: string };
-
-export interface GenerateInput {
-  notes: string;
-  title?: string;
-  tripId?: string;
-  fieldId?: string;
-  beforePhoto?: { uri: string; name: string; type: string };
-  afterPhoto?: { uri: string; name: string; type: string };
-}
-
-type GenerateResult =
-  | { ok: true; data: ReportGenerateData }
-  | { ok: false; error: string };
 
 interface ReportState {
   // 목록 표시용 (list 응답)
@@ -47,13 +33,18 @@ interface ReportState {
   refresh: (params?: ListReportsParams) => Promise<void>;
   loadDetail: (reportId: string) => Promise<Report | null>;
   create: (body: CreateReportBody) => Promise<CreateResult>;
+  // 보고서 생성 + 그 외근 visits 별 빈 FieldReport 자동 스캐폴드 (결정 §3).
+  // visits 의 fieldId 가 빈 string 이면 skip (timeline.fieldId 누락 — backlog §16).
+  createWithVisitScaffold: (
+    body: CreateReportBody,
+    visitFieldIds: string[],
+  ) => Promise<CreateResult>;
   update: (id: string, body: UpdateReportBody) => Promise<GenericResult>;
   remove: (id: string) => Promise<GenericResult>;
   // 현장별 전·중·후 보고(field_reports) CRUD — 성공 시 상세 재로드로 fieldReports 갱신.
   addFieldReport: (reportId: string, body: FieldReportInput) => Promise<GenericResult>;
   updateFieldReport: (reportId: string, fieldReportId: string, body: Partial<FieldReportInput>) => Promise<GenericResult>;
   removeFieldReport: (reportId: string, fieldReportId: string) => Promise<GenericResult>;
-  generate: (input: GenerateInput) => Promise<GenerateResult>;
   clearAll: () => void;
 
   getById: (id: string) => Report | undefined;
@@ -154,6 +145,29 @@ export const useReportStore = create<ReportState>((set, get) => ({
     }
   },
 
+  createWithVisitScaffold: async (body, visitFieldIds) => {
+    const created = await get().create(body);
+    if (!created.ok) return created;
+    // unique fieldId 만, 빈 string 제외 (timeline.fieldId 누락 — backlog §16).
+    const seen = new Set<string>();
+    const targets = visitFieldIds.filter((id) => {
+      if (!id || seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+    // 순차 호출 — 백엔드 race 회피 + 한 건 실패해도 나머지 계속.
+    for (const fieldId of targets) {
+      try {
+        await reportsApi.addFieldReport(created.report.id, { fieldId });
+      } catch {
+        // 개별 실패는 silently skip — 사용자가 상세에서 수동 추가 가능.
+      }
+    }
+    // 스캐폴드 결과 동기화.
+    await get().loadDetail(created.report.id);
+    return created;
+  },
+
   update: async (id, body) => {
     set({ busy: true });
     try {
@@ -217,42 +231,6 @@ export const useReportStore = create<ReportState>((set, get) => ({
       await get().loadDetail(reportId);
       return { ok: true };
     } catch (e) {
-      return { ok: false, error: describeError(e) };
-    }
-  },
-
-  generate: async (input) => {
-    set({ busy: true });
-    try {
-      const fd = new FormData();
-      fd.append('notes', input.notes);
-      if (input.title) fd.append('title', input.title);
-      if (input.tripId) fd.append('tripId', input.tripId);
-      if (input.fieldId) fd.append('fieldId', input.fieldId);
-      if (input.beforePhoto) fd.append('before_photo', input.beforePhoto as unknown as Blob);
-      if (input.afterPhoto) fd.append('after_photo', input.afterPhoto as unknown as Blob);
-
-      const data = await reportsApi.generate(fd);
-
-      // 생성 결과를 list 캐시·detailCache 에도 즉시 반영
-      const r: Report = {
-        id: data.reportId ?? data.id,
-        creatorId: useAuthStore.getState().user?.id ?? '',
-        tripId: data.tripId,
-        title: data.title,
-        outputFileUrl: data.outputFileUrl ?? data.fileUrl ?? data.downloadUrl ?? null,
-        fieldReports: data.fieldReport ? [data.fieldReport] : undefined,
-        createdAt: new Date().toISOString(),
-        updatedAt: null,
-      };
-      set((s) => ({
-        reports: [r, ...s.reports.filter((x) => x.id !== r.id)],
-        detailCache: { ...s.detailCache, [r.id]: r },
-        busy: false,
-      }));
-      return { ok: true, data };
-    } catch (e) {
-      set({ busy: false });
       return { ok: false, error: describeError(e) };
     }
   },
