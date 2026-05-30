@@ -71,7 +71,9 @@ export default function TripsList() {
 
   return (
     <View style={styles.screenRoot}>
-      <MapSheetLayout title="외근 내역">
+      {/* 외근 탭 루트엔 "선택된 외근" 개념이 없음 — 지도에 내 현장 전체를 까는 대신 빈 마커.
+          전체 현장 탐색은 '현장' 탭에서, 그 외근의 현장은 카드 탭 → 외근 상세에서 노출. */}
+      <MapSheetLayout title="외근 내역" mapFieldIds={[]}>
         <BottomSheetFlatList
           data={trips}
           keyExtractor={(t) => String(t.id)}
