@@ -5,14 +5,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { MapDashboard } from './MapDashboard';
 import { Text } from '@/components/ui/Text';
-import { useUiStore } from '@/stores/uiStore';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 
 interface Props {
   title: string;
   onBack?: () => void;
-  initialIndex?: number; // 주면 마운트 시 이 index로 고정 시작. 미지정 시 탭 간 공유 인덱스 사용
+  initialIndex?: number; // 마운트/포커스 시 이 index로 reset. 미지정 시 2(최대)
   // 지도 배경에 노출할 현장 화이트리스트. 외근 상세/진행 중 화면에서
   // 해당 외근의 destinations.fieldId 만 넘기면 다른 현장이 흐려지지 않음.
   mapFieldIds?: string[];
@@ -21,41 +20,31 @@ interface Props {
 
 /**
  * 지도 배경 + 하단 시트 레이아웃.
- * `initialIndex`를 생략하면 탭 루트들끼리 `uiStore.sheetIndex`를 공유해
- * 사용자가 마지막에 드래그한 높이가 다음 탭에서도 유지된다.
+ *
+ * 탭/스택 진입(focus) 마다 sheet 를 `initialIndex` 로 reset.
+ * 이유: tab 루트의 StickyBottomBar 안에 있는 주요 CTA(외근 시작 등)는
+ * sheet 가 내려가면 화면 밖으로 사라지므로, 탭 재진입 시 항상 보여야 함.
+ * 사용자가 지도 보려면 시트를 직접 드래그 → 다음 focus 시 다시 펼침.
  */
 export function MapSheetLayout({
   title,
   onBack,
-  initialIndex,
+  initialIndex = 2,
   mapFieldIds,
   children,
 }: Props) {
   const snapPoints = useMemo(() => ['18%', '55%', '92%'], []);
-  const shouldSync = initialIndex === undefined;
-  const startIndex = initialIndex ?? useUiStore.getState().sheetIndex;
   const sheetRef = useRef<BottomSheet>(null);
-
-  const handleChange = useCallback(
-    (i: number) => {
-      if (!shouldSync) return;
-      if (i < 0) return; // closed/transient 값 무시
-      useUiStore.getState().setSheetIndex(i);
-    },
-    [shouldSync],
-  );
 
   useFocusEffect(
     useCallback(() => {
-      if (!shouldSync) return;
-      const target = useUiStore.getState().sheetIndex;
       // mount race 차단 — sheetRef 가 ready 되기 전에 snapToIndex 가 호출되면
-      // 시트가 startIndex(18%) 에 머물러 흰 화면이 됨. 한 프레임 미뤄 ref 부착 후 호출.
+      // 시트가 초기 index 에 머물러 흰 화면이 됨. 한 프레임 미뤄 ref 부착 후 호출.
       const handle = requestAnimationFrame(() => {
-        sheetRef.current?.snapToIndex(target);
+        sheetRef.current?.snapToIndex(initialIndex);
       });
       return () => cancelAnimationFrame(handle);
-    }, [shouldSync]),
+    }, [initialIndex]),
   );
 
   return (
@@ -63,12 +52,11 @@ export function MapSheetLayout({
       <MapDashboard scopeFieldIds={mapFieldIds} />
       <BottomSheet
         ref={sheetRef}
-        index={startIndex}
+        index={initialIndex}
         snapPoints={snapPoints}
         enablePanDownToClose={false}
         backgroundStyle={styles.sheetBg}
         handleIndicatorStyle={styles.handle}
-        onChange={handleChange}
       >
         <View style={styles.sheetHeader}>
           {onBack ? (
