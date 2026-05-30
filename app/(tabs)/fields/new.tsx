@@ -24,6 +24,7 @@ import {
 } from '@/utils/addressSearch';
 import { ProjectPicker } from '@/components/ProjectPicker';
 import { ManualCoordinateForm } from '@/components/fields/ManualCoordinateForm';
+import { FieldPinMap } from '@/components/fields/FieldPinMap';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -368,10 +369,27 @@ export default function NewField() {
               </Text>
               {selected ? (
                 <Text variant="caption" color="textMuted" style={styles.selectedCoord}>
-                  {selected.lat.toFixed(4)}, {selected.lng.toFixed(4)}
+                  {selected.lat.toFixed(6)}, {selected.lng.toFixed(6)}
                 </Text>
               ) : null}
             </Card>
+
+            {selected ? (
+              <>
+                <Text variant="caption" color="textMuted" style={styles.pinHint}>
+                  지도를 탭하거나 핀을 드래그해 정확한 위치로 조정할 수 있어요
+                </Text>
+                <FieldPinMap
+                  lat={selected.lat}
+                  lng={selected.lng}
+                  onDragEnd={(la, ln) =>
+                    setSelected((prev) =>
+                      prev ? { ...prev, lat: la, lng: ln } : prev,
+                    )
+                  }
+                />
+              </>
+            ) : null}
 
             <Text variant="bodySm" weight="semibold" color="textMuted" style={styles.label}>
               프로젝트 (선택)
@@ -488,6 +506,7 @@ const styles = StyleSheet.create({
   },
   selectedAddr: { marginTop: 2 },
   selectedCoord: { marginTop: 4 },
+  pinHint: { marginTop: spacing.xs, marginBottom: spacing.xs },
   statusRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
   submit: { marginTop: spacing.xl },
 });
