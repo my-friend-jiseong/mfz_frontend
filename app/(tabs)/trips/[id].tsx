@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
+import { Alert, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { Ionicons } from '@expo/vector-icons';
 import { useTripStore } from '@/stores/tripStore';
@@ -29,6 +29,9 @@ export default function TripDetail() {
   const trip = useTripStore((s) => (id ? s.getById(id) : undefined));
   const activeTripId = useTripStore((s) => s.activeTripId);
   const loadTripDetail = useTripStore((s) => s.loadDetail);
+  const removeTrip = useTripStore((s) => s.remove);
+  const tripBusy = useTripStore((s) => s.busy);
+  const [deleting, setDeleting] = useState(false);
   // selector 안에서 .filter().sort() 호출하면 매 호출마다 새 array reference →
   // useSyncExternalStoreWithSelector 가 무한 re-render → React error #185.
   // raw 배열 구독 + useMemo 로 도출 (fields/new 와 동일 패턴).
@@ -169,6 +172,35 @@ export default function TripDetail() {
   // 종료 후 review 재진입에선 destinations 가 비어있을 수 있음 — visit 으로 폴백.
   const totalDest = destinations.length || visitCount + skippedCount;
 
+  const isActiveTrip = activeTripId === id;
+  const canDelete = !isActiveTrip;
+
+  const handleDelete = () => {
+    if (!canDelete || deleting || tripBusy) return;
+    const tripLabel = trip.title || `${fmtDate(trip.startedAt)} 외근`;
+    const confirmText = `${tripLabel} 을(를) 삭제할까요?\n방문 기록도 함께 사라지며 되돌릴 수 없습니다.`;
+    const runDelete = async () => {
+      setDeleting(true);
+      const r = await removeTrip(id);
+      setDeleting(false);
+      if (r.ok) {
+        router.replace('/(tabs)/trips' as never);
+      } else if (Platform.OS === 'web') {
+        window.alert(`삭제 실패: ${r.error}`);
+      } else {
+        Alert.alert('삭제 실패', r.error);
+      }
+    };
+    if (Platform.OS === 'web') {
+      if (window.confirm(confirmText)) void runDelete();
+    } else {
+      Alert.alert('외근 삭제', confirmText, [
+        { text: '취소', style: 'cancel' },
+        { text: '삭제', style: 'destructive', onPress: () => void runDelete() },
+      ]);
+    }
+  };
+
   return (
     <View style={styles.screenRoot}>
       <MapSheetLayout
@@ -179,9 +211,27 @@ export default function TripDetail() {
       >
         <BottomSheetScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.header}>
-          <Text variant="h2" weight="heavy">
-            {trip.title || `${fmtDate(trip.startedAt)} 외근`}
-          </Text>
+          <View style={styles.titleRow}>
+            <Text variant="h2" weight="heavy" style={styles.titleText}>
+              {trip.title || `${fmtDate(trip.startedAt)} 외근`}
+            </Text>
+            {canDelete ? (
+              <Pressable
+                onPress={handleDelete}
+                disabled={deleting || tripBusy}
+                accessibilityRole="button"
+                accessibilityLabel="외근 삭제"
+                hitSlop={8}
+                style={({ pressed }) => [
+                  styles.deleteBtn,
+                  (deleting || tripBusy) && { opacity: 0.4 },
+                  pressed && { opacity: 0.6 },
+                ]}
+              >
+                <Ionicons name="trash-outline" size={20} color={colors.danger} />
+              </Pressable>
+            ) : null}
+          </View>
           <View style={styles.metaRow}>
             <Ionicons name="time-outline" size={14} color={colors.textMuted} />
             <Text variant="bodySm" color="textMuted">
@@ -319,6 +369,21 @@ const styles = StyleSheet.create({
   screenRoot: { flex: 1 },
   scroll: { padding: spacing.lg, paddingBottom: spacing.xxl * 2 },
   header: { gap: spacing.sm, marginBottom: spacing.lg },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  titleText: { flex: 1 },
+  deleteBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.dangerMuted,
+  },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',

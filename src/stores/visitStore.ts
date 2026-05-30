@@ -38,6 +38,7 @@ interface VisitState {
   byTrip: (tripId: string) => Visit[];
   byField: (fieldId: string) => Visit[];
   getById: (id: string) => Visit | undefined;
+  removeByTrip: (tripId: string) => void;
   clearAll: () => void;
 }
 
@@ -131,6 +132,11 @@ export const useVisitStore = create<VisitState>((set, get) => ({
       .sort((a, b) => b.visitedAt.localeCompare(a.visitedAt)),
 
   getById: (id) => get().visits.find((v) => v.id === id),
+
+  // 외근 삭제 시 호출 — 그 외근에 묶인 visit 행을 정리.
+  removeByTrip: (tripId) => {
+    set((s) => ({ visits: s.visits.filter((v) => v.tripId !== tripId) }));
+  },
 
   // 로그아웃 시 호출.
   clearAll: () => set({ visits: [] }),

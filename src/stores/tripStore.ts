@@ -13,6 +13,8 @@ type EndResult =
   | { ok: false; needsConfirm: true; message: string }
   | { ok: false; error: string };
 
+type GenericResult = { ok: true } | { ok: false; error: string };
+
 interface TripState {
   trips: Trip[];
   activeTripId: string | null;
@@ -25,6 +27,7 @@ interface TripState {
   loadDetail: (id: string) => Promise<void>;
   start: (title?: string) => Promise<StartResult>;
   end: (force?: boolean) => Promise<EndResult>;
+  remove: (id: string) => Promise<GenericResult>;
 
   getById: (id: string) => Trip | undefined;
   byWorker: (workerId: string) => Trip[];
@@ -166,6 +169,24 @@ export const useTripStore = create<TripState>((set, get) => ({
       if (e instanceof ApiError && e.code === 'confirm_required_zero_visits') {
         return { ok: false, needsConfirm: true, message: e.message };
       }
+      return { ok: false, error: describeError(e) };
+    }
+  },
+
+  remove: async (id) => {
+    // 진행 중 외근은 종료 후 삭제 — UI 가드와 별개로 store 차원에서도 거부.
+    if (get().activeTripId === id) {
+      return { ok: false, error: '진행 중인 외근은 종료 후 삭제할 수 있습니다.' };
+    }
+    try {
+      await tripsApi.remove(id);
+      set((s) => ({ trips: s.trips.filter((t) => t.id !== id) }));
+      // 외근 삭제 시 그 외근에 묶인 visit 들은 백엔드가 cascade 처리한다 가정.
+      // 로컬 visitStore 의 잔존도 함께 정리해 UI 회로 차단.
+      const visitState = useVisitStore.getState();
+      visitState.removeByTrip?.(id);
+      return { ok: true };
+    } catch (e) {
       return { ok: false, error: describeError(e) };
     }
   },

@@ -167,6 +167,11 @@ export const trips = {
 
   detail: (tripId: string) => request<TripDetailResponse>(`/api/trips/${tripId}`),
 
+  // backend-backlog §2 — DELETE /api/trips/:tripId 신설 요청. 미배포 상태에서 호출 시
+  // 404/405 가 떨어지면 호출 측에서 ApiError 로 잡아 안내. 응답 body 는 빈 객체로 가정.
+  remove: (tripId: string) =>
+    request<Record<string, never>>(`/api/trips/${tripId}`, { method: 'DELETE' }),
+
   /** 외부 지도 앱 길안내 딥링크 — providers wrap 객체로 응답 */
   navigationDeepLinks: (tripId: string, body: NavigationDeepLinksBody) =>
     request<NavigationDeepLinksResponse>(
