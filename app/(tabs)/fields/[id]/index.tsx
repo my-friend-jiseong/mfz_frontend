@@ -44,8 +44,10 @@ export default function FieldDetail() {
   const addFieldPhoto = useFieldStore((s) => s.addPhoto);
   const removeTextMemo = useFieldStore((s) => s.removeTextMemo);
   const removePhoto = useFieldStore((s) => s.removePhoto);
+  const removeField = useFieldStore((s) => s.remove);
   const patchFieldStatus = useFieldStore((s) => s.patchStatus);
   const allVisits = useVisitStore((s) => s.visits);
+  const [deleting, setDeleting] = useState(false);
 
   // 진입 시 detail 페치 (directAttachments 채우기)
   useEffect(() => {
@@ -132,6 +134,39 @@ export default function FieldDetail() {
         .sort((a, b) => b.visitedAt.localeCompare(a.visitedAt)),
     [allVisits, fieldId],
   );
+
+  // 삭제 사전 조건 — 방문 이력이 있으면 백엔드가 거부. 사유를 동선 진입 전에 노출해
+  // "확인 → 사실은 안 됨" anti-pattern 차단. edit.tsx 와 동일 정책, UI 만 detail 헤더로 끌어옴.
+  const deleteBlockedReason =
+    visits.length > 0
+      ? `방문 기록 ${visits.length}건이 있어 삭제할 수 없습니다.`
+      : null;
+  const handleDelete = () => {
+    if (deleting) return;
+    if (deleteBlockedReason) {
+      Alert.alert('삭제할 수 없습니다', `${deleteBlockedReason}\n\n방문 기록을 정리하거나 상태를 '조치 완료' 로 변경해주세요.`);
+      return;
+    }
+    Alert.alert('현장 삭제', '이 현장을 삭제할까요? 메모·사진도 함께 정리됩니다.', [
+      { text: '취소', style: 'cancel' },
+      {
+        text: '삭제',
+        style: 'destructive',
+        onPress: async () => {
+          setDeleting(true);
+          const r = await removeField(fieldId);
+          setDeleting(false);
+          if (r.ok) {
+            router.replace('/(tabs)/fields' as never);
+          } else if ('needsConfirm' in r) {
+            Alert.alert('삭제할 수 없습니다', r.message);
+          } else {
+            Alert.alert('삭제 실패', r.error);
+          }
+        },
+      },
+    ]);
+  };
 
   if (!field) {
     return (
@@ -265,18 +300,42 @@ export default function FieldDetail() {
         </Button>
       </View>
 
-      {/* 체크인은 외근 진행 화면의 currentDest 에서만 가능 — destination 경로와 일관.
-          즉석 방문은 외근 진행 화면의 '현장 추가' 로 명시적 동선.
-          삭제 액션은 수정 화면 안에 있음 — 라벨은 단순화. */}
-      <Button
-        onPress={() => router.push(`/(tabs)/fields/${field.id}/edit` as never)}
-        variant="secondary"
-        fullWidth
-        leftIcon="create-outline"
-        style={styles.editBtn}
-      >
-        수정
-      </Button>
+      <View style={styles.actionRow}>
+        <Button
+          onPress={() => router.push(`/(tabs)/fields/${field.id}/edit` as never)}
+          variant="secondary"
+          fullWidth
+          leftIcon="create-outline"
+          style={styles.actionPrimary}
+        >
+          수정
+        </Button>
+        <Pressable
+          onPress={handleDelete}
+          disabled={deleting}
+          accessibilityRole="button"
+          accessibilityLabel="현장 삭제"
+          accessibilityHint={deleteBlockedReason ?? undefined}
+          hitSlop={8}
+          style={({ pressed }) => [
+            styles.deleteBtn,
+            deleteBlockedReason && styles.deleteBtnBlocked,
+            (deleting) && { opacity: 0.4 },
+            pressed && { opacity: 0.6 },
+          ]}
+        >
+          <Ionicons
+            name="trash-outline"
+            size={20}
+            color={deleteBlockedReason ? colors.textMuted : colors.danger}
+          />
+        </Pressable>
+      </View>
+      {deleteBlockedReason ? (
+        <Text variant="caption" color="textMuted" style={styles.deleteHint}>
+          {deleteBlockedReason}
+        </Text>
+      ) : null}
 
       <Text variant="bodySm" weight="bold" color="textMuted" style={styles.sectionTitle}>
         메모 ({directTextMemos.length})
@@ -404,7 +463,28 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     alignSelf: 'flex-start',
   },
-  editBtn: { marginTop: spacing.md },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  actionPrimary: { flex: 1 },
+  deleteBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.dangerMuted,
+    borderWidth: 1,
+    borderColor: colors.danger,
+  },
+  deleteBtnBlocked: {
+    backgroundColor: colors.surfaceMuted,
+    borderColor: colors.borderMuted,
+  },
+  deleteHint: { marginTop: spacing.xs },
   sectionTitle: { marginTop: spacing.lg },
   memoInputRow: {
     flexDirection: 'row',
