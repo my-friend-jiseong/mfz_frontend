@@ -53,8 +53,16 @@ export function MapSheetLayout({
     }, [initialIndex]),
   );
 
+  // gorhom v5 non-modal: containerHeight = 부모 View 의 측정 높이. 그 값 기준으로 snap 계산.
+  // 부모를 absolute + top:-insets.top 으로 확장하면 측정 높이가 inset 만큼 커져 '100%' 가 진짜 화면 끝.
+  // (marginTop 만으론 View 의 height 가 안 늘어남, topInset 은 modal 모드에서만 동작.)
   return (
-    <View style={[styles.root, { marginTop: -insets.top }]}>
+    <View
+      style={[
+        styles.root,
+        { position: 'absolute', top: -insets.top, left: 0, right: 0, bottom: 0 },
+      ]}
+    >
       <MapDashboard scopeFieldIds={mapFieldIds} />
       <BottomSheet
         ref={sheetRef}
