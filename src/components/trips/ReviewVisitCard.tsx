@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from '@/components/ui/Card';
@@ -64,8 +64,12 @@ export function ReviewVisitCard({
   const [error, setError] = useState<string | null>(null);
 
   // 외부에서 visit.status 가 바뀌면 chip 의 active 도 따라가도록 sync.
-  // (단일 actor 환경이라 발생 가능성 낮지만 카드가 살아있는 동안 store mutation 발생 시 stale 차단.)
+  // 단, 사용자가 chip 을 한 번이라도 손댔으면 (touched) 덮어쓰지 않음 —
+  // 동시 store mutation 이 사용자의 미저장 선택을 사일런트로 되돌리는 회로 차단.
+  // 사용자가 저장에 성공하면 handleSave 의 setSavedAt 직후 touched 를 해제 → 이후 외부 변경은 다시 반영.
+  const statusTouchedRef = useRef(false);
   useEffect(() => {
+    if (statusTouchedRef.current) return;
     setStatus(visit.status);
   }, [visit.status]);
 
@@ -123,6 +127,8 @@ export function ReviewVisitCard({
     setSaving(false);
     if (r.ok) {
       setSavedAt(Date.now());
+      // 저장 성공 후엔 store 가 진실 — 다시 외부 동기화 허용.
+      statusTouchedRef.current = false;
       // 'other' reason 은 한 번 저장되면 비움 — 같은 카드에서 다시 다른 status 로 옮길 때 잔존 X.
       if (status !== 'other') setReason('');
     } else {
@@ -183,7 +189,10 @@ export function ReviewVisitCard({
               return (
                 <Pressable
                   key={s}
-                  onPress={() => setStatus(s)}
+                  onPress={() => {
+                    statusTouchedRef.current = true;
+                    setStatus(s);
+                  }}
                   accessibilityRole="radio"
                   accessibilityState={{ selected: active }}
                   style={({ pressed }) => [

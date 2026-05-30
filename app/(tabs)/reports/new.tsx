@@ -47,7 +47,8 @@ export default function ComposeReport() {
   const allTrips = useTripStore((s) => s.trips);
   const loadTripDetail = useTripStore((s) => s.loadDetail);
   const userId = useAuthStore((s) => s.user?.id);
-  const visitsByTrip = useVisitStore((s) => s.byTrip);
+  // 안정 함수 ref 대신 raw visits 배열을 구독 — syncFromTimeline mutation 시 rerender 보장.
+  const allVisits = useVisitStore((s) => s.visits);
   const getField = useFieldStore((s) => s.getById);
   const directAttachmentsMap = useFieldStore((s) => s.directAttachments);
   const loadFieldDetail = useFieldStore((s) => s.loadDetail);
@@ -161,12 +162,16 @@ export default function ComposeReport() {
   }, [tripId, loadTripDetail]);
 
   // visit 들의 field 메모도 hydrate — buildReportNotesFromTrip 이 attachments 참조.
-  const tripVisits = useMemo(
-    () => (tripId ? visitsByTrip(tripId) : []),
-    [tripId, visitsByTrip],
-  );
+  const tripVisits = useMemo(() => {
+    if (!tripId) return [];
+    return allVisits
+      .filter((v) => v.tripId === tripId)
+      .sort((a, b) => a.visitedAt.localeCompare(b.visitedAt));
+  }, [tripId, allVisits]);
   useEffect(() => {
     for (const v of tripVisits) {
+      // 백엔드 timeline 이 fieldId 없이 오는 케이스 — 빈 id 로 detail 호출하면 404. 건너뜀.
+      if (!v.fieldId) continue;
       void loadFieldDetail(v.fieldId);
     }
   }, [tripVisits, loadFieldDetail]);
@@ -209,7 +214,7 @@ export default function ComposeReport() {
     // head 에 날짜 + 시작 시각 (같은 날 외근 2건 구별). meta 는 끝 시각·진행시간 + 방문 카운트만 —
     // head 와 시각 중복을 피한다.
     const head = `${fmtDate(t.startedAt)} ${fmtTime(t.startedAt)}${t.title ? ` · ${t.title}` : ''}`;
-    const visitCount = visitsByTrip(t.id).length;
+    const visitCount = allVisits.reduce((n, v) => (v.tripId === t.id ? n + 1 : n), 0);
     const tail = t.endedAt ? `~ ${fmtTime(t.endedAt)}` : '진행 중';
     const meta = `${tail}${visitCount > 0 ? ` · 방문 ${visitCount}건` : ' · 방문 없음'}`;
     return { head, meta };

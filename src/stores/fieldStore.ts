@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { Field, FieldStatus } from '@/types/entities';
 import { fields as fieldsApi, ApiError, localizeError } from '@/api';
 import { useVisitStore } from './visitStore';
+import { useAuthStore } from './authStore';
 import type {
   CreateFieldBody,
   UpdateFieldBody,
@@ -208,8 +209,14 @@ export const useFieldStore = create<FieldState>((set, get) => ({
   },
 
   loadDetail: async (id) => {
+    // 시작 시 userId 캡처 — 응답이 늦게 도착하는 동안 로그아웃/계정 전환이 일어나면
+    // 이전 사용자의 데이터가 새 사용자 store 에 적재되는 회로 차단.
+    const startUserId = useAuthStore.getState().user?.id ?? null;
     try {
       const res = await fieldsApi.detail(id);
+      const currentUserId = useAuthStore.getState().user?.id ?? null;
+      const stillAuthed = useAuthStore.getState().isAuthenticated;
+      if (!stillAuthed || currentUserId !== startUserId) return;
       set((s) => ({
         fields: s.fields.map((f) =>
           f.id === id

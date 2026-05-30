@@ -42,10 +42,19 @@ interface VisitState {
 }
 
 // merge 헬퍼 — 같은 visit.id 면 새 값으로 갱신, 없으면 추가. 결과는 새 array.
+// timeline 응답은 fieldId 가 없어 ''로 채워져 들어오는데, 이전에 recentVisits 로 적재된
+// 진짜 fieldId 를 ''로 덮으면 byField 조회가 깨짐. 빈 fieldId 면 existing 값 보존.
 function mergeVisits(existing: Visit[], incoming: Visit[]): Visit[] {
   if (incoming.length === 0) return existing;
   const byId = new Map(existing.map((v) => [v.id, v]));
-  for (const v of incoming) byId.set(v.id, v);
+  for (const v of incoming) {
+    const prev = byId.get(v.id);
+    if (prev && !v.fieldId && prev.fieldId) {
+      byId.set(v.id, { ...v, fieldId: prev.fieldId });
+    } else {
+      byId.set(v.id, v);
+    }
+  }
   return Array.from(byId.values());
 }
 

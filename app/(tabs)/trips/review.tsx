@@ -51,47 +51,11 @@ export default function TripReview() {
     [destinations],
   );
 
-  // 잘못된 진입 가드 — tripId 없음
-  if (!id) {
-    return (
-      <MapSheetLayout title="외근 정리" onBack={() => safeBack(router)}>
-        <EmptyState
-          icon="alert-circle-outline"
-          title="외근 정보가 없습니다"
-          description="외근 목록에서 다시 진입해주세요"
-        />
-      </MapSheetLayout>
-    );
-  }
-
-  // 트립이 store 에 없으면 — race 가능성. 단순 EmptyState 로 (별도 fetch 없음).
-  if (!trip) {
-    return (
-      <MapSheetLayout title="외근 정리" onBack={() => safeBack(router)}>
-        <EmptyState
-          icon="search-outline"
-          title="외근을 찾을 수 없습니다"
-          description="삭제됐거나 다른 사용자의 외근일 수 있습니다"
-        />
-      </MapSheetLayout>
-    );
-  }
-
-  // 아직 진행 중인 트립으로 들어왔다면 active 화면으로 — 정리는 종료 후에만.
-  if (activeTripId === id) {
-    return <Redirect href="/(tabs)/trips/active" />;
-  }
-
-  const visitCount = visits.length;
+  // Hooks must be called unconditionally — 모든 useMemo/useEffect/useRef 를 가드 위로.
   const skippedDestinations = useMemo(
     () => destinations.filter((d) => d.status === 'skipped'),
     [destinations],
   );
-  const skippedCount = skippedDestinations.length;
-  // 계획 totalDest — destination 살아있으면 그 길이, 없으면 visit + skipped 합계로 추정.
-  // active.finalizeEnd 가 종료 직후 removeByTrip 으로 destinations 를 정리하므로
-  // 종료 후 review 재진입에선 destinations 가 비어있을 수 있음 — visit 으로 폴백.
-  const totalDest = destinations.length || visitCount + skippedCount;
 
   // visit 을 카드 데이터의 진실값으로. destination 이 살아있으면 order 만 그쪽에서 가져옴.
   const destinationByFieldId = useMemo(() => {
@@ -138,9 +102,6 @@ export default function TripReview() {
   // 무한 루프 차단 — 2중 가드:
   //   1) deps 는 fieldIds 의 stable string key (같은 ids 면 effect 안 재실행)
   //   2) ref guard 로 이미 페치한 fieldId 중복 호출 X
-  // 원래 회로: store selector 가 매 render 마다 새 array reference 를 반환 +
-  // loadFieldDetail 내부 set(...) 이 fieldStore 를 변경 → 이 컴포넌트 rerender →
-  // 새 array → useEffect 재실행 → 다시 set → ... Maximum update depth.
   const fieldIdsKey = useMemo(
     () =>
       visitCards
@@ -158,6 +119,45 @@ export default function TripReview() {
       void loadFieldDetail(fid);
     }
   }, [fieldIdsKey, loadFieldDetail]);
+
+  // 가드 — hooks 호출 끝난 뒤로 옮김 (Rules of Hooks).
+  // 잘못된 진입 — tripId 없음
+  if (!id) {
+    return (
+      <MapSheetLayout title="외근 정리" onBack={() => safeBack(router)}>
+        <EmptyState
+          icon="alert-circle-outline"
+          title="외근 정보가 없습니다"
+          description="외근 목록에서 다시 진입해주세요"
+        />
+      </MapSheetLayout>
+    );
+  }
+
+  // 트립이 store 에 없으면 — race 가능성. 단순 EmptyState 로 (별도 fetch 없음).
+  if (!trip) {
+    return (
+      <MapSheetLayout title="외근 정리" onBack={() => safeBack(router)}>
+        <EmptyState
+          icon="search-outline"
+          title="외근을 찾을 수 없습니다"
+          description="삭제됐거나 다른 사용자의 외근일 수 있습니다"
+        />
+      </MapSheetLayout>
+    );
+  }
+
+  // 아직 진행 중인 트립으로 들어왔다면 active 화면으로 — 정리는 종료 후에만.
+  if (activeTripId === id) {
+    return <Redirect href="/(tabs)/trips/active" />;
+  }
+
+  const visitCount = visits.length;
+  const skippedCount = skippedDestinations.length;
+  // 계획 totalDest — destination 살아있으면 그 길이, 없으면 visit + skipped 합계로 추정.
+  // active.finalizeEnd 가 종료 직후 removeByTrip 으로 destinations 를 정리하므로
+  // 종료 후 review 재진입에선 destinations 가 비어있을 수 있음 — visit 으로 폴백.
+  const totalDest = destinations.length || visitCount + skippedCount;
 
   return (
     <View style={styles.screenRoot}>
