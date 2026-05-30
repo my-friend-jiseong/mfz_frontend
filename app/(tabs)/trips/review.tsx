@@ -306,7 +306,7 @@ export default function TripReview() {
         <View style={styles.ctaRow}>
           <Button
             onPress={() => router.replace('/(tabs)/trips' as never)}
-            variant="ghost"
+            variant="secondary"
             size="lg"
             style={styles.ctaFlex}
           >
