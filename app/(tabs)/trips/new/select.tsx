@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import { Ionicons } from '@expo/vector-icons';
@@ -148,6 +148,17 @@ export default function NewTripSelect() {
     );
   };
 
+  // 선택된 현장 요약 — id → field (주소) lookup. 해제 chip 의 X 클릭으로 즉시 토글.
+  const fieldById = useMemo(() => {
+    const m = new Map<string, Field>();
+    for (const f of myFields) m.set(f.id, f);
+    return m;
+  }, [myFields]);
+  const selectedFields = useMemo(
+    () => selectedIds.map((id) => fieldById.get(id)).filter((f): f is Field => !!f),
+    [selectedIds, fieldById],
+  );
+
   return (
     <MapSheetLayout title="방문할 현장 선택" onBack={() => safeBack(router)}>
       <View style={styles.head}>
@@ -159,6 +170,37 @@ export default function NewTripSelect() {
             {selectedIds.length}/{myFields.length}개
           </Text>
         </View>
+        {selectedFields.length > 0 ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.selectedRow}
+          >
+            {selectedFields.map((f) => (
+              <Pressable
+                key={f.id}
+                onPress={() => toggle(f.id)}
+                accessibilityRole="button"
+                accessibilityLabel={`${f.address} 선택 해제`}
+                style={({ pressed }) => [
+                  styles.selectedChip,
+                  pressed && { opacity: opacity.pressed },
+                ]}
+              >
+                <Text
+                  variant="caption"
+                  weight="bold"
+                  color="primary"
+                  numberOfLines={1}
+                  style={styles.selectedChipLabel}
+                >
+                  {f.address}
+                </Text>
+                <Ionicons name="close" size={14} color={colors.primary} />
+              </Pressable>
+            ))}
+          </ScrollView>
+        ) : null}
         <Input
           value={search}
           onChangeText={setSearch}
@@ -275,6 +317,20 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   chipRow: { flexDirection: 'row', gap: spacing.xs, flexWrap: 'wrap' },
+  selectedRow: { gap: spacing.xs, paddingVertical: 2 },
+  selectedChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryMuted,
+    maxWidth: 200,
+  },
+  selectedChipLabel: { flexShrink: 1 },
   list: { paddingHorizontal: spacing.lg, paddingBottom: 120 },
   row: {
     flexDirection: 'row',
