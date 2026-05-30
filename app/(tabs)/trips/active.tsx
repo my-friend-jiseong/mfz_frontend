@@ -20,12 +20,10 @@ import { CurrentDestCard } from '@/components/trips/CurrentDestCard';
 import { AllDoneCard } from '@/components/trips/AllDoneCard';
 import { DestinationRow } from '@/components/trips/DestinationRow';
 import { AddDestinationModal } from '@/components/trips/AddDestinationModal';
-import { openKakaoRouteTo } from '@/utils/kakaoMap';
 import { navigateToTripDetail } from '@/utils/postTripFlow';
 import { trips as tripsApi, localizeError } from '@/api';
 import { VISIT_STATUS_LABEL } from '@/types/entities';
 import { nearestNeighborOrder } from '@/utils/routeOptimize';
-import * as Linking from 'expo-linking';
 import { safeBack } from '@/utils/backNavigation';
 import { spacing } from '@/theme/spacing';
 import type { Destination } from '@/types/entities';
@@ -147,52 +145,20 @@ export default function ActiveTrip() {
     return <Redirect href="/(tabs)/trips" />;
   }
 
-  const handleNavigate = async () => {
+  const handleNavigate = () => {
     if (!currentDest) return;
     const field = getField(currentDest.fieldId);
     if (!field) return;
-
-    // 백엔드 deep-links 응답 — providers 객체로 wrap (handoff §6c).
-    // 응답 받기 실패 시 카카오맵 직링크로 폴백.
-    if (activeTripId) {
-      try {
-        const res = await tripsApi.navigationDeepLinks(activeTripId, {
-          fieldId: field.id,
-          destinationName: field.address,
-          destinationLat: field.latitude,
-          destinationLng: field.longitude,
-        });
-        const PROVIDERS = [
-          { key: 'kakao', label: '카카오맵' },
-          { key: 'naver', label: '네이버 지도' },
-          { key: 'google', label: '구글 지도' },
-        ] as const;
-        const entries: Array<{ label: string; url: string }> = [];
-        for (const p of PROVIDERS) {
-          const url = res.providers?.[p.key];
-          if (typeof url === 'string' && url.startsWith('http')) {
-            entries.push({ label: p.label, url });
-          }
-        }
-        if (entries.length === 1) {
-          await Linking.openURL(entries[0].url);
-          return;
-        }
-        if (entries.length > 1) {
-          Alert.alert('길찾기 — 지도 앱 선택', undefined, [
-            { text: '취소', style: 'cancel' },
-            ...entries.map((e) => ({
-              text: e.label,
-              onPress: () => void Linking.openURL(e.url),
-            })),
-          ]);
-          return;
-        }
-      } catch {
-        // fallthrough — 카카오맵 직링크
-      }
-    }
-    void openKakaoRouteTo(field.address, field.latitude, field.longitude);
+    // 인앱 카카오 길안내 — 외부 앱 강제 분기 차단. providers 다이얼로그/Linking.openURL 모두 제거.
+    // backend-backlog §1 카카오-only 정책과 일관 (응답 shape 미정 상태에서도 동작).
+    router.push({
+      pathname: '/(tabs)/trips/navigate',
+      params: {
+        name: field.address,
+        lat: String(field.latitude),
+        lng: String(field.longitude),
+      },
+    } as never);
   };
 
   const handleCheckIn = () => {
@@ -384,7 +350,7 @@ export default function ActiveTrip() {
           positionLabel={`${progress.total}곳 중 ${progress.resolved + 1}번째`}
           address={currentDestField?.address ?? '알 수 없는 현장'}
           addressDetail={currentDestField?.addressDetail ?? undefined}
-          onNavigate={() => void handleNavigate()}
+          onNavigate={handleNavigate}
           onCheckIn={handleCheckIn}
           onSkip={handleSkip}
           onShowField={
