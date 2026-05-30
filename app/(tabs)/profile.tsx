@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   Alert,
   Linking,
@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useAuthStore } from '@/stores/authStore';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -78,6 +78,17 @@ export default function Profile() {
 
   const [loggingOut, setLoggingOut] = useState(false);
 
+  // 탭 진입 시 스크롤 위로 reset — 다른 탭(MapSheetLayout 사용)들과 일관된 진입 UX.
+  const scrollRef = useRef<ScrollView>(null);
+  useFocusEffect(
+    useCallback(() => {
+      const handle = requestAnimationFrame(() => {
+        scrollRef.current?.scrollTo({ y: 0, animated: false });
+      });
+      return () => cancelAnimationFrame(handle);
+    }, []),
+  );
+
   const performLogout = async () => {
     setLoggingOut(true);
     await logout();
@@ -117,7 +128,7 @@ export default function Profile() {
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView ref={scrollRef} contentContainerStyle={styles.scroll}>
         <View style={styles.avatarBox}>
           <View style={styles.avatar}>
             <Text weight="heavy" color="onPrimary" style={styles.avatarText}>
