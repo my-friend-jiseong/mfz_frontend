@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BottomSheet from '@gorhom/bottom-sheet';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
@@ -37,6 +38,9 @@ export function MapSheetLayout({
   // 이전 92% 는 status bar 위쪽이 살짝 비어 보이던 회로. middle/bottom snap 은 그대로.
   const snapPoints = useMemo(() => ['18%', '55%', '100%'], []);
   const sheetRef = useRef<BottomSheet>(null);
+  // gorhom 의 '100%' 는 컨테이너 기준이라 상단 safe area (status bar/노치) 위로는 안 올라감.
+  // 컨테이너를 inset 만큼 위로 끌어올려 sheet 가 진짜 화면 끝까지 닿게 함.
+  const insets = useSafeAreaInsets();
 
   useFocusEffect(
     useCallback(() => {
@@ -50,7 +54,7 @@ export function MapSheetLayout({
   );
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { marginTop: -insets.top }]}>
       <MapDashboard scopeFieldIds={mapFieldIds} />
       <BottomSheet
         ref={sheetRef}
@@ -60,7 +64,8 @@ export function MapSheetLayout({
         backgroundStyle={styles.sheetBg}
         handleIndicatorStyle={styles.handle}
       >
-        <View style={styles.sheetHeader}>
+        {/* sheet 가 100% snap 일 때 헤더가 status bar 뒤로 안 깔리도록 inset 만큼 추가 패딩 */}
+        <View style={[styles.sheetHeader, { paddingTop: insets.top + spacing.sm }]}>
           {onBack ? (
             <Pressable
               onPress={onBack}
@@ -96,7 +101,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
+    // paddingTop 은 inline 으로 inset 반영 — 100% snap 시 status bar 보호.
     paddingBottom: spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
