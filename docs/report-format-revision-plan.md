@@ -162,14 +162,31 @@
 
 ---
 
-## 7. 미결 모호 사항 (사용자 확인 필요)
+## 7. 결정 사항 (2026-05-31 확정)
 
-별도 질문 세션으로 진행. 본 문서의 §0·§3·§4 의 결정은 질문 답변 후 확정.
+| # | 질문 | 결정 |
+|---|---|---|
+| 1 | AI 초안받기 | **완전 제거** — generate.tsx, reports/generate API, reportPrefill.ts 정리 |
+| 2 | '외근 없이 작성' 그룹 | **폐지** — reports/index.tsx orphan 분기 제거. 모든 보고서는 tripId 필수 |
+| 3 | 자동 스캐폴드 기준 | **외근의 visits 별 1행** — skipped destination 은 제외 |
+| 4 | 체크인 phase prefill | **백엔드 §9 머지 후 자동 prefill** — §9 미해소 동안은 빈 슬롯 |
+| 5 | 위치도 형식 | **인앱 Kakao 지도 embed** — KakaoMapWebView 재사용, scopeFieldIds 로 그 외근 현장만 |
+| 6 | 다운로드 포맷 | **Word 유지 + PDF 추가** — outputFileUrl 보존, PDF endpoint 신규 (backlog §19 후보) |
+| 7 | 외근당 다중 보고서 | **허용** — '보고서 작성' 버튼 동작 단순. 한 외근에 여러 버전 보고서 가능 |
 
-1. **AI 초안받기 — 완전 제거?**
-2. **외근 없이 작성 그룹 — 폐지?**
-3. **현장 보고 자동 스캐폴드 범위 — visits / destinations / 수동만?**
-4. **체크인 phase 사진을 현장 보고 슬롯에 자동 prefill 할지?**
-5. **위치도 — 인터랙티브 지도 / 정적 이미지 / 마커 텍스트?**
-6. **다운로드 포맷 — Word 유지 / PDF 신규 / 둘 다?**
-7. **외근에 보고서가 이미 있을 때 "보고서 작성" 버튼 동선 — 새 작성 차단 / 기존으로 redirect / 다중 허용?**
+### 결정 후 영향
+
+- **§4 백엔드 백로그 갱신**:
+  - §18 — `POST /api/reports/from-trip/:tripId` 단축 endpoint (스캐폴드 round-trip 절감, **선택**)
+  - §19 — 보고서 PDF 생성 endpoint (`POST /api/reports/:id/export?format=pdf`)
+  - §9 (기등록) — visit phase 모델, prefill 의 전제 조건
+  - §16 (기등록) — timeline fieldId, 자동 스캐폴드의 전제 조건
+- **외근 상세 footer "보고서 작성"** — 매번 새 보고서 생성, 기존 보고서는 reports 탭에서 접근.
+- **목록 페이지** — '외근 없이 작성' 헤더 제거 → tripId 별 그룹만. 한 외근 하위에 여러 보고서면 createdAt 역순.
+
+### 작업 차단/대기
+
+- **#4 (phase prefill)** 은 §9 백엔드 머지 전까지 빈 슬롯으로 동작 — 차단 아님.
+- **#6 (PDF)** 은 §19 endpoint 도착 전까지 Word 만 다운로드 가능. UI 에서 PDF 버튼은 §19 머지 후 노출.
+- **#3 (자동 스캐폴드)** 은 §16 의 timeline.fieldId 가 없으면 visit 의 fieldId 가 빈 string 일 수 있어
+  스캐폴드 결과가 잘못된 row 를 만듦. §16 머지 직전엔 같은 세션 내(checkin 직후 작성)만 신뢰.
