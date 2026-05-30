@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from '@/components/ui/Card';
@@ -54,7 +54,11 @@ export function ReviewVisitCard({
   const addTextMemo = useFieldStore((s) => s.addTextMemo);
   const addPhoto = useFieldStore((s) => s.addPhoto);
   // 좁은 selector — 이 카드의 fieldId attachments 만 구독해 다른 카드 입력으로 인한 rerender 차단.
-  const attachments = useFieldStore((s) => s.directAttachments[fieldId] ?? []);
+  // selector 안 `?? []` 는 directAttachments[fieldId] 가 undefined 인 동안 매 호출마다
+  // 새 array literal 을 반환 → useSyncExternalStoreWithSelector 가 무한 re-render →
+  // React error #185. raw 구독 + useMemo 로 stable fallback.
+  const rawAttachments = useFieldStore((s) => s.directAttachments[fieldId]);
+  const attachments = useMemo(() => rawAttachments ?? [], [rawAttachments]);
 
   const [expanded, setExpanded] = useState(initiallyExpanded);
   const [status, setStatus] = useState<VisitStatus>(visit.status);
