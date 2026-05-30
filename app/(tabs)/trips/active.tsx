@@ -21,7 +21,7 @@ import { AllDoneCard } from '@/components/trips/AllDoneCard';
 import { DestinationRow } from '@/components/trips/DestinationRow';
 import { AddDestinationModal } from '@/components/trips/AddDestinationModal';
 import { openKakaoRouteTo } from '@/utils/kakaoMap';
-import { navigateToReview } from '@/utils/postTripFlow';
+import { navigateToTripDetail } from '@/utils/postTripFlow';
 import { trips as tripsApi, localizeError } from '@/api';
 import { VISIT_STATUS_LABEL } from '@/types/entities';
 import { nearestNeighborOrder } from '@/utils/routeOptimize';
@@ -287,8 +287,8 @@ export default function ActiveTrip() {
     if (originalTripId !== null) {
       removeByTrip(originalTripId);
     }
-    // 종료 직후 review 화면으로 단일 진입 — 보고서 작성 prompt 는 review 의 footer CTA 가 가져감.
-    navigateToReview(router, endedTripId);
+    // 종료 직후 외근 상세(detail) 로 단일 진입 — 보고서 작성 prompt 는 detail footer CTA 가 가져감.
+    navigateToTripDetail(router, endedTripId);
   };
 
   const handleEnd = async () => {
