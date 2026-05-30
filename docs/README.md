@@ -9,4 +9,6 @@
 | [backend-handoff.md](backend-handoff.md) | **백엔드 보충 가이드라인** — 프런트 선행 개발 항목 중 백엔드 활성화/명세가 필요한 항목 정리 |
 | [backend-backlog.md](backend-backlog.md) | 프런트 측 누적 백엔드 요청 큐 |
 | [qa-2nd-fix-plan.md](qa-2nd-fix-plan.md) | **2차 QA 조치 가이드라인** — Notion "2차 QA" 1~12 + 기타 항목 작업 계획 (보고서 13~17 보류) |
+| [REPORT_CHANGE_PLAN.md](REPORT_CHANGE_PLAN.md) | 보고서 양식 변경안 — 새 양식 명세 (입력) |
+| [report-format-revision-plan.md](report-format-revision-plan.md) | **보고서 양식 변경 조치 가이드라인** — REPORT_CHANGE_PLAN.md 기반 코드 변경 계획 |
 | [IAD.drawio](IAD.drawio) | IA 다이어그램 (drawio) — 현재 프론트 구조 반영 |
