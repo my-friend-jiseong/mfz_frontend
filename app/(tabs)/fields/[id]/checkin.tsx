@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -13,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFieldStore } from '@/stores/fieldStore';
 import { safeBack } from '@/utils/backNavigation';
+import { pickPhoto, promptPhotoSource } from '@/utils/media';
 import { useTripStore } from '@/stores/tripStore';
 import { useVisitStore } from '@/stores/visitStore';
 import { useDestinationStore } from '@/stores/destinationStore';
@@ -52,6 +54,7 @@ export default function FieldCheckin() {
   const activeTripId = useTripStore((s) => s.activeTripId);
   const checkIn = useVisitStore((s) => s.checkIn);
   const setResult = useVisitStore((s) => s.setResult);
+  const addPhoto = useFieldStore((s) => s.addPhoto);
   const findDestination = useDestinationStore((s) => s.findByTripField);
   const markDestinationArrived = useDestinationStore((s) => s.markArrived);
 
@@ -61,6 +64,37 @@ export default function FieldCheckin() {
   const [saving, setSaving] = useState(false);
   // checkIn 중복 호출 가드 — StrictMode dev 더블 마운트 / 빠른 재 mount 시 visit 두 번 생성 방지
   const checkInGuardRef = useRef(false);
+
+  // 단계별 사진 슬롯 — 백엔드 단계 메타(backlog §9) 도착 전, 세션 내 시각 유도용.
+  // 슬롯에 사진을 첨부하면 fields/.../photos 로 일반 사진 업로드 + 미리보기 URI 보관.
+  type Phase = 'before' | 'during' | 'after';
+  const [phaseUri, setPhaseUri] = useState<Record<Phase, string | null>>({
+    before: null,
+    during: null,
+    after: null,
+  });
+  const [phaseBusy, setPhaseBusy] = useState<Phase | null>(null);
+
+  const handlePhasePick = (phase: Phase) => {
+    if (phaseBusy) return;
+    promptPhotoSource((source) => {
+      void (async () => {
+        setPhaseBusy(phase);
+        try {
+          const file = await pickPhoto(source);
+          if (!file) return;
+          const r = await addPhoto(fieldId, file);
+          if (r.ok) {
+            setPhaseUri((p) => ({ ...p, [phase]: file.uri }));
+          } else {
+            Alert.alert('사진 추가 실패', r.error);
+          }
+        } finally {
+          setPhaseBusy(null);
+        }
+      })();
+    });
+  };
 
   useEffect(() => {
     if (
@@ -222,6 +256,41 @@ export default function FieldCheckin() {
           />
         ) : null}
 
+        <Text variant="bodySm" weight="bold" color="textMuted" style={styles.sectionTitle}>
+          작업 사진 (선택 — 보고서에 활용)
+        </Text>
+        <View style={styles.phaseRow}>
+          {(['before', 'during', 'after'] as const).map((phase) => {
+            const label = phase === 'before' ? '작업 전' : phase === 'during' ? '작업 중' : '작업 후';
+            const uri = phaseUri[phase];
+            const busy = phaseBusy === phase;
+            return (
+              <Pressable
+                key={phase}
+                onPress={() => handlePhasePick(phase)}
+                disabled={!!phaseBusy}
+                accessibilityRole="button"
+                accessibilityLabel={`${label} 사진 추가`}
+                style={({ pressed }) => [
+                  styles.phaseSlot,
+                  uri && styles.phaseSlotFilled,
+                  pressed && { opacity: opacity.pressed },
+                  busy && { opacity: 0.5 },
+                ]}
+              >
+                {uri ? (
+                  <Image source={{ uri }} style={styles.phasePreview} />
+                ) : (
+                  <Ionicons name="camera-outline" size={22} color={colors.textMuted} />
+                )}
+                <Text variant="caption" weight="bold" color={uri ? 'primary' : 'textMuted'}>
+                  {label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
         <Button
           onPress={() => router.push(`/(tabs)/fields/${fieldId}` as never)}
           variant="secondary"
@@ -229,7 +298,7 @@ export default function FieldCheckin() {
           rightIcon="arrow-forward"
           style={styles.toField}
         >
-          메모·사진 추가
+          메모·추가 사진
         </Button>
 
         <Button
@@ -285,6 +354,34 @@ const styles = StyleSheet.create({
   },
   reasonBox: { marginTop: spacing.md },
   reasonField: { minHeight: 72, textAlignVertical: 'top' },
+  phaseRow: { flexDirection: 'row', gap: spacing.sm },
+  phaseSlot: {
+    flex: 1,
+    aspectRatio: 1,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    overflow: 'hidden',
+  },
+  phaseSlotFilled: {
+    borderStyle: 'solid',
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryMuted,
+  },
+  phasePreview: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 22,
+    width: '100%',
+    height: undefined,
+  },
   toField: { marginTop: spacing.xl },
   submit: { marginTop: spacing.md },
 });
