@@ -33,6 +33,7 @@ import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
 import { FilterChip } from '@/components/ui/FilterChip';
+import { SafeScreen } from '@/components/SafeScreen';
 
 // 중복 주소 미리보기 — 본인 fields 중 같은 roadAddress 매칭, alert message 에 fmt.
 // 백엔드 응답 details 는 duplicateCount 만 주므로 (backend-backlog 별도 항목 아님 — 로컬로 충분),
@@ -215,6 +216,7 @@ export default function NewField() {
     results.length === 0;
 
   return (
+    <SafeScreen>
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -441,6 +443,7 @@ export default function NewField() {
         )}
       </ScrollView>
     </KeyboardAvoidingView>
+    </SafeScreen>
   );
 }
 

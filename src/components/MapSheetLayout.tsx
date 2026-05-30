@@ -39,7 +39,8 @@ export function MapSheetLayout({
   const snapPoints = useMemo(() => ['18%', '55%', '100%'], []);
   const sheetRef = useRef<BottomSheet>(null);
   // gorhom 의 '100%' 는 컨테이너 기준이라 상단 safe area (status bar/노치) 위로는 안 올라감.
-  // 컨테이너를 inset 만큼 위로 끌어올려 sheet 가 진짜 화면 끝까지 닿게 함.
+  // 루트 SafeAreaView 제거 (app/_layout.tsx) 후 부모 컨테이너가 edge-to-edge 라 sheet 가
+  // 자연스럽게 status bar 영역까지 닿음. inset 은 sheet 헤더의 paddingTop 보정에만 사용.
   const insets = useSafeAreaInsets();
 
   useFocusEffect(
@@ -53,16 +54,8 @@ export function MapSheetLayout({
     }, [initialIndex]),
   );
 
-  // gorhom v5 non-modal: containerHeight = 부모 View 의 측정 높이. 그 값 기준으로 snap 계산.
-  // 부모를 absolute + top:-insets.top 으로 확장하면 측정 높이가 inset 만큼 커져 '100%' 가 진짜 화면 끝.
-  // (marginTop 만으론 View 의 height 가 안 늘어남, topInset 은 modal 모드에서만 동작.)
   return (
-    <View
-      style={[
-        styles.root,
-        { position: 'absolute', top: -insets.top, left: 0, right: 0, bottom: 0 },
-      ]}
-    >
+    <View style={styles.root}>
       <MapDashboard scopeFieldIds={mapFieldIds} />
       <BottomSheet
         ref={sheetRef}

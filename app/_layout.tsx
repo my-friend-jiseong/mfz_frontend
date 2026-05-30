@@ -1,7 +1,18 @@
 import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { useFonts } from 'expo-font';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import {
+  SafeAreaProvider,
+  SafeAreaView,
+  SafeAreaInsetsContext,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
+import { useTripStore } from '@/stores/tripStore';
+// 루트는 일부러 safe area 패딩 미적용 — map 화면(MapSheetLayout)이 BottomSheet 를 edge-to-edge
+// (status bar 영역까지) 노출해야 하기 때문. 비-map 화면 (forms, profile, auth) 은 각자 SafeAreaView
+// 로 paddingTop 책임. TripStatusBanner 가 보이면 그게 inset 을 consume 한 것으로 간주해
+// 하위 트리에 inset.top=0 을 provider 로 내려보내 비-map 화면이 banner 아래에 또 padding 을
+// 추가하는 더블 패딩 회로 차단.
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
@@ -62,20 +73,35 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={styles.root}>
       <SafeAreaProvider>
-        <SafeAreaView style={styles.root} edges={['top']}>
-          <TripStatusBanner />
-          <View style={styles.content}>
-            <Stack screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="index" />
-              <Stack.Screen name="(auth)" />
-              <Stack.Screen name="(tabs)" />
-            </Stack>
-          </View>
-          <SessionGuardModal />
-          <StatusBar style="dark" />
-        </SafeAreaView>
+        <RootContent />
       </SafeAreaProvider>
     </GestureHandlerRootView>
+  );
+}
+
+// inset provider 가 SafeAreaProvider 내부에서만 useSafeAreaInsets 호출 가능.
+function RootContent() {
+  const insets = useSafeAreaInsets();
+  const bannerVisible = useTripStore((s) => s.activeTripId !== null);
+  const downstreamInsets = bannerVisible
+    ? { ...insets, top: 0 }
+    : insets;
+
+  return (
+    <View style={styles.root}>
+      <TripStatusBanner />
+      <SafeAreaInsetsContext.Provider value={downstreamInsets}>
+        <View style={styles.content}>
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="index" />
+            <Stack.Screen name="(auth)" />
+            <Stack.Screen name="(tabs)" />
+          </Stack>
+        </View>
+      </SafeAreaInsetsContext.Provider>
+      <SessionGuardModal />
+      <StatusBar style="dark" />
+    </View>
   );
 }
 

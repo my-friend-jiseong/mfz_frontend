@@ -25,6 +25,7 @@ import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
 import { fmtDate, fmtTime } from '@/utils/datetime';
+import { SafeScreen } from '@/components/SafeScreen';
 
 // 새 양식(2026-05-31 결정) — 본문/AI/보고서 레벨 사진 제거.
 // 제목 + 외근 선택 → 그 외근의 visits 마다 빈 FieldReport 자동 스캐폴드 → 상세로 이동.
@@ -136,6 +137,7 @@ export default function ComposeReport() {
   };
 
   return (
+    <SafeScreen>
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -338,6 +340,7 @@ export default function ComposeReport() {
         </Pressable>
       </Modal>
     </KeyboardAvoidingView>
+    </SafeScreen>
   );
 }
 

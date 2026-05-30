@@ -31,6 +31,7 @@ import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
 import { withAlpha } from '@/theme/withAlpha';
+import { SafeScreen } from '@/components/SafeScreen';
 
 // ERD v2: 체크인은 방문 기록(trip·field·시각·status)만 생성. 메모·사진·음성 첨부는
 // 현장(field) 상세에서 관리.
@@ -192,6 +193,7 @@ export default function FieldCheckin() {
   };
 
   return (
+    <SafeScreen>
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -328,6 +330,7 @@ export default function FieldCheckin() {
         </Button>
       </ScrollView>
     </KeyboardAvoidingView>
+    </SafeScreen>
   );
 }
 

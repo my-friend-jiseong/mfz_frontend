@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useTripStore } from '@/stores/tripStore';
@@ -49,6 +50,8 @@ export function TripStatusBanner() {
     return () => clearInterval(t);
   }, [activeTripId]);
 
+  const insets = useSafeAreaInsets();
+
   if (activeTripId === null) return null;
   const trip = getById(activeTripId);
   if (!trip) return null;
@@ -56,7 +59,12 @@ export function TripStatusBanner() {
   return (
     <Pressable
       onPress={() => router.push('/(tabs)/trips/active' as never)}
-      style={({ pressed }) => [styles.banner, pressed && { opacity: opacity.pressed }]}
+      // 루트 SafeAreaView 가 없어진 후, banner 가 status bar 영역까지 깔리지 않도록 내부 paddingTop.
+      style={({ pressed }) => [
+        styles.banner,
+        { paddingTop: insets.top + spacing.sm },
+        pressed && { opacity: opacity.pressed },
+      ]}
       accessibilityRole="button"
       accessibilityLabel="외근 진행 화면으로 이동"
     >

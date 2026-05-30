@@ -19,6 +19,7 @@ import { spacing } from '@/theme/spacing';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Text } from '@/components/ui/Text';
+import { SafeScreen } from '@/components/SafeScreen';
 
 interface FieldErrors {
   email?: string;
@@ -171,6 +172,7 @@ export default function Signup() {
     passwordConfirm.length > 0 && passwordConfirm === password && !fieldErrors.passwordConfirm;
 
   return (
+    <SafeScreen>
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -346,6 +348,7 @@ export default function Signup() {
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
+    </SafeScreen>
   );
 }
 

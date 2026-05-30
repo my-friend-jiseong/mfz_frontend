@@ -14,6 +14,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
+import { SafeScreen } from '@/components/SafeScreen';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
@@ -127,6 +128,7 @@ export default function Profile() {
   };
 
   return (
+    <SafeScreen>
     <View style={styles.container}>
       <ScrollView ref={scrollRef} contentContainerStyle={styles.scroll}>
         <View style={styles.avatarBox}>
@@ -201,6 +203,7 @@ export default function Profile() {
         </Button>
       </ScrollView>
     </View>
+    </SafeScreen>
   );
 }
 

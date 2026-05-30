@@ -11,6 +11,7 @@ import { safeBack } from '@/utils/backNavigation';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
+import { SafeScreen } from '@/components/SafeScreen';
 
 // 인앱 카카오 길안내 — 외부 앱(카카오맵/Linking.openURL) 의존 차단.
 // `https://map.kakao.com/link/to/...` web URL 은 WebView 안에서 정상 렌더되며
@@ -32,7 +33,7 @@ export default function TripNavigate() {
 
   if (!url) {
     return (
-      <View style={styles.root}>
+      <SafeScreen>
         <EmptyState
           icon="navigate-outline"
           title="길안내 좌표가 없습니다"
@@ -43,11 +44,12 @@ export default function TripNavigate() {
             </Button>
           }
         />
-      </View>
+      </SafeScreen>
     );
   }
 
   return (
+    <SafeScreen>
     <View style={styles.root}>
       <View style={styles.header}>
         <Pressable
@@ -126,6 +128,7 @@ export default function TripNavigate() {
         </Pressable>
       )}
     </View>
+    </SafeScreen>
   );
 }
 

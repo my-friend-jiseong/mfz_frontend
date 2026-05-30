@@ -37,6 +37,7 @@ import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
 import { FilterChip } from '@/components/ui/FilterChip';
+import { SafeScreen } from '@/components/SafeScreen';
 
 const DETAIL_MAX = 100;
 
@@ -328,6 +329,7 @@ export default function EditField() {
     results.length === 0;
 
   return (
+    <SafeScreen>
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -587,6 +589,7 @@ export default function EditField() {
         </Button>
       </ScrollView>
     </KeyboardAvoidingView>
+    </SafeScreen>
   );
 }
 

@@ -16,6 +16,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { SafeScreen } from '@/components/SafeScreen';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 
@@ -80,33 +81,33 @@ export default function EditReport() {
 
   if (!summary) {
     return (
-      <View style={styles.container}>
+      <SafeScreen>
         <EmptyState
           icon="document-text-outline"
           title="보고서를 찾을 수 없습니다"
           action={backToReports}
         />
-      </View>
+      </SafeScreen>
     );
   }
 
   if (userId !== summary.creatorId) {
     return (
-      <View style={styles.container}>
+      <SafeScreen>
         <EmptyState
           icon="lock-closed-outline"
           title="수정 권한이 없습니다"
           description="작성자 본인만 수정 가능합니다"
           action={backToReports}
         />
-      </View>
+      </SafeScreen>
     );
   }
 
   if (!report) {
     // 첫 fetch 끝났는데도 null 이면 not-found, 아니면 race 보호용 LoadingState.
     return (
-      <View style={styles.container}>
+      <SafeScreen>
         {detailStatus === 'missing' ? (
           <EmptyState
             icon="document-text-outline"
@@ -117,7 +118,7 @@ export default function EditReport() {
         ) : (
           <LoadingState label="보고서 불러오는 중" />
         )}
-      </View>
+      </SafeScreen>
     );
   }
 
@@ -162,6 +163,7 @@ export default function EditReport() {
   };
 
   return (
+    <SafeScreen>
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -213,6 +215,7 @@ export default function EditReport() {
         </Button>
       </ScrollView>
     </KeyboardAvoidingView>
+    </SafeScreen>
   );
 }
 

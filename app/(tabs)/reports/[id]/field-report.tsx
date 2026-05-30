@@ -26,6 +26,7 @@ import { Button } from '@/components/ui/Button';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
+import { SafeScreen } from '@/components/SafeScreen';
 
 // ERD v2: 보고서 본문 = 현장별 전·중·후 사진+캡션(field_reports). 추가/수정 화면.
 
@@ -221,7 +222,7 @@ export default function FieldReportEditor() {
 
   if (isEdit && !existing) {
     return (
-      <View style={styles.container}>
+      <SafeScreen>
         <EmptyState
           icon="document-text-outline"
           title="현장 보고를 찾을 수 없습니다"
@@ -238,12 +239,12 @@ export default function FieldReportEditor() {
             </Button>
           }
         />
-      </View>
+      </SafeScreen>
     );
   }
 
   return (
-    <>
+    <SafeScreen>
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -516,7 +517,7 @@ export default function FieldReportEditor() {
           </Pressable>
         </Pressable>
       </Modal>
-    </>
+    </SafeScreen>
   );
 }
 
