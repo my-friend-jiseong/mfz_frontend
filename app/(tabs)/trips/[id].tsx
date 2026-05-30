@@ -240,7 +240,7 @@ export default function TripDetail() {
                 >
                   방문한 현장 정리 ({visitCards.length})
                 </Text>
-                {visitCards.map((c, idx) => {
+                {visitCards.map((c) => {
                   const field = getField(c.fieldId);
                   return (
                     <ReviewVisitCard
@@ -250,7 +250,6 @@ export default function TripDetail() {
                       fieldId={c.fieldId}
                       fieldAddress={field?.address ?? '알 수 없는 현장'}
                       fieldAddressDetail={field?.addressDetail || undefined}
-                      initiallyExpanded={idx === 0}
                     />
                   );
                 })}
