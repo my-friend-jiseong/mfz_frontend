@@ -36,7 +36,7 @@ export interface FieldFilterParams {
   categories?: string[];
 }
 
-// 필터 적용 — status → project → category(AND) → search 순.
+// 필터 적용 — status → project → category(OR) → search 순. 모든 facet 동일 의미(union).
 // search 매칭: address + addressDetail + projectName + categories.
 export function applyFieldFilters(
   fields: readonly Field[],
@@ -51,8 +51,9 @@ export function applyFieldFilters(
     list = list.filter((f) => f.projectId && allow.has(f.projectId));
   }
   if (categories && categories.length > 0) {
+    const allowCats = new Set(categories);
     list = list.filter((f) =>
-      categories.every((c) => (f.categories ?? []).includes(c)),
+      (f.categories ?? []).some((c) => allowCats.has(c)),
     );
   }
   const q = search.trim().toLowerCase();

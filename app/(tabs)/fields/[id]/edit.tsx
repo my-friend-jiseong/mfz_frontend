@@ -291,21 +291,22 @@ export default function EditField() {
 
   const handleDelete = () => {
     // 방문 이력 있으면 백엔드가 차단함을 미리 안내 — anti-pattern '정말 삭제할까요 → 사실은 삭제 못 함' 해소.
+    // Alert.alert 는 webAlertPatch 가 web 에서 window.alert/confirm 으로 자동 라우팅.
     if (visitCount > 0) {
-      const msg = `이 현장에는 방문 기록이 ${visitCount}건 있어 삭제할 수 없습니다.\n\n방문 기록을 정리하거나 현장 상태를 '조치 완료' 로 변경해주세요.`;
-      if (Platform.OS === 'web') window.alert(msg);
-      else Alert.alert('삭제할 수 없습니다', msg);
+      Alert.alert(
+        '삭제할 수 없습니다',
+        `이 현장에는 방문 기록이 ${visitCount}건 있어 삭제할 수 없습니다.\n\n방문 기록을 정리하거나 현장 상태를 '조치 완료' 로 변경해주세요.`,
+      );
       return;
     }
-    const msg = '이 현장을 삭제할까요? 메모·사진도 함께 정리됩니다.';
-    if (Platform.OS === 'web') {
-      if (confirm(msg)) void performDelete();
-    } else {
-      Alert.alert('현장 삭제', msg, [
+    Alert.alert(
+      '현장 삭제',
+      '이 현장을 삭제할까요? 메모·사진도 함께 정리됩니다.',
+      [
         { text: '취소', style: 'cancel' },
         { text: '삭제', style: 'destructive', onPress: () => void performDelete() },
-      ]);
-    }
+      ],
+    );
   };
 
   const handleCancel = () => {

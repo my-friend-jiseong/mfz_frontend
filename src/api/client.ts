@@ -43,13 +43,30 @@ function buildUrl(path: string, query?: RequestInit_['query']): string {
 
 // __DEV__ 로그용 — login/refresh 응답의 token 필드를 평문으로 콘솔에 노출하지 않게 마스킹.
 // 화면 공유·screencast 시 누출 위험 차단. Sentry 의 beforeSend 와 같은 정책.
-const SECRET_KEY_RE = /(password|token|secret|auth|refresh)/i;
+//
+// 키 이름 전체 매칭 (substring 아님) — `authorId`/`refreshedAt`/`authoredBy` 같은
+// 무해한 키가 [REDACTED] 로 덮여 디버깅이 불가능해지던 회로 차단.
+const SECRET_KEYS = new Set([
+  'password',
+  'newPassword',
+  'currentPassword',
+  'accessToken',
+  'refreshToken',
+  'access_token',
+  'refresh_token',
+  'token',
+  'secret',
+  'authorization',
+]);
+function isSecretKey(k: string): boolean {
+  return SECRET_KEYS.has(k.toLowerCase());
+}
 function maskSecretsForLog(value: unknown): unknown {
   if (!value || typeof value !== 'object') return value;
   if (Array.isArray(value)) return value.map(maskSecretsForLog);
   const masked: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-    if (SECRET_KEY_RE.test(k)) masked[k] = '[REDACTED]';
+    if (isSecretKey(k)) masked[k] = '[REDACTED]';
     else if (v && typeof v === 'object') masked[k] = maskSecretsForLog(v);
     else masked[k] = v;
   }

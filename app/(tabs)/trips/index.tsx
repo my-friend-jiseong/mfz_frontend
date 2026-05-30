@@ -32,6 +32,14 @@ export default function TripsList() {
     [allTrips, userId],
   );
 
+  // tripId → visit 카운트 Map — renderItem 의 per-row .filter (O(N×M)) 제거.
+  // allVisits 가 바뀔 때만 재계산.
+  const visitCountByTrip = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const v of allVisits) m.set(v.tripId, (m.get(v.tripId) ?? 0) + 1);
+    return m;
+  }, [allVisits]);
+
   // 진행 중인 외근이 있으면 외근 탭은 그 외근의 방문 현장 화면(active)으로 직행.
   // 사용자가 외근 탭을 누를 때 "지금 무슨 현장 가는 거였지" 즉시 확인할 수 있도록.
   if (activeTripId !== null) {
@@ -41,7 +49,7 @@ export default function TripsList() {
   // 라인 46 의 <Redirect/> 로 activeTripId 있으면 이 화면에 도달 못함 →
   // 'isActive Badge' 분기는 영구 dead. 진행 중 외근은 외근 탭 진입 시 active 화면이 직행으로 받음.
   const renderItem = ({ item }: { item: Trip }) => {
-    const visitCount = allVisits.filter((v) => v.tripId === item.id).length;
+    const visitCount = visitCountByTrip.get(item.id) ?? 0;
     const dateText = fmtDate(item.startedAt);
     const startTime = fmtTime(item.startedAt);
     return (
