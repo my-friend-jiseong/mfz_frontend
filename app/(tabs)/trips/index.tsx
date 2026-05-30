@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import { Redirect, useRouter } from 'expo-router';
 import { useTripStore } from '@/stores/tripStore';
@@ -70,28 +70,23 @@ export default function TripsList() {
   };
 
   return (
-    <MapSheetLayout title="외근 내역">
-      <BottomSheetFlatList
-        data={trips}
-        keyExtractor={(t) => String(t.id)}
-        renderItem={renderItem}
-        contentContainerStyle={styles.list}
-        ListEmptyComponent={
-          <EmptyState
-            icon="briefcase-outline"
-            title="외근 기록이 없습니다"
-            description="아래 버튼을 눌러 첫 외근을 시작하세요"
-            action={
-              <Button
-                onPress={() => router.push('/(tabs)/trips/new/select' as never)}
-                leftIcon="play-circle"
-              >
-                외근 시작
-              </Button>
-            }
-          />
-        }
-      />
+    <View style={styles.screenRoot}>
+      <MapSheetLayout title="외근 내역">
+        <BottomSheetFlatList
+          data={trips}
+          keyExtractor={(t) => String(t.id)}
+          renderItem={renderItem}
+          contentContainerStyle={styles.list}
+          ListEmptyComponent={
+            <EmptyState
+              icon="briefcase-outline"
+              title="외근 기록이 없습니다"
+              description="아래 버튼을 눌러 첫 외근을 시작하세요"
+            />
+          }
+        />
+      </MapSheetLayout>
+      {/* StickyBottomBar 는 BottomSheet 외부에 둔다 (active.tsx / [id].tsx 와 동일 패턴) — 시트 내부 absolute 자식이 pan 제스처에 가려져 탭 진입 시 안 보이던 회로 차단. */}
       <StickyBottomBar>
         <Button
           onPress={() => router.push('/(tabs)/trips/new/select' as never)}
@@ -102,11 +97,12 @@ export default function TripsList() {
           외근 시작
         </Button>
       </StickyBottomBar>
-    </MapSheetLayout>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  screenRoot: { flex: 1 },
   list: { padding: spacing.lg, paddingBottom: 120 },
   cardSpacing: { marginBottom: spacing.sm },
   meta: { marginTop: spacing.xs },
