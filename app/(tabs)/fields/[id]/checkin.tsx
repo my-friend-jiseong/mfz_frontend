@@ -92,7 +92,9 @@ export default function FieldCheckin() {
           if (prior) {
             void removePhoto(fieldId, prior);
           }
-          const r = await addPhoto(fieldId, file);
+          // backend-backlog §9 — phase 태그 전달. §9 머지 후 보고서 편집기가 자동 prefill (G2/F2).
+          // checkin Phase ('before'|'during'|'after') = api AttachmentPhase 와 동일 alphabet.
+          const r = await addPhoto(fieldId, file, { phase });
           if (r.ok) {
             setPhaseSlots((p) => ({
               ...p,

@@ -15,10 +15,15 @@ type CreateResult =
   | { ok: true; report: Report }
   | { ok: false; error: string };
 
-// 스캐폴드 후 부분 실패를 호출 측에 전달 (F4). attemptedCount > 0 이고 failedCount > 0 이면
-// 사용자에게 안내 권장.
+// 스캐폴드 후 부분 실패를 호출 측에 전달 (F4/G8). failedFieldIds 로 어느 현장이 실패했는지
+// 호출 측이 알 수 있게 — 안내 메시지에 현장명 노출 / '실패만 재시도' 액션 등 향후 확장 가능.
 export type CreateWithScaffoldResult =
-  | { ok: true; report: Report; attempted: number; failed: number }
+  | {
+      ok: true;
+      report: Report;
+      attemptedFieldIds: string[];
+      failedFieldIds: string[];
+    }
   | { ok: false; error: string };
 
 type GenericResult =
@@ -106,8 +111,14 @@ export const useReportStore = create<ReportState>((set, get) => ({
   },
 
   loadDetail: async (reportId) => {
+    // 이미 success 인 detailStatus 를 'loading' 으로 downgrade 하지 않음 (G7) —
+    // createWithVisitScaffold 가 success 후 곧장 loadDetail 호출 시 잠깐 'loading' 으로 보이고
+    // 캐시는 fieldReports 없는 상태라 빈 화면 flash 가 생기던 회로 차단.
     set((s) => ({
-      detailStatus: { ...s.detailStatus, [reportId]: 'loading' },
+      detailStatus:
+        s.detailStatus[reportId] === 'success'
+          ? s.detailStatus
+          : { ...s.detailStatus, [reportId]: 'loading' },
     }));
     try {
       const res = await reportsApi.detail(reportId);
@@ -119,8 +130,12 @@ export const useReportStore = create<ReportState>((set, get) => ({
       }));
       return r;
     } catch {
+      // 이미 success 였으면 missing 으로 격하시키지 않음 — 캐시 사용 계속.
       set((s) => ({
-        detailStatus: { ...s.detailStatus, [reportId]: 'missing' },
+        detailStatus:
+          s.detailStatus[reportId] === 'success'
+            ? s.detailStatus
+            : { ...s.detailStatus, [reportId]: 'missing' },
       }));
       return null;
     }
@@ -153,13 +168,13 @@ export const useReportStore = create<ReportState>((set, get) => ({
   },
 
   createWithVisitScaffold: async (body, visitFieldIds) => {
-    // busy 는 create + scaffold + loadDetail 끝까지 유지 (F10) — 헤더/네비 가드가
-    // 'idle' 로 잘못 판단해 사용자 이탈을 허용하던 회로 차단.
+    // busy 는 create + scaffold + loadDetail 끝까지 유지 (F10).
     set({ busy: true });
+    let created: Report;
     try {
       // create 가 자체 busy=false flip 하지 않도록 직접 api 호출 + 캐시 반영.
       const data = await reportsApi.create(body);
-      const created: Report = {
+      created = {
         id: data.id,
         creatorId: data.authorUserId,
         tripId: data.tripId,
@@ -173,25 +188,37 @@ export const useReportStore = create<ReportState>((set, get) => ({
         detailCache: { ...s.detailCache, [created.id]: created },
         detailStatus: { ...s.detailStatus, [created.id]: 'success' },
       }));
-      // unique fieldId 만, 빈 string 제외 (timeline.fieldId 누락 — backlog §16).
-      const targets = Array.from(new Set(visitFieldIds.filter(Boolean)));
-      // 순차 호출 — 백엔드 race 회피 + 한 건 실패해도 나머지 계속. 실패 카운트는 호출 측에 전달 (F4).
-      let failed = 0;
-      for (const fieldId of targets) {
-        try {
-          await reportsApi.addFieldReport(created.id, { fieldId });
-        } catch {
-          failed += 1;
-        }
-      }
-      // 스캐폴드 결과 동기화.
-      await get().loadDetail(created.id);
-      set({ busy: false });
-      return { ok: true, report: created, attempted: targets.length, failed };
     } catch (e) {
       set({ busy: false });
       return { ok: false, error: describeError(e) };
     }
+    // unique fieldId 만, 빈 string 제외 (timeline.fieldId 누락 — backlog §16).
+    const targets = Array.from(new Set(visitFieldIds.filter(Boolean)));
+    // 병렬 호출 (G9) — distinct fieldId 라 서버 race 없음. wall-time N×latency → max(latency).
+    // allSettled 는 절대 reject 안 함 — 한 건 실패해도 나머지 결과 그대로 반환.
+    const results = await Promise.allSettled(
+      targets.map((fieldId) =>
+        reportsApi.addFieldReport(created.id, { fieldId }),
+      ),
+    );
+    const failedFieldIds: string[] = [];
+    results.forEach((r, i) => {
+      if (r.status === 'rejected') failedFieldIds.push(targets[i]);
+    });
+    // loadDetail 실패는 보고서/카드 생성 자체엔 영향 X — 별도 catch 후 success 유지 (G6).
+    // try 안에 두면 5xx 가 catch 로 떨어져 호출 측이 '생성 실패' 로 오인 → 중복 보고서 생성.
+    try {
+      await get().loadDetail(created.id);
+    } catch {
+      // 캐시는 이미 success — 사용자가 상세 진입하면 다시 fetch 시도 가능.
+    }
+    set({ busy: false });
+    return {
+      ok: true,
+      report: created,
+      attemptedFieldIds: targets,
+      failedFieldIds,
+    };
   },
 
   update: async (id, body) => {

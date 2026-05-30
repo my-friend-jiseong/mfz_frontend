@@ -9,6 +9,7 @@ import type {
   ListMineParams,
   FieldDirectAttachment,
 } from '@/api';
+import type { AttachmentPhase } from '@/api/endpoints/fields';
 import type { DuplicateAddressDetails, HasRelatedVisitsDetails } from '@/api/errors';
 
 type CreateResult =
@@ -42,6 +43,7 @@ interface FieldState {
   addPhoto: (
     id: string,
     file: { uri: string; name: string; type: string },
+    opts?: { phase?: AttachmentPhase },
   ) => Promise<
     { ok: true; photoId: string } | { ok: false; error: string }
   >;
@@ -283,9 +285,9 @@ export const useFieldStore = create<FieldState>((set, get) => ({
     }
   },
 
-  addPhoto: async (id, file) => {
+  addPhoto: async (id, file, opts) => {
     try {
-      const res = await fieldsApi.addPhoto(id, file);
+      const res = await fieldsApi.addPhoto(id, file, opts);
       const attachment = photoToAttachment(res.photo);
       set((s) => ({
         directAttachments: {

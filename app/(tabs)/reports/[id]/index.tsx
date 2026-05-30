@@ -162,8 +162,15 @@ export default function ReportDetail() {
 
   if (!report) {
     // 첫 진입 race 동안 LoadingState 노출, fetch 끝났는데도 null 이면 'not found'.
+    // initialIndex/mapFieldIds 를 loaded 분기와 동일하게 — prop 변경으로 시트가 92%→55% 점프
+    // 하거나 배경 지도가 '전체 현장 flash → scope' 으로 깜빡이던 회로 차단 (G1·G5).
     return (
-      <MapSheetLayout title="보고서 상세" onBack={() => safeBack(router)}>
+      <MapSheetLayout
+        title="보고서 상세"
+        onBack={() => safeBack(router)}
+        initialIndex={1}
+        mapFieldIds={overviewFieldIds}
+      >
         {deleting ? (
           <EmptyState icon="trash-outline" title="보고서를 삭제 중입니다" />
         ) : detailStatus === 'missing' ? (

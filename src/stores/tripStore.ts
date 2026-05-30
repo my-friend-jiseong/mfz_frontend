@@ -20,6 +20,9 @@ interface TripState {
   trips: Trip[];
   activeTripId: string | null;
   busy: boolean;
+  // tripId 별 detail fetch 진행 상태 (G10 altitude) — reportStore.detailStatus 와 동일 패턴.
+  // 'loading' 동안엔 그 tripId 에 의존하는 submit/UI 가드 가능. token-ref race 회피용 단일 진실.
+  detailStatus: Record<string, 'loading' | 'success' | 'missing'>;
 
   hydrate: () => Promise<void>;
   refreshActive: () => Promise<void>;
@@ -45,6 +48,7 @@ export const useTripStore = create<TripState>((set, get) => ({
   trips: [],
   activeTripId: null,
   busy: false,
+  detailStatus: {},
 
   hydrate: async () => {
     await Promise.all([get().refreshActive(), get().refreshList()]);
@@ -82,6 +86,7 @@ export const useTripStore = create<TripState>((set, get) => ({
   },
 
   loadDetail: async (id) => {
+    set((s) => ({ detailStatus: { ...s.detailStatus, [id]: 'loading' } }));
     try {
       const res = await tripsApi.detail(id);
       // timeline → visitStore. tripDetailResponse.timeline 의 entry 는 fieldId 가 없을 수도 있어
@@ -102,9 +107,11 @@ export const useTripStore = create<TripState>((set, get) => ({
               }
             : t,
         ),
+        detailStatus: { ...s.detailStatus, [id]: 'success' },
       }));
     } catch {
       // 비로그인·404 등 — 무시. 화면은 list 응답 기준으로 fallback 렌더.
+      set((s) => ({ detailStatus: { ...s.detailStatus, [id]: 'missing' } }));
     }
   },
 
@@ -201,5 +208,5 @@ export const useTripStore = create<TripState>((set, get) => ({
       .sort((a, b) => b.startedAt.localeCompare(a.startedAt)),
 
   // 로그아웃 시 호출.
-  clearAll: () => set({ trips: [], activeTripId: null, busy: false }),
+  clearAll: () => set({ trips: [], activeTripId: null, busy: false, detailStatus: {} }),
 }));

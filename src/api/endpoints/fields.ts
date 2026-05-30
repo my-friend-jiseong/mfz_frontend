@@ -224,9 +224,16 @@ export const fields = {
       body: { text },
     }),
 
-  addPhoto: (fieldId: string, file: { uri: string; name: string; type: string }) => {
+  // opts.phase: backend-backlog §9 visit 단계. 백엔드 미지원 동안엔 silently 무시되지만
+  // 프론트 source 가 phase 를 보내야 머지 직후 보고서 prefill 이 살아남.
+  addPhoto: (
+    fieldId: string,
+    file: { uri: string; name: string; type: string },
+    opts?: { phase?: AttachmentPhase },
+  ) => {
     const fd = new FormData();
     fd.append('file', file as unknown as Blob);
+    if (opts?.phase) fd.append('phase', opts.phase);
     return request<FieldPhotoResponse>(`/api/fields/${fieldId}/photos`, {
       method: 'POST',
       body: fd,

@@ -16,6 +16,7 @@ import { useReportStore } from '@/stores/reportStore';
 import { useTripStore } from '@/stores/tripStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useVisitStore } from '@/stores/visitStore';
+import { useFieldStore } from '@/stores/fieldStore';
 import { safeBack } from '@/utils/backNavigation';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
@@ -43,8 +44,6 @@ export default function ComposeReport() {
   const [submitting, setSubmitting] = useState(false);
   const [tripPickerOpen, setTripPickerOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // 선택된 외근의 detail 페치 진행 상태 — submit 차단 가드 (F3).
-  const [tripHydrating, setTripHydrating] = useState(false);
 
   const myTrips = useMemo(() => {
     if (!userId) return [];
@@ -53,7 +52,7 @@ export default function ComposeReport() {
       .sort((a, b) => b.startedAt.localeCompare(a.startedAt));
   }, [allTrips, userId]);
 
-  // 무결성 검증 (F6) — params.tripId 가 본인 외근이 아니면 reset.
+  // 무결성 검증 (G4/F6) — params.tripId 가 본인 외근이 아니면 reset.
   // myTrips 가 비어있을 동안엔 보류 (refreshList race) — 한 번이라도 로드된 뒤 검증.
   useEffect(() => {
     if (!params.tripId) return;
@@ -64,13 +63,20 @@ export default function ComposeReport() {
     }
   }, [params.tripId, myTrips]);
 
-  // 선택된 외근의 detail (visits) 동기화 — 스캐폴드 fieldId 정확도를 위해.
-  // tripHydrating 으로 진행 상태 추적, submit 차단 가드의 단일 진실 출처.
+  // tripHydrating 은 tripStore.detailStatus 가 단일 진실 출처 (G10/G3) — local useState 제거.
+  // stale finally 가 새 fetch in-flight 인 채 false 로 flip 하던 race 가 store 측 set 으로 해소.
+  const tripHydrating = useTripStore(
+    (s) => (tripId ? s.detailStatus[tripId] === 'loading' : false),
+  );
+
+  // 선택된 외근의 detail (visits) 동기화 — myTrips 매치 검증 통과해야 호출 (G4).
+  // 본인 소유 아닌 foreign tripId 가 백엔드로 leak 되는 회로 차단.
   useEffect(() => {
     if (!tripId) return;
-    setTripHydrating(true);
-    void loadTripDetail(tripId).finally(() => setTripHydrating(false));
-  }, [tripId, loadTripDetail]);
+    if (myTrips.length === 0) return; // myTrips 미해소 — 검증 보류
+    if (!myTrips.some((t) => t.id === tripId)) return; // foreign tripId — 호출 차단
+    void loadTripDetail(tripId);
+  }, [tripId, myTrips, loadTripDetail]);
 
   const selectedTrip = useMemo(
     () => (tripId ? myTrips.find((t) => t.id === tripId) ?? null : null),
@@ -113,9 +119,17 @@ export default function ComposeReport() {
       Alert.alert('보고서 생성 실패', r.error);
       return;
     }
-    // 부분 실패 안내 (F4). attempted=0 (visit 0건) 은 정상 케이스 — 알림 X.
-    if (r.failed > 0) {
-      const msg = `현장 보고 ${r.attempted}건 중 ${r.failed}건 자동 생성에 실패했습니다.\n상세 화면에서 빠진 현장을 수동으로 추가할 수 있어요.`;
+    // 부분 실패 안내 (F4/G8) — failedFieldIds 로 현장명까지 노출.
+    if (r.failedFieldIds.length > 0) {
+      const getField = useFieldStore.getState().getById;
+      const names = r.failedFieldIds
+        .slice(0, 5)
+        .map((fid) => getField(fid)?.address ?? `현장 ${fid.slice(0, 6)}`)
+        .join('\n· ');
+      const overflow = r.failedFieldIds.length > 5
+        ? `\n· 외 ${r.failedFieldIds.length - 5}건`
+        : '';
+      const msg = `현장 보고 ${r.attemptedFieldIds.length}건 중 ${r.failedFieldIds.length}건 자동 생성에 실패했습니다.\n\n· ${names}${overflow}\n\n상세 화면에서 직접 추가할 수 있어요.`;
       Alert.alert('일부 현장 보고 누락', msg);
     }
     router.replace(`/(tabs)/reports/${r.report.id}` as never);
