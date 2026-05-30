@@ -56,8 +56,12 @@ export default function FieldReportEditor() {
   const reportTripId = useReportStore(
     (s) => s.detailCache[reportId]?.tripId ?? null,
   );
-  const tripVisits = useVisitStore((s) =>
-    reportTripId ? s.visits.filter((v) => v.tripId === reportTripId) : [],
+  // selector 안에서 .filter() 호출하면 매 호출마다 새 array reference →
+  // useSyncExternalStoreWithSelector 가 무한 re-render → React error #185. raw 구독 + useMemo.
+  const allVisits = useVisitStore((s) => s.visits);
+  const tripVisits = useMemo(
+    () => (reportTripId ? allVisits.filter((v) => v.tripId === reportTripId) : []),
+    [allVisits, reportTripId],
   );
 
   useEffect(() => {

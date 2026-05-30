@@ -29,22 +29,32 @@ export default function TripReview() {
   const trip = useTripStore((s) => (id ? s.getById(id) : undefined));
   const activeTripId = useTripStore((s) => s.activeTripId);
   const loadTripDetail = useTripStore((s) => s.loadDetail);
-  const visits = useVisitStore((s) =>
-    id
-      ? s.visits
-          .filter((v) => v.tripId === id)
-          .sort((a, b) => a.visitedAt.localeCompare(b.visitedAt))
-      : [],
-  );
-  const destinations = useDestinationStore((s) =>
-    id
-      ? s.destinations
-          .filter((d) => d.tripId === id)
-          .sort((a, b) => a.order - b.order)
-      : [],
-  );
+  // selector 안에서 .filter().sort() 호출하면 매 호출마다 새 array reference →
+  // useSyncExternalStoreWithSelector 가 무한 re-render → React error #185.
+  // raw 배열 구독 + useMemo 로 도출 (fields/new 와 동일 패턴).
+  const allVisits = useVisitStore((s) => s.visits);
+  const allDestinations = useDestinationStore((s) => s.destinations);
   const getField = useFieldStore((s) => s.getById);
   const loadFieldDetail = useFieldStore((s) => s.loadDetail);
+
+  const visits = useMemo(
+    () =>
+      id
+        ? allVisits
+            .filter((v) => v.tripId === id)
+            .sort((a, b) => a.visitedAt.localeCompare(b.visitedAt))
+        : [],
+    [allVisits, id],
+  );
+  const destinations = useMemo(
+    () =>
+      id
+        ? allDestinations
+            .filter((d) => d.tripId === id)
+            .sort((a, b) => a.order - b.order)
+        : [],
+    [allDestinations, id],
+  );
 
   const tripFieldIds = useMemo(
     () => destinations.map((d) => d.fieldId),
