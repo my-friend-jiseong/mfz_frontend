@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useFieldStore } from '@/stores/fieldStore';
 import { useAuthStore } from '@/stores/authStore';
 import { KakaoMapWebView, fieldsToMarkers } from '@/components/KakaoMapWebView';
+import { requestUserLocation, type LatLng } from '@/utils/geolocation';
 import {
   MapFilterBar,
   type DisplayMode,
@@ -36,6 +37,17 @@ export function MapDashboard({ scopeFieldIds }: MapDashboardProps = {}) {
     photo: true,
   });
   const [showBoundary, setShowBoundary] = useState(false);
+  // 사용자 현재 위치 — mount 1회 fetch. 권한 거부/오류 시 null 유지 (지도는 부산 중심 fallback).
+  // ref guard 로 같은 세션 내 dashboard 재 mount 마다 또 권한 prompt 가 뜨는 회로 차단.
+  const [myLocation, setMyLocation] = useState<LatLng | null>(null);
+  const locationFetchedRef = useRef(false);
+  useEffect(() => {
+    if (locationFetchedRef.current) return;
+    locationFetchedRef.current = true;
+    void requestUserLocation().then((loc) => {
+      if (loc) setMyLocation(loc);
+    });
+  }, []);
 
   const myFields = useMemo(
     () => (userId ? allFields.filter((f) => f.userId === userId) : []),
@@ -144,6 +156,8 @@ export function MapDashboard({ scopeFieldIds }: MapDashboardProps = {}) {
           markers={markers}
           displayMode={displayMode}
           showBoundary={showBoundary}
+          myLocation={myLocation}
+          center={myLocation ?? undefined}
           onMarkerPress={(fieldId) =>
             router.push(`/(tabs)/fields/${fieldId}` as never)
           }

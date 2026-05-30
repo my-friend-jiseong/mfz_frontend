@@ -22,6 +22,8 @@ interface MapHtmlOptions {
   center: { lat: number; lng: number };
   displayMode?: MapDisplayMode;
   showBoundary?: boolean;
+  // 사용자 현재 위치 — 있으면 별도 파란 점 + pulse 링으로 표시. 클릭 비활성.
+  myLocation?: { lat: number; lng: number } | null;
 }
 
 export function buildKakaoMapHtml({
@@ -30,6 +32,7 @@ export function buildKakaoMapHtml({
   center,
   displayMode = 'markers',
   showBoundary = false,
+  myLocation = null,
 }: MapHtmlOptions): string {
   // RN WebView와 웹 iframe 양쪽에서 메시지 전송 가능한 브리지 스크립트
   const postMsgFn = `function postMsg(msg){var s=JSON.stringify(msg);if(window.ReactNativeWebView){window.ReactNativeWebView.postMessage(s);}else if(window.parent&&window.parent!==window){window.parent.postMessage(s,'*');}}`;
@@ -69,6 +72,7 @@ MARKERS.forEach(function(m){
   const markersJson = JSON.stringify(markers);
   const modeLiteral = JSON.stringify(displayMode);
   const showBoundaryLiteral = showBoundary ? 'true' : 'false';
+  const myLocationLiteral = myLocation ? JSON.stringify(myLocation) : 'null';
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
@@ -76,6 +80,9 @@ MARKERS.forEach(function(m){
   html,body{margin:0;padding:0;height:100%;width:100%;}
   #map{height:100%;width:100%;}
   #banner{position:absolute;top:12px;left:12px;right:12px;background:#d97706ee;color:#fff;padding:10px 14px;border-radius:8px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:13px;line-height:1.4;z-index:10;display:none;}
+  @keyframes mfzPulse { 0% { transform: scale(0.6); opacity: 0.7; } 100% { transform: scale(2.4); opacity: 0; } }
+  .mfz-me-ring { position:absolute; top:50%; left:50%; width:22px; height:22px; margin:-11px 0 0 -11px; border-radius:50%; background:#2563eb; opacity:0.35; animation: mfzPulse 1.6s ease-out infinite; }
+  .mfz-me-dot { position:absolute; top:50%; left:50%; width:14px; height:14px; margin:-7px 0 0 -7px; border-radius:50%; background:#2563eb; border:3px solid #fff; box-shadow:0 1px 3px rgba(0,0,0,0.35); }
 </style>
 <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=${kakaoJsKey}&autoload=false"></script>
 <script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
@@ -88,6 +95,7 @@ MARKERS.forEach(function(m){
   var CENTER = { lat: ${center.lat}, lng: ${center.lng} };
   var MODE = ${modeLiteral};
   var SHOW_BOUNDARY = ${showBoundaryLiteral};
+  var MY_LOCATION = ${myLocationLiteral};
   var BOUNDARY_URL = 'https://raw.githubusercontent.com/southkorea/southkorea-maps/master/kostat/2018/json/skorea-municipalities-2018-topo-simple.json';
   ${postMsgFn}
 
@@ -239,6 +247,21 @@ MARKERS.forEach(function(m){
         .catch(function(e){ console.error('boundary/choropleth load failed', e); });
     }
 
+    function renderMyLocation(){
+      if (!MY_LOCATION) return;
+      var content = document.createElement('div');
+      content.style.cssText = 'position:relative;width:22px;height:22px;pointer-events:none;';
+      content.innerHTML = '<div class="mfz-me-ring"></div><div class="mfz-me-dot"></div>';
+      new kakao.maps.CustomOverlay({
+        position: new kakao.maps.LatLng(MY_LOCATION.lat, MY_LOCATION.lng),
+        content: content,
+        map: map,
+        xAnchor: 0.5,
+        yAnchor: 0.5,
+        zIndex: 5,
+      });
+    }
+
     if (MODE === 'heatmap') {
       renderHeatmap();
     } else {
@@ -246,6 +269,7 @@ MARKERS.forEach(function(m){
       renderMarkers();
     }
 
+    renderMyLocation();
     renderPolygons();
 
     postMsg({ type: 'ready' });

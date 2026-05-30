@@ -36,6 +36,8 @@ interface Props {
   center?: { lat: number; lng: number };
   displayMode?: MapDisplayMode;
   showBoundary?: boolean;
+  // 사용자 현재 위치 — 있으면 파란 점 + pulse 링으로 노출 (클릭 비활성).
+  myLocation?: { lat: number; lng: number } | null;
   onMarkerPress?: (fieldId: string) => void;
 }
 
@@ -46,6 +48,7 @@ export function KakaoMapWebView({
   center,
   displayMode = 'markers',
   showBoundary = false,
+  myLocation = null,
   onMarkerPress,
 }: Props) {
   const webRef = useRef<WebView>(null);
@@ -67,11 +70,12 @@ export function KakaoMapWebView({
       buildKakaoMapHtml({
         kakaoJsKey,
         markers: groupedMarkers,
-        center: center ?? DEFAULT_CENTER,
+        center: center ?? myLocation ?? DEFAULT_CENTER,
         displayMode,
         showBoundary,
+        myLocation,
       }),
-    [kakaoJsKey, groupedMarkers, center, displayMode, showBoundary],
+    [kakaoJsKey, groupedMarkers, center, displayMode, showBoundary, myLocation],
   );
 
   return (

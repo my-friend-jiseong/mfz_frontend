@@ -59,11 +59,23 @@ interface Props {
   center?: { lat: number; lng: number };
   displayMode?: MapDisplayMode;
   showBoundary?: boolean;
+  myLocation?: { lat: number; lng: number } | null;
   onMarkerPress?: (fieldId: string) => void;
 }
 
 const DEFAULT_CENTER = { lat: 35.17, lng: 129.07 };
 const SDK_SCRIPT_ID = '__kakao_maps_sdk__';
+const MY_LOC_PULSE_KEYFRAMES_ID = '__mfz_me_pulse__';
+
+function ensureMyLocPulseStyle() {
+  if (typeof document === 'undefined') return;
+  if (document.getElementById(MY_LOC_PULSE_KEYFRAMES_ID)) return;
+  const style = document.createElement('style');
+  style.id = MY_LOC_PULSE_KEYFRAMES_ID;
+  style.textContent =
+    '@keyframes mfzPulse { 0% { transform: scale(0.6); opacity: 0.7; } 100% { transform: scale(2.4); opacity: 0; } }';
+  document.head.appendChild(style);
+}
 
 type Overlay = { setMap: (m: unknown | null) => void };
 type KakaoGlobal = {
@@ -139,11 +151,13 @@ export function KakaoMapWebView({
   center,
   displayMode = 'markers',
   showBoundary = false,
+  myLocation = null,
   onMarkerPress,
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<unknown>(null);
   const overlaysRef = useRef<Overlay[]>([]);
+  const myLocOverlayRef = useRef<Overlay | null>(null);
   const boundaryOverlaysRef = useRef<Overlay[]>([]);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -153,7 +167,7 @@ export function KakaoMapWebView({
   // 동일 좌표 마커는 그룹으로 묶어 첫 마커만 표시 + "+N" 뱃지. 좌표 무손실.
   const markerGroups = useMemo(() => groupSameLocationMarkers(markers), [markers]);
 
-  // 지도 인스턴스 1회 생성
+  // 지도 인스턴스 1회 생성. 초기 center 는 props.center > myLocation > DEFAULT.
   useEffect(() => {
     if (!kakaoJsKey || !containerRef.current) return;
     let cancelled = false;
@@ -165,7 +179,7 @@ export function KakaoMapWebView({
           setError('Kakao SDK 로드 실패');
           return;
         }
-        const c = center ?? DEFAULT_CENTER;
+        const c = center ?? myLocation ?? DEFAULT_CENTER;
         mapRef.current = new k.maps.Map(containerRef.current, {
           center: new k.maps.LatLng(c.lat, c.lng),
           level: 8,
@@ -181,6 +195,40 @@ export function KakaoMapWebView({
     // 초기 center로만 생성. 이후 center 변경은 별도 useEffect에서 처리 가능 (현재는 불필요)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kakaoJsKey]);
+
+  // myLocation 오버레이 — ready 후 한 번 / myLocation 변경 시 재배치.
+  useEffect(() => {
+    if (!ready || !mapRef.current) return;
+    const k = getKakao();
+    if (!k) return;
+    myLocOverlayRef.current?.setMap(null);
+    myLocOverlayRef.current = null;
+    if (!myLocation) return;
+    ensureMyLocPulseStyle();
+    const content = document.createElement('div');
+    content.style.cssText = 'position:relative;width:22px;height:22px;pointer-events:none;';
+    content.innerHTML =
+      '<div style="position:absolute;top:50%;left:50%;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;background:#2563eb;opacity:0.35;animation:mfzPulse 1.6s ease-out infinite;"></div>' +
+      '<div style="position:absolute;top:50%;left:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:#2563eb;border:3px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.35);"></div>';
+    const overlay = new (k.maps as unknown as {
+      CustomOverlay: new (opts: {
+        position: unknown;
+        content: Element;
+        map: unknown;
+        xAnchor?: number;
+        yAnchor?: number;
+        zIndex?: number;
+      }) => Overlay;
+    }).CustomOverlay({
+      position: new k.maps.LatLng(myLocation.lat, myLocation.lng),
+      content,
+      map: mapRef.current,
+      xAnchor: 0.5,
+      yAnchor: 0.5,
+      zIndex: 5,
+    });
+    myLocOverlayRef.current = overlay;
+  }, [ready, myLocation]);
 
   // 행정구역 경계 + 단계구분도 렌더링 (공통 폴리곤)
   useEffect(() => {
