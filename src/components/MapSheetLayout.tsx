@@ -33,7 +33,9 @@ export function MapSheetLayout({
   mapFieldIds,
   children,
 }: Props) {
-  const snapPoints = useMemo(() => ['18%', '55%', '92%'], []);
+  // 마지막 snap = 100% — 탭 진입 시 (initialIndex=2 default) 시트가 화면을 꽉 채움.
+  // 이전 92% 는 status bar 위쪽이 살짝 비어 보이던 회로. middle/bottom snap 은 그대로.
+  const snapPoints = useMemo(() => ['18%', '55%', '100%'], []);
   const sheetRef = useRef<BottomSheet>(null);
 
   useFocusEffect(
