@@ -131,4 +131,4 @@
 - [ ] S9 safeBack 폴백
 - [ ] S10 토큰 회전
 
-> §8 = [frontend-erd-v2-plan.md](frontend-erd-v2-plan.md) 의 백엔드 확인 항목. 해당 호출에서 계약 불일치가 나면 로그에 raw 응답 첨부.
+> §8 = ERD v2 프론트 마이그레이션 계획의 백엔드 확인 항목. 해당 호출에서 계약 불일치가 나면 로그에 raw 응답 첨부.

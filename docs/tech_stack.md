@@ -8,8 +8,10 @@
 
 | **구분** | **기술** |
 | --- | --- |
-| REST API 서버 | Spring Boot |
+| REST API 서버 | Node.js (Express) |
+| ORM | Prisma |
 | 데이터베이스 | PostgreSQL |
+| 인증 | JWT (jsonwebtoken) + bcrypt |
 
 ## 외부 서비스
 

@@ -661,7 +661,7 @@ export interface TripTimelineEntry {
 ## 18. 🟢 `POST /api/reports/from-trip/:tripId` — 보고서+현장보고 단축 생성
 
 ### 배경
-새 보고서 양식(2026-05-31, [`docs/report-format-revision-plan.md`](report-format-revision-plan.md))에서
+새 보고서 양식(2026-05-31)에서
 보고서 생성 = 그 외근의 visits 별 FieldReport 자동 스캐폴드. 프론트는 현재 `POST /api/reports`
 1회 + `POST /api/reports/:id/field-reports` N회 (순차) 로 처리. N 회 round-trip 비용 절감용 단축 endpoint.
 
@@ -730,4 +730,4 @@ body: { format: 'word' | 'pdf' }
 - **2026-05-30**: §15 추가 — 인증/프로필 UX 검토(B-5) 중 발견. 프로필 수정 endpoint 부재(낮). 단일 actor 정책상 우선순위 낮음, 자체 처리 의지 누적 시 격상.
 - **2026-05-31**: §16 추가 — 2차 QA(#10) 디버깅 중 발견. `timeline[].fieldId` 누락(중상). 세션 재진입 후 visit 이 카드/지도에서 빠지는 회로. 프론트는 optional 선반영.
 - **2026-05-31**: §17 추가 — 2차 QA 기타. 더미 데이터 보강 요청(낮). 시연 시각화(히트맵/마커 그룹/외근 카드) 가능치 확보.
-- **2026-05-31**: §18·§19 추가 — 보고서 양식 변경 사이클. §18 보고서+현장보고 단축 생성(낮·round-trip 절감), §19 PDF export(중상·새 양식 인쇄/공유). 결정 §1~§7 은 [`report-format-revision-plan.md`](report-format-revision-plan.md).
+- **2026-05-31**: §18·§19 추가 — 보고서 양식 변경 사이클. §18 보고서+현장보고 단축 생성(낮·round-trip 절감), §19 PDF export(중상·새 양식 인쇄/공유). 결정 §1~§7 은 보고서 양식 변경 사이클에서 확정(계획서는 반영 후 정리, git 이력 참조).
