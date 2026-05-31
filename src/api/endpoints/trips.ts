@@ -122,17 +122,6 @@ export interface OptimizedOrderItem {
   etaMinutes: number;
 }
 
-export interface OptimizePreviewBody {
-  startLat: number;
-  startLng: number;
-  fields: Array<{ fieldId: string; name?: string; lat: number; lng: number }>;
-}
-
-export interface OptimizePreviewResponse {
-  optimizedOrder: OptimizedOrderItem[];
-  summary: { algorithm: string; totalDistanceKm: number; totalEtaMinutes: number };
-}
-
 export interface OptimizeNavigationBody {
   startLat: number;
   startLng: number;
@@ -178,13 +167,6 @@ export const trips = {
       `/api/trips/${tripId}/navigation/deep-links`,
       { method: 'POST', body },
     ),
-
-  /** 외근 시작 전 동선 최적화 — tripId 불필요 */
-  optimizePreview: (body: OptimizePreviewBody) =>
-    request<OptimizePreviewResponse>('/api/trips/navigation/optimize-preview', {
-      method: 'POST',
-      body,
-    }),
 
   /** 다중 현장 동선 최적 순서 제안 — 외근 시작 후 */
   optimizeNavigation: (tripId: string, body: OptimizeNavigationBody) =>

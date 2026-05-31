@@ -58,6 +58,21 @@ export default function NewTripSelect() {
     [myFields, statusFilter, projectFilter, categoryFilter, search],
   );
 
+  // 선택된 현장 요약 — id → field (주소) lookup. 해제 chip 의 X 클릭으로 즉시 토글.
+  // hooks 는 early return (activeTripId !== null 분기) 위에 모아둔다 — order/active 화면에서
+  // tripStore 가 startTrip 으로 activeTripId 를 채우면 stack 에 남아있던 select 가 함께
+  // re-render 되는데, 이 두 useMemo 가 early return 아래에 있으면 hook 카운트가 줄어
+  // React #300 "Rendered fewer hooks than expected" 로 root 가 죽는다.
+  const fieldById = useMemo(() => {
+    const m = new Map<string, Field>();
+    for (const f of myFields) m.set(f.id, f);
+    return m;
+  }, [myFields]);
+  const selectedFields = useMemo(
+    () => selectedIds.map((id) => fieldById.get(id)).filter((f): f is Field => !!f),
+    [selectedIds, fieldById],
+  );
+
   const toggle = (id: string) =>
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
@@ -147,17 +162,6 @@ export default function NewTripSelect() {
       </Pressable>
     );
   };
-
-  // 선택된 현장 요약 — id → field (주소) lookup. 해제 chip 의 X 클릭으로 즉시 토글.
-  const fieldById = useMemo(() => {
-    const m = new Map<string, Field>();
-    for (const f of myFields) m.set(f.id, f);
-    return m;
-  }, [myFields]);
-  const selectedFields = useMemo(
-    () => selectedIds.map((id) => fieldById.get(id)).filter((f): f is Field => !!f),
-    [selectedIds, fieldById],
-  );
 
   return (
     <MapSheetLayout title="방문할 현장 선택" onBack={() => safeBack(router)}>

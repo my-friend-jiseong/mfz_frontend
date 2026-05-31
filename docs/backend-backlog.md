@@ -178,25 +178,17 @@ HTTP status 는 200 정상이라 클라이언트 catch 분기도 안 탐. `manua
 
 ---
 
-## 5. 🟢 `POST /api/trips/navigation/optimize-preview` 백엔드 404
+## 5. ✅ `POST /api/trips/navigation/optimize-preview` 백엔드 404 — 클라이언트 only 로 확정
 
 ### 배경
-"✨ 최적 순서 추천" 누를 때 호출하는 endpoint 가 백엔드에서 404. 클라이언트 [`trips/new/order.tsx`](../app/\(tabs\)/trips/new/order.tsx#L78) 가 try/catch 로 잡아 nearest-neighbor fallback 으로 자동 회복 — 사용자 흐름은 무영향.
+"✨ 최적 순서 추천" 누를 때 호출하던 endpoint 가 백엔드에서 404 누적. 클라이언트 fallback 이 nearest-neighbor 와 결과 동일했고 백엔드 배포 의향도 확인 어려움 → option B 확정: 호출 자체 제거.
 
-### 백엔드가 해야 할 것
-다음 중 하나:
-- **(A) endpoint 배포** — 시나리오 문서·핸드오프에서 가정한 contract 대로 구현
-- **(B) contract 정정** — 백엔드가 이 endpoint 를 제공할 의향이 없으면 시나리오·handoff 문서에서 "클라이언트 nearest-neighbor 만 사용" 으로 명시. 클라이언트 호출 자체를 제거 가능.
-
-### 우선순위
-🟢 낮음 — fallback 작동으로 사용자 흐름 무영향. 다만 매 외근 시작마다 404 가 콘솔에 누적되는 점은 모니터링 시 노이즈.
-
-### 발견 시점
-2026-05-09 (Playwright 통합 자동화 캡처)
+### 결과
+2026-05-31 — `tripsApi.optimizePreview` 와 관련 타입 (`OptimizePreviewBody`/`OptimizePreviewResponse`) 모두 삭제. `trips/new/order.tsx` 의 `handleOptimize` 는 `nearestNeighborOrder` 만 호출 (동기). 외근 시작 후 단계의 `POST /api/trips/{tripId}/navigation/optimize` 는 그대로 유지 — 그쪽은 백엔드 contract 살아있음.
 
 ### 관련 코드
-- 프론트 [`app/(tabs)/trips/new/order.tsx:78-87`](../app/\(tabs\)/trips/new/order.tsx#L78) 호출
-- 프론트 [`src/utils/routeOptimize.ts`](../src/utils/routeOptimize.ts) fallback 알고리즘
+- 프론트 [`app/(tabs)/trips/new/order.tsx`](../app/\(tabs\)/trips/new/order.tsx) — 호출부 (현재 nearest-neighbor 만)
+- 프론트 [`src/utils/routeOptimize.ts`](../src/utils/routeOptimize.ts) — 알고리즘
 
 ---
 

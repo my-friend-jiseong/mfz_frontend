@@ -479,7 +479,7 @@ async function flowSecondField(page, ctx) {
 }
 
 async function flowTripStart(page, ctx) {
-  // S7 외근 시작 — 두 현장 선택 → 순서 (S6 회귀: optimizePreview name=title) → 외근 시작 → /trips/active
+  // S7 외근 시작 — 두 현장 선택 → 순서 (클라이언트 nearest-neighbor) → 외근 시작 → /trips/active
   // S5 회귀 (mapFieldIds 지도 scope) 는 visual 검증 어려워 path 만 확인.
   const captured = [];
   const onResp = async (resp) => {
@@ -518,19 +518,12 @@ async function flowTripStart(page, ctx) {
     }
     add('PASS', 'S7 현장 선택 → /trips/new/order 진입');
 
-    // S6 회귀: 최적 순서 추천 — optimizePreview 호출 시 name=title 가는지 응답 캡처로 간접 확인.
-    // optimizePreview 응답은 백엔드 내부에서 echo 안 하지만 호출은 일어남.
+    // 최적 순서 추천 — 클라이언트 nearest-neighbor (backend-backlog §5 option B 확정 후
+    // optimize-preview 호출 제거). 네트워크 호출 없이 list 가 재정렬되는지 시각적으로만 확인.
     const optimizeBtn = page.getByText(/최적 순서 추천/).first();
     if (await optimizeBtn.isVisible().catch(() => false)) {
       await optimizeBtn.click();
-      await page.waitForTimeout(3000);
-      // Alert/Modal 처리 — Alert.alert 가 web 에선 confirm. promptChoice 의 path 가 아니라 그냥 alert.
-      const optimizeCall = captured.find((c) => c.url?.includes('optimize-preview'));
-      if (optimizeCall) {
-        add('PASS', 'S6 optimizePreview 호출됨', `status=${optimizeCall.status}`);
-      } else {
-        add('WARN', 'S6 optimizePreview 호출 캡처 실패');
-      }
+      await page.waitForTimeout(1500);
     }
 
     // 외근 시작 확정 — fab 텍스트 "외근 시작 확정 (N곳)"
