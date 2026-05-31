@@ -33,7 +33,9 @@ export default function TripsList() {
   );
 
   // tripId → visit 카운트 Map — renderItem 의 per-row .filter (O(N×M)) 제거.
-  // allVisits 가 바뀔 때만 재계산.
+  // allVisits 가 바뀔 때만 재계산. 단 visitStore 는 각 외근 loadDetail 시에만 채워지므로,
+  // 탭 첫 진입(refreshList 만 돈 상태)에선 비어 있다 → 카운트가 있는 trip 만 여기 등재되고,
+  // 없는 trip 은 list API 의 item.visitCount 로 폴백(renderItem 참고).
   const visitCountByTrip = useMemo(() => {
     const m = new Map<string, number>();
     for (const v of allVisits) m.set(v.tripId, (m.get(v.tripId) ?? 0) + 1);
@@ -49,7 +51,9 @@ export default function TripsList() {
   // 라인 46 의 <Redirect/> 로 activeTripId 있으면 이 화면에 도달 못함 →
   // 'isActive Badge' 분기는 영구 dead. 진행 중 외근은 외근 탭 진입 시 active 화면이 직행으로 받음.
   const renderItem = ({ item }: { item: Trip }) => {
-    const visitCount = visitCountByTrip.get(item.id) ?? 0;
+    // 로컬 동기화 카운트 우선(세션 중 방문 추가/삭제 반영, list 응답보다 최신).
+    // 미동기화 trip(탭 첫 진입 등)은 list API 의 visitCount 로 폴백 — 전부 0건으로 뜨던 회로 차단.
+    const visitCount = visitCountByTrip.get(item.id) ?? item.visitCount ?? 0;
     const dateText = fmtDate(item.startedAt);
     const startTime = fmtTime(item.startedAt);
     return (
