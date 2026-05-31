@@ -21,6 +21,7 @@ import { API_BASE_URL } from '@/api';
 import { safeBack } from '@/utils/backNavigation';
 import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout } from '@/components/MapSheetLayout';
+import { KakaoMapWebView, fieldsToMarkers } from '@/components/KakaoMapWebView';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -28,7 +29,7 @@ import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
 import { fmtDateTime } from '@/utils/datetime';
-import type { FieldReport } from '@/types/entities';
+import type { Field, FieldReport } from '@/types/entities';
 
 // 현장별 전·중·후 사진 카드 (ERD v2: 보고서 본문 대체).
 function FieldReportCard({
@@ -114,6 +115,8 @@ export default function ReportDetail() {
   const removeFieldReport = useReportStore((s) => s.removeFieldReport);
   const allTrips = useTripStore((s) => s.trips);
   const getField = useFieldStore((s) => s.getById);
+  const allFields = useFieldStore((s) => s.fields);
+  const loadFieldDetail = useFieldStore((s) => s.loadDetail);
   const allVisits = useVisitStore((s) => s.visits);
   const userId = useAuthStore((s) => s.user?.id);
 
@@ -159,6 +162,26 @@ export default function ReportDetail() {
     }
     return Array.from(set);
   }, [fieldReports, trip, allVisits]);
+
+  // 위치도 마커 — overviewFieldIds 의 현장 객체(좌표)를 fieldStore 에서 lookup.
+  const overviewMarkers = useMemo(() => {
+    const byId = new Map(allFields.map((f) => [f.id, f]));
+    const out: Field[] = [];
+    for (const fid of overviewFieldIds) {
+      const f = byId.get(fid);
+      if (f) out.push(f);
+    }
+    return fieldsToMarkers(out);
+  }, [allFields, overviewFieldIds]);
+
+  // 위치도용 현장 좌표 확보 — 아직 fieldStore 에 없는 fieldId 만 detail 로드.
+  // overviewFieldIds/loadFieldDetail 에만 의존(allFields 제외) → 로드가 재발화를 유발하지 않음.
+  useEffect(() => {
+    for (const fid of overviewFieldIds) {
+      if (useFieldStore.getState().getById(fid)) continue;
+      void loadFieldDetail(fid);
+    }
+  }, [overviewFieldIds, loadFieldDetail]);
 
   if (!report) {
     // 첫 진입 race 동안 LoadingState 노출, fetch 끝났는데도 null 이면 'not found'.
@@ -274,13 +297,17 @@ export default function ReportDetail() {
           {report.updatedAt ? ` · 수정: ${fmtDateTime(report.updatedAt)}` : ''}
         </Text>
 
-        {overviewFieldIds.length > 0 ? (
-          <View style={styles.overviewHint}>
-            <Ionicons name="map-outline" size={12} color={colors.textMuted} />
-            <Text variant="caption" color="textMuted">
-              위치도 — 시트를 내려 그 외근의 현장 {overviewFieldIds.length}곳 확인
+        {/* 위치도 — 그 외근의 현장 전체를 담는 정적 지도(figure). BottomSheet 안이라 드래그/줌
+            비활성(interactive=false)으로 sheet pan 과 충돌 회피. 전체 탐색은 배경 지도로 위임. */}
+        {overviewMarkers.length > 0 ? (
+          <>
+            <Text variant="bodySm" weight="bold" color="textMuted" style={styles.mapLabel}>
+              위치도 — 현장 {overviewMarkers.length}곳
             </Text>
-          </View>
+            <View style={styles.overviewMap}>
+              <KakaoMapWebView markers={overviewMarkers} fitToMarkers interactive={false} />
+            </View>
+          </>
         ) : null}
 
         <View style={styles.sectionHead}>
@@ -392,12 +419,13 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   meta: { marginTop: spacing.sm },
-  overviewHint: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginTop: spacing.md,
-    paddingVertical: spacing.xs,
+  mapLabel: { marginTop: spacing.lg, marginBottom: spacing.xs },
+  overviewMap: {
+    height: 300,
+    borderRadius: radius.lg,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   sectionHead: {
     flexDirection: 'row',

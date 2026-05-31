@@ -27,6 +27,8 @@ interface MapHtmlOptions {
   // true 면 center/level 대신 모든 마커가 한 화면에 들어오도록 setBounds 로 자동 프레이밍.
   // 위치도(보고서 작성 미리보기 등)처럼 "현장 전체를 담는" 정적 뷰에 사용.
   fitToMarkers?: boolean;
+  // false 면 드래그/줌 비활성 — BottomSheet 안 등 pan 충돌 회피용 정적 위치도(figure).
+  interactive?: boolean;
 }
 
 export function buildKakaoMapHtml({
@@ -37,6 +39,7 @@ export function buildKakaoMapHtml({
   showBoundary = false,
   myLocation = null,
   fitToMarkers = false,
+  interactive = true,
 }: MapHtmlOptions): string {
   // RN WebView와 웹 iframe 양쪽에서 메시지 전송 가능한 브리지 스크립트
   const postMsgFn = `function postMsg(msg){var s=JSON.stringify(msg);if(window.ReactNativeWebView){window.ReactNativeWebView.postMessage(s);}else if(window.parent&&window.parent!==window){window.parent.postMessage(s,'*');}}`;
@@ -101,6 +104,7 @@ MARKERS.forEach(function(m){
   var SHOW_BOUNDARY = ${showBoundaryLiteral};
   var MY_LOCATION = ${myLocationLiteral};
   var FIT_TO_MARKERS = ${fitToMarkers ? 'true' : 'false'};
+  var INTERACTIVE = ${interactive ? 'true' : 'false'};
   var BOUNDARY_URL = 'https://raw.githubusercontent.com/southkorea/southkorea-maps/master/kostat/2018/json/skorea-municipalities-2018-topo-simple.json';
   ${postMsgFn}
 
@@ -118,6 +122,8 @@ MARKERS.forEach(function(m){
     });
     // RN 측 injectJavaScript 에서 in-place 갱신을 위해 전역에 노출.
     window.__mfzMap = map;
+    // 정적 위치도(figure) — 드래그/줌 차단. BottomSheet 등에서 pan 충돌 회피 + 보고서 그림용.
+    if (!INTERACTIVE) { map.setDraggable(false); map.setZoomable(false); }
 
     // KWCAG 1.4.1 — status 별 색 + 형상 + 라벨 3중 인코딩 SVG.
     // count>1: 우상단 카운트 뱃지 + 라벨 absolute(좌표 정확도 무손실).

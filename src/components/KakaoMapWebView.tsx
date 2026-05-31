@@ -40,6 +40,8 @@ interface Props {
   myLocation?: { lat: number; lng: number } | null;
   // true 면 모든 마커가 한 화면에 들어오도록 자동 프레이밍 (center 무시). 위치도 미리보기용.
   fitToMarkers?: boolean;
+  // false 면 드래그/줌 비활성 — BottomSheet 안 등 pan 충돌 회피용 정적 위치도.
+  interactive?: boolean;
   onMarkerPress?: (fieldId: string) => void;
 }
 
@@ -52,6 +54,7 @@ export function KakaoMapWebView({
   showBoundary = false,
   myLocation = null,
   fitToMarkers = false,
+  interactive = true,
   onMarkerPress,
 }: Props) {
   const webRef = useRef<WebView>(null);
@@ -84,8 +87,9 @@ export function KakaoMapWebView({
         showBoundary,
         myLocation: initialMyLocationRef.current,
         fitToMarkers,
+        interactive,
       }),
-    [kakaoJsKey, groupedMarkers, displayMode, showBoundary, fitToMarkers],
+    [kakaoJsKey, groupedMarkers, displayMode, showBoundary, fitToMarkers, interactive],
   );
 
   // 후속 center 변경 → in-place setCenter (pan/zoom 보존).

@@ -62,6 +62,8 @@ interface Props {
   myLocation?: { lat: number; lng: number } | null;
   // true 면 모든 마커가 한 화면에 들어오도록 자동 프레이밍 (center 무시). 위치도 미리보기용.
   fitToMarkers?: boolean;
+  // false 면 드래그/줌 비활성 — BottomSheet 안 등 pan 충돌 회피용 정적 위치도.
+  interactive?: boolean;
   onMarkerPress?: (fieldId: string) => void;
 }
 
@@ -85,6 +87,8 @@ type KakaoMap = {
   setCenter: (latlng: unknown) => void;
   setLevel: (level: number) => void;
   setBounds: (bounds: LatLngBounds, pt?: number, pr?: number, pb?: number, pl?: number) => void;
+  setDraggable: (v: boolean) => void;
+  setZoomable: (v: boolean) => void;
 };
 type KakaoGlobal = {
   maps: {
@@ -162,6 +166,7 @@ export function KakaoMapWebView({
   showBoundary = false,
   myLocation = null,
   fitToMarkers = false,
+  interactive = true,
   onMarkerPress,
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -230,6 +235,13 @@ export function KakaoMapWebView({
     markers.forEach((m) => bounds.extend(new k.maps.LatLng(m.lat, m.lng)));
     mapRef.current.setBounds(bounds, 40, 40, 56, 40);
   }, [ready, markers, fitToMarkers]);
+
+  // 정적 위치도(figure) — 드래그/줌 차단. BottomSheet pan 충돌 회피 + 보고서 그림용.
+  useEffect(() => {
+    if (!ready || !mapRef.current) return;
+    mapRef.current.setDraggable(interactive);
+    mapRef.current.setZoomable(interactive);
+  }, [ready, interactive]);
 
   // myLocation 오버레이 — ready 후 한 번 / myLocation 변경 시 재배치.
   useEffect(() => {

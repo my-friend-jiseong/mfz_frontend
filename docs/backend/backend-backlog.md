@@ -716,6 +716,43 @@ body: { format: 'word' | 'pdf' }
 
 ---
 
+## 20. 🟠 보고서 Word/PDF 출력에 "위치도" 이미지 자동 삽입
+
+### 배경
+프론트는 보고서 작성·상세 화면에 그 외근의 **현장 전체를 한 화면에 담는 위치도**를
+이미 렌더한다 (`KakaoMapWebView` + `fitToMarkers` — 모든 마커가 들어오도록 `setBounds`).
+그러나 이건 **카카오 JS SDK 로 그리는 라이브 지도(DOM/WebView)** 이지 래스터 이미지가 아니다.
+사용자 요구는 이 위치도가 **다운로드되는 Word(추후 PDF) 문서 안에도 그림으로** 들어가는 것.
+
+### 제약 — 카카오는 정적지도 REST 이미지 API 가 없음
+구글 Static Maps / 네이버 Static Map 과 달리 카카오는 `markers=...` 를 URL 로 받아 PNG 를
+돌려주는 서버사이드 엔드포인트가 없다 (정적지도는 JS SDK `StaticMap` 뿐). 따라서 URL 한 줄로
+이미지를 얻는 길은 막혀 있고, 아래 둘 중 하나가 필요:
+
+1. **(권장) 백엔드가 export 시 렌더** — headless 브라우저(puppeteer 등)로 카카오 JS 지도를
+   띄워 마커·fitBounds 적용 후 스크린샷 → docx 에 삽입. 서버 생성 문서라 결과가 일관됨.
+2. **프론트 캡처 후 업로드** — 네이티브는 `react-native-view-shot` 으로 WebView 픽셀 캡처가
+   가능(크로스오리진 타일도 native 캡처라 무방). **단 웹은 html2canvas 가 카카오 타일을
+   canvas-taint 로 못 담아 불가** → 크로스플랫폼 신뢰성이 떨어짐.
+
+### 백엔드가 해야 할 것
+- export(`outputFileUrl` 생성 / §19 PDF) 파이프라인에 위치도 figure 1장 삽입.
+- 입력: 그 보고서/외근의 현장 좌표 목록(이미 보유) + 마커 색/형상은 status 기준(프론트와 동일 규칙).
+- fitBounds 동등 프레이밍(현장 전체 포함) + 적당한 패딩.
+
+### 프론트엔드 영향
+- 백엔드 렌더(1안) 채택 시 프론트 추가 작업 없음 — 화면 위치도와 문서 위치도가 따로 살아도 OK.
+- 2안 채택 시 네이티브에서 캡처→업로드 훅 추가 필요. (웹 미지원 한계 명시)
+
+### 발견 시점
+2026-06-01 (보고서 위치도 인라인화 사이클 — 사용자가 "Word 로 가져올 때도 있어야" 확인).
+
+### 관련 코드
+- 프론트 [`src/components/KakaoMapWebView.tsx`](../../src/components/KakaoMapWebView.tsx) · [`src/assets/kakaoMapHtml.ts`](../../src/assets/kakaoMapHtml.ts) (`fitToMarkers`)
+- 프론트 [`app/(tabs)/reports/new.tsx`](../../app/\(tabs\)/reports/new.tsx) · [`app/(tabs)/reports/[id]/index.tsx`](../../app/\(tabs\)/reports/\[id\]/index.tsx) (인라인 위치도)
+
+---
+
 ## 변경 이력
 
 - **2026-05-08**: 백로그 신설. §1 길찾기 카카오-only 정책 반영. (이전 §1 title 은 백엔드 처리 완료로 제거)
@@ -730,4 +767,5 @@ body: { format: 'word' | 'pdf' }
 - **2026-05-30**: §15 추가 — 인증/프로필 UX 검토(B-5) 중 발견. 프로필 수정 endpoint 부재(낮). 단일 actor 정책상 우선순위 낮음, 자체 처리 의지 누적 시 격상.
 - **2026-05-31**: §16 추가 — 2차 QA(#10) 디버깅 중 발견. `timeline[].fieldId` 누락(중상). 세션 재진입 후 visit 이 카드/지도에서 빠지는 회로. 프론트는 optional 선반영.
 - **2026-05-31**: §17 추가 — 2차 QA 기타. 더미 데이터 보강 요청(낮). 시연 시각화(히트맵/마커 그룹/외근 카드) 가능치 확보.
+- **2026-06-01**: §20 추가 — 보고서 위치도 인라인화 사이클. 화면엔 fitToMarkers 위치도 반영, Word/PDF 문서 삽입은 카카오 정적지도 REST 부재로 백엔드 렌더(권장) 또는 네이티브 캡처 필요(중상).
 - **2026-05-31**: §18·§19 추가 — 보고서 양식 변경 사이클. §18 보고서+현장보고 단축 생성(낮·round-trip 절감), §19 PDF export(중상·새 양식 인쇄/공유). 결정 §1~§7 은 보고서 양식 변경 사이클에서 확정(계획서는 반영 후 정리, git 이력 참조).
