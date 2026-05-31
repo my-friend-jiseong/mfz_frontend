@@ -115,18 +115,34 @@ export function MapDashboard({ scopeFieldIds }: MapDashboardProps = {}) {
   // 카메라 중심 우선순위 — scoped 화면(외근 상세/진행 중)에서는 scope 클러스터 centroid 가
   // myLocation 보다 우선. 사용자가 멀리 떨어진 외근을 열 때 destination 마커가 화면 밖으로
   // 밀려 보이지 않던 회로 차단. scope 가 없거나 비어 있으면 내 위치로 폴백.
+  //
+  // scoped centroid 는 "1회 프레이밍" — 한 번 확정하면 고정한다. 외근 진입 후 목적지 상세가
+  // 비동기로 하나씩 로드되며 scopedFields 가 커지면 centroid 값이 미세하게 흔들리는데,
+  // 그 변화가 KakaoMapWebView 의 setCenter 를 재발화시켜 사용자가 드래그한 지도를 도로
+  // 목적지 중심으로 끌어당기던 회로 차단. 모든 목적지가 로드되면(=완전한 프레이밍) freeze 하고,
+  // 그 뒤엔 일반 지도처럼 드래그 위치가 유지된다. 스코프(scopeFieldIds)가 바뀌면 재프레이밍.
+  const scopedCenterRef = useRef<{ key: string; center: LatLng } | null>(null);
   const mapCenter = useMemo(() => {
     if (scopeFieldIds && scopedFields.length > 0) {
+      const key = scopeFieldIds.join(',');
+      if (scopedCenterRef.current?.key === key) {
+        return scopedCenterRef.current.center;
+      }
       let sumLat = 0;
       let sumLng = 0;
       for (const f of scopedFields) {
         sumLat += f.latitude;
         sumLng += f.longitude;
       }
-      return {
+      const center = {
         lat: sumLat / scopedFields.length,
         lng: sumLng / scopedFields.length,
       };
+      // 목적지가 전부 로드됐을 때만 freeze — 부분 집합으로 프레이밍한 채 굳는 것 방지.
+      if (scopedFields.length === scopeFieldIds.length) {
+        scopedCenterRef.current = { key, center };
+      }
+      return center;
     }
     return myLocation ?? undefined;
   }, [scopeFieldIds, scopedFields, myLocation]);
