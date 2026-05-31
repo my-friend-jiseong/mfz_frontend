@@ -735,6 +735,31 @@ body: { format: 'word' | 'pdf' }
    가능(크로스오리진 타일도 native 캡처라 무방). **단 웹은 html2canvas 가 카카오 타일을
    canvas-taint 로 못 담아 불가** → 크로스플랫폼 신뢰성이 떨어짐.
 
+### 백엔드 렌더 동작 원리 (1안 상세)
+"프론트가 그린 화면을 서버가 가져오는" 게 아니라, **서버가 동일한 지도 웹페이지를 자기
+headless 브라우저로 새로 그려 사진을 찍는 것**이다. 카카오 지도는 사용자 기기에 묶인 게
+아니라 `sdk.js`(JS) + 카카오 서버에서 받는 타일 PNG 로 이뤄진 그냥 웹페이지라, 브라우저
+환경이면 서버 안에서도 똑같이 렌더된다.
+
+```
+[Word/PDF export 요청]
+  → 서버가 headless Chromium(puppeteer/playwright) 실행
+  → buildKakaoMapHtml() 과 사실상 같은 HTML 로드 (SDK → 마커 → fitBounds)
+  → 타일 로드 완료 대기: kakao.maps.event.addListener(map,'tilesloaded'|'idle', …)
+  → page.screenshot()  →  지도 PNG 1장
+  → docx 에 그림으로 삽입
+```
+
+**왜 이건 되고 웹 프론트 html2canvas 는 안 되나**: html2canvas 는 DOM 을 `<canvas>` 에 다시
+그린 뒤 `toDataURL()` 로 픽셀을 빼는데, 교차출처(cross-origin) 타일이 올라가는 순간 canvas
+가 taint 되어 추출이 차단된다. headless 스크린샷은 canvas 를 안 거치고 브라우저 엔진이
+화면 전체를 OS 레벨로 래스터화하는 진짜 사진이라 taint 개념이 적용되지 않는다.
+
+**실무상 주의 — 카카오 JS 키 도메인(referer)**: 카카오 JS SDK 는 개발자콘솔에 등록된 웹
+도메인에서만 동작한다(referer 검사). headless 크롬이 로드하는 페이지도 등록된 도메인에서
+서빙하거나, puppeteer `page.setExtraHTTPHeaders({ Referer: '<등록 도메인>' })` 로 referer
+를 맞춰야 지도가 뜬다. 이 한 가지만 처리하면 나머지는 정형적인 작업(대기→캡처→삽입)이다.
+
 ### 백엔드가 해야 할 것
 - export(`outputFileUrl` 생성 / §19 PDF) 파이프라인에 위치도 figure 1장 삽입.
 - 입력: 그 보고서/외근의 현장 좌표 목록(이미 보유) + 마커 색/형상은 status 기준(프론트와 동일 규칙).
