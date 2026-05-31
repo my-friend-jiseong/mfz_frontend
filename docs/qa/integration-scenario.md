@@ -2,11 +2,11 @@
 
 > 작성: 2026-05-28 · 대상 빌드: `feat/erd-v2-frontend` (HEAD `9b0a67c` 기준)
 > 진행 환경: web (`npm run web` 또는 `npm run build:web` 정적 서브) — 모바일 전용(카메라/마이크 네이티브, expo-secure-store) 은 web fallback 평가
-> 백엔드: `EXPO_PUBLIC_API_BASE_URL` 미설정 시 운영 도메인 `https://ilgayo.co.kr` ([config.ts](../src/api/config.ts))
+> 백엔드: `EXPO_PUBLIC_API_BASE_URL` 미설정 시 운영 도메인 `https://ilgayo.co.kr` ([config.ts](../../src/api/config.ts))
 >
 > 이 문서는 "무엇을 어떻게 시도하는가" 만 정의. 발견 사항은 별도 QA 로그로 누적.
 
-> ⚠️ **선행 조건 — 백엔드 ERD v2 여부**: 본 시나리오는 백엔드가 ERD v2([ERD_REVOLUTION.md](ERD_REVOLUTION.md)) 로 배포된 상태를 가정한다. 운영 도메인이 아직 v1 이면 mutation 단계에서 계약 불일치(404·400) 가 나는 것이 정상이며, 그 경우 v2 백엔드(스테이징/로컬) 의 URL 을 `.env.local` `EXPO_PUBLIC_API_BASE_URL` 로 지정한 뒤 재실행한다.
+> ⚠️ **선행 조건 — 백엔드 ERD v2 여부**: 본 시나리오는 백엔드가 ERD v2([ERD_REVOLUTION.md](../reference/ERD_REVOLUTION.md)) 로 배포된 상태를 가정한다. 운영 도메인이 아직 v1 이면 mutation 단계에서 계약 불일치(404·400) 가 나는 것이 정상이며, 그 경우 v2 백엔드(스테이징/로컬) 의 URL 을 `.env.local` `EXPO_PUBLIC_API_BASE_URL` 로 지정한 뒤 재실행한다.
 > ⚠️ **운영 데이터 보호**: 운영 도메인을 그대로 쓰는 동안에는 mutation(회원가입·현장·외근·보고서 생성) 을 자동 실행하지 않는다. 자동 검증은 read-only(부팅·렌더·콘솔 에러) 만, mutation 은 v2 백엔드 확보 후 수동/별도 spec.
 
 ---
@@ -24,7 +24,7 @@
 
 ## 1. 자동 검증 가능 (read-only · 백엔드 mutation 불필요)
 
-> Playwright 헤드리스([qa-runner.mjs](../qa-runner.mjs)) 또는 수동 web 으로 확인. 핵심 목적: **대규모 리팩터 후 번들/부팅/렌더가 깨지지 않는지** + 삭제된 모듈(`geofence`·`offlineQueueStore`·`OfflineBadge`·`api/network`·`app/shared`) 잔존 import 로 인한 런타임 크래시 부재.
+> Playwright 헤드리스([qa-runner.mjs](../../qa-runner.mjs)) 또는 수동 web 으로 확인. 핵심 목적: **대규모 리팩터 후 번들/부팅/렌더가 깨지지 않는지** + 삭제된 모듈(`geofence`·`offlineQueueStore`·`OfflineBadge`·`api/network`·`app/shared`) 잔존 import 로 인한 런타임 크래시 부재.
 
 ### A1. 번들 성공
 - `npm run build:web` 이 에러 없이 export 완료. (삭제 모듈을 import 하는 코드가 남아 있으면 여기서 실패 → 강한 신호)

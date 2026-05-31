@@ -55,15 +55,15 @@ providers: {
 2026-05-08 (외근 시작 → 길찾기 클릭 → 의도 없이 구글맵 단독 진입 보고)
 
 ### 관련 코드
-- 프론트 [`app/(tabs)/trips/active.tsx:187-233`](../app/\(tabs\)/trips/active.tsx) `handleNavigate`
-- 백엔드 [`mfz_backend/src/fieldwork/tripsService.js:1274-1312`](../../mfz_backend/src/fieldwork/tripsService.js) `buildMapDeepLink` / `createNavigationDeepLinks`
+- 프론트 [`app/(tabs)/trips/active.tsx:187-233`](../../app/\(tabs\)/trips/active.tsx) `handleNavigate`
+- 백엔드 [`mfz_backend/src/fieldwork/tripsService.js:1274-1312`](../../../mfz_backend/src/fieldwork/tripsService.js) `buildMapDeepLink` / `createNavigationDeepLinks`
 
 ---
 
 ## 2. 🟡 `PATCH /api/trips/:tripId` / `DELETE /api/trips/:tripId` 신설
 
 ### 배경
-Trip 자원에 Update·Delete 엔드포인트가 없음. Field 는 `PATCH /api/fields/:fieldId` / `DELETE /api/fields/:fieldId` 가 있어 [`fields/[id]/edit.tsx`](../app/\(tabs\)/fields/\[id\]/edit.tsx) 에서 사용 중인데 Trip 만 비대칭. 프론트의 외근 상세 화면 ([`trips/[id].tsx`](../app/\(tabs\)/trips/\[id\].tsx)) 에 수정·삭제 UI 가 들어갈 자리가 없음.
+Trip 자원에 Update·Delete 엔드포인트가 없음. Field 는 `PATCH /api/fields/:fieldId` / `DELETE /api/fields/:fieldId` 가 있어 [`fields/[id]/edit.tsx`](../../app/\(tabs\)/fields/\[id\]/edit.tsx) 에서 사용 중인데 Trip 만 비대칭. 프론트의 외근 상세 화면 ([`trips/[id].tsx`](../../app/\(tabs\)/trips/\[id\].tsx)) 에 수정·삭제 UI 가 들어갈 자리가 없음.
 
 ### 백엔드가 해야 할 것
 
@@ -98,7 +98,7 @@ DELETE /api/trips/:tripId
 ### 프론트엔드가 할 일 (백엔드 준비 후)
 - `tripStore.update(tripId, body)` / `tripStore.remove(tripId)` 추가
 - `tripsApi.update` / `tripsApi.remove` 추가
-- 외근 상세 ([`trips/[id].tsx`](../app/\(tabs\)/trips/\[id\].tsx)) 에 "수정 / 삭제" CTA 추가, 또는 별도 edit 화면 (`trips/[id]/edit.tsx`) 구성 — Field 패턴 그대로
+- 외근 상세 ([`trips/[id].tsx`](../../app/\(tabs\)/trips/\[id\].tsx)) 에 "수정 / 삭제" CTA 추가, 또는 별도 edit 화면 (`trips/[id]/edit.tsx`) 구성 — Field 패턴 그대로
 - 활성 외근일 땐 삭제 버튼 비활성
 
 ### 우선순위
@@ -142,8 +142,8 @@ HTTP status 는 200 정상이라 클라이언트 catch 분기도 안 탐. `manua
 2026-05-09 (Playwright 통합 자동화 재실행 중 캡처)
 
 ### 관련 코드
-- 프론트 호출 [`src/api/endpoints/fields.ts:192`](../src/api/endpoints/fields.ts#L192) `addressSearch`
-- 프론트 사용 [`app/(tabs)/fields/new.tsx:75-100`](../app/\(tabs\)/fields/new.tsx#L75) 디바운스 + 카카오 호출
+- 프론트 호출 [`src/api/endpoints/fields.ts:192`](../../src/api/endpoints/fields.ts#L192) `addressSearch`
+- 프론트 사용 [`app/(tabs)/fields/new.tsx:75-100`](../../app/\(tabs\)/fields/new.tsx#L75) 디바운스 + 카카오 호출
 
 ---
 
@@ -156,7 +156,7 @@ HTTP status 는 200 정상이라 클라이언트 catch 분기도 안 탐. `manua
 { "code": "detail_address_required", "message": "상세 주소를 입력해주세요" }
 ```
 
-그런데 클라이언트 [`fields/new.tsx`](../app/\(tabs\)/fields/new.tsx) 의 "상세 주소 (동/호수 등)" 입력은 placeholder 만 있고 강제 입력 없음. 사용자가 빈 채로 "현장 등록" 누르면 백엔드가 거부 → 일반 Alert (`등록 실패`) 로 떨어짐. `detail_address_required` 코드는 클라이언트 ERROR_MESSAGES 표에도 누락이라 코드 분기로 인라인 필드 에러도 못 띄움.
+그런데 클라이언트 [`fields/new.tsx`](../../app/\(tabs\)/fields/new.tsx) 의 "상세 주소 (동/호수 등)" 입력은 placeholder 만 있고 강제 입력 없음. 사용자가 빈 채로 "현장 등록" 누르면 백엔드가 거부 → 일반 Alert (`등록 실패`) 로 떨어짐. `detail_address_required` 코드는 클라이언트 ERROR_MESSAGES 표에도 누락이라 코드 분기로 인라인 필드 에러도 못 띄움.
 
 ### 결정 필요 — 두 방향 중 하나로 정합
 - **(A) 백엔드 측에서 optional 로 완화**: detailAddress 가 없는 경우 빈 문자열로 저장. 이유: 모든 현장이 동·호수 단위로 식별 가능한 건 아님 (예: 가로수, 광장).
@@ -173,8 +173,8 @@ HTTP status 는 200 정상이라 클라이언트 catch 분기도 안 탐. `manua
 2026-05-09 (Playwright 자동화 spec 의 빈 detail 등록 시도에서 캡처)
 
 ### 관련 코드
-- 프론트 [`app/(tabs)/fields/new.tsx:360-366`](../app/\(tabs\)/fields/new.tsx#L360) detail 입력
-- 프론트 [`src/api/errors.ts`](../src/api/errors.ts) ERROR_MESSAGES (코드 누락)
+- 프론트 [`app/(tabs)/fields/new.tsx:360-366`](../../app/\(tabs\)/fields/new.tsx#L360) detail 입력
+- 프론트 [`src/api/errors.ts`](../../src/api/errors.ts) ERROR_MESSAGES (코드 누락)
 
 ---
 
@@ -187,15 +187,15 @@ HTTP status 는 200 정상이라 클라이언트 catch 분기도 안 탐. `manua
 2026-05-31 — `tripsApi.optimizePreview` 와 관련 타입 (`OptimizePreviewBody`/`OptimizePreviewResponse`) 모두 삭제. `trips/new/order.tsx` 의 `handleOptimize` 는 `nearestNeighborOrder` 만 호출 (동기). 외근 시작 후 단계의 `POST /api/trips/{tripId}/navigation/optimize` 는 그대로 유지 — 그쪽은 백엔드 contract 살아있음.
 
 ### 관련 코드
-- 프론트 [`app/(tabs)/trips/new/order.tsx`](../app/\(tabs\)/trips/new/order.tsx) — 호출부 (현재 nearest-neighbor 만)
-- 프론트 [`src/utils/routeOptimize.ts`](../src/utils/routeOptimize.ts) — 알고리즘
+- 프론트 [`app/(tabs)/trips/new/order.tsx`](../../app/\(tabs\)/trips/new/order.tsx) — 호출부 (현재 nearest-neighbor 만)
+- 프론트 [`src/utils/routeOptimize.ts`](../../src/utils/routeOptimize.ts) — 알고리즘
 
 ---
 
 ## 6. 🟠 현장 삭제 — 방문 기록 있어도 cascade 로 삭제 허용
 
 ### 배경
-현재 `DELETE /api/fields/:fieldId` 가 방문 기록(`visits`) 이 연결돼 있으면 `has_related_visits` 코드로 차단. 프론트의 [`fields/[id]/edit.tsx:281-293`](../app/\(tabs\)/fields/\[id\]/edit.tsx) 가 그 코드를 받아 "방문 기록이 남아 있는 현장은 삭제할 수 없습니다" 안내만 띄움. 단일 Actor 가 본인 현장을 정리하려 해도 막혀 있어 운용 시 자기 데이터를 못 지움.
+현재 `DELETE /api/fields/:fieldId` 가 방문 기록(`visits`) 이 연결돼 있으면 `has_related_visits` 코드로 차단. 프론트의 [`fields/[id]/edit.tsx:281-293`](../../app/\(tabs\)/fields/\[id\]/edit.tsx) 가 그 코드를 받아 "방문 기록이 남아 있는 현장은 삭제할 수 없습니다" 안내만 띄움. 단일 Actor 가 본인 현장을 정리하려 해도 막혀 있어 운용 시 자기 데이터를 못 지움.
 
 ### 백엔드가 해야 할 것
 **(A) 가드 제거 + cascade 삭제** (정책 권장)
@@ -212,7 +212,7 @@ HTTP status 는 200 정상이라 클라이언트 catch 분기도 안 탐. `manua
 
 ### 프론트엔드 영향
 - `fieldStore.remove` 의 결과 분기에서 `needsConfirm` 처리 변경 — confirm 다이얼로그 후 force 옵션으로 재호출.
-- [`fields/[id]/edit.tsx:283`](../app/\(tabs\)/fields/\[id\]/edit.tsx) 의 안내 문구 재작성 — "삭제할 수 없습니다" → "방문 N건과 첨부물도 함께 삭제됩니다. 계속할까요?".
+- [`fields/[id]/edit.tsx:283`](../../app/\(tabs\)/fields/\[id\]/edit.tsx) 의 안내 문구 재작성 — "삭제할 수 없습니다" → "방문 N건과 첨부물도 함께 삭제됩니다. 계속할까요?".
 - `src/api/errors.ts` 의 `has_related_visits` 메시지 갱신 또는 코드 자체 deprecate.
 
 ### 우선순위
@@ -222,9 +222,9 @@ HTTP status 는 200 정상이라 클라이언트 catch 분기도 안 탐. `manua
 2026-05-10 (요구사항 정리 #1)
 
 ### 관련 코드
-- 프론트 [`fieldStore.remove`](../src/stores/fieldStore.ts) — `needsConfirm` 분기
-- 프론트 [`fields/[id]/edit.tsx:273-306`](../app/\(tabs\)/fields/\[id\]/edit.tsx) `performDelete`/`handleDelete`
-- 프론트 [`src/api/errors.ts:95`](../src/api/errors.ts#L95) `has_related_visits` 매핑
+- 프론트 [`fieldStore.remove`](../../src/stores/fieldStore.ts) — `needsConfirm` 분기
+- 프론트 [`fields/[id]/edit.tsx:273-306`](../../app/\(tabs\)/fields/\[id\]/edit.tsx) `performDelete`/`handleDelete`
+- 프론트 [`src/api/errors.ts:95`](../../src/api/errors.ts#L95) `has_related_visits` 매핑
 
 ---
 
@@ -254,7 +254,7 @@ HTTP status 는 200 정상이라 클라이언트 catch 분기도 안 탐. `manua
 - 이 방식이면 보고서 lifecycle 단순. 다만 클라이언트는 2-step.
 
 ### 프론트엔드 영향 (백엔드 결정 후)
-- **(B) 채택**: [`reportStore.create`](../src/stores/reportStore.ts) 에 사진 인자 추가 → multipart 빌더 사용. [`reports/new.tsx`](../app/\(tabs\)/reports/new.tsx) `handleManualSave` 본문 가드 풀고 "제목 + (본문 OR 사진)" 로 재작성.
+- **(B) 채택**: [`reportStore.create`](../../src/stores/reportStore.ts) 에 사진 인자 추가 → multipart 빌더 사용. [`reports/new.tsx`](../../app/\(tabs\)/reports/new.tsx) `handleManualSave` 본문 가드 풀고 "제목 + (본문 OR 사진)" 로 재작성.
 - **(C) 채택**: `handleManualSave` 가 create → attach 2-step. 실패 시 보고서 롤백 정책 필요.
 
 ### 우선순위
@@ -264,9 +264,9 @@ HTTP status 는 200 정상이라 클라이언트 catch 분기도 안 탐. `manua
 2026-05-10 (요구사항 정리 #2)
 
 ### 관련 코드
-- 프론트 [`app/(tabs)/reports/new.tsx:274-301`](../app/\(tabs\)/reports/new.tsx#L274) `handleManualSave`
-- 프론트 [`src/api/endpoints/reports.ts:56-61`](../src/api/endpoints/reports.ts#L56) `CreateReportBody`
-- 프론트 [`src/stores/reportStore.ts:125-150`](../src/stores/reportStore.ts#L125) `create`
+- 프론트 [`app/(tabs)/reports/new.tsx:274-301`](../../app/\(tabs\)/reports/new.tsx#L274) `handleManualSave`
+- 프론트 [`src/api/endpoints/reports.ts:56-61`](../../src/api/endpoints/reports.ts#L56) `CreateReportBody`
+- 프론트 [`src/stores/reportStore.ts:125-150`](../../src/stores/reportStore.ts#L125) `create`
 - 백엔드 `POST /api/reports` body schema
 
 ---
@@ -297,7 +297,7 @@ HTTP status 는 200 정상이라 클라이언트 catch 분기도 안 탐. `manua
 
 > 체크인 → **조치 전** 사진/설명 → 조치 및 **조치 중** 사진/설명 → 조치 완료 → **조치 후** 사진/설명
 
-각 phase 별 사진+짧은 설명이 결국 보고서에 그대로 들어감. 현재 데이터 모델은 visit 하위 attachment 가 평면적(`text`/`photo`/`audio`) 이라 phase 구분이 없음. 결과: 사용자가 보고서 작성 시 어떤 사진이 "조치 전" 인지 매번 다시 분류해야 함 (현재 [`reports/new.tsx:156-162`](../app/\(tabs\)/reports/new.tsx#L156) 의 promptChoice 로 사용자가 직접 슬롯 지정).
+각 phase 별 사진+짧은 설명이 결국 보고서에 그대로 들어감. 현재 데이터 모델은 visit 하위 attachment 가 평면적(`text`/`photo`/`audio`) 이라 phase 구분이 없음. 결과: 사용자가 보고서 작성 시 어떤 사진이 "조치 전" 인지 매번 다시 분류해야 함 (현재 [`reports/new.tsx:156-162`](../../app/\(tabs\)/reports/new.tsx#L156) 의 promptChoice 로 사용자가 직접 슬롯 지정).
 
 ### 백엔드가 해야 할 것
 **(A) attachment 에 phase 필드 추가**
@@ -326,10 +326,10 @@ HTTP status 는 200 정상이라 클라이언트 catch 분기도 안 탐. `manua
 2026-05-10 (요구사항 정리 #9 — 현장 워크플로우 청취 결과 반영)
 
 ### 관련 코드
-- 프론트 [`app/(tabs)/fields/[id]/checkin.tsx`](../app/\(tabs\)/fields/\[id\]/checkin.tsx)
-- 프론트 [`app/(tabs)/trips/visit.tsx`](../app/\(tabs\)/trips/visit.tsx)
-- 프론트 [`app/(tabs)/reports/new.tsx:142-162`](../app/\(tabs\)/reports/new.tsx#L142) `handleImportPhotoTap`
-- 프론트 [`src/types/entities.ts`](../src/types/entities.ts) attachment 타입
+- 프론트 [`app/(tabs)/fields/[id]/checkin.tsx`](../../app/\(tabs\)/fields/\[id\]/checkin.tsx)
+- 프론트 [`app/(tabs)/trips/visit.tsx`](../../app/\(tabs\)/trips/visit.tsx)
+- 프론트 [`app/(tabs)/reports/new.tsx:142-162`](../../app/\(tabs\)/reports/new.tsx#L142) `handleImportPhotoTap`
+- 프론트 [`src/types/entities.ts`](../../src/types/entities.ts) attachment 타입
 
 ---
 
@@ -347,7 +347,7 @@ HTTP status 는 200 정상이라 클라이언트 catch 분기도 안 탐. `manua
 - 보고서 export(공유 URL/다운로드) 시 zip 패키지 < 20MB 보장 (초과 시 추가 압축 라운드 또는 분할).
 
 ### 프론트엔드 영향
-- 업로드 응답이 presigned URL 흐름으로 바뀌면 [`src/utils/media.ts`](../src/utils/media.ts) 의 업로드 회로 재작성 필요.
+- 업로드 응답이 presigned URL 흐름으로 바뀌면 [`src/utils/media.ts`](../../src/utils/media.ts) 의 업로드 회로 재작성 필요.
 - 클라이언트도 사전 리샘플 1라운드 두면 백엔드 부하 감소 (대개 sharp/canvas — `expo-image-manipulator` 사용 가능).
 
 ### 우선순위
@@ -361,7 +361,7 @@ HTTP status 는 200 정상이라 클라이언트 catch 분기도 안 탐. `manua
 ## 11. 🟠 외근 destinations 영속화 + GET endpoint — 다른 디바이스·세션에서 "계획 0곳" 회로 차단
 
 ### 배경
-프론트의 `destinationStore` ([`src/stores/destinationStore.ts`](../src/stores/destinationStore.ts)) 는 **로컬 + AsyncStorage 전용**. 사용자가 외근을 시작할 때 `bulkCreate(tripId, fieldIds[])` 로 로컬에만 적재되고, 백엔드엔 destinations 데이터가 보내지지 않음. 그래서 다음 회로가 깨짐:
+프론트의 `destinationStore` ([`src/stores/destinationStore.ts`](../../src/stores/destinationStore.ts)) 는 **로컬 + AsyncStorage 전용**. 사용자가 외근을 시작할 때 `bulkCreate(tripId, fieldIds[])` 로 로컬에만 적재되고, 백엔드엔 destinations 데이터가 보내지지 않음. 그래서 다음 회로가 깨짐:
 
 - 사용자 A 가 디바이스 1 에서 외근 시작 (현장 3곳) → destinations 로컬 적재.
 - 같은 사용자 A 가 디바이스 2 (또는 새 브라우저) 에서 같은 외근 조회 → trip 자체는 `GET /api/trips/list` 응답에 들어 있지만 destinations 가 로컬에 없으므로 **"계획 0곳 · 실제 방문 0건"** 으로 표시. 사용자는 "분명 3곳 골랐는데" 로 혼란.
@@ -369,7 +369,7 @@ HTTP status 는 200 정상이라 클라이언트 catch 분기도 안 탐. `manua
 - AsyncStorage 손상·정리 케이스도 동일.
 
 부수적으로:
-- 트립 상세 화면의 "계획된 목적지" 섹션 ([`trips/[id].tsx`](../app/\(tabs\)/trips/\[id\].tsx) `planBox`) 도 로컬 destinations 없으면 비노출.
+- 트립 상세 화면의 "계획된 목적지" 섹션 ([`trips/[id].tsx`](../../app/\(tabs\)/trips/\[id\].tsx) `planBox`) 도 로컬 destinations 없으면 비노출.
 - 진행 중 외근의 다음 목적지 / 순서 변경 / 건너뛰기 / 도착 마크 같은 lifecycle 도 사용자가 시작한 디바이스에서만 일관성 보장.
 
 ### 백엔드가 해야 할 것
@@ -419,7 +419,7 @@ body: { status?: 'arrived' | 'skipped'; order?: number; }
   - hydrate 가 AsyncStorage 가 아니라 trip 별 GET 으로 (또는 (D) 적용 시 trip 상세 로드 시점 부수효과).
   - bulkCreate 가 로컬 임시 적재 → API 응답 결과로 교체 (server id 로 키 정렬).
   - markArrived/markSkipped/reorder 는 (C) PATCH 호출 후 응답 반영. 오프라인 큐 지원.
-- 트립 상세 [`trips/[id].tsx:215`](../app/\(tabs\)/trips/\[id\].tsx#L215) 의 "계획 N곳 · 실제 방문 M건" 라인 — 본 사이클에서 `trip.siteCount` (`TripListItem.siteCount`) 우선 사용으로 1차 회피 적용. 백엔드 destinations endpoint 가 들어오면 server-truth 단일화.
+- 트립 상세 [`trips/[id].tsx:215`](../../app/\(tabs\)/trips/\[id\].tsx#L215) 의 "계획 N곳 · 실제 방문 M건" 라인 — 본 사이클에서 `trip.siteCount` (`TripListItem.siteCount`) 우선 사용으로 1차 회피 적용. 백엔드 destinations endpoint 가 들어오면 server-truth 단일화.
 
 ### 우선순위
 🟠 중상 — 사용자 외근 lifecycle 의 핵심 데이터가 다른 디바이스에서 새는 회로. 단일 사용자/단일 디바이스 시나리오에선 막힘 없으나, 모바일·웹 동시 사용 / 디바이스 교체 / 캐시 정리 후 재진입 시 즉시 노출.
@@ -428,9 +428,9 @@ body: { status?: 'arrived' | 'skipped'; order?: number; }
 2026-05-11 (사용자 보고: "외근 생성할 땐 3곳 골랐는데 트립 상세에 계획 0곳·실제 방문 0건 으로 나옴")
 
 ### 관련 코드
-- 프론트 [`src/stores/destinationStore.ts`](../src/stores/destinationStore.ts) — 현 로컬 전용 구현
-- 프론트 [`app/(tabs)/trips/new/order.tsx:158`](../app/\(tabs\)/trips/new/order.tsx#L158) — `bulkCreate` 호출 지점 (server-side 로 옮길 자리)
-- 프론트 [`app/(tabs)/trips/[id].tsx:215`](../app/\(tabs\)/trips/\[id\].tsx#L215) — 카운트 라인 (siteCount fallback 1차 적용 지점)
+- 프론트 [`src/stores/destinationStore.ts`](../../src/stores/destinationStore.ts) — 현 로컬 전용 구현
+- 프론트 [`app/(tabs)/trips/new/order.tsx:158`](../../app/\(tabs\)/trips/new/order.tsx#L158) — `bulkCreate` 호출 지점 (server-side 로 옮길 자리)
+- 프론트 [`app/(tabs)/trips/[id].tsx:215`](../../app/\(tabs\)/trips/\[id\].tsx#L215) — 카운트 라인 (siteCount fallback 1차 적용 지점)
 - 백엔드 trips/destinations 라우트 신설 — 위 (A)~(C) (선택적으로 (D))
 
 ---
@@ -438,9 +438,9 @@ body: { status?: 'arrived' | 'skipped'; order?: number; }
 ## 12. 🟠 ERD 파악 및 최신화 — 프론트와 합동 진행
 
 ### 배경
-[`docs/ERD.drawio`](./ERD.drawio) 가 현재 백엔드 실제 스키마와 어디까지 맞물리는지 확인된 바 없음. 본 백로그 §6~§11 (현장 cascade, 보고서 본문/multipart, visit phase, MinIO/압축, destinations 영속화) 가 모두 데이터 모델 변경을 동반하는데, 단일한 ERD 진실값이 없어 다음 회로에서 어긋남:
+[`docs/ERD.drawio`](../diagram/ERD.drawio) 가 현재 백엔드 실제 스키마와 어디까지 맞물리는지 확인된 바 없음. 본 백로그 §6~§11 (현장 cascade, 보고서 본문/multipart, visit phase, MinIO/압축, destinations 영속화) 가 모두 데이터 모델 변경을 동반하는데, 단일한 ERD 진실값이 없어 다음 회로에서 어긋남:
 
-- 프론트 [`src/types/entities.ts`](../src/types/entities.ts) 의 `Trip`/`Field`/`Visit`/`Destination` 등 인터페이스가 백엔드 실제 컬럼과 1:1 인지 검증 어려움 (현재는 응답 typing 으로만 간접 추적).
+- 프론트 [`src/types/entities.ts`](../../src/types/entities.ts) 의 `Trip`/`Field`/`Visit`/`Destination` 등 인터페이스가 백엔드 실제 컬럼과 1:1 인지 검증 어려움 (현재는 응답 typing 으로만 간접 추적).
 - `TripListItem.siteCount`/`visitCount` 같은 derived 값이 어떤 join/count 로 계산되는지 ERD 만 봐선 모름 — §11 destinations 영속화 후 변경 영향 평가도 막힘.
 - visit phase (§9) / report 첨부 분기 (§7) / fields cascade (§6) 가 들어가면 어떤 FK/제약/인덱스가 추가/수정되는지 ERD 에 반영 필요.
 
@@ -470,8 +470,8 @@ body: { status?: 'arrived' | 'skipped'; order?: number; }
 2026-05-11 (사용자 — "ERD 파악 및 최신화도 백로그에 추가, 프론트랑 합동")
 
 ### 관련 자료
-- [`docs/ERD.drawio`](./ERD.drawio) — 현재 ERD (검증 미수행)
-- 프론트 [`src/types/entities.ts`](../src/types/entities.ts) — 프론트 데이터 모델
+- [`docs/ERD.drawio`](../diagram/ERD.drawio) — 현재 ERD (검증 미수행)
+- 프론트 [`src/types/entities.ts`](../../src/types/entities.ts) — 프론트 데이터 모델
 - 본 백로그 §6 (cascade), §7 (보고서), §9 (visit phase), §10 (파일 인프라), §11 (destinations) — 각 항목이 ERD 변경을 동반
 
 ---
@@ -503,7 +503,7 @@ POST /api/reports/generate (multipart)  → 500 { code: "internal_server_error",
 2026-05-28 (ERD v2 통합 검증, 실호출).
 
 ### 관련 코드
-- 프론트 [`src/api/endpoints/reports.ts`](../src/api/endpoints/reports.ts) `generate`, [`src/stores/reportStore.ts`](../src/stores/reportStore.ts) `generate`, [`app/(tabs)/reports/new.tsx`](../app/\(tabs\)/reports/new.tsx) `handleAiGenerate`
+- 프론트 [`src/api/endpoints/reports.ts`](../../src/api/endpoints/reports.ts) `generate`, [`src/stores/reportStore.ts`](../../src/stores/reportStore.ts) `generate`, [`app/(tabs)/reports/new.tsx`](../../app/\(tabs\)/reports/new.tsx) `handleAiGenerate`
 
 ---
 
@@ -538,9 +538,9 @@ DELETE /api/fields/:fieldId/photos/:photoId
 2026-05-30 (현장 라이프사이클 UX 검토 — C9-C).
 
 ### 관련 코드
-- 프론트 API: [`src/api/endpoints/fields.ts`](../src/api/endpoints/fields.ts) `removeTextMemo`, `removePhoto`
-- 프론트 스토어: [`src/stores/fieldStore.ts`](../src/stores/fieldStore.ts)
-- UI: [`app/(tabs)/fields/[id]/index.tsx`](../app/\(tabs\)/fields/\[id\]/index.tsx), [`src/components/AttachmentPreview.tsx`](../src/components/AttachmentPreview.tsx) `PhotoGrid` `onDelete`
+- 프론트 API: [`src/api/endpoints/fields.ts`](../../src/api/endpoints/fields.ts) `removeTextMemo`, `removePhoto`
+- 프론트 스토어: [`src/stores/fieldStore.ts`](../../src/stores/fieldStore.ts)
+- UI: [`app/(tabs)/fields/[id]/index.tsx`](../../app/\(tabs\)/fields/\[id\]/index.tsx), [`src/components/AttachmentPreview.tsx`](../../src/components/AttachmentPreview.tsx) `PhotoGrid` `onDelete`
 
 ---
 
@@ -574,7 +574,7 @@ PATCH /api/me/password
 2026-05-30 (인증/프로필 UX 검토 — B-5).
 
 ### 관련 코드
-- 프론트 [`src/api/endpoints/auth.ts`](../src/api/endpoints/auth.ts), [`app/(tabs)/profile.tsx`](../app/\(tabs\)/profile.tsx)
+- 프론트 [`src/api/endpoints/auth.ts`](../../src/api/endpoints/auth.ts), [`app/(tabs)/profile.tsx`](../../app/\(tabs\)/profile.tsx)
 
 ---
 
@@ -623,8 +623,8 @@ export interface TripTimelineEntry {
 2026-05-30 (2차 QA — #10).
 
 ### 관련 코드
-- 프론트 [`src/api/endpoints/trips.ts`](../src/api/endpoints/trips.ts),
-  [`src/stores/visitStore.ts`](../src/stores/visitStore.ts)
+- 프론트 [`src/api/endpoints/trips.ts`](../../src/api/endpoints/trips.ts),
+  [`src/stores/visitStore.ts`](../../src/stores/visitStore.ts)
 
 ---
 
@@ -682,7 +682,7 @@ skipped destination 은 제외.
 2026-05-31 (보고서 양식 변경 — RP2).
 
 ### 관련 코드
-- 프론트 [`src/stores/reportStore.ts`](../src/stores/reportStore.ts) `createWithVisitScaffold`
+- 프론트 [`src/stores/reportStore.ts`](../../src/stores/reportStore.ts) `createWithVisitScaffold`
 
 ---
 
@@ -712,7 +712,7 @@ body: { format: 'word' | 'pdf' }
 2026-05-31 (보고서 양식 변경 — 결정 §6).
 
 ### 관련 코드
-- 프론트 [`app/(tabs)/reports/[id]/index.tsx`](../app/\(tabs\)/reports/\[id\]/index.tsx)
+- 프론트 [`app/(tabs)/reports/[id]/index.tsx`](../../app/\(tabs\)/reports/\[id\]/index.tsx)
 
 ---
 
