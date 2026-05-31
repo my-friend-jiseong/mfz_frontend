@@ -13,7 +13,6 @@ import { Text } from '@/components/ui/Text';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFieldStore } from '@/stores/fieldStore';
-import { safeBack } from '@/utils/backNavigation';
 import { pickPhoto, promptPhotoSource } from '@/utils/media';
 import { useTripStore } from '@/stores/tripStore';
 import { useVisitStore } from '@/stores/visitStore';
@@ -189,7 +188,13 @@ export default function FieldCheckin() {
         markDestinationArrived(dest.id);
       }
     }
-    safeBack(router);
+    // safeBack 대신 명시적 replace — 체크인은 trips/active 에서 cross-tab push 로 들어와
+    // fields 탭의 stack 에 단일 screen 으로 박혀 있다. safeBack 의 canGoBack 은 그 fields stack
+    // 기준으로 false → fallback replace('/(tabs)/trips') 가 trips/index 의 Redirect 를 거치는
+    // 우회 경로인데, web 에서 cross-tab replace 가 navigator state 를 깔끔히 전환 못해
+    // URL 만 바뀌고 화면이 그대로 남는 회로가 있었다. 우리는 정확히 active 으로 돌아갈
+    // 의도라 history 의존 없이 직행.
+    router.replace('/(tabs)/trips/active' as never);
   };
 
   return (
