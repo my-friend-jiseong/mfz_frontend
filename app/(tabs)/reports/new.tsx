@@ -21,6 +21,8 @@ import { safeBack } from '@/utils/backNavigation';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { KakaoMapWebView, fieldsToMarkers } from '@/components/KakaoMapWebView';
+import type { Field } from '@/types/entities';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
@@ -39,6 +41,8 @@ export default function ComposeReport() {
   const loadTripDetail = useTripStore((s) => s.loadDetail);
   const userId = useAuthStore((s) => s.user?.id);
   const allVisits = useVisitStore((s) => s.visits);
+  const allFields = useFieldStore((s) => s.fields);
+  const loadFieldDetail = useFieldStore((s) => s.loadDetail);
 
   const [tripId, setTripId] = useState<string | null>(params.tripId ?? null);
   const [title, setTitle] = useState('');
@@ -99,6 +103,40 @@ export default function ComposeReport() {
   }, [tripId, allVisits]);
 
   const scaffoldFieldIds = tripVisits.map((v) => v.fieldId).filter(Boolean);
+
+  // 위치도 — 선택 외근의 방문 현장 객체(좌표 포함)를 fieldStore 에서 lookup (중복 제거).
+  const previewFields = useMemo(() => {
+    const byId = new Map(allFields.map((f) => [f.id, f]));
+    const seen = new Set<string>();
+    const out: Field[] = [];
+    for (const v of tripVisits) {
+      const fid = v.fieldId;
+      if (!fid || seen.has(fid)) continue;
+      const f = byId.get(fid);
+      if (f) {
+        out.push(f);
+        seen.add(fid);
+      }
+    }
+    return out;
+  }, [allFields, tripVisits]);
+
+  const previewMarkers = useMemo(
+    () => fieldsToMarkers(previewFields),
+    [previewFields],
+  );
+
+  // 위치도용 현장 좌표 확보 — visits 의 fieldId 중 fieldStore 에 아직 없는 것만 detail 로드.
+  // tripVisits/loadFieldDetail 에만 의존하고 allFields 엔 의존하지 않음 → loadFieldDetail 이
+  // fields 를 갱신해도 재발화하지 않아 무한 루프 없음(getById 가드가 이미 받은 건 skip).
+  useEffect(() => {
+    for (const v of tripVisits) {
+      const fid = v.fieldId;
+      if (!fid) continue;
+      if (useFieldStore.getState().getById(fid)) continue;
+      void loadFieldDetail(fid);
+    }
+  }, [tripVisits, loadFieldDetail]);
 
   // submit 가드 — 외근 없는 사용자 동선 안내 (F5).
   const noTripsAtAll = myTrips.length === 0;
@@ -228,6 +266,19 @@ export default function ComposeReport() {
             이 외근은 방문 기록이 없어 현장 보고가 자동 생성되지 않습니다.
             보고서 생성 후 상세 화면에서 직접 추가할 수 있어요.
           </Text>
+        ) : null}
+
+        {/* 위치도 — 연결 외근의 방문 현장 전체를 한 화면에 담는 미리보기 지도 (fitToMarkers).
+            좌표가 비동기로 도착하면 마커가 채워지며 자동 재프레이밍. */}
+        {selectedTrip && previewMarkers.length > 0 ? (
+          <>
+            <Text variant="bodySm" weight="bold" color="textMuted" style={styles.label}>
+              위치도 — 현장 {previewMarkers.length}곳
+            </Text>
+            <View style={styles.previewMap}>
+              <KakaoMapWebView markers={previewMarkers} fitToMarkers />
+            </View>
+          </>
         ) : null}
 
         {/* 외근 없는 사용자 — 보고서 생성 자체가 불가하므로 외근부터 시작하도록 안내 (F5) */}
@@ -373,6 +424,14 @@ const styles = StyleSheet.create({
   changeBtn: { alignSelf: 'flex-start', marginTop: spacing.xs },
   pickTripBtn: { marginTop: spacing.xs },
   scaffoldHint: { marginTop: spacing.md },
+  previewMap: {
+    height: 300,
+    marginTop: spacing.xs,
+    borderRadius: radius.lg,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
   noTripsCard: {
     marginTop: spacing.md,
     backgroundColor: colors.surfaceMuted,

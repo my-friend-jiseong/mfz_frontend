@@ -60,6 +60,8 @@ interface Props {
   displayMode?: MapDisplayMode;
   showBoundary?: boolean;
   myLocation?: { lat: number; lng: number } | null;
+  // true 면 모든 마커가 한 화면에 들어오도록 자동 프레이밍 (center 무시). 위치도 미리보기용.
+  fitToMarkers?: boolean;
   onMarkerPress?: (fieldId: string) => void;
 }
 
@@ -78,11 +80,17 @@ function ensureMyLocPulseStyle() {
 }
 
 type Overlay = { setMap: (m: unknown | null) => void };
-type KakaoMap = { setCenter: (latlng: unknown) => void };
+type LatLngBounds = { extend: (latlng: unknown) => void };
+type KakaoMap = {
+  setCenter: (latlng: unknown) => void;
+  setLevel: (level: number) => void;
+  setBounds: (bounds: LatLngBounds, pt?: number, pr?: number, pb?: number, pl?: number) => void;
+};
 type KakaoGlobal = {
   maps: {
     load: (cb: () => void) => void;
     LatLng: new (lat: number, lng: number) => unknown;
+    LatLngBounds: new () => LatLngBounds;
     Map: new (container: HTMLElement, options: { center: unknown; level: number }) => KakaoMap;
     Marker: new (options: { position: unknown; map: unknown; title?: string }) => Overlay;
     Circle: new (options: {
@@ -153,6 +161,7 @@ export function KakaoMapWebView({
   displayMode = 'markers',
   showBoundary = false,
   myLocation = null,
+  fitToMarkers = false,
   onMarkerPress,
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -198,12 +207,29 @@ export function KakaoMapWebView({
   }, [kakaoJsKey]);
 
   // mount 후 center prop 변경 — map.setCenter 로 in-place 갱신 (init useEffect 가 무시하던 회로 차단).
+  // fitToMarkers 모드에선 아래 setBounds 가 프레이밍을 잡으므로 center 추종 생략.
   useEffect(() => {
-    if (!ready || !mapRef.current || !center) return;
+    if (!ready || !mapRef.current || !center || fitToMarkers) return;
     const k = getKakao();
     if (!k) return;
     mapRef.current.setCenter(new k.maps.LatLng(center.lat, center.lng));
-  }, [ready, center?.lat, center?.lng]);
+  }, [ready, center?.lat, center?.lng, fitToMarkers]);
+
+  // fitToMarkers — 모든 마커가 한 화면에 들어오도록 setBounds. 마커가 비동기로 도착(현장 좌표
+  // 로드)하면 다시 맞춤. 1개면 setBounds 가 최대 줌으로 튀어 부적절 → 센터 + 적당한 level.
+  useEffect(() => {
+    if (!ready || !mapRef.current || !fitToMarkers || markers.length === 0) return;
+    const k = getKakao();
+    if (!k) return;
+    if (markers.length === 1) {
+      mapRef.current.setCenter(new k.maps.LatLng(markers[0].lat, markers[0].lng));
+      mapRef.current.setLevel(5);
+      return;
+    }
+    const bounds = new k.maps.LatLngBounds();
+    markers.forEach((m) => bounds.extend(new k.maps.LatLng(m.lat, m.lng)));
+    mapRef.current.setBounds(bounds, 40, 40, 56, 40);
+  }, [ready, markers, fitToMarkers]);
 
   // myLocation 오버레이 — ready 후 한 번 / myLocation 변경 시 재배치.
   useEffect(() => {

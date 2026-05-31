@@ -24,6 +24,9 @@ interface MapHtmlOptions {
   showBoundary?: boolean;
   // 사용자 현재 위치 — 있으면 별도 파란 점 + pulse 링으로 표시. 클릭 비활성.
   myLocation?: { lat: number; lng: number } | null;
+  // true 면 center/level 대신 모든 마커가 한 화면에 들어오도록 setBounds 로 자동 프레이밍.
+  // 위치도(보고서 작성 미리보기 등)처럼 "현장 전체를 담는" 정적 뷰에 사용.
+  fitToMarkers?: boolean;
 }
 
 export function buildKakaoMapHtml({
@@ -33,6 +36,7 @@ export function buildKakaoMapHtml({
   displayMode = 'markers',
   showBoundary = false,
   myLocation = null,
+  fitToMarkers = false,
 }: MapHtmlOptions): string {
   // RN WebView와 웹 iframe 양쪽에서 메시지 전송 가능한 브리지 스크립트
   const postMsgFn = `function postMsg(msg){var s=JSON.stringify(msg);if(window.ReactNativeWebView){window.ReactNativeWebView.postMessage(s);}else if(window.parent&&window.parent!==window){window.parent.postMessage(s,'*');}}`;
@@ -96,6 +100,7 @@ MARKERS.forEach(function(m){
   var MODE = ${modeLiteral};
   var SHOW_BOUNDARY = ${showBoundaryLiteral};
   var MY_LOCATION = ${myLocationLiteral};
+  var FIT_TO_MARKERS = ${fitToMarkers ? 'true' : 'false'};
   var BOUNDARY_URL = 'https://raw.githubusercontent.com/southkorea/southkorea-maps/master/kostat/2018/json/skorea-municipalities-2018-topo-simple.json';
   ${postMsgFn}
 
@@ -157,6 +162,21 @@ MARKERS.forEach(function(m){
           yAnchor: 0.5,
         });
       });
+    }
+
+    // 모든 마커가 한 화면에 들어오도록 자동 프레이밍 — center/level 고정 대신.
+    // 1개면 setBounds 가 최대 줌으로 튀어 부적절 → 그 점에 센터 + 적당한 level.
+    function fitBounds(){
+      if (!FIT_TO_MARKERS || MARKERS.length === 0) return;
+      if (MARKERS.length === 1) {
+        map.setCenter(new kakao.maps.LatLng(MARKERS[0].lat, MARKERS[0].lng));
+        map.setLevel(5);
+        return;
+      }
+      var bounds = new kakao.maps.LatLngBounds();
+      MARKERS.forEach(function(m){ bounds.extend(new kakao.maps.LatLng(m.lat, m.lng)); });
+      // padding(px): top,right,bottom,left — 라벨이 마커 아래 떠서 하단 여유 더 줌.
+      map.setBounds(bounds, 40, 40, 56, 40);
     }
 
     function renderHeatmap(){
@@ -274,6 +294,7 @@ MARKERS.forEach(function(m){
       // markers · choropleth 모두 마커 표시
       renderMarkers();
     }
+    fitBounds();
 
     applyMyLocation(MY_LOCATION);
     renderPolygons();
