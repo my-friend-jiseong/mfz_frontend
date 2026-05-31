@@ -70,14 +70,20 @@ export default function ComposeReport() {
     (s) => (tripId ? s.detailStatus[tripId] === 'loading' : false),
   );
 
-  // 선택된 외근의 detail (visits) 동기화 — myTrips 매치 검증 통과해야 호출 (G4).
-  // 본인 소유 아닌 foreign tripId 가 백엔드로 leak 되는 회로 차단.
+  // tripId 가 본인 소유 외근인지 — 안정적 boolean. myTrips 배열 참조가 아니라 이 값에 의존해야
+  // 아래 detail 동기화 effect 가 무한 루프에 빠지지 않는다 (loadTripDetail → trips 새 배열 →
+  // myTrips 새 참조 → effect 재실행 → … 304 가 끝없이 도는 회로). 멤버십이 그대로면 true 유지.
+  const tripIsOwned = useMemo(
+    () => (tripId ? myTrips.some((t) => t.id === tripId) : false),
+    [tripId, myTrips],
+  );
+
+  // 선택된 외근의 detail (visits) 동기화 — 본인 소유 검증 통과해야 호출 (G4).
+  // 본인 소유 아닌 foreign tripId 가 백엔드로 leak 되는 회로 차단. tripId/소유여부가 바뀔 때만 1회.
   useEffect(() => {
-    if (!tripId) return;
-    if (myTrips.length === 0) return; // myTrips 미해소 — 검증 보류
-    if (!myTrips.some((t) => t.id === tripId)) return; // foreign tripId — 호출 차단
+    if (!tripId || !tripIsOwned) return;
     void loadTripDetail(tripId);
-  }, [tripId, myTrips, loadTripDetail]);
+  }, [tripId, tripIsOwned, loadTripDetail]);
 
   const selectedTrip = useMemo(
     () => (tripId ? myTrips.find((t) => t.id === tripId) ?? null : null),
