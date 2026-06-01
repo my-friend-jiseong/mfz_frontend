@@ -102,6 +102,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   already_ended_trip: '외근이 이미 종료되었습니다',
   // 현장 (Field)
   field_not_found: '현장을 찾을 수 없습니다',
+  // backend-backlog §4 (A) — 백엔드 optional 완화 전까지의 안전망 메시지.
+  detail_address_required: '상세 주소를 입력해주세요',
   coordinates_out_of_korea: '대한민국 영역 내 좌표만 입력 가능합니다',
   duplicate_address_warning_required: '같은 주소의 현장이 이미 있습니다',
   has_related_visits: '방문 기록이 있어 삭제할 수 없습니다',

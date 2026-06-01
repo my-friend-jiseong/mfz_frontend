@@ -115,7 +115,7 @@ HTTP status 는 200 정상이라 클라이언트 catch 분기도 안 탐. `manua
 
 ---
 
-## 4. 🟡 `detailAddress` 정책 정합 — 백엔드는 필수, 프론트는 선택
+## 4. 🟡 `detailAddress` optional 완화 요청 — 백엔드 nullable 화 (방향 (A) 확정)
 
 ### 배경
 `POST /api/fields` 가 `detailAddress` 빠진 요청에 대해 400 응답:
@@ -124,25 +124,30 @@ HTTP status 는 200 정상이라 클라이언트 catch 분기도 안 탐. `manua
 { "code": "detail_address_required", "message": "상세 주소를 입력해주세요" }
 ```
 
-그런데 클라이언트 [`fields/new.tsx`](../../app/\(tabs\)/fields/new.tsx) 의 "상세 주소 (동/호수 등)" 입력은 placeholder 만 있고 강제 입력 없음. 사용자가 빈 채로 "현장 등록" 누르면 백엔드가 거부 → 일반 Alert (`등록 실패`) 로 떨어짐. `detail_address_required` 코드는 클라이언트 ERROR_MESSAGES 표에도 누락이라 코드 분기로 인라인 필드 에러도 못 띄움.
+그런데 클라이언트 [`fields/new.tsx`](../../app/\(tabs\)/fields/new.tsx) 의 "상세 주소 (동/호수 등)" 입력은 placeholder 만 있고 강제 입력 없음. 사용자가 빈 채로 "현장 등록" 누르면 백엔드가 거부 → 일반 Alert (`등록 실패`) 로 떨어짐.
 
-### 결정 필요 — 두 방향 중 하나로 정합
-- **(A) 백엔드 측에서 optional 로 완화**: detailAddress 가 없는 경우 빈 문자열로 저장. 이유: 모든 현장이 동·호수 단위로 식별 가능한 건 아님 (예: 가로수, 광장).
-- **(B) 백엔드 정책 유지 + 프론트 측 강제**: 클라이언트가 사전 차단. 이유: 데이터 품질을 백엔드 단계에서 보장.
+### 결정 — (A) 백엔드 optional 완화로 확정 (2026-06-01)
+- **(A) ✅ 채택**: `detailAddress` 를 optional 로 완화 — 없으면 빈 문자열/null 로 저장하고 `detail_address_required` 400 을 던지지 않음. 이유: 모든 현장이 동·호수 단위로 식별 가능한 건 아님 (가로수, 광장, 교차로 등 point 성 현장). 프론트가 이미 optional 로 다루는 UX 와도 정합.
+- **(B) ✗ 기각**: 프론트 강제(별표+가드). 위 사유로 데이터 모델상 부적절.
 
-### 프론트엔드가 할 일 (둘 다 공통)
-- `detail_address_required` 를 `src/api/errors.ts` ERROR_MESSAGES 에 추가
-- (B) 채택 시 필드 라벨에 별표(*) + submit 직전 `if (!detail.trim()) errs.detail = '...'` 가드 + `inputError` 스타일 매핑
+### 백엔드가 할 일
+- `POST /api/fields` · `PATCH /api/fields/:id` 에서 `detailAddress` 를 optional 로 — 미전송/빈 값 허용, 빈 문자열(또는 null)로 저장.
+- `detail_address_required` 검증 제거 (또는 해당 경로 비활성).
+- ERD `location.detail_address` 컬럼 nullable 확인.
+
+### 프론트엔드 (완료)
+- `detail_address_required` → `src/api/errors.ts` ERROR_MESSAGES 추가 (백엔드 완화 배포 전까지 안전망 메시지). 2026-06-01 반영.
+- 프론트는 이미 detail 을 강제하지 않으므로 추가 UI 변경 없음.
 
 ### 우선순위
 🟡 중간 — 사용자가 첫 현장 등록에서 알 수 없는 이유로 차단됨. 새 사용자 첫 인상 관련.
 
 ### 발견 시점
-2026-05-09 (Playwright 자동화 spec 의 빈 detail 등록 시도에서 캡처)
+2026-05-09 (Playwright 자동화 spec 의 빈 detail 등록 시도에서 캡처). 2026-06-01 방향 (A) 확정.
 
 ### 관련 코드
 - 프론트 [`app/(tabs)/fields/new.tsx:360-366`](../../app/\(tabs\)/fields/new.tsx#L360) detail 입력
-- 프론트 [`src/api/errors.ts`](../../src/api/errors.ts) ERROR_MESSAGES (코드 누락)
+- 프론트 [`src/api/errors.ts`](../../src/api/errors.ts) ERROR_MESSAGES (`detail_address_required` 추가 완료)
 
 ---
 
@@ -754,5 +759,6 @@ headless 브라우저로 새로 그려 사진을 찍는 것**이다. 카카오 �
 - **2026-06-01**: §20 추가 — 보고서 위치도 인라인화 사이클. 화면엔 fitToMarkers 위치도 반영, Word/PDF 문서 삽입은 카카오 정적지도 REST 부재로 백엔드 렌더(권장) 또는 네이티브 캡처 필요(중상).
 - **2026-05-31**: §18·§19 추가 — 보고서 양식 변경 사이클. §18 보고서+현장보고 단축 생성(낮·round-trip 절감), §19 PDF export(중상·새 양식 인쇄/공유). 결정 §1~§7 은 보고서 양식 변경 사이클에서 확정(계획서는 반영 후 정리, git 이력 참조).
 - **2026-06-01**: 전체 우선순위 재검토. §17 클로즈(🟢→✅, 프론트 자가 시드로 백엔드 불요). §11 격상(🟠→🔴, 외근-현장 미표시의 실제 원인=지도 마커). §19·§20 강등(🟠→🟡, hidden 폴백 있어 차단 아님).
+- **2026-06-01**: §4 방향 (A) 확정 — `detailAddress` optional/nullable 완화를 백엔드에 요청(point 성 현장은 동·호수 없음). 프론트는 `detail_address_required` ERROR_MESSAGES 안전망 추가로 선반영.
 - **2026-06-01**: 백엔드 release 브랜치 대조 — 이미 조치된 항목 삭제·재기술. **§1 삭제**(deep-links 가 google 제거하고 kakao+naver 만 반환, 커밋 8aafcec — naver 는 프론트 http 가드로 걸러져 카카오만 남음, 핵심 버그 해소). **§6 삭제**(`?force=true` cascade 구현됨, option B — 백엔드 완료, 프론트가 confirm 후 force 재호출만 붙이면 되는 follow-up). **§16 격상 되돌림 🔴→🟡**: release `toTimelineCard` 가 fieldId 를 이미 포함(git -S 기준 최초 커밋부터) → 전제 오류, 라이브 검증 후 닫기 예정. §7(A) content min 10자 강제 없음 확인(완화 불요)·(B) multipart 만 잔존. §3 핸들러 코드 정상 → '0건' 은 KAKAO_REST_API_KEY 환경 사안(코드 아님).
 - **2026-06-01**: 운영(`ilgayo.co.kr`) read-only probe 로 전제 실측 검증. **§16 닫힘(🟡→✅)**: 라이브 `GET /api/trips/:tripId` timeline entry 가 fieldId 를 실제로 실어옴(`field-…c78aaeb8`/"대연 전기실"). **§3 실측 확인**: 4/4 키워드 여전히 0건 → KAKAO_REST_API_KEY 운영 키 사안 확정(데모 지오코딩도 폴백 중). **§11 실측 확인**: detail 에 destinations 없음 + `/destinations` 404 → 미구현 확정. 단 timeline 의 visit fieldId 로 완료 외근의 현장은 프론트만으로 도출 가능 → 보고된 버그는 프론트 우선 수정 가능, §11 백엔드는 계획 목적지 영속화 범위로 잔존. §18·§19 404(미구현) 확인.
