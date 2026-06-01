@@ -85,8 +85,14 @@ HTTP status 는 200 정상이라 클라이언트 catch 분기도 안 탐. `manua
 - 사용자가 "왜 검색이 안 되지?" 하는 혼란 — 본 백엔드 fix 후 자연 해결
 - Playwright 통합 자동화에서도 검색 단계를 매번 manual 우회로 처리 중
 
+### 라이브 재확인 (2026-06-01)
+운영 read-only probe 결과 여전히 `동아대학교 부민캠퍼스`·`부산광역시청`·`해운대해수욕장`·`부산 사하구 낙동대로 100`
+**4/4 모두 `HTTP 200 · items=0`**. 백엔드 핸들러 코드(`searchFieldAddress`)는 정상이므로 코드 버그가 아니라
+**`KAKAO_REST_API_KEY` 운영 환경값(만료/권한/도메인)** 문제로 확정. 부수효과: 데모 시드 스크립트의
+지오코딩(`seed_demo_data.mjs` `geocode()`)도 전부 폴백 좌표로 떨어지는 중.
+
 ### 우선순위
-🔴 높음 — 핵심 사용자 흐름 차단. 시나리오 S4·S5 가 manual 우회로만 동작.
+🔴 높음 — 핵심 사용자 흐름 차단. 시나리오 S4·S5 가 manual 우회로만 동작. (코드 아님 — 운영 키 설정 사안)
 
 ### 발견 시점
 2026-05-09 (Playwright 통합 자동화 재실행 중 캡처)
@@ -335,8 +341,17 @@ body: { status?: 'arrived' | 'skipped'; order?: number; }
   - markArrived/markSkipped/reorder 는 (C) PATCH 호출 후 응답 반영. 오프라인 큐 지원.
 - 트립 상세 [`trips/[id].tsx:215`](../../app/\(tabs\)/trips/\[id\].tsx#L215) 의 "계획 N곳 · 실제 방문 M건" 라인 — 본 사이클에서 `trip.siteCount` (`TripListItem.siteCount`) 우선 사용으로 1차 회피 적용. 백엔드 destinations endpoint 가 들어오면 server-truth 단일화.
 
+### 라이브 재확인 (2026-06-01)
+운영 read-only probe 로 미구현 확정: `GET /api/trips/:tripId` 응답에 `destinations` 키 없음 +
+`GET /api/trips/:tripId/destinations` → **404**. 단, 같은 응답의 `timeline[]` 은 visit 별 `fieldId` 를
+정상 제공(§16 닫힘). 따라서 **완료된 외근의 "관련 현장" 표시는 destinations 없이도 timeline 의 visit
+fieldId 로 도출 가능** → 프론트 우선 수정으로 보고된 버그를 백엔드 없이 해소할 수 있음. 본 항목(백엔드
+destinations 영속화)은 **계획된(미방문/skipped) 목적지·진행 중 외근·크로스 기기** 일관성용으로 여전히 유효.
+
 ### 우선순위
-🔴 높음 — §16 과 같은 증상("외근 선택 시 관련 현장 안 보임")의 지도측 절반. 카드는 §16(timeline fieldId), 지도 마커는 본 항목(destinations 영속화)에 의존 — §16 만 해결하면 마커는 여전히 빔. 모바일·웹 동시 사용 / 디바이스 교체 / 캐시 정리 후 재진입 시 즉시 노출.
+🔴 높음 — "외근 선택 시 관련 현장 안 보임" 의 지도측 절반(인라인 지도 마커가 client-only destinations 의존).
+모바일·웹 동시 사용 / 디바이스 교체 / 캐시 정리 후 재진입 시 즉시 노출. 단 보고된 버그의 즉효 수정은
+프론트(지도 마커를 visit fieldId 에서 도출)로 가능 — 본 백엔드 항목은 계획 목적지 영속화 범위로 잔존.
 
 ### 발견 시점
 2026-05-11 (사용자 보고: "외근 생성할 땐 3곳 골랐는데 트립 상세에 계획 0곳·실제 방문 0건 으로 나옴")
@@ -492,15 +507,16 @@ PATCH /api/me/password
 
 ---
 
-## 16. 🟡 `GET /api/trips/:tripId` — `timeline[].fieldId` 정식 포함 (거의 해결, 라이브 검증 대기)
+## 16. ✅ `GET /api/trips/:tripId` — `timeline[].fieldId` 정식 포함 (라이브 검증 완료, 닫힘)
 
-### 현황 (2026-06-01) — 백엔드 release 코드엔 이미 있음
-백엔드 대조 결과 `release` 브랜치의 `tripsService.js` `toTimelineCard()` 가 `fieldId: visit.fieldId`
-를 **이미 포함**(git -S 기준 최초 커밋부터 존재, ERD v2 e673227 에서도 유지). 즉 본 항목의
-전제("timeline 에 fieldId 누락")는 현재 코드와 맞지 않음 — QA 당시(05-30) 배포본이 mock 단계
-(dcecdb0)였을 가능성. **라이브 `GET /api/trips/:tripId` 응답에 `timeline[].fieldId` 가 실제로
-실려오는지 1회 확인하면 닫을 수 있음.** "외근 선택 시 관련 현장 안 보임" 의 잔여 원인은 카드(본 항목)
-가 아니라 지도 마커 → §11(destinations 영속화) 쪽.
+### 결과 (2026-06-01) — 이미 해결, 라이브 probe 로 확정
+운영(`ilgayo.co.kr`) read-only probe 결과 `GET /api/trips/:tripId` 의 `timeline[]` entry 가
+`fieldId` 를 **실제로 실어 보냄**: keys=`[visitId, fieldId, siteName, visitedAt, status, resultStatus]`,
+예) `fieldId="field-...c78aaeb8"`, `siteName="대연 전기실"`. 백엔드 `toTimelineCard()` 가 최초 커밋부터
+포함해 온 것과 일치. 본 항목 전제("timeline 에 fieldId 누락")는 현재 운영과 맞지 않음 — QA 당시(05-30)
+배포본이 mock 단계(dcecdb0)였던 것으로 추정. **방문 카드는 정상 동작해야 함.** "외근 선택 시 관련 현장
+안 보임" 의 잔여 원인은 카드(본 항목)가 아니라 인라인 지도 마커 → §11(destinations) 쪽이며, §11 은
+라이브에서 미구현 확인(detail 에 destinations 없음 + `/destinations` 404).
 
 ### 배경 (당시)
 2차 QA(2026-05-30) #10 — "외근 방문 여부가 제대로 저장되지 않음". 디버깅 결과 backend
@@ -724,4 +740,5 @@ headless 브라우저로 새로 그려 사진을 찍는 것**이다. 카카오 �
 - **2026-06-01**: §20 추가 — 보고서 위치도 인라인화 사이클. 화면엔 fitToMarkers 위치도 반영, Word/PDF 문서 삽입은 카카오 정적지도 REST 부재로 백엔드 렌더(권장) 또는 네이티브 캡처 필요(중상).
 - **2026-05-31**: §18·§19 추가 — 보고서 양식 변경 사이클. §18 보고서+현장보고 단축 생성(낮·round-trip 절감), §19 PDF export(중상·새 양식 인쇄/공유). 결정 §1~§7 은 보고서 양식 변경 사이클에서 확정(계획서는 반영 후 정리, git 이력 참조).
 - **2026-06-01**: 전체 우선순위 재검토. §17 클로즈(🟢→✅, 프론트 자가 시드로 백엔드 불요). §11 격상(🟠→🔴, 외근-현장 미표시의 실제 원인=지도 마커). §19·§20 강등(🟠→🟡, hidden 폴백 있어 차단 아님).
-- **2026-06-01**: 백엔드 release 브랜치 대조 — 이미 조치된 항목 삭제·재기술. **§1 삭제**(deep-links 가 google 제거하고 kakao+naver 만 반환, 커밋 8aafcec — naver 는 프론트 http 가드로 걸러져 카카오만 남음, 핵심 버그 해소). **§6 삭제**(`?force=true` cascade 구현됨, option B — 백엔드 완료, 프론트가 confirm 후 force 재호출만 붙이면 되는 follow-up). **§16 격상 되돌림 🔴→🟡**: release `toTimelineCard` 가 fieldId 를 이미 포함(git -S 기준 최초 커밋부터) → 전제 오류, 라이브 `GET /api/trips/:tripId` 응답 검증 후 닫기 예정. §7(A) content min 10자 강제 없음 확인(완화 불요)·(B) multipart 만 잔존. §3 핸들러 코드 정상 → '0건' 은 KAKAO_REST_API_KEY 환경 사안(코드 아님).
+- **2026-06-01**: 백엔드 release 브랜치 대조 — 이미 조치된 항목 삭제·재기술. **§1 삭제**(deep-links 가 google 제거하고 kakao+naver 만 반환, 커밋 8aafcec — naver 는 프론트 http 가드로 걸러져 카카오만 남음, 핵심 버그 해소). **§6 삭제**(`?force=true` cascade 구현됨, option B — 백엔드 완료, 프론트가 confirm 후 force 재호출만 붙이면 되는 follow-up). **§16 격상 되돌림 🔴→🟡**: release `toTimelineCard` 가 fieldId 를 이미 포함(git -S 기준 최초 커밋부터) → 전제 오류, 라이브 검증 후 닫기 예정. §7(A) content min 10자 강제 없음 확인(완화 불요)·(B) multipart 만 잔존. §3 핸들러 코드 정상 → '0건' 은 KAKAO_REST_API_KEY 환경 사안(코드 아님).
+- **2026-06-01**: 운영(`ilgayo.co.kr`) read-only probe 로 전제 실측 검증. **§16 닫힘(🟡→✅)**: 라이브 `GET /api/trips/:tripId` timeline entry 가 fieldId 를 실제로 실어옴(`field-…c78aaeb8`/"대연 전기실"). **§3 실측 확인**: 4/4 키워드 여전히 0건 → KAKAO_REST_API_KEY 운영 키 사안 확정(데모 지오코딩도 폴백 중). **§11 실측 확인**: detail 에 destinations 없음 + `/destinations` 404 → 미구현 확정. 단 timeline 의 visit fieldId 로 완료 외근의 현장은 프론트만으로 도출 가능 → 보고된 버그는 프론트 우선 수정 가능, §11 백엔드는 계획 목적지 영속화 범위로 잔존. §18·§19 404(미구현) 확인.
