@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { buildKakaoMapHtml, type MapDisplayMode } from '@/assets/kakaoMapHtml';
+import { KAKAO_WEBVIEW_BASE_URL } from '@/utils/kakaoMap';
 import type { Field, FieldStatus } from '@/types/entities';
 import { FIELD_STATUS_LABEL } from '@/types/entities';
 import { Text } from '@/components/ui/Text';
@@ -113,7 +114,7 @@ export function KakaoMapWebView({
       <WebView
         ref={webRef}
         originWhitelist={['*']}
-        source={{ html }}
+        source={{ html, baseUrl: KAKAO_WEBVIEW_BASE_URL }}
         javaScriptEnabled
         domStorageEnabled
         mixedContentMode="compatibility"

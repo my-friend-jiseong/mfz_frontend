@@ -2,6 +2,7 @@ import { useCallback, useRef } from 'react';
 import { View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import type { AddressSearchItem } from '@/api';
+import { KAKAO_WEBVIEW_BASE_URL } from '@/utils/kakaoMap';
 
 // 카카오 장소(키워드) 검색을 클라이언트에서 수행하는 헤드리스 브릿지.
 // 백엔드 /address/search 는 도로명 주소만 매칭 → "동아대학교" 같은 POI 는 0건.
@@ -55,7 +56,7 @@ export function useKakaoPlaceSearch() {
       <WebView
         ref={webRef}
         originWhitelist={['*']}
-        source={{ html: buildSearchHtml(kakaoJsKey) }}
+        source={{ html: buildSearchHtml(kakaoJsKey), baseUrl: KAKAO_WEBVIEW_BASE_URL }}
         javaScriptEnabled
         domStorageEnabled
         onLoadEnd={() => {

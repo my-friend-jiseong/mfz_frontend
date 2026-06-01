@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import type { PinAddress } from '@/utils/addressSearch';
+import { KAKAO_WEBVIEW_BASE_URL } from '@/utils/kakaoMap';
 import { colors } from '@/theme/colors';
 import { radius } from '@/theme/spacing';
 
@@ -50,7 +51,7 @@ export function FieldPinMap({ lat, lng, onDragEnd, height = 220 }: Props) {
       <WebView
         ref={webRef}
         originWhitelist={['*']}
-        source={{ html }}
+        source={{ html, baseUrl: KAKAO_WEBVIEW_BASE_URL }}
         javaScriptEnabled
         domStorageEnabled
         mixedContentMode="compatibility"
