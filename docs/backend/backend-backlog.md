@@ -10,56 +10,6 @@
 
 ---
 
-## 1. 🟠 길찾기 deep-links — 카카오 web URL 만 단독 반환
-
-### 배경
-`POST /api/trips/:tripId/navigation/deep-links` 응답이 현재 카카오·구글·네이버 3종을 모두 반환:
-
-```js
-providers: {
-  kakao:  "kakaomap://route?ep=lat,lng&by=CAR",   // 모바일 앱 스킴
-  google: "https://www.google.com/maps/dir/...",  // HTTPS web URL
-  naver:  "nmap://route/car?...",                 // 모바일 앱 스킴
-}
-```
-
-웹 브라우저에서 `kakaomap://`·`nmap://` 앱 스킴은 처리 불가. 프론트의 안전 가드(`url.startsWith('http')`) 가 둘을 걸러내면 구글만 남아 **선택 다이얼로그 없이 곧장 구글맵으로 진입** — 카카오 정책에 어긋남.
-
-### 백엔드가 해야 할 것
-서비스 정책상 **카카오만 사용**. 응답 단순화:
-
-```js
-providers: {
-  kakao: "https://map.kakao.com/link/to/이름,lat,lng"   // web/mobile 모두 처리 가능한 단일 URL
-}
-```
-
-또는 모바일 앱 우선·웹 fallback 둘 다 노출:
-```js
-providers: {
-  kakaoApp: "kakaomap://route?ep=lat,lng&by=CAR",
-  kakaoWeb: "https://map.kakao.com/link/to/이름,lat,lng"
-}
-```
-
-`google`·`naver` 키는 응답에서 제거.
-
-### 프론트엔드 영향
-- `active.tsx` 의 `handleNavigate` — provider 선택 다이얼로그 로직 제거, 카카오 한 종만 열도록 단순화
-- 응답 typing (`NavigationDeepLinksResponse`) 도 `providers: { kakao: string }` 으로 좁힘
-
-### 우선순위
-🟠 중상 — 단순 불편이 아니라 카카오-only 지도 정책 위반. web 사용자가 카카오로 가야 할 자리에 구글로 단독 진입.
-
-### 발견 시점
-2026-05-08 (외근 시작 → 길찾기 클릭 → 의도 없이 구글맵 단독 진입 보고)
-
-### 관련 코드
-- 프론트 [`app/(tabs)/trips/active.tsx:187-233`](../../app/\(tabs\)/trips/active.tsx) `handleNavigate`
-- 백엔드 [`mfz_backend/src/fieldwork/tripsService.js:1274-1312`](../../../mfz_backend/src/fieldwork/tripsService.js) `buildMapDeepLink` / `createNavigationDeepLinks`
-
----
-
 ## 2. 🟡 `PATCH /api/trips/:tripId` / `DELETE /api/trips/:tripId` 신설
 
 ### 배경
@@ -189,42 +139,6 @@ HTTP status 는 200 정상이라 클라이언트 catch 분기도 안 탐. `manua
 ### 관련 코드
 - 프론트 [`app/(tabs)/trips/new/order.tsx`](../../app/\(tabs\)/trips/new/order.tsx) — 호출부 (현재 nearest-neighbor 만)
 - 프론트 [`src/utils/routeOptimize.ts`](../../src/utils/routeOptimize.ts) — 알고리즘
-
----
-
-## 6. 🟠 현장 삭제 — 방문 기록 있어도 cascade 로 삭제 허용
-
-### 배경
-현재 `DELETE /api/fields/:fieldId` 가 방문 기록(`visits`) 이 연결돼 있으면 `has_related_visits` 코드로 차단. 프론트의 [`fields/[id]/edit.tsx:281-293`](../../app/\(tabs\)/fields/\[id\]/edit.tsx) 가 그 코드를 받아 "방문 기록이 남아 있는 현장은 삭제할 수 없습니다" 안내만 띄움. 단일 Actor 가 본인 현장을 정리하려 해도 막혀 있어 운용 시 자기 데이터를 못 지움.
-
-### 백엔드가 해야 할 것
-**(A) 가드 제거 + cascade 삭제** (정책 권장)
-- `DELETE /api/fields/:fieldId` 가 방문 유무와 무관하게 진행.
-- 같은 트랜잭션에서 cascade:
-  - `visits` (해당 fieldId)
-  - `text_memos` / `voice_memos` / `photos` (visitId 또는 fieldId 직접 첨부 양쪽)
-  - `destinations` (해당 fieldId — 진행 중 외근의 destination 까지 포함할지 별도 정책 결정. 진행 중 외근은 차단 또는 destination 만 정리)
-- 구현 방식 권장: `deletedAt` 컬럼 도입한 soft-delete + 통계·이력 보존. 단, 프론트는 `deletedAt !== null` 인 row 를 hide 처리하도록 응답 필터.
-
-**(B) confirm 우회 코드 추가** (대안)
-- `DELETE /api/fields/:fieldId?force=true` 또는 body `{ force: true }` 로 cascade 동의.
-- 응답: 삭제된 visit·attachment 카운트 echo (사용자 알림용).
-
-### 프론트엔드 영향
-- `fieldStore.remove` 의 결과 분기에서 `needsConfirm` 처리 변경 — confirm 다이얼로그 후 force 옵션으로 재호출.
-- [`fields/[id]/edit.tsx:283`](../../app/\(tabs\)/fields/\[id\]/edit.tsx) 의 안내 문구 재작성 — "삭제할 수 없습니다" → "방문 N건과 첨부물도 함께 삭제됩니다. 계속할까요?".
-- `src/api/errors.ts` 의 `has_related_visits` 메시지 갱신 또는 코드 자체 deprecate.
-
-### 우선순위
-🟠 중상 — 사용자가 본인의 잘못 등록된 현장을 정리할 수 있어야 함. 운용 시 1순위로 마주치는 막힘.
-
-### 발견 시점
-2026-05-10 (요구사항 정리 #1)
-
-### 관련 코드
-- 프론트 [`fieldStore.remove`](../../src/stores/fieldStore.ts) — `needsConfirm` 분기
-- 프론트 [`fields/[id]/edit.tsx:273-306`](../../app/\(tabs\)/fields/\[id\]/edit.tsx) `performDelete`/`handleDelete`
-- 프론트 [`src/api/errors.ts:95`](../../src/api/errors.ts#L95) `has_related_visits` 매핑
 
 ---
 
@@ -578,12 +492,20 @@ PATCH /api/me/password
 
 ---
 
-## 16. 🔴 `GET /api/trips/:tripId` — `timeline[].fieldId` 정식 포함
+## 16. 🟡 `GET /api/trips/:tripId` — `timeline[].fieldId` 정식 포함 (거의 해결, 라이브 검증 대기)
 
-### 배경
+### 현황 (2026-06-01) — 백엔드 release 코드엔 이미 있음
+백엔드 대조 결과 `release` 브랜치의 `tripsService.js` `toTimelineCard()` 가 `fieldId: visit.fieldId`
+를 **이미 포함**(git -S 기준 최초 커밋부터 존재, ERD v2 e673227 에서도 유지). 즉 본 항목의
+전제("timeline 에 fieldId 누락")는 현재 코드와 맞지 않음 — QA 당시(05-30) 배포본이 mock 단계
+(dcecdb0)였을 가능성. **라이브 `GET /api/trips/:tripId` 응답에 `timeline[].fieldId` 가 실제로
+실려오는지 1회 확인하면 닫을 수 있음.** "외근 선택 시 관련 현장 안 보임" 의 잔여 원인은 카드(본 항목)
+가 아니라 지도 마커 → §11(destinations 영속화) 쪽.
+
+### 배경 (당시)
 2차 QA(2026-05-30) #10 — "외근 방문 여부가 제대로 저장되지 않음". 디버깅 결과 backend
 는 visit 자체를 정상 저장하지만, `TripDetailResponse.timeline` 응답에 `fieldId` 가
-누락되어 세션 재진입 시 visitStore 에 `fieldId: ''` 로 흡수됨.
+누락된 것으로 관찰돼 세션 재진입 시 visitStore 에 `fieldId: ''` 로 흡수된다고 판단함.
 
 ```ts
 // 현재
@@ -801,5 +723,5 @@ headless 브라우저로 새로 그려 사진을 찍는 것**이다. 카카오 �
 - **2026-05-31**: §17 추가 — 2차 QA 기타. 더미 데이터 보강 요청(낮). 시연 시각화(히트맵/마커 그룹/외근 카드) 가능치 확보.
 - **2026-06-01**: §20 추가 — 보고서 위치도 인라인화 사이클. 화면엔 fitToMarkers 위치도 반영, Word/PDF 문서 삽입은 카카오 정적지도 REST 부재로 백엔드 렌더(권장) 또는 네이티브 캡처 필요(중상).
 - **2026-05-31**: §18·§19 추가 — 보고서 양식 변경 사이클. §18 보고서+현장보고 단축 생성(낮·round-trip 절감), §19 PDF export(중상·새 양식 인쇄/공유). 결정 §1~§7 은 보고서 양식 변경 사이클에서 확정(계획서는 반영 후 정리, git 이력 참조).
-- **2026-06-01**: §16 격상 중상(🟠)→높음(🔴) — 외근 선택 시 관련 현장이 안 보이는 회로 재확인. 백엔드 요청 확정. 프론트는 선반영 완료라 백엔드 반영만 남음.
-- **2026-06-01**: 전체 우선순위 재검토. §17 클로즈(🟢→✅, 프론트 자가 시드로 백엔드 불요). §11 격상(🟠→🔴, §16 과 동일 증상의 지도측 절반). §1 격상(🟡→🟠, 카카오-only 정책 위반). §19·§20 강등(🟠→🟡, hidden 폴백 있어 차단 아님).
+- **2026-06-01**: 전체 우선순위 재검토. §17 클로즈(🟢→✅, 프론트 자가 시드로 백엔드 불요). §11 격상(🟠→🔴, 외근-현장 미표시의 실제 원인=지도 마커). §19·§20 강등(🟠→🟡, hidden 폴백 있어 차단 아님).
+- **2026-06-01**: 백엔드 release 브랜치 대조 — 이미 조치된 항목 삭제·재기술. **§1 삭제**(deep-links 가 google 제거하고 kakao+naver 만 반환, 커밋 8aafcec — naver 는 프론트 http 가드로 걸러져 카카오만 남음, 핵심 버그 해소). **§6 삭제**(`?force=true` cascade 구현됨, option B — 백엔드 완료, 프론트가 confirm 후 force 재호출만 붙이면 되는 follow-up). **§16 격상 되돌림 🔴→🟡**: release `toTimelineCard` 가 fieldId 를 이미 포함(git -S 기준 최초 커밋부터) → 전제 오류, 라이브 `GET /api/trips/:tripId` 응답 검증 후 닫기 예정. §7(A) content min 10자 강제 없음 확인(완화 불요)·(B) multipart 만 잔존. §3 핸들러 코드 정상 → '0건' 은 KAKAO_REST_API_KEY 환경 사안(코드 아님).
