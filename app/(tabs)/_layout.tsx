@@ -77,11 +77,11 @@ export default function TabsLayout() {
         tabBarInactiveTintColor: colors.textMuted,
         tabBarStyle: {
           borderTopColor: colors.border,
-          // 84 = home indicator + tab convention(RN 표준값). 거기에 하단 inset 을 더해
-          // 제스처 네비게이션 바 위로 탭 아이콘이 올라오도록 — 네이티브에서 탭이 잘리던 회로 차단.
-          height: 84 + insets.bottom,
-          paddingTop: spacing.sm,
-          paddingBottom: spacing.sm + insets.bottom,
+          // 콘텐츠 높이 56 = Material Design bottom navigation 표준값. 거기에 OS 가 보고하는
+          // 실제 네비게이션 바 높이(insets.bottom)만 더해 바를 띄운다 — 임의 수치 없이 표준 + 실측.
+          height: 56 + insets.bottom,
+          paddingTop: spacing.xs,
+          paddingBottom: insets.bottom,
         },
         tabBarShowLabel: false,
         tabBarLabelPosition: 'below-icon',
