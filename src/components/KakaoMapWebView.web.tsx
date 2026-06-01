@@ -147,7 +147,9 @@ function loadKakaoSdk(appkey: string): Promise<void> {
     }
     const script = document.createElement('script');
     script.id = SDK_SCRIPT_ID;
-    script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${encodeURIComponent(appkey)}&autoload=false`;
+    // libraries=services 필수 — 이 스크립트는 id 로 싱글톤이라, services 없이 먼저 로드되면
+    // 같은 SDK 를 공유하는 장소검색(useKakaoPlaceSearch.web)에서 kakao.maps.services 가 undefined 가 됨.
+    script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${encodeURIComponent(appkey)}&autoload=false&libraries=services`;
     script.async = true;
     script.onload = () => {
       const k = getKakao();

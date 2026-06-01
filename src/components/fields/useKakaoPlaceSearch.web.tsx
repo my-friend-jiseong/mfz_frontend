@@ -88,7 +88,8 @@ export function useKakaoPlaceSearch() {
           () =>
             new Promise<AddressSearchItem[]>((resolve) => {
               const k = getKakao();
-              if (!k) {
+              // services 가 없으면(다른 로더가 libraries 없이 먼저 로드한 경우) 조용히 빈 결과.
+              if (!k || !k.maps.services) {
                 resolve([]);
                 return;
               }
