@@ -113,7 +113,7 @@ export default function NewField() {
     setSearching(true);
     setSearchError(null);
     const handle = setTimeout(async () => {
-      // 주소(백엔드)·장소(클라이언트) 병행 — 하나가 실패/0건이어도 다른 쪽으로 보완.
+      // 1차: 주소(백엔드) 결과를 즉시 표시 — 장소 검색에 묶지 않는다(절대 차단 금지).
       let addrItems: AddressSearchItem[] = [];
       let emptyMsg: string | null = null;
       let providerDown = false;
@@ -126,15 +126,24 @@ export default function NewField() {
         if (errorCode(e) === 'kakao_provider_unavailable') providerDown = true;
         else errMsg = localizeError(e);
       }
-      const placeItems = await searchPlaces(k).catch(() => [] as AddressSearchItem[]);
       if (myReqId !== reqIdRef.current) return;
-      const merged = mergeSearchItems(addrItems, placeItems);
-      setResults(merged);
-      setEmptyMessage(merged.length === 0 ? emptyMsg : null);
-      // 장소 결과로 채워졌다면 provider 장애/에러 fallback 은 숨긴다.
-      setProviderUnavailable(providerDown && merged.length === 0);
-      setSearchError(errMsg && merged.length === 0 ? errMsg : null);
+      setResults(addrItems);
+      setEmptyMessage(addrItems.length === 0 ? emptyMsg : null);
+      setProviderUnavailable(providerDown && addrItems.length === 0);
+      setSearchError(errMsg && addrItems.length === 0 ? errMsg : null);
       setSearching(false);
+
+      // 2차: 장소(키워드) 결과가 도착하면 병합 (비차단 — 느리거나 실패해도 주소 결과엔 영향 없음).
+      searchPlaces(k)
+        .then((placeItems) => {
+          if (myReqId !== reqIdRef.current || placeItems.length === 0) return;
+          const merged = mergeSearchItems(addrItems, placeItems);
+          setResults(merged);
+          setEmptyMessage(null);
+          setProviderUnavailable(false);
+          setSearchError(null);
+        })
+        .catch(() => {});
     }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(handle);
   }, [query, retryToken, searchPlaces]);
