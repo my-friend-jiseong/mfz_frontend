@@ -1,12 +1,14 @@
 import { useEffect, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
+import type { PinAddress } from '@/utils/addressSearch';
 import { colors } from '@/theme/colors';
 import { radius } from '@/theme/spacing';
 
 interface Props {
   lat: number;
   lng: number;
-  onDragEnd: (lat: number, lng: number) => void;
+  // address 는 역지오코딩 성공 시에만 전달 (좌표는 즉시, 주소는 비동기 후속).
+  onDragEnd: (lat: number, lng: number, address?: PinAddress) => void;
   height?: number;
 }
 
@@ -14,6 +16,20 @@ const SDK_SCRIPT_ID = '__kakao_maps_sdk__';
 
 type Overlay = { setMap: (m: unknown | null) => void; setPosition: (p: unknown) => void; getPosition: () => { getLat: () => number; getLng: () => number } };
 type KakaoMap = { setCenter: (latlng: unknown) => void };
+type RegionPart = {
+  address_name: string;
+  region_1depth_name?: string;
+  region_2depth_name?: string;
+  building_name?: string;
+};
+type Coord2AddressItem = { road_address: RegionPart | null; address: RegionPart | null };
+type Geocoder = {
+  coord2Address: (
+    lng: number,
+    lat: number,
+    cb: (result: Coord2AddressItem[], status: string) => void,
+  ) => void;
+};
 type KakaoGlobal = {
   maps: {
     load: (cb: () => void) => void;
@@ -23,12 +39,37 @@ type KakaoGlobal = {
     event: {
       addListener: (target: unknown, type: string, handler: (e?: { latLng: { getLat: () => number; getLng: () => number } }) => void) => void;
     };
+    services: {
+      Geocoder: new () => Geocoder;
+      Status: { OK: string };
+    };
   };
 };
 
 function getKakao(): KakaoGlobal | null {
   const w = window as unknown as { kakao?: KakaoGlobal };
   return w.kakao ?? null;
+}
+
+// kakao coord2Address 결과 → 공용 PinAddress 정규화.
+function toPinAddress(item: Coord2AddressItem): PinAddress {
+  const road = item.road_address;
+  const jibun = item.address;
+  const base = road ?? jibun;
+  const roadAddress = road?.address_name ?? '';
+  const jibunAddress = jibun?.address_name ?? '';
+  const buildingName = road?.building_name || null;
+  const display = buildingName
+    ? `${roadAddress} (${buildingName})`
+    : roadAddress || jibunAddress;
+  return {
+    roadAddress,
+    jibunAddress,
+    buildingName,
+    sido: base?.region_1depth_name || undefined,
+    sigungu: base?.region_2depth_name || undefined,
+    display,
+  };
 }
 
 function loadKakaoSdk(appkey: string): Promise<void> {
@@ -54,7 +95,7 @@ function loadKakaoSdk(appkey: string): Promise<void> {
     }
     const script = document.createElement('script');
     script.id = SDK_SCRIPT_ID;
-    script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${encodeURIComponent(appkey)}&autoload=false`;
+    script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${encodeURIComponent(appkey)}&autoload=false&libraries=services`;
     script.async = true;
     script.onload = () => {
       const k = getKakao();
@@ -71,6 +112,9 @@ export function FieldPinMap({ lat, lng, onDragEnd, height = 220 }: Props) {
   const kakaoJsKey = process.env.EXPO_PUBLIC_KAKAO_JS_KEY ?? '';
   const markerRef = useRef<Overlay | null>(null);
   const mapRef = useRef<KakaoMap | null>(null);
+  const geocoderRef = useRef<Geocoder | null>(null);
+  // 사용자 본인 이동 좌표 — prop 으로 되돌아오면 재센터를 건너뛴다(중앙 고정 버그 차단).
+  const lastEmittedRef = useRef<{ lat: number; lng: number } | null>(null);
 
   const safeLat = Number.isFinite(lat) ? lat : 0;
   const safeLng = Number.isFinite(lng) ? lng : 0;
@@ -96,15 +140,28 @@ export function FieldPinMap({ lat, lng, onDragEnd, height = 220 }: Props) {
         draggable: true,
       });
       markerRef.current = marker;
+      const geocoder = new k.maps.services.Geocoder();
+      geocoderRef.current = geocoder;
+      // 좌표는 즉시, 주소는 역지오코딩 콜백 후 후속 전달.
+      const emitMove = (la: number, ln: number) => {
+        lastEmittedRef.current = { lat: la, lng: ln };
+        onDragEnd(la, ln);
+        geocoder.coord2Address(ln, la, (result, status) => {
+          if (status === k.maps.services.Status.OK && result[0]) {
+            lastEmittedRef.current = { lat: la, lng: ln };
+            onDragEnd(la, ln, toPinAddress(result[0]));
+          }
+        });
+      };
       k.maps.event.addListener(marker, 'dragend', () => {
         const p = marker.getPosition();
-        onDragEnd(p.getLat(), p.getLng());
+        emitMove(p.getLat(), p.getLng());
       });
       k.maps.event.addListener(map, 'click', (e) => {
         const p = e?.latLng;
         if (!p) return;
         marker.setPosition(p);
-        onDragEnd(p.getLat(), p.getLng());
+        emitMove(p.getLat(), p.getLng());
       });
     });
     return () => {
@@ -114,8 +171,11 @@ export function FieldPinMap({ lat, lng, onDragEnd, height = 220 }: Props) {
   }, [kakaoJsKey]);
 
   // 후속 lat/lng prop 변경 — marker + map in-place 이동.
+  // 사용자 본인 이동(lastEmitted)이면 재센터 생략 — 외부 변경(주소 재선택)만 재센터.
   useEffect(() => {
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    const le = lastEmittedRef.current;
+    if (le && Math.abs(le.lat - lat) < 1e-9 && Math.abs(le.lng - lng) < 1e-9) return;
     const k = getKakao();
     if (!k || !mapRef.current || !markerRef.current) return;
     const p = new k.maps.LatLng(lat, lng);

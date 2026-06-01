@@ -16,6 +16,17 @@ export interface SelectedAddress {
   display: string;
 }
 
+// 핀 드래그/탭 후 좌표→주소 역지오코딩(kakao Geocoder.coord2Address)으로 해석된 결과.
+// FieldPinMap(.native/.web) 이 동일 shape 로 emit → 호출부가 SelectedAddress 에 병합.
+export interface PinAddress {
+  roadAddress: string;
+  jibunAddress: string;
+  buildingName: string | null;
+  sido?: string;
+  sigungu?: string;
+  display: string;
+}
+
 export function itemToSelected(item: AddressSearchItem): SelectedAddress {
   const display = item.buildingName
     ? `${item.roadAddress} (${item.buildingName})`

@@ -379,15 +379,26 @@ export default function NewField() {
             {selected ? (
               <>
                 <Text variant="caption" color="textMuted" style={styles.pinHint}>
-                  지도를 탭하거나 핀을 드래그해 정확한 위치로 조정할 수 있어요
+                  지도를 탭하거나 핀을 드래그해 위치를 잡으면 주소도 자동으로 갱신돼요
                 </Text>
                 <FieldPinMap
                   lat={selected.lat}
                   lng={selected.lng}
-                  onDragEnd={(la, ln) =>
-                    setSelected((prev) =>
-                      prev ? { ...prev, lat: la, lng: ln } : prev,
-                    )
+                  onDragEnd={(la, ln, addr) =>
+                    setSelected((prev) => {
+                      if (!prev) return prev;
+                      const next = { ...prev, lat: la, lng: ln };
+                      // 역지오코딩이 도착하면 주소 필드도 좌표에 맞춰 갱신 (좌표↔주소 불일치 방지).
+                      if (addr) {
+                        next.roadAddress = addr.roadAddress;
+                        next.jibunAddress = addr.jibunAddress;
+                        next.buildingName = addr.buildingName;
+                        next.sido = addr.sido;
+                        next.sigungu = addr.sigungu;
+                        next.display = addr.display;
+                      }
+                      return next;
+                    })
                   }
                 />
               </>
