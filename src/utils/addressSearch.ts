@@ -43,6 +43,27 @@ export function itemToSelected(item: AddressSearchItem): SelectedAddress {
   };
 }
 
+// 주소 검색(백엔드)·장소 키워드 검색(클라이언트 카카오 SDK) 결과를 합친다.
+// primary(주소) 를 앞에, secondary(장소) 를 뒤에 — 도로명 검색 시 기존 동작 보존,
+// 장소명 검색 시 백엔드가 0건이어도 키워드 결과로 채워짐. 좌표+도로명으로 중복 제거.
+export function mergeSearchItems(
+  primary: readonly AddressSearchItem[],
+  secondary: readonly AddressSearchItem[],
+): AddressSearchItem[] {
+  const keyOf = (it: AddressSearchItem) =>
+    `${(it.roadAddress || it.jibunAddress).trim().toLowerCase()}|${it.lat.toFixed(5)}|${it.lng.toFixed(5)}`;
+  const seen = new Set<string>();
+  const out: AddressSearchItem[] = [];
+  for (const it of [...primary, ...secondary]) {
+    if (!Number.isFinite(it.lat) || !Number.isFinite(it.lng)) continue;
+    const k = keyOf(it);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(it);
+  }
+  return out;
+}
+
 export const SEARCH_DEBOUNCE_MS = 300;
 export const MIN_KEYWORD_LEN = 2;
 

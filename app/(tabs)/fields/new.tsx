@@ -18,6 +18,7 @@ import type { Field, FieldStatus } from '@/types/entities';
 import { FIELD_STATUS_VALUES, FIELD_STATUS_LABEL } from '@/types/entities';
 import {
   itemToSelected,
+  mergeSearchItems,
   SEARCH_DEBOUNCE_MS,
   MIN_KEYWORD_LEN,
   type SelectedAddress,
@@ -25,6 +26,7 @@ import {
 import { ProjectPicker } from '@/components/ProjectPicker';
 import { ManualCoordinateForm } from '@/components/fields/ManualCoordinateForm';
 import { FieldPinMap } from '@/components/fields/FieldPinMap';
+import { useKakaoPlaceSearch } from '@/components/fields/useKakaoPlaceSearch';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -90,6 +92,10 @@ export default function NewField() {
   const [status, setStatus] = useState<FieldStatus>('pending');
   const [submitting, setSubmitting] = useState(false);
 
+  // 장소(키워드) 검색 — 클라이언트 카카오 SDK. 백엔드 주소검색(도로명)과 병행해
+  // "동아대학교" 같은 POI 도 잡는다. element 는 네이티브 헤드리스 WebView(웹은 null).
+  const { search: searchPlaces, element: placeSearchBridge } = useKakaoPlaceSearch();
+
   // 디바운스 검색 — 키워드 변경 시 SEARCH_DEBOUNCE_MS 후 호출.
   // 호출 도중 입력이 또 바뀌면 기존 결과는 폐기 (latest-wins).
   const reqIdRef = useRef(0);
@@ -107,30 +113,31 @@ export default function NewField() {
     setSearching(true);
     setSearchError(null);
     const handle = setTimeout(async () => {
+      // 주소(백엔드)·장소(클라이언트) 병행 — 하나가 실패/0건이어도 다른 쪽으로 보완.
+      let addrItems: AddressSearchItem[] = [];
+      let emptyMsg: string | null = null;
+      let providerDown = false;
+      let errMsg: string | null = null;
       try {
         const res = await fieldsApi.addressSearch(k);
-        if (myReqId !== reqIdRef.current) return;
-        setResults(res.items);
-        setEmptyMessage(res.emptyMessage ?? null);
-        setProviderUnavailable(false);
-        setSearchError(null);
+        addrItems = res.items;
+        emptyMsg = res.emptyMessage ?? null;
       } catch (e) {
-        if (myReqId !== reqIdRef.current) return;
-        if (errorCode(e) === 'kakao_provider_unavailable') {
-          setProviderUnavailable(true);
-          setResults([]);
-          setEmptyMessage(null);
-          setSearchError(null);
-        } else {
-          setSearchError(localizeError(e));
-          setResults([]);
-        }
-      } finally {
-        if (myReqId === reqIdRef.current) setSearching(false);
+        if (errorCode(e) === 'kakao_provider_unavailable') providerDown = true;
+        else errMsg = localizeError(e);
       }
+      const placeItems = await searchPlaces(k).catch(() => [] as AddressSearchItem[]);
+      if (myReqId !== reqIdRef.current) return;
+      const merged = mergeSearchItems(addrItems, placeItems);
+      setResults(merged);
+      setEmptyMessage(merged.length === 0 ? emptyMsg : null);
+      // 장소 결과로 채워졌다면 provider 장애/에러 fallback 은 숨긴다.
+      setProviderUnavailable(providerDown && merged.length === 0);
+      setSearchError(errMsg && merged.length === 0 ? errMsg : null);
+      setSearching(false);
     }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(handle);
-  }, [query, retryToken]);
+  }, [query, retryToken, searchPlaces]);
 
   const handleSelectItem = (item: AddressSearchItem) => {
     setSelected(itemToSelected(item));
@@ -221,6 +228,7 @@ export default function NewField() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
+      {placeSearchBridge}
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <View style={styles.stepRow}>
           <View style={[styles.stepDot, styles.stepDotActive]}>
@@ -246,10 +254,10 @@ export default function NewField() {
         {step === 1 ? (
           <>
             <Input
-              label="주소 또는 건물명"
+              label="주소 · 건물명 · 장소명"
               value={query}
               onChangeText={setQuery}
-              placeholder="예: 해운대 우동, 동성로"
+              placeholder="예: 동아대학교, 해운대 우동, 동성로"
               autoFocus
               autoCapitalize="none"
               returnKeyType="search"

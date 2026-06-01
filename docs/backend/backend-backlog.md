@@ -91,8 +91,20 @@ HTTP status 는 200 정상이라 클라이언트 catch 분기도 안 탐. `manua
 **`KAKAO_REST_API_KEY` 운영 환경값(만료/권한/도메인)** 문제로 확정. 부수효과: 데모 시드 스크립트의
 지오코딩(`seed_demo_data.mjs` `geocode()`)도 전부 폴백 좌표로 떨어지는 중.
 
+### 추가 (2026-06-01): 장소명(POI) 검색 — 주소 API 구조적 한계 + 프론트 선보완
+운영 키가 정상화돼도 `/address/search` 는 카카오 Local **주소** API(`address.json`) 만 호출하므로
+`동아대학교` 같은 **장소명(POI)** 은 구조적으로 0건이다. 도로명/지번만 매칭되고 상호·기관명은 못 잡음.
+- **프론트 선보완(완료)**: 클라이언트 카카오 JS SDK `services.Places.keywordSearch` 로 장소명 검색을
+  병행해 주소 결과와 병합. 네이티브는 헤드리스 WebView 브릿지([`useKakaoPlaceSearch.tsx`](../../src/components/fields/useKakaoPlaceSearch.tsx)),
+  웹은 직접 SDK([`.web.tsx`](../../src/components/fields/useKakaoPlaceSearch.web.tsx)). 병합·중복제거는
+  [`mergeSearchItems`](../../src/utils/addressSearch.ts). JS 키만으로 동작(REST 키 불요).
+- **백엔드 요청(이상적)**: `/address/search` 가 서버측에서 `keyword.json` 도 호출해 주소+장소를 합쳐 반환하면
+  클라이언트 SDK 의존(JS 키 도메인 화이트리스트, 헤드리스 WebView)을 걷어낼 수 있음. 응답 shape 동일 유지,
+  장소 출처 item 은 `sido/sigungu` 가 빌 수 있음(주소 depth 미제공).
+
 ### 우선순위
 🔴 높음 — 핵심 사용자 흐름 차단. 시나리오 S4·S5 가 manual 우회로만 동작. (코드 아님 — 운영 키 설정 사안)
+장소명 검색은 프론트 선보완으로 1차 해소 — 백엔드 병합은 🟡(인프라 단순화 목적).
 
 ### 발견 시점
 2026-05-09 (Playwright 통합 자동화 재실행 중 캡처)
