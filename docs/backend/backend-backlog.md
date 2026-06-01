@@ -59,37 +59,21 @@ DELETE /api/trips/:tripId
 
 ---
 
-## 3. 🔴 카카오 Local 주소 검색이 모든 키워드에서 결과 0건
+## 3. 🟡 주소검색 — 백엔드 keyword.json 병합(POI) 선택적 보강 (운영 키 정상 확인)
 
-### 배경
-`POST/GET /api/fields/address/search?keyword=...` 가 **어떤 키워드든** 항상 다음 응답:
+### 현황 (2026-06-01 read-only probe 로 정정)
+**과거 전제("어떤 키워드든 0건 = `KAKAO_REST_API_KEY` 만료/권한")는 무효.** 운영
+`GET /api/fields/address/search` 가 실주소에 정상 응답:
+`부산 연제구 중앙대로 1001`→1 · `낙동대로 550`→1(부산 사하구 낙동대로 550) · `해운대구 우동`→4 ·
+`부산 중구 중앙대로`→10 · `서면`→10 · `동래구`→1.
+0건인 것은 전부 **장소명(POI)** (`부산광역시청`·`해운대해수욕장`·`센텀`) — 카카오 Local **주소**
+API(`address.json`)가 상호·기관명을 구조적으로 못 잡는 정상 동작. **운영 키 이슈는 종결.**
+남은 건 POI 검색 한 가지인데 이미 프론트 클라이언트 키워드검색으로 해소(아래).
 
-```json
-{
-  "query": "...",
-  "provider": { "primary": "kakao_local_rest", "manualCoordinateFallback": true },
-  "items": []
-}
-```
-
-검증된 키워드: `동아대학교 부민캠퍼스`, `부산광역시청`, `해운대해수욕장` — 모두 0건.
-HTTP status 는 200 정상이라 클라이언트 catch 분기도 안 탐. `manualCoordinateFallback: true` 라 사용자에게 "좌표 직접 입력으로 진행 →" 우회 경로는 노출되지만, **시나리오의 핵심 진입점 (주소 검색 → 좌표 자동 채움) 이 사실상 차단** 된 상태.
-
-### 백엔드가 해야 할 것
-- 카카오 Local REST API 키가 만료/권한 문제인지 확인 (REST API 키 vs JavaScript 키 혼용 가능성, 도메인 화이트리스트 누락 가능성)
-- 백엔드 ↔ 카카오 사이 호출 자체가 실패하고 있는지 로그 확인
-- 응답 정상화 — 정상 키워드에 대해 items 가 실제로 채워지도록
-
-### 프론트엔드 영향
-- `fields/new.tsx` 의 검색 흐름이 항상 0건 분기 → manual 좌표 입력으로만 등록 가능
-- 사용자가 "왜 검색이 안 되지?" 하는 혼란 — 본 백엔드 fix 후 자연 해결
-- Playwright 통합 자동화에서도 검색 단계를 매번 manual 우회로 처리 중
-
-### 라이브 재확인 (2026-06-01)
-운영 read-only probe 결과 여전히 `동아대학교 부민캠퍼스`·`부산광역시청`·`해운대해수욕장`·`부산 사하구 낙동대로 100`
-**4/4 모두 `HTTP 200 · items=0`**. 백엔드 핸들러 코드(`searchFieldAddress`)는 정상이므로 코드 버그가 아니라
-**`KAKAO_REST_API_KEY` 운영 환경값(만료/권한/도메인)** 문제로 확정. 부수효과: 데모 시드 스크립트의
-지오코딩(`seed_demo_data.mjs` `geocode()`)도 전부 폴백 좌표로 떨어지는 중.
+### 정정 경위
+2026-06-01 오전 probe 는 우연히 POI/부정확 키워드(`부산광역시청`·`해운대해수욕장`·`부산 사하구 낙동대로 100`)만
+넣어 4/4 0건 → "키 만료"로 오판. 같은 날 정상 도로명/지역 키워드로 재확인하니 정상 응답 → 키는 살아 있음.
+데모 시드 지오코딩도 정상 좌표를 받는다.
 
 ### 추가 (2026-06-01): 장소명(POI) 검색 — 주소 API 구조적 한계 + 프론트 선보완
 운영 키가 정상화돼도 `/address/search` 는 카카오 Local **주소** API(`address.json`) 만 호출하므로
@@ -103,11 +87,11 @@ HTTP status 는 200 정상이라 클라이언트 catch 분기도 안 탐. `manua
   장소 출처 item 은 `sido/sigungu` 가 빌 수 있음(주소 depth 미제공).
 
 ### 우선순위
-🔴 높음 — 핵심 사용자 흐름 차단. 시나리오 S4·S5 가 manual 우회로만 동작. (코드 아님 — 운영 키 설정 사안)
-장소명 검색은 프론트 선보완으로 1차 해소 — 백엔드 병합은 🟡(인프라 단순화 목적).
+🟡 낮음~중간 — **차단 아님**(주소검색 정상 + POI 는 프론트 키워드검색으로 해소). 백엔드 `keyword.json`
+병합은 클라이언트 SDK 의존(JS 키 도메인 화이트리스트·헤드리스 WebView) 제거용 선택 보강.
 
 ### 발견 시점
-2026-05-09 (Playwright 통합 자동화 재실행 중 캡처)
+2026-05-09 최초(당시 0건 관측) → 2026-06-01 운영 probe 로 키 정상 확인, 🔴→🟡 강등·재기술.
 
 ### 관련 코드
 - 프론트 호출 [`src/api/endpoints/fields.ts:192`](../../src/api/endpoints/fields.ts#L192) `addressSearch`
@@ -177,9 +161,8 @@ HTTP status 는 200 정상이라 클라이언트 catch 분기도 안 탐. `manua
 
 ### 백엔드가 해야 할 것
 
-**(A) `content` min 가드 완화**
-- 10 → 0 (또는 옵셔널). max 50,000 유지.
-- 정책: **제목 1자 이상 + (본문 1자 이상 OR 사진 1장 이상)** 중 하나는 강제. 진짜 빈 보고서 차단.
+**(A) `content` min 가드 완화 — ✅ 불요 (2026-06-01 release 대조 확인)**
+- 운영에 `content` 10자 강제가 이미 없음. 추가 완화 불필요. → **본 항목의 잔여는 (B) 사진 첨부뿐.**
 
 **(B) 직접 저장도 multipart 수용**
 - `POST /api/reports` 가 `Content-Type: application/json` 외 `multipart/form-data` 도 받도록.
@@ -762,3 +745,4 @@ headless 브라우저로 새로 그려 사진을 찍는 것**이다. 카카오 �
 - **2026-06-01**: §4 방향 (A) 확정 — `detailAddress` optional/nullable 완화를 백엔드에 요청(point 성 현장은 동·호수 없음). 프론트는 `detail_address_required` ERROR_MESSAGES 안전망 추가로 선반영.
 - **2026-06-01**: 백엔드 release 브랜치 대조 — 이미 조치된 항목 삭제·재기술. **§1 삭제**(deep-links 가 google 제거하고 kakao+naver 만 반환, 커밋 8aafcec — naver 는 프론트 http 가드로 걸러져 카카오만 남음, 핵심 버그 해소). **§6 삭제**(`?force=true` cascade 구현됨, option B — 백엔드 완료, 프론트가 confirm 후 force 재호출만 붙이면 되는 follow-up). **§16 격상 되돌림 🔴→🟡**: release `toTimelineCard` 가 fieldId 를 이미 포함(git -S 기준 최초 커밋부터) → 전제 오류, 라이브 검증 후 닫기 예정. §7(A) content min 10자 강제 없음 확인(완화 불요)·(B) multipart 만 잔존. §3 핸들러 코드 정상 → '0건' 은 KAKAO_REST_API_KEY 환경 사안(코드 아님).
 - **2026-06-01**: 운영(`ilgayo.co.kr`) read-only probe 로 전제 실측 검증. **§16 닫힘(🟡→✅)**: 라이브 `GET /api/trips/:tripId` timeline entry 가 fieldId 를 실제로 실어옴(`field-…c78aaeb8`/"대연 전기실"). **§3 실측 확인**: 4/4 키워드 여전히 0건 → KAKAO_REST_API_KEY 운영 키 사안 확정(데모 지오코딩도 폴백 중). **§11 실측 확인**: detail 에 destinations 없음 + `/destinations` 404 → 미구현 확정. 단 timeline 의 visit fieldId 로 완료 외근의 현장은 프론트만으로 도출 가능 → 보고된 버그는 프론트 우선 수정 가능, §11 백엔드는 계획 목적지 영속화 범위로 잔존. §18·§19 404(미구현) 확인.
+- **2026-06-01**: 백로그 점검 — 정상 도로명/지역 키워드로 §3 재측정. **§3 🔴→🟡 강등·재기술**: `중앙대로 1001`→1·`낙동대로 550`→1·`해운대구 우동`→4·`중구 중앙대로`→10·`서면`→10·`동래구`→1 정상 응답 → 운영 키는 살아 있음. 앞선 "4/4 0건" 은 우연히 POI/부정확 키워드만 넣은 표본 편향이었고, 실제 0건은 장소명(POI: `부산광역시청`·`해운대해수욕장`·`센텀`)뿐(address.json 구조적 한계, 프론트 키워드검색으로 해소 완료). **§7(A) ✅ 표기**: content 10자 강제 부재 재확인 → 잔여는 (B) 사진 첨부뿐.
