@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/Text';
 import { colors } from '@/theme/colors';
@@ -68,6 +69,7 @@ export function MapFilterBar({
   showBoundary,
   onToggleBoundary,
 }: Props) {
+  const insets = useSafeAreaInsets();
   const [expanded, setExpanded] = useState<GroupKey | null>(null);
 
   const toggleGroup = (key: GroupKey) =>
@@ -87,7 +89,8 @@ export function MapFilterBar({
   const visibilityOnCount = attachmentOnCount + (showBoundary ? 1 : 0);
 
   return (
-    <View style={styles.container}>
+    // 지도 배경 위 최상단 요소 — 시트를 내렸을 때 필터바가 상태바 밑으로 깔려 잘리던 회로 차단.
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.groupRow}>
         <GroupChip
           label="표시 방식"
