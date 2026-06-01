@@ -10,7 +10,7 @@
 
 ---
 
-## 1. 🟡 길찾기 deep-links — 카카오 web URL 만 단독 반환
+## 1. 🟠 길찾기 deep-links — 카카오 web URL 만 단독 반환
 
 ### 배경
 `POST /api/trips/:tripId/navigation/deep-links` 응답이 현재 카카오·구글·네이버 3종을 모두 반환:
@@ -49,7 +49,7 @@ providers: {
 - 응답 typing (`NavigationDeepLinksResponse`) 도 `providers: { kakao: string }` 으로 좁힘
 
 ### 우선순위
-🟡 중간 — 현 상태에서 web 사용자가 카카오로 보내야 할 자리에 구글로 가고 있음.
+🟠 중상 — 단순 불편이 아니라 카카오-only 지도 정책 위반. web 사용자가 카카오로 가야 할 자리에 구글로 단독 진입.
 
 ### 발견 시점
 2026-05-08 (외근 시작 → 길찾기 클릭 → 의도 없이 구글맵 단독 진입 보고)
@@ -358,7 +358,7 @@ HTTP status 는 200 정상이라 클라이언트 catch 분기도 안 탐. `manua
 
 ---
 
-## 11. 🟠 외근 destinations 영속화 + GET endpoint — 다른 디바이스·세션에서 "계획 0곳" 회로 차단
+## 11. 🔴 외근 destinations 영속화 + GET endpoint — 다른 디바이스·세션에서 "계획 0곳" 회로 차단
 
 ### 배경
 프론트의 `destinationStore` ([`src/stores/destinationStore.ts`](../../src/stores/destinationStore.ts)) 는 **로컬 + AsyncStorage 전용**. 사용자가 외근을 시작할 때 `bulkCreate(tripId, fieldIds[])` 로 로컬에만 적재되고, 백엔드엔 destinations 데이터가 보내지지 않음. 그래서 다음 회로가 깨짐:
@@ -422,7 +422,7 @@ body: { status?: 'arrived' | 'skipped'; order?: number; }
 - 트립 상세 [`trips/[id].tsx:215`](../../app/\(tabs\)/trips/\[id\].tsx#L215) 의 "계획 N곳 · 실제 방문 M건" 라인 — 본 사이클에서 `trip.siteCount` (`TripListItem.siteCount`) 우선 사용으로 1차 회피 적용. 백엔드 destinations endpoint 가 들어오면 server-truth 단일화.
 
 ### 우선순위
-🟠 중상 — 사용자 외근 lifecycle 의 핵심 데이터가 다른 디바이스에서 새는 회로. 단일 사용자/단일 디바이스 시나리오에선 막힘 없으나, 모바일·웹 동시 사용 / 디바이스 교체 / 캐시 정리 후 재진입 시 즉시 노출.
+🔴 높음 — §16 과 같은 증상("외근 선택 시 관련 현장 안 보임")의 지도측 절반. 카드는 §16(timeline fieldId), 지도 마커는 본 항목(destinations 영속화)에 의존 — §16 만 해결하면 마커는 여전히 빔. 모바일·웹 동시 사용 / 디바이스 교체 / 캐시 정리 후 재진입 시 즉시 노출.
 
 ### 발견 시점
 2026-05-11 (사용자 보고: "외근 생성할 땐 3곳 골랐는데 트립 상세에 계획 0곳·실제 방문 0건 으로 나옴")
@@ -628,9 +628,16 @@ export interface TripTimelineEntry {
 
 ---
 
-## 17. 🟢 더미 데이터 보강 — 시연 시각화 가능치 확보
+## 17. ✅ 더미 데이터 보강 — 프론트 자가 시드로 해결 (백엔드 불요)
 
-### 배경
+### 결과
+2026-06-01 발표 준비 중 클로즈. 데모 데이터는 프론트 자가 시드 스크립트
+(`docs/presentation/seed_demo_data.mjs`)로 전부 생성 — 현장·외근·방문·보고서 전·중·후
+사진까지. probe 로 `POST /api/reports/:id/field-reports` 가 외부 photo URL 을 그대로
+저장·회수함을 확인(`docs/backend/demo-seed-request.md`)해 백엔드 적재·변경 요청이 소멸.
+실제 점검 사진 교체는 프론트/사용자 몫.
+
+### 배경 (당시)
 2차 QA(2026-05-30) — 기타 항목. 현재 더미 데이터는 시각화 검증/시연에 부족.
 히트맵·마커 그룹·외근 카드 가독성 시연 시 의미 있는 그림이 안 나옴.
 
@@ -686,7 +693,7 @@ skipped destination 은 제외.
 
 ---
 
-## 19. 🟠 `POST /api/reports/:id/export?format=pdf` — PDF 출력
+## 19. 🟡 `POST /api/reports/:id/export?format=pdf` — PDF 출력
 
 ### 배경
 새 양식의 다운로드 결정 §6 (2026-05-31): Word 유지 + PDF 추가. 현재 `outputFileUrl` 은 Word 만.
@@ -716,7 +723,7 @@ body: { format: 'word' | 'pdf' }
 
 ---
 
-## 20. 🟠 보고서 Word/PDF 출력에 "위치도" 이미지 자동 삽입
+## 20. 🟡 보고서 Word/PDF 출력에 "위치도" 이미지 자동 삽입
 
 ### 배경
 프론트는 보고서 작성·상세 화면에 그 외근의 **현장 전체를 한 화면에 담는 위치도**를
@@ -795,3 +802,4 @@ headless 브라우저로 새로 그려 사진을 찍는 것**이다. 카카오 �
 - **2026-06-01**: §20 추가 — 보고서 위치도 인라인화 사이클. 화면엔 fitToMarkers 위치도 반영, Word/PDF 문서 삽입은 카카오 정적지도 REST 부재로 백엔드 렌더(권장) 또는 네이티브 캡처 필요(중상).
 - **2026-05-31**: §18·§19 추가 — 보고서 양식 변경 사이클. §18 보고서+현장보고 단축 생성(낮·round-trip 절감), §19 PDF export(중상·새 양식 인쇄/공유). 결정 §1~§7 은 보고서 양식 변경 사이클에서 확정(계획서는 반영 후 정리, git 이력 참조).
 - **2026-06-01**: §16 격상 중상(🟠)→높음(🔴) — 외근 선택 시 관련 현장이 안 보이는 회로 재확인. 백엔드 요청 확정. 프론트는 선반영 완료라 백엔드 반영만 남음.
+- **2026-06-01**: 전체 우선순위 재검토. §17 클로즈(🟢→✅, 프론트 자가 시드로 백엔드 불요). §11 격상(🟠→🔴, §16 과 동일 증상의 지도측 절반). §1 격상(🟡→🟠, 카카오-only 정책 위반). §19·§20 강등(🟠→🟡, hidden 폴백 있어 차단 아님).
