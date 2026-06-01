@@ -345,7 +345,9 @@ body: { status?: 'arrived' | 'skipped'; order?: number; }
 운영 read-only probe 로 미구현 확정: `GET /api/trips/:tripId` 응답에 `destinations` 키 없음 +
 `GET /api/trips/:tripId/destinations` → **404**. 단, 같은 응답의 `timeline[]` 은 visit 별 `fieldId` 를
 정상 제공(§16 닫힘). 따라서 **완료된 외근의 "관련 현장" 표시는 destinations 없이도 timeline 의 visit
-fieldId 로 도출 가능** → 프론트 우선 수정으로 보고된 버그를 백엔드 없이 해소할 수 있음. 본 항목(백엔드
+fieldId 로 도출 가능** → 프론트 우선 수정으로 보고된 버그를 백엔드 없이 해소. **적용됨(2026-06-01)**:
+[`trips/[id].tsx`](../../app/\(tabs\)/trips/\[id\].tsx) `tripFieldIds` 가 destinations(순서 보존) +
+visit fieldId 보완으로 union 도출 → 다른 세션/기기에서도 완료 외근 마커가 뜸. 본 항목(백엔드
 destinations 영속화)은 **계획된(미방문/skipped) 목적지·진행 중 외근·크로스 기기** 일관성용으로 여전히 유효.
 
 ### 우선순위

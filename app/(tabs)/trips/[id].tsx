@@ -59,10 +59,26 @@ export default function TripDetail() {
     [allDestinations, id],
   );
 
-  const tripFieldIds = useMemo(
-    () => destinations.map((d) => d.fieldId),
-    [destinations],
-  );
+  // 지도 마커용 현장 id — 계획된 destinations 우선(순서 보존), 누락분은 방문(visit) fieldId 로 보완.
+  // destinations 는 client-only(AsyncStorage)라 다른 세션/기기/캐시 정리 후엔 비어 있는데, 완료된 외근은
+  // timeline→visit 의 fieldId(라이브 확인됨)로 현장을 도출 가능 → 마커가 빈 회로 차단. (backend-backlog §11)
+  const tripFieldIds = useMemo(() => {
+    const ids: string[] = [];
+    const seen = new Set<string>();
+    for (const d of destinations) {
+      if (d.fieldId && !seen.has(d.fieldId)) {
+        seen.add(d.fieldId);
+        ids.push(d.fieldId);
+      }
+    }
+    for (const v of visits) {
+      if (v.fieldId && !seen.has(v.fieldId)) {
+        seen.add(v.fieldId);
+        ids.push(v.fieldId);
+      }
+    }
+    return ids;
+  }, [destinations, visits]);
 
   // Hooks must be called unconditionally — 모든 useMemo/useEffect/useRef 를 가드 위로.
   const skippedDestinations = useMemo(
