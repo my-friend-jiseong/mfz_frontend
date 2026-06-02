@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import { Redirect, useRouter } from 'expo-router';
 import { useTripStore } from '@/stores/tripStore';
@@ -78,27 +78,25 @@ export default function TripsList() {
   };
 
   return (
-    <View style={styles.screenRoot}>
-      {/* 외근 탭 루트엔 "선택된 외근" 개념이 없음 — 지도에 내 현장 전체를 까는 대신 빈 마커.
-          전체 현장 탐색은 '현장' 탭에서, 그 외근의 현장은 카드 탭 → 외근 상세에서 노출. */}
-      <MapSheetLayout title="외근 내역" mapFieldIds={[]}>
-        <BottomSheetFlatList
-          data={trips}
-          keyExtractor={(t) => String(t.id)}
-          renderItem={renderItem}
-          contentContainerStyle={styles.list}
-          // gorhom 은 onScroll 을 public 타입에서 제외하지만 런타임엔 useScrollHandler 로 전달함.
-          {...({ onScroll } as object)}
-          ListEmptyComponent={
-            <EmptyState
-              icon="briefcase-outline"
-              title="외근 기록이 없습니다"
-              description="아래 버튼을 눌러 첫 외근을 시작하세요"
-            />
-          }
-        />
-      </MapSheetLayout>
-      {/* StickyBottomBar 는 BottomSheet 외부에 둔다 (active.tsx / [id].tsx 와 동일 패턴) — 시트 내부 absolute 자식이 pan 제스처에 가려져 탭 진입 시 안 보이던 회로 차단. */}
+    // 외근 탭 루트엔 "선택된 외근" 개념이 없음 — 지도에 내 현장 전체를 까는 대신 빈 마커.
+    // 전체 현장 탐색은 '현장' 탭에서, 그 외근의 현장은 카드 탭 → 외근 상세에서 노출.
+    // StickyBottomBar 는 '현장' 탭과 동일하게 MapSheetLayout(시트 콘텐츠) 안에 둔다.
+    <MapSheetLayout title="외근 내역" mapFieldIds={[]}>
+      <BottomSheetFlatList
+        data={trips}
+        keyExtractor={(t) => String(t.id)}
+        renderItem={renderItem}
+        contentContainerStyle={styles.list}
+        // gorhom 은 onScroll 을 public 타입에서 제외하지만 런타임엔 useScrollHandler 로 전달함.
+        {...({ onScroll } as object)}
+        ListEmptyComponent={
+          <EmptyState
+            icon="briefcase-outline"
+            title="외근 기록이 없습니다"
+            description="아래 버튼을 눌러 첫 외근을 시작하세요"
+          />
+        }
+      />
       <StickyBottomBar visible={visible}>
         <Button
           onPress={() => router.push('/(tabs)/trips/new/select' as never)}
@@ -109,12 +107,11 @@ export default function TripsList() {
           외근 시작
         </Button>
       </StickyBottomBar>
-    </View>
+    </MapSheetLayout>
   );
 }
 
 const styles = StyleSheet.create({
-  screenRoot: { flex: 1 },
   list: { padding: spacing.lg, paddingBottom: 120 },
   cardSpacing: { marginBottom: spacing.sm },
   meta: { marginTop: spacing.xs },
