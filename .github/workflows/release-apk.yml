@@ -1,0 +1,77 @@
+name: Release APK
+
+# feature → main → release 흐름의 마지막 단계.
+# release 브랜치에 push 되면 EAS 로 Android APK(preview 프로필)를 빌드하고,
+# 완료된 APK 를 GitHub Release 자산으로 첨부한다. (Expo 로그인 없이 GitHub 에서 바로 다운로드)
+on:
+  push:
+    branches: [release]
+  workflow_dispatch: # 수동 트리거도 허용
+
+# Release 생성·자산 업로드를 위해 쓰기 권한 필요.
+permissions:
+  contents: write
+
+# release 빌드는 도중 취소하지 않는다(클라우드 빌드가 떠 있으므로). 중복 push 는 직렬화.
+concurrency:
+  group: release-apk
+  cancel-in-progress: false
+
+jobs:
+  build-apk:
+    name: Build Android APK & attach to Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # release 는 main 에서 ff 되어 오므로 이미 통과한 상태지만, EAS 빌드 분(分) 낭비 방지용 가드.
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      # --wait: 빌드 완료까지 대기, --json: 결과를 JSON 으로(사람용 로그는 stderr 로 분리).
+      - name: Build Android APK on EAS
+        id: eas
+        run: |
+          eas build --platform android --profile preview --non-interactive --wait --json > eas-build.json
+          APK_URL=$(jq -r '(if type=="array" then .[0] else . end) | .artifacts.applicationArchiveUrl // .artifacts.buildUrl // empty' eas-build.json)
+          if [ -z "$APK_URL" ]; then
+            echo "::error::EAS 출력에서 APK URL 을 찾지 못했습니다. 아래 JSON 확인:"
+            cat eas-build.json
+            exit 1
+          fi
+          echo "apk_url=$APK_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Read app version
+        id: ver
+        run: echo "version=$(node -p "require('./app.json').expo.version")" >> "$GITHUB_OUTPUT"
+
+      - name: Download APK
+        run: curl -fL -o "ilgayo-v${{ steps.ver.outputs.version }}-${{ github.run_number }}.apk" "${{ steps.eas.outputs.apk_url }}"
+
+      - name: Create GitHub Release with APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-v${{ steps.ver.outputs.version }}-${{ github.run_number }}
+          name: APK v${{ steps.ver.outputs.version }} (#${{ github.run_number }})
+          body: |
+            release 브랜치 push 로 자동 빌드된 Android APK.
+
+            - commit: ${{ github.sha }}
+            - EAS 프로필: preview (apk)
+            - 빌드 상세: https://expo.dev/accounts/my-friend-jiseong/projects/mfz-frontend/builds
+          files: ilgayo-v${{ steps.ver.outputs.version }}-${{ github.run_number }}.apk
