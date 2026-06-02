@@ -11,6 +11,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
 import { StickyBottomBar } from '@/components/ui/StickyBottomBar';
+import { useHideOnScroll } from '@/components/ui/useHideOnScroll';
 import { spacing } from '@/theme/spacing';
 import { fmtDate, fmtDuration, fmtTime } from '@/utils/datetime';
 import type { Trip } from '@/types/entities';
@@ -41,6 +42,9 @@ export default function TripsList() {
     for (const v of allVisits) m.set(v.tripId, (m.get(v.tripId) ?? 0) + 1);
     return m;
   }, [allVisits]);
+
+  // hide-on-scroll — Redirect 분기보다 위에서 호출(훅 순서 고정).
+  const { onScroll, visible } = useHideOnScroll();
 
   // 진행 중인 외근이 있으면 외근 탭은 그 외근의 방문 현장 화면(active)으로 직행.
   // 사용자가 외근 탭을 누를 때 "지금 무슨 현장 가는 거였지" 즉시 확인할 수 있도록.
@@ -83,6 +87,8 @@ export default function TripsList() {
           keyExtractor={(t) => String(t.id)}
           renderItem={renderItem}
           contentContainerStyle={styles.list}
+          // gorhom 은 onScroll 을 public 타입에서 제외하지만 런타임엔 useScrollHandler 로 전달함.
+          {...({ onScroll } as object)}
           ListEmptyComponent={
             <EmptyState
               icon="briefcase-outline"
@@ -93,7 +99,7 @@ export default function TripsList() {
         />
       </MapSheetLayout>
       {/* StickyBottomBar 는 BottomSheet 외부에 둔다 (active.tsx / [id].tsx 와 동일 패턴) — 시트 내부 absolute 자식이 pan 제스처에 가려져 탭 진입 시 안 보이던 회로 차단. */}
-      <StickyBottomBar>
+      <StickyBottomBar visible={visible}>
         <Button
           onPress={() => router.push('/(tabs)/trips/new/select' as never)}
           size="lg"

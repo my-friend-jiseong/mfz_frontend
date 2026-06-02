@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Input';
 import { StickyBottomBar } from '@/components/ui/StickyBottomBar';
+import { useHideOnScroll } from '@/components/ui/useHideOnScroll';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
@@ -100,6 +101,8 @@ export default function ReportsIndex() {
     return result;
   }, [allReports, allTrips, userId, search]);
 
+  const { onScroll, visible } = useHideOnScroll();
+
   return (
     <MapSheetLayout title="보고서">
       <View style={styles.toolbar}>
@@ -177,6 +180,8 @@ export default function ReportsIndex() {
           </View>
         )}
         contentContainerStyle={styles.list}
+        // gorhom 은 onScroll 을 public 타입에서 제외하지만 런타임엔 useScrollHandler 로 전달함.
+        {...({ onScroll } as object)}
         ListEmptyComponent={
           <EmptyState
             icon={search ? 'search-outline' : 'document-text-outline'}
@@ -199,7 +204,7 @@ export default function ReportsIndex() {
           />
         }
       />
-      <StickyBottomBar>
+      <StickyBottomBar visible={visible}>
         <Button
           onPress={() => router.push('/(tabs)/reports/new' as never)}
           size="lg"

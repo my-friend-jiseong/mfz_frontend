@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
 import { FilterChip } from '@/components/ui/FilterChip';
 import { StickyBottomBar } from '@/components/ui/StickyBottomBar';
+import { useHideOnScroll } from '@/components/ui/useHideOnScroll';
 import {
   FIELD_STATUS_VALUES,
   FIELD_STATUS_LABEL,
@@ -135,6 +136,8 @@ export default function FieldsList() {
     [],
   );
 
+  const { onScroll, visible } = useHideOnScroll();
+
   return (
     <MapSheetLayout title="현장">
       <View style={styles.toolbar}>
@@ -216,6 +219,8 @@ export default function FieldsList() {
         keyExtractor={keyExtractor}
         renderItem={renderItem}
         contentContainerStyle={styles.list}
+        // gorhom 은 onScroll 을 public 타입에서 제외하지만 런타임엔 useScrollHandler 로 전달함.
+        {...({ onScroll } as object)}
         ListEmptyComponent={
           <EmptyState
             icon={search || hasFilter ? 'search-outline' : 'location-outline'}
@@ -240,7 +245,7 @@ export default function FieldsList() {
           />
         }
       />
-      <StickyBottomBar>
+      <StickyBottomBar visible={visible}>
         <Button
           onPress={() => router.push('/(tabs)/fields/new' as never)}
           size="lg"
