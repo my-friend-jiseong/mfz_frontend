@@ -50,5 +50,8 @@
     "playwright": "^1.59.1",
     "typescript": "~5.9.2"
   },
+  "overrides": {
+    "postcss": "8.5.10"
+  },
   "private": true
 }
