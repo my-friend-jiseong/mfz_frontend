@@ -289,12 +289,18 @@ export function KakaoMapWebView({
   }, [ready, myLocation]);
 
   // 단계구분도 카운트 집계 — 폴리곤 effect 와 분리해, 경계만 토글(markers 불변)할 땐 재집계 생략.
+  // 렌더 단계라 throw 가 화면을 깨므로 try 로 감싸 실패 시 null(채색 생략)로 폴백.
   const regionCounts = useMemo(() => {
     if (displayMode !== 'choropleth') return null;
-    return aggregateByRegion(
-      markers.map((m) => ({ id: m.id, lat: m.lat, lng: m.lng })),
-      loadSigunguGeoJson(),
-    );
+    try {
+      return aggregateByRegion(
+        markers.map((m) => ({ id: m.id, lat: m.lat, lng: m.lng })),
+        loadSigunguGeoJson(),
+      );
+    } catch (e) {
+      console.error('단계구분도 집계 실패', e);
+      return null;
+    }
   }, [displayMode, markers]);
 
   // 행정구역 경계 + 단계구분도 렌더링 (공통 폴리곤)
@@ -421,6 +427,15 @@ export function KakaoMapWebView({
         overlaysRef.current.push(overlay);
       });
     }
+
+    // 언마운트/재실행 시 줌 리스너 정리 — 다음 실행 전 cleanup 으로도 제거되지만,
+    // 언마운트엔 다음 실행이 없으므로 여기서 떼어내 리스너·stale 클로저 누수 차단.
+    return () => {
+      if (zoomListenerRef.current) {
+        k.maps.event.removeListener(zoomListenerRef.current);
+        zoomListenerRef.current = null;
+      }
+    };
   }, [markers, markerGroups, ready, onMarkerPress, displayMode]);
 
   if (!kakaoJsKey) {

@@ -80,22 +80,33 @@ export function KakaoMapWebView({
 
   // 경계·단계구분도 지오메트리는 번들 소스에서 — 런타임 fetch/CDN 없이 오프라인 동작.
   // 외곽 링은 정적이라 모드 진입 시 1회 추출(내부 캐시), code별 채색은 마커 집계로 계산.
+  // 둘 다 렌더 단계라 throw 가 화면을 깨므로 try 로 감싸 실패 시 미주입(경계/채색 생략)으로 폴백.
   const needsBoundary = showBoundary || displayMode === 'choropleth';
-  const boundaryRings = useMemo(
-    () => (needsBoundary ? getBoundaryRings() : undefined),
-    [needsBoundary],
-  );
+  const boundaryRings = useMemo(() => {
+    if (!needsBoundary) return undefined;
+    try {
+      return getBoundaryRings();
+    } catch (e) {
+      console.error('경계 지오메트리 로드 실패', e);
+      return undefined;
+    }
+  }, [needsBoundary]);
   const regionFill = useMemo(() => {
     if (displayMode !== 'choropleth') return undefined;
-    const counts = aggregateByRegion(
-      markers.map((m) => ({ id: m.id, lat: m.lat, lng: m.lng })),
-      loadSigunguGeoJson(),
-    );
-    const fill: Record<string, number> = {};
-    counts.forEach((c, code) => {
-      fill[code] = fillOpacityForCount(c);
-    });
-    return fill;
+    try {
+      const counts = aggregateByRegion(
+        markers.map((m) => ({ id: m.id, lat: m.lat, lng: m.lng })),
+        loadSigunguGeoJson(),
+      );
+      const fill: Record<string, number> = {};
+      counts.forEach((c, code) => {
+        fill[code] = fillOpacityForCount(c);
+      });
+      return fill;
+    } catch (e) {
+      console.error('단계구분도 집계 실패', e);
+      return undefined;
+    }
   }, [displayMode, markers]);
 
   // html 빌더 deps 에서 center·myLocation 제거 — 비동기 도착(권한 응답) 시 source 전체
