@@ -34,9 +34,12 @@ export const HEAT_MAX = 10;
 // (기존 MapLegend 의 근사 HEATMAP_STEPS 단색 알파를 대체)
 
 function hexLerp(a: string, b: string, t: number): string {
+  // 스톱 범위 밖(off < 첫 스톱, off > 마지막 스톱)에선 t 가 음수/1초과가 되어 채널이
+  // 0..255 를 벗어나 깨진 hex(#298c10d 등)가 나오므로 외삽하지 않도록 t 를 clamp.
+  const tc = t < 0 ? 0 : t > 1 ? 1 : t;
   const pa = [1, 3, 5].map((i) => parseInt(a.slice(i, i + 2), 16));
   const pb = [1, 3, 5].map((i) => parseInt(b.slice(i, i + 2), 16));
-  const ch = pa.map((v, i) => Math.round(v + (pb[i] - v) * t));
+  const ch = pa.map((v, i) => Math.round(v + (pb[i] - v) * tc));
   return '#' + ch.map((v) => v.toString(16).padStart(2, '0')).join('');
 }
 

@@ -419,8 +419,9 @@ export function KakaoMapWebView({
     heatInstanceRef.current = heat;
 
     let pending = false;
+    let rafId = 0;
     const redraw = () => {
-      if (displayModeRef.current !== 'heatmap') return;
+      if (displayModeRef.current !== 'heatmap' || !mapRef.current) return;
       const proj = map.getProjection();
       const data = heatPointsRef.current.map((p) => {
         const pt = proj.containerPointFromCoords(new k.maps.LatLng(p.lat, p.lng));
@@ -428,11 +429,12 @@ export function KakaoMapWebView({
       });
       heat.setData({ max: HEAT_MAX, data });
     };
-    // pan 중 bounds_changed 폭주 → rAF 로 프레임당 1회.
+    // pan 중 bounds_changed 폭주 → rAF 로 프레임당 1회. heatmap 모드 아니면 스케줄 생략(낭비 방지).
     const schedule = () => {
+      if (displayModeRef.current !== 'heatmap') return;
       if (pending) return;
       pending = true;
-      requestAnimationFrame(() => {
+      rafId = requestAnimationFrame(() => {
         pending = false;
         redraw();
       });
@@ -452,6 +454,7 @@ export function KakaoMapWebView({
     ro.observe(heatRef.current);
 
     return () => {
+      cancelAnimationFrame(rafId); // 언마운트 시 대기 중 rAF 가 분리된 지도에 getProjection 호출하는 것 방지
       k.maps.event.removeListener(map, 'bounds_changed', schedule);
       k.maps.event.removeListener(map, 'zoom_changed', schedule);
       ro.disconnect();

@@ -143,7 +143,9 @@ MARKERS.forEach(function(m){
       heat.setData({ max: ${HEAT_MAX}, data: data });
     }
     // pan 중 bounds_changed 가 폭주 → rAF 로 프레임당 1회로 합침.
+    // heatmap 모드가 아니면 스케줄 자체를 건너뛴다(기본 markers 모드 pan 마다 rAF 낭비 방지).
     function heatSchedule(){
+      if (MODE !== 'heatmap') return;
       if (heatPending) return;
       heatPending = true;
       requestAnimationFrame(function(){ heatPending = false; heatRedraw(); });
