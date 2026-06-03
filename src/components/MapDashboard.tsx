@@ -55,8 +55,12 @@ export function MapDashboard({
     });
   }, []);
 
+  // allFields 는 /api/fields/mine 출처 — 백엔드가 이미 "내 현장"으로 스코프해 내려준다.
+  // 따라서 클라이언트에서 현장별 owner(userId)로 재필터하지 않는다(로그인 가드만 유지).
+  // Before: f.userId === userId 로 한 번 더 걸렀는데, 복사/배정으로 owner 가 내가 아닌 현장
+  // (예: 데모 시드, 남이 만들어 나에게 배정)이 통째로 떨어져 지도 마커가 0이 되던 회로 차단.
   const myFields = useMemo(
-    () => (userId ? allFields.filter((f) => f.userId === userId) : []),
+    () => (userId ? allFields : []),
     [allFields, userId],
   );
 
