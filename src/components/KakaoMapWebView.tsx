@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { buildKakaoMapHtml, type MapDisplayMode } from '@/assets/kakaoMapHtml';
@@ -109,53 +109,88 @@ export function KakaoMapWebView({
     }
   }, [displayMode, markers]);
 
-  // html 빌더 deps 에서 center·myLocation 제거 — 비동기 도착(권한 응답) 시 source 전체
-  // 재주입으로 사용자의 pan/zoom/InfoWindow 가 reset 되던 회로 차단. 초기 1회만 HTML 에 박고,
-  // 이후 변경은 injectJavaScript 로 in-place 업데이트.
-  // initialCenter/initialMyLocation 은 mount 시점 값으로만 의미 — ref 에 박아 deps 에서 제외.
+  // HTML 은 마운트당 1회만 빌드(정적). 마커·모드·경계·채색·현재위치·center 는 모두 ready 후
+  // injectJavaScript 로 in-place 주입한다 — 마커 변경(필터)마다 문서를 리로드하던 회로 차단으로
+  // pan/zoom 보존 + 경계 지오메트리(~3MB) 재직렬화·전체 리로드 회피.
+  // markers/center 는 placeholder·초기 프레이밍용 mount 시점 값만 HTML 에 박는다(deps 제외).
   const initialCenterRef = useRef(center ?? myLocation ?? DEFAULT_CENTER);
-  const initialMyLocationRef = useRef(myLocation);
+  const initialMarkersRef = useRef(groupedMarkers);
   const html = useMemo(
     () =>
       buildKakaoMapHtml({
         kakaoJsKey,
-        markers: groupedMarkers,
+        markers: initialMarkersRef.current,
         center: initialCenterRef.current,
-        displayMode,
-        showBoundary,
-        myLocation: initialMyLocationRef.current,
         fitToMarkers,
         interactive,
-        boundaryRings,
-        regionFill,
       }),
-    [
-      kakaoJsKey,
-      groupedMarkers,
-      displayMode,
-      showBoundary,
-      fitToMarkers,
-      interactive,
-      boundaryRings,
-      regionFill,
-    ],
+    [kakaoJsKey, fitToMarkers, interactive],
   );
 
-  // 후속 center 변경 → in-place setCenter (pan/zoom 보존).
+  // html 이 바뀌면(키/interactive/fitToMarkers) WebView 가 리로드되므로 ready 를 내려, 새 문서에 재주입.
+  const [ready, setReady] = useState(false);
   useEffect(() => {
-    if (!center) return;
-    const js = `if(window.__mfzMap){window.__mfzMap.setCenter(new kakao.maps.LatLng(${center.lat},${center.lng}));}true;`;
-    webRef.current?.injectJavaScript(js);
-  }, [center?.lat, center?.lng]);
+    setReady(false);
+  }, [html]);
 
-  // 후속 myLocation 변경 → in-place 마커 갱신.
+  const inject = useCallback((js: string) => {
+    webRef.current?.injectJavaScript(`${js};true;`);
+  }, []);
+
+  // 마커(또는 히트맵) — head 마커 배열 주입. 변경마다 in-place 재렌더.
   useEffect(() => {
+    if (!ready) return;
+    inject(
+      `window.__mfzSetMarkers&&window.__mfzSetMarkers(${JSON.stringify(groupedMarkers)})`,
+    );
+  }, [ready, groupedMarkers, inject]);
+
+  // 표시 방식(markers/heatmap/choropleth) 전환.
+  useEffect(() => {
+    if (!ready) return;
+    inject(`window.__mfzSetMode&&window.__mfzSetMode(${JSON.stringify(displayMode)})`);
+  }, [ready, displayMode, inject]);
+
+  // 시/군/구 경계선 표시 토글.
+  useEffect(() => {
+    if (!ready) return;
+    inject(
+      `window.__mfzSetShowBoundary&&window.__mfzSetShowBoundary(${showBoundary ? 'true' : 'false'})`,
+    );
+  }, [ready, showBoundary, inject]);
+
+  // 경계 지오메트리(~3MB) — needsBoundary 토글 시에만 1회 주입(stable ref). 마커 변경엔 안 보냄.
+  useEffect(() => {
+    if (!ready) return;
+    inject(
+      `window.__mfzSetBoundaryGeometry&&window.__mfzSetBoundaryGeometry(${boundaryRings ? JSON.stringify(boundaryRings) : 'null'})`,
+    );
+  }, [ready, boundaryRings, inject]);
+
+  // 단계구분도 채색(code→opacity) — 마커 변경마다 갱신하되 페이로드가 작아 저렴.
+  useEffect(() => {
+    if (!ready) return;
+    inject(
+      `window.__mfzSetRegionFill&&window.__mfzSetRegionFill(${regionFill ? JSON.stringify(regionFill) : 'null'})`,
+    );
+  }, [ready, regionFill, inject]);
+
+  // 현재 위치 오버레이.
+  useEffect(() => {
+    if (!ready) return;
     const payload = myLocation
       ? `{lat:${myLocation.lat},lng:${myLocation.lng}}`
       : 'null';
-    const js = `if(window.__mfzSetMyLocation){window.__mfzSetMyLocation(${payload});}true;`;
-    webRef.current?.injectJavaScript(js);
-  }, [myLocation?.lat, myLocation?.lng]);
+    inject(`window.__mfzSetMyLocation&&window.__mfzSetMyLocation(${payload})`);
+  }, [ready, myLocation?.lat, myLocation?.lng, inject]);
+
+  // center 변경 → in-place setCenter (pan/zoom 보존). fitToMarkers 모드는 fitBounds 가 잡으므로 생략.
+  useEffect(() => {
+    if (!ready || !center || fitToMarkers) return;
+    inject(
+      `window.__mfzMap&&window.__mfzMap.setCenter(new kakao.maps.LatLng(${center.lat},${center.lng}))`,
+    );
+  }, [ready, center?.lat, center?.lng, fitToMarkers, inject]);
 
   return (
     <View style={styles.container}>
@@ -169,7 +204,9 @@ export function KakaoMapWebView({
         onMessage={(event) => {
           try {
             const msg = JSON.parse(event.nativeEvent.data);
-            if (msg.type === 'markerPress' && typeof msg.fieldId === 'string') {
+            if (msg.type === 'ready') {
+              setReady(true);
+            } else if (msg.type === 'markerPress' && typeof msg.fieldId === 'string') {
               onMarkerPress?.(msg.fieldId);
             } else if (msg.type === 'markerGroupPress' && Array.isArray(msg.groupIds)) {
               const ids = new Set<string>(msg.groupIds);

@@ -1,13 +1,16 @@
 // Kakao Maps JS SDK를 WebView에 임베드할 HTML 문자열 생성
 // KAKAO_JS_KEY 없으면 placeholder 렌더
+//
+// 갱신 모델: HTML 은 마운트당 1회만 빌드(정적)하고, 마커·경계·단계구분도·현재위치는
+// 모두 window.__mfzSet* 세터로 injectJavaScript in-place 주입한다.
+//   - 마커 변경(필터)마다 문서를 통째로 리로드하던 회로 차단 → pan/zoom 보존, 재직렬화 최소화.
+//   - 경계 지오메트리(시군구 외곽 링 ~3MB)는 ready 후 1회만 주입, 채색(fill)은 작은 맵만 갱신.
 
 export type MapDisplayMode = 'markers' | 'heatmap' | 'choropleth';
 
 interface MapHtmlOptions {
   kakaoJsKey: string;
-  // shape/badge: KWCAG 1.4.1 색각이상 대응 — 색 단독 표현 금지, 형상·라벨 동반.
-  // count/groupIds: 호출 측에서 동일 좌표를 그루핑한 head 마커. count>1이면 카운트 뱃지 표시,
-  //                 클릭 시 markerGroupPress 메시지로 groupIds 배열 전송.
+  // placeholder(키 없음) 폴백에서 칩으로 표시할 마운트 시점 마커. 실지도 마커는 __mfzSetMarkers 로 주입.
   markers: {
     id: string;
     lat: number;
@@ -20,33 +23,19 @@ interface MapHtmlOptions {
     groupIds?: string[];
   }[];
   center: { lat: number; lng: number };
-  displayMode?: MapDisplayMode;
-  showBoundary?: boolean;
-  // 사용자 현재 위치 — 있으면 별도 파란 점 + pulse 링으로 표시. 클릭 비활성.
-  myLocation?: { lat: number; lng: number } | null;
   // true 면 center/level 대신 모든 마커가 한 화면에 들어오도록 setBounds 로 자동 프레이밍.
   // 위치도(보고서 작성 미리보기 등)처럼 "현장 전체를 담는" 정적 뷰에 사용.
   fitToMarkers?: boolean;
   // false 면 드래그/줌 비활성 — BottomSheet 안 등 pan 충돌 회피용 정적 위치도(figure).
   interactive?: boolean;
-  // 시/군/구 외곽 링 슬림 지오메트리 (sigungu.getBoundaryRings). 경계/단계구분도에 필요할 때만 주입.
-  // 있으면 런타임 fetch/CDN 없이 이 좌표로 폴리곤을 그린다.
-  boundaryRings?: { code: string; rings: number[][][] }[];
-  // code → fillOpacity. 단계구분도 채색용. RN 측에서 집계·계산해 주입.
-  regionFill?: Record<string, number>;
 }
 
 export function buildKakaoMapHtml({
   kakaoJsKey,
   markers,
   center,
-  displayMode = 'markers',
-  showBoundary = false,
-  myLocation = null,
   fitToMarkers = false,
   interactive = true,
-  boundaryRings,
-  regionFill,
 }: MapHtmlOptions): string {
   // RN WebView와 웹 iframe 양쪽에서 메시지 전송 가능한 브리지 스크립트
   const postMsgFn = `function postMsg(msg){var s=JSON.stringify(msg);if(window.ReactNativeWebView){window.ReactNativeWebView.postMessage(s);}else if(window.parent&&window.parent!==window){window.parent.postMessage(s,'*');}}`;
@@ -83,19 +72,11 @@ MARKERS.forEach(function(m){
 </body></html>`;
   }
 
-  const markersJson = JSON.stringify(markers);
-  const modeLiteral = JSON.stringify(displayMode);
-  const showBoundaryLiteral = showBoundary ? 'true' : 'false';
-  const myLocationLiteral = myLocation ? JSON.stringify(myLocation) : 'null';
-  const boundaryRingsLiteral = boundaryRings ? JSON.stringify(boundaryRings) : 'null';
-  const regionFillLiteral = regionFill ? JSON.stringify(regionFill) : 'null';
-
   return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
 <style>
   html,body{margin:0;padding:0;height:100%;width:100%;}
   #map{height:100%;width:100%;}
-  #banner{position:absolute;top:12px;left:12px;right:12px;background:#d97706ee;color:#fff;padding:10px 14px;border-radius:8px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:13px;line-height:1.4;z-index:10;display:none;}
   @keyframes mfzPulse { 0% { transform: scale(0.6); opacity: 0.7; } 100% { transform: scale(2.4); opacity: 0; } }
   .mfz-me-ring { position:absolute; top:50%; left:50%; width:22px; height:22px; margin:-11px 0 0 -11px; border-radius:50%; background:#2563eb; opacity:0.35; animation: mfzPulse 1.6s ease-out infinite; }
   .mfz-me-dot { position:absolute; top:50%; left:50%; width:14px; height:14px; margin:-7px 0 0 -7px; border-radius:50%; background:#2563eb; border:3px solid #fff; box-shadow:0 1px 3px rgba(0,0,0,0.35); }
@@ -103,26 +84,12 @@ MARKERS.forEach(function(m){
 <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=${kakaoJsKey}&autoload=false"></script>
 </head><body>
 <div id="map"></div>
-<div id="banner"></div>
 <script>
 (function(){
-  var MARKERS = ${markersJson};
   var CENTER = { lat: ${center.lat}, lng: ${center.lng} };
-  var MODE = ${modeLiteral};
-  var SHOW_BOUNDARY = ${showBoundaryLiteral};
-  var MY_LOCATION = ${myLocationLiteral};
   var FIT_TO_MARKERS = ${fitToMarkers ? 'true' : 'false'};
   var INTERACTIVE = ${interactive ? 'true' : 'false'};
-  // 슬림 외곽 링 + code별 fillOpacity — RN(sigungu.ts)에서 집계·계산해 주입. 런타임 fetch/CDN 없음.
-  var BOUNDARY_RINGS = ${boundaryRingsLiteral};
-  var REGION_FILL = ${regionFillLiteral};
   ${postMsgFn}
-
-  function showBanner(text){
-    var b = document.getElementById('banner');
-    b.textContent = text;
-    b.style.display = 'block';
-  }
 
   kakao.maps.load(function(){
     var container = document.getElementById('map');
@@ -134,6 +101,12 @@ MARKERS.forEach(function(m){
     window.__mfzMap = map;
     // 정적 위치도(figure) — 드래그/줌 차단. BottomSheet 등에서 pan 충돌 회피 + 보고서 그림용.
     if (!INTERACTIVE) { map.setDraggable(false); map.setZoomable(false); }
+
+    // === 상태 (세터로 주입) ===
+    var MARKERS = [];
+    var MODE = 'markers';
+    var SHOW_BOUNDARY = false;
+    var REGION_FILL = null;
 
     // KWCAG 1.4.1 — status 별 색 + 형상 + 라벨 3중 인코딩 SVG.
     // count>1: 우상단 카운트 뱃지 + 라벨 absolute(좌표 정확도 무손실).
@@ -157,9 +130,21 @@ MARKERS.forEach(function(m){
       return '<div style="position:relative;width:36px;height:36px;cursor:pointer;">' + svg + countBadge + labelHtml + '</div>';
     }
 
+    // === 마커 / 히트맵 레이어 ===
+    var markerOverlays = [];
+    var heatCircles = [];
+    var heatZoomListener = null;
+
+    function clearMarkerLayer(){
+      for (var i = 0; i < markerOverlays.length; i++) markerOverlays[i].setMap(null);
+      markerOverlays = [];
+      for (var j = 0; j < heatCircles.length; j++) heatCircles[j].setMap(null);
+      heatCircles = [];
+      if (heatZoomListener) { kakao.maps.event.removeListener(heatZoomListener); heatZoomListener = null; }
+    }
+
     function renderMarkers(){
       MARKERS.forEach(function(m){
-        var pos = new kakao.maps.LatLng(m.lat, m.lng);
         var content = document.createElement('div');
         content.innerHTML = buildMarkerHtml(m);
         content.firstChild.addEventListener('click', function(){
@@ -169,14 +154,41 @@ MARKERS.forEach(function(m){
             postMsg({ type: 'markerPress', fieldId: m.id });
           }
         });
-        new kakao.maps.CustomOverlay({
-          position: pos,
+        var ov = new kakao.maps.CustomOverlay({
+          position: new kakao.maps.LatLng(m.lat, m.lng),
           content: content,
           map: map,
           // anchor 박스 = SVG 36×36. 중앙(0.5,0.5)이 좌표에 정확히 정렬되어 줌 무관 정확.
           xAnchor: 0.5,
           yAnchor: 0.5,
         });
+        markerOverlays.push(ov);
+      });
+    }
+
+    // kakao level↑ = 축소(픽셀당 미터↑). 화면상 블롭 크기를 줌 무관하게 일정히 유지하려
+    // 미터 반경을 level 에 2배씩 비례. (웹: KakaoMapWebView.web.tsx radiusForLevel 과 동일 식)
+    function radiusForLevel(level){
+      var r = 500 * Math.pow(2, level - 6);
+      return Math.max(50, Math.min(50000, r));
+    }
+    function renderHeatmap(){
+      // heatmap.js 없이 Circle 오버레이로 밀도 근사. 줌 변화 시 setRadius 로 갱신.
+      var radius = radiusForLevel(map.getLevel());
+      MARKERS.forEach(function(m){
+        var circle = new kakao.maps.Circle({
+          center: new kakao.maps.LatLng(m.lat, m.lng),
+          radius: radius,
+          strokeWeight: 0,
+          fillColor: '#dc2626',
+          fillOpacity: 0.28,
+        });
+        circle.setMap(map);
+        heatCircles.push(circle);
+      });
+      heatZoomListener = kakao.maps.event.addListener(map, 'zoom_changed', function(){
+        var r = radiusForLevel(map.getLevel());
+        for (var i = 0; i < heatCircles.length; i++) heatCircles[i].setRadius(r);
       });
     }
 
@@ -195,55 +207,43 @@ MARKERS.forEach(function(m){
       map.setBounds(bounds, 40, 40, 56, 40);
     }
 
-    // kakao level↑ = 축소(픽셀당 미터↑). 화면상 블롭 크기를 줌 무관하게 일정히 유지하려
-    // 미터 반경을 level 에 2배씩 비례. (웹: KakaoMapWebView.web.tsx radiusForLevel 과 동일 식)
-    function radiusForLevel(level){
-      var r = 500 * Math.pow(2, level - 6);
-      return Math.max(50, Math.min(50000, r));
-    }
-    var heatCircles = [];
-    function renderHeatmap(){
-      // heatmap.js 없이 Circle 오버레이로 밀도 근사. 줌 변화 시 setRadius 로 갱신.
-      var radius = radiusForLevel(map.getLevel());
-      MARKERS.forEach(function(m){
-        var circle = new kakao.maps.Circle({
-          center: new kakao.maps.LatLng(m.lat, m.lng),
-          radius: radius,
-          strokeWeight: 0,
-          fillColor: '#dc2626',
-          fillOpacity: 0.28,
-        });
-        circle.setMap(map);
-        heatCircles.push(circle);
-      });
+    function applyData(){
+      clearMarkerLayer();
+      if (MODE === 'heatmap') renderHeatmap();
+      else renderMarkers(); // markers · choropleth 모두 마커 표시
+      fitBounds();
     }
 
-    // 경계·단계구분도 — RN 에서 주입한 슬림 링(BOUNDARY_RINGS) + code별 fillOpacity(REGION_FILL)로
-    // 폴리곤만 그린다. 좌표 변환·집계는 RN(sigungu.ts)에서 끝났으므로 여기선 네트워크/CDN 불필요.
-    function renderPolygons(){
+    // === 경계 / 단계구분도 폴리곤 ===
+    // 지오메트리는 1회 주입해 code별 폴리곤 ref 를 보관하고, 스타일(스트로크·채색)만 싸게 갱신.
+    var boundaryPolys = {}; // code -> [kakao.maps.Polygon]
+    function clearBoundary(){
+      for (var code in boundaryPolys) {
+        var arr = boundaryPolys[code];
+        for (var i = 0; i < arr.length; i++) arr[i].setMap(null);
+      }
+      boundaryPolys = {};
+    }
+    function applyBoundaryStyle(){
       var isChoropleth = MODE === 'choropleth';
-      if (!SHOW_BOUNDARY && !isChoropleth) return;
-      if (!BOUNDARY_RINGS) return;
-
-      BOUNDARY_RINGS.forEach(function(feat){
-        var fillOpacity = isChoropleth && REGION_FILL ? (REGION_FILL[feat.code] || 0) : 0;
-        feat.rings.forEach(function(ring){
-          var path = ring.map(function(c){ return new kakao.maps.LatLng(c[1], c[0]); });
-          var p = new kakao.maps.Polygon({
-            path: path,
+      var visible = SHOW_BOUNDARY || isChoropleth;
+      for (var code in boundaryPolys) {
+        var fillOpacity = isChoropleth && REGION_FILL ? (REGION_FILL[code] || 0) : 0;
+        var arr = boundaryPolys[code];
+        for (var i = 0; i < arr.length; i++) {
+          var p = arr[i];
+          if (!visible) { p.setMap(null); continue; }
+          p.setMap(map);
+          p.setOptions({
             strokeWeight: SHOW_BOUNDARY ? 1.5 : 0.8,
-            strokeColor: '#004c80',
             strokeOpacity: SHOW_BOUNDARY ? 0.6 : 0.3,
-            strokeStyle: 'solid',
-            fillColor: '#2563eb',
             fillOpacity: fillOpacity,
           });
-          p.setMap(map);
-        });
-      });
+        }
+      }
     }
 
-    // 현재 위치 마커 — RN 측 in-place 갱신을 위해 overlay ref 보존.
+    // === 현재 위치 ===
     var myLocOverlay = null;
     function applyMyLocation(loc){
       if (myLocOverlay) { myLocOverlay.setMap(null); myLocOverlay = null; }
@@ -260,24 +260,37 @@ MARKERS.forEach(function(m){
         zIndex: 5,
       });
     }
+
+    // === 세터 (RN injectJavaScript 진입점) ===
+    window.__mfzSetMarkers = function(markers){ MARKERS = markers || []; applyData(); };
+    window.__mfzSetMode = function(mode){ MODE = mode; applyData(); applyBoundaryStyle(); };
+    window.__mfzSetShowBoundary = function(sb){ SHOW_BOUNDARY = !!sb; applyBoundaryStyle(); };
+    window.__mfzSetRegionFill = function(fill){ REGION_FILL = fill; applyBoundaryStyle(); };
+    window.__mfzSetBoundaryGeometry = function(rings){
+      clearBoundary();
+      if (rings) {
+        rings.forEach(function(feat){
+          var arr = [];
+          feat.rings.forEach(function(ring){
+            var path = ring.map(function(c){ return new kakao.maps.LatLng(c[1], c[0]); });
+            arr.push(new kakao.maps.Polygon({
+              path: path,
+              strokeColor: '#004c80',
+              strokeStyle: 'solid',
+              fillColor: '#2563eb',
+              strokeWeight: 0.8,
+              strokeOpacity: 0.3,
+              fillOpacity: 0,
+            }));
+          });
+          boundaryPolys[feat.code] = arr;
+        });
+      }
+      applyBoundaryStyle();
+    };
     window.__mfzSetMyLocation = applyMyLocation;
 
-    if (MODE === 'heatmap') {
-      renderHeatmap();
-      // 줌 변경 시 블롭 반경을 화면상 일정하게 — 전국 뷰서 점, 거리 뷰서 거대해지던 문제 차단.
-      kakao.maps.event.addListener(map, 'zoom_changed', function(){
-        var radius = radiusForLevel(map.getLevel());
-        for (var i = 0; i < heatCircles.length; i++) heatCircles[i].setRadius(radius);
-      });
-    } else {
-      // markers · choropleth 모두 마커 표시
-      renderMarkers();
-    }
-    fitBounds();
-
-    applyMyLocation(MY_LOCATION);
-    renderPolygons();
-
+    // 초기엔 빈 지도 — 마커·경계·현재위치는 ready 직후 RN 이 주입.
     postMsg({ type: 'ready' });
   });
 })();
