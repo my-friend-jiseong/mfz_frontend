@@ -137,13 +137,25 @@ export function KakaoMapWebView({
     webRef.current?.injectJavaScript(`${js};true;`);
   }, []);
 
-  // 마커(또는 히트맵) — head 마커 배열 주입. 변경마다 in-place 재렌더.
+  // 마커 — head 마커 배열 주입. 변경마다 in-place 재렌더.
   useEffect(() => {
     if (!ready) return;
     inject(
       `window.__mfzSetMarkers&&window.__mfzSetMarkers(${JSON.stringify(groupedMarkers)})`,
     );
   }, [ready, groupedMarkers, inject]);
+
+  // 히트맵 점 — {lat,lng,value}. 동일좌표 군집 count 를 value 로 실어 밀도에 가중(10건>1건).
+  const heatPoints = useMemo(
+    () => groupedMarkers.map((m) => ({ lat: m.lat, lng: m.lng, value: m.count ?? 1 })),
+    [groupedMarkers],
+  );
+  useEffect(() => {
+    if (!ready) return;
+    inject(
+      `window.__mfzSetHeatPoints&&window.__mfzSetHeatPoints(${JSON.stringify(heatPoints)})`,
+    );
+  }, [ready, heatPoints, inject]);
 
   // 표시 방식(markers/heatmap/choropleth) 전환.
   useEffect(() => {

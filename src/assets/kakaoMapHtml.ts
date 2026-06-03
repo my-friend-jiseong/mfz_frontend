@@ -6,6 +6,9 @@
 //   - 마커 변경(필터)마다 문서를 통째로 리로드하던 회로 차단 → pan/zoom 보존, 재직렬화 최소화.
 //   - 경계 지오메트리(시군구 외곽 링 ~3MB)는 ready 후 1회만 주입, 채색(fill)은 작은 맵만 갱신.
 
+import { HEAT_GRADIENT, HEAT_CONFIG, HEAT_MAX } from '@/theme/heatScale';
+import { HEATMAP_JS_SOURCE } from '@/assets/heatmapLib';
+
 export type MapDisplayMode = 'markers' | 'heatmap' | 'choropleth';
 
 interface MapHtmlOptions {
@@ -76,14 +79,18 @@ MARKERS.forEach(function(m){
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
 <style>
   html,body{margin:0;padding:0;height:100%;width:100%;}
-  #map{height:100%;width:100%;}
+  #mapwrap{position:relative;height:100%;width:100%;}
+  #map{position:absolute;inset:0;}
+  /* KDE 히트맵 캔버스 — 지도 위 투명 오버레이. heatmap 모드에서만 display:block. */
+  #heat{position:absolute;inset:0;pointer-events:none;z-index:5;display:none;}
   @keyframes mfzPulse { 0% { transform: scale(0.6); opacity: 0.7; } 100% { transform: scale(2.4); opacity: 0; } }
   .mfz-me-ring { position:absolute; top:50%; left:50%; width:22px; height:22px; margin:-11px 0 0 -11px; border-radius:50%; background:#2563eb; opacity:0.35; animation: mfzPulse 1.6s ease-out infinite; }
   .mfz-me-dot { position:absolute; top:50%; left:50%; width:14px; height:14px; margin:-7px 0 0 -7px; border-radius:50%; background:#2563eb; border:3px solid #fff; box-shadow:0 1px 3px rgba(0,0,0,0.35); }
 </style>
+<script>${HEATMAP_JS_SOURCE}</script>
 <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=${kakaoJsKey}&autoload=false"></script>
 </head><body>
-<div id="map"></div>
+<div id="mapwrap"><div id="map"></div><div id="heat"></div></div>
 <script>
 (function(){
   var CENTER = { lat: ${center.lat}, lng: ${center.lng} };
@@ -104,9 +111,52 @@ MARKERS.forEach(function(m){
 
     // === 상태 (세터로 주입) ===
     var MARKERS = [];
+    var HEAT_POINTS = [];
     var MODE = 'markers';
     var SHOW_BOUNDARY = false;
     var REGION_FILL = null;
+
+    // === KDE 히트맵 (heatmap.js / h337) ===
+    // 카카오엔 히트맵 레이어가 없어 투명 캔버스에 직접 그린다. 점은 위경도로 보관하고
+    // pan/zoom 마다 containerPointFromCoords 로 화면 px 로 변환해 다시 그린다(어긋남 방지).
+    var heatEl = document.getElementById('heat');
+    var heat = h337.create({
+      container: heatEl,
+      radius: ${HEAT_CONFIG.radius},
+      maxOpacity: ${HEAT_CONFIG.maxOpacity},
+      minOpacity: ${HEAT_CONFIG.minOpacity},
+      blur: ${HEAT_CONFIG.blur},
+      gradient: ${JSON.stringify(HEAT_GRADIENT)},
+    });
+    var heatPending = false;
+    function heatRedraw(){
+      if (MODE !== 'heatmap') return;
+      var proj = map.getProjection();
+      var data = [];
+      for (var i = 0; i < HEAT_POINTS.length; i++) {
+        var p = HEAT_POINTS[i];
+        var pt = proj.containerPointFromCoords(new kakao.maps.LatLng(p.lat, p.lng));
+        data.push({ x: Math.round(pt.x), y: Math.round(pt.y), value: p.value || 1 });
+      }
+      heat.setData({ max: ${HEAT_MAX}, data: data });
+    }
+    // pan 중 bounds_changed 가 폭주 → rAF 로 프레임당 1회로 합침.
+    function heatSchedule(){
+      if (heatPending) return;
+      heatPending = true;
+      requestAnimationFrame(function(){ heatPending = false; heatRedraw(); });
+    }
+    function applyHeat(){
+      if (MODE === 'heatmap') { heatEl.style.display = 'block'; heatSchedule(); }
+      else { heatEl.style.display = 'none'; heat.setData({ max: ${HEAT_MAX}, data: [] }); }
+    }
+    kakao.maps.event.addListener(map, 'bounds_changed', heatSchedule);
+    kakao.maps.event.addListener(map, 'zoom_changed', heatSchedule);
+    // 회전/리사이즈 시 webview relayout — setData 는 캔버스 치수를 안 바꾸므로 configure 로 리사이즈 후 재계산.
+    window.addEventListener('resize', function(){
+      heat.configure({ width: heatEl.clientWidth, height: heatEl.clientHeight });
+      heatSchedule();
+    });
 
     // KWCAG 1.4.1 — status 별 색 + 형상 + 라벨 3중 인코딩 SVG.
     // count>1: 우상단 카운트 뱃지 + 라벨 absolute(좌표 정확도 무손실).
@@ -130,15 +180,12 @@ MARKERS.forEach(function(m){
       return '<div style="position:relative;width:36px;height:36px;cursor:pointer;">' + svg + countBadge + labelHtml + '</div>';
     }
 
-    // === 마커 / 히트맵 레이어 ===
+    // === 마커 레이어 (히트맵은 위 캔버스로 분리) ===
     var markerOverlays = [];
-    var heatOverlays = [];
 
     function clearMarkerLayer(){
       for (var i = 0; i < markerOverlays.length; i++) markerOverlays[i].setMap(null);
       markerOverlays = [];
-      for (var j = 0; j < heatOverlays.length; j++) heatOverlays[j].setMap(null);
-      heatOverlays = [];
     }
 
     function renderMarkers(){
@@ -164,23 +211,6 @@ MARKERS.forEach(function(m){
       });
     }
 
-    // 히트맵 블롭 — 줌 무관 고정 px CSS 원(CustomOverlay). 겹치면 알파 누적으로 밀도 표현.
-    // (미터 반경 Circle 은 kakao 줌 척도와 안 맞아 줌아웃 시 화면상 커지던 문제 → 픽셀 고정으로 대체)
-    function renderHeatmap(){
-      MARKERS.forEach(function(m){
-        var el = document.createElement('div');
-        el.style.cssText = 'width:64px;height:64px;border-radius:50%;pointer-events:none;background:radial-gradient(circle, rgba(220,38,38,0.5) 0%, rgba(220,38,38,0) 70%);';
-        var ov = new kakao.maps.CustomOverlay({
-          position: new kakao.maps.LatLng(m.lat, m.lng),
-          content: el,
-          map: map,
-          xAnchor: 0.5,
-          yAnchor: 0.5,
-        });
-        heatOverlays.push(ov);
-      });
-    }
-
     // 모든 마커가 한 화면에 들어오도록 자동 프레이밍 — center/level 고정 대신.
     // 1개면 setBounds 가 최대 줌으로 튀어 부적절 → 그 점에 센터 + 적당한 level.
     function fitBounds(){
@@ -198,8 +228,7 @@ MARKERS.forEach(function(m){
 
     function applyData(){
       clearMarkerLayer();
-      if (MODE === 'heatmap') renderHeatmap();
-      else if (MODE === 'markers') renderMarkers(); // choropleth 는 구역 색만 — 마커 미표시
+      if (MODE === 'markers') renderMarkers(); // heatmap=캔버스 오버레이, choropleth=구역 색만
       fitBounds();
     }
 
@@ -252,7 +281,9 @@ MARKERS.forEach(function(m){
 
     // === 세터 (RN injectJavaScript 진입점) ===
     window.__mfzSetMarkers = function(markers){ MARKERS = markers || []; applyData(); };
-    window.__mfzSetMode = function(mode){ MODE = mode; applyData(); applyBoundaryStyle(); };
+    // 히트맵 점 — [{lat,lng,value}]. value 는 동일좌표 군집 count(가중). heatmap 모드일 때만 redraw.
+    window.__mfzSetHeatPoints = function(pts){ HEAT_POINTS = pts || []; if (MODE === 'heatmap') heatSchedule(); };
+    window.__mfzSetMode = function(mode){ MODE = mode; applyData(); applyBoundaryStyle(); applyHeat(); };
     window.__mfzSetShowBoundary = function(sb){ SHOW_BOUNDARY = !!sb; applyBoundaryStyle(); };
     window.__mfzSetRegionFill = function(fill){ REGION_FILL = fill; applyBoundaryStyle(); };
     window.__mfzSetBoundaryGeometry = function(rings){
