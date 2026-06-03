@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   Image,
   KeyboardAvoidingView,
   Modal,
@@ -17,7 +18,6 @@ import { useFieldStore } from '@/stores/fieldStore';
 import { useVisitStore } from '@/stores/visitStore';
 import { fields as fieldsApi, API_BASE_URL } from '@/api';
 import { pickPhoto, promptPhotoSource } from '@/utils/media';
-import { notify } from '@/utils/notify';
 import { safeBack } from '@/utils/backNavigation';
 import { EmptyState } from '@/components/EmptyState';
 import { Card } from '@/components/ui/Card';
@@ -227,7 +227,7 @@ function FieldReportEditor() {
 
   const pickPhase = (phase: Phase) => {
     if (!fieldId) {
-      notify('현장 먼저 선택', '사진을 올릴 현장을 먼저 선택해주세요.');
+      Alert.alert('현장 먼저 선택', '사진을 올릴 현장을 먼저 선택해주세요.');
       return;
     }
     promptPhotoSource(async (src) => {
@@ -241,7 +241,7 @@ function FieldReportEditor() {
           [phase]: { ...prev[phase], url: res.photo.fileUrl },
         }));
       } catch {
-        notify('사진 업로드 실패', '잠시 후 다시 시도해주세요.');
+        Alert.alert('사진 업로드 실패', '잠시 후 다시 시도해주세요.');
       } finally {
         setUploading(null);
       }
@@ -289,8 +289,9 @@ function FieldReportEditor() {
       // 마법사: 다음 현장으로 이어가기, 일반: 진입했던 화면(상세)으로 복귀.
       if (wizardSeq) {
         // 마지막 단계 저장 완료에만 통지 — 건너뛰기/나중에 작성은 미완이라 제외.
+        // web 은 webAlertPatch 가 window.alert 로 라우팅.
         if (!wizardSeq.nextFrId) {
-          notify('보고서 작성 완료', '작성한 현장 보고가 모두 저장됐습니다.');
+          Alert.alert('보고서 작성 완료', '작성한 현장 보고가 모두 저장됐습니다.');
         }
         goWizardNext();
       } else {

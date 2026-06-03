@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -16,7 +17,6 @@ import { useTripStore } from '@/stores/tripStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useVisitStore } from '@/stores/visitStore';
 import { useFieldStore } from '@/stores/fieldStore';
-import { notify } from '@/utils/notify';
 import { safeBack } from '@/utils/backNavigation';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
@@ -163,7 +163,7 @@ export default function ComposeReport() {
     const r = await createWithVisitScaffold({ title: t, tripId }, scaffoldFieldIds);
     setSubmitting(false);
     if (!r.ok) {
-      notify('보고서 생성 실패', r.error);
+      Alert.alert('보고서 생성 실패', r.error);
       return;
     }
     // 부분 실패 안내 (F4/G8) — failedFieldIds 로 현장명까지 노출.
@@ -177,8 +177,7 @@ export default function ComposeReport() {
         ? `\n· 외 ${r.failedFieldIds.length - 5}건`
         : '';
       const msg = `현장 보고 ${r.attemptedFieldIds.length}건 중 ${r.failedFieldIds.length}건 자동 생성에 실패했습니다.\n\n· ${names}${overflow}\n\n상세 화면에서 직접 추가할 수 있어요.`;
-      // notify — RN web 의 Alert.alert 가 no-op 이라 web 에선 안내가 통째로 사라지던 버그.
-      notify('일부 현장 보고 누락', msg);
+      Alert.alert('일부 현장 보고 누락', msg);
     }
     // 마법사 진입 — 스토어가 스캐폴드 후 상세 순서 기준 첫 현장 보고 id 를 돌려준다.
     // null 이면(방문 0건·loadDetail 실패) 기존처럼 상세로. 에디터 화면이 hydrated
