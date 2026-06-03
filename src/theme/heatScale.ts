@@ -31,6 +31,26 @@ export const HEAT_CONFIG = {
 // 군집이 주황·빨강으로 또렷해지게. 화면이 다 빨개지면 올린다(§6).
 export const HEAT_MAX = 5;
 
+// === 극단 줌아웃 반경 축소 ===
+// 커널은 화면 px 고정(36)이라, 멀리 당기면 도시 전체가 커널 1개보다 작아져
+// "지리 경계 밖으로 튀어나가는 빨간 원"으로 수렴한다. SHRINK_START 레벨 초과부터
+// 레벨당 1/FACTOR 로 반경을 줄여(하한 MIN) 원이 실제 군집 위치 크기에 수렴하게 한다.
+// 평소 줌(시내 단위, ≤START)에선 기존 반경 그대로 — 가시성 영향 없음.
+// 주의: h337.configure({radius})는 store 의 _cfgRadius 에 반영되지 않으므로(생성 시 고정),
+// 반경 변경은 setData 의 점별 radius 필드로 전달한다. 이 공식은 네이티브 HTML
+// (kakaoMapHtml.ts)에도 동일하게 인라인됨 — 수정 시 양쪽 동기화.
+export const HEAT_RADIUS_SHRINK_START_LEVEL = 10;
+export const HEAT_RADIUS_SHRINK_FACTOR = 1.5;
+export const HEAT_RADIUS_MIN = 10;
+
+export function heatRadiusForLevel(level: number): number {
+  if (level <= HEAT_RADIUS_SHRINK_START_LEVEL) return HEAT_CONFIG.radius;
+  const r =
+    HEAT_CONFIG.radius /
+    Math.pow(HEAT_RADIUS_SHRINK_FACTOR, level - HEAT_RADIUS_SHRINK_START_LEVEL);
+  return Math.max(HEAT_RADIUS_MIN, Math.round(r));
+}
+
 // === 범례용 ===
 // h337 은 stop 사이를 연속 보간하므로, 범례 바도 보간된 셀로 그려 실제 렌더와 일치시킨다.
 // (기존 MapLegend 의 근사 HEATMAP_STEPS 단색 알파를 대체)

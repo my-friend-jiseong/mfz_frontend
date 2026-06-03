@@ -6,7 +6,14 @@
 //   - 마커 변경(필터)마다 문서를 통째로 리로드하던 회로 차단 → pan/zoom 보존, 재직렬화 최소화.
 //   - 경계 지오메트리(시군구 외곽 링 ~3MB)는 ready 후 1회만 주입, 채색(fill)은 작은 맵만 갱신.
 
-import { HEAT_GRADIENT, HEAT_CONFIG, HEAT_MAX } from '@/theme/heatScale';
+import {
+  HEAT_GRADIENT,
+  HEAT_CONFIG,
+  HEAT_MAX,
+  HEAT_RADIUS_SHRINK_START_LEVEL,
+  HEAT_RADIUS_SHRINK_FACTOR,
+  HEAT_RADIUS_MIN,
+} from '@/theme/heatScale';
 import { HEATMAP_JS_SOURCE } from '@/assets/heatmapLib';
 
 export type MapDisplayMode = 'markers' | 'heatmap' | 'choropleth';
@@ -136,18 +143,27 @@ MARKERS.forEach(function(m){
     });
     var heatPending = false;
     var heatZooming = false; // 줌 애니메이션 진행 중 플래그 — 전환 프레임마다 재계산하지 않음
+    // 극단 줌아웃에서 커널(화면 px 고정)이 도시보다 커져 '경계 밖 빨간 원'으로 수렴하는 것 완화 —
+    // 일정 레벨 초과부터 반경 축소(하한 있음). heatScale.heatRadiusForLevel 과 동일 공식(동기화 주의).
+    function heatRadiusForLevel(lvl){
+      if (lvl <= ${HEAT_RADIUS_SHRINK_START_LEVEL}) return ${HEAT_CONFIG.radius};
+      var r = ${HEAT_CONFIG.radius} / Math.pow(${HEAT_RADIUS_SHRINK_FACTOR}, lvl - ${HEAT_RADIUS_SHRINK_START_LEVEL});
+      return Math.max(${HEAT_RADIUS_MIN}, Math.round(r));
+    }
     function heatRedraw(){
       if (MODE !== 'heatmap') return;
       var proj = map.getProjection();
       // 뷰포트 밖 점은 커널 반경(R) 밖이라 화면 픽셀에 기여하지 못함 → 제외.
       // (화면 밖 점이 h337 colorize 영역을 캔버스 전체로 키우던 비대 차단 — 줌인 pan 비용 감소)
-      var W = heatEl.clientWidth, H = heatEl.clientHeight, R = ${HEAT_CONFIG.radius};
+      // h337.configure({radius})는 store 에 반영되지 않으므로 점별 radius 로 전달.
+      var W = heatEl.clientWidth, H = heatEl.clientHeight;
+      var R = heatRadiusForLevel(map.getLevel());
       var data = [];
       for (var i = 0; i < HEAT_POINTS.length; i++) {
         var p = HEAT_POINTS[i];
         var pt = proj.containerPointFromCoords(new kakao.maps.LatLng(p.lat, p.lng));
         if (pt.x < -R || pt.x > W + R || pt.y < -R || pt.y > H + R) continue;
-        data.push({ x: Math.round(pt.x), y: Math.round(pt.y), value: p.value || 1 });
+        data.push({ x: Math.round(pt.x), y: Math.round(pt.y), value: p.value || 1, radius: R });
       }
       heat.setData({ max: ${HEAT_MAX}, data: data });
     }

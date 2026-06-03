@@ -4,7 +4,7 @@ import type { Field, FieldStatus } from '@/types/entities';
 import { FIELD_STATUS_LABEL } from '@/types/entities';
 import h337 from 'heatmap.js';
 import type { MapDisplayMode } from '@/assets/kakaoMapHtml';
-import { HEAT_GRADIENT, HEAT_CONFIG, HEAT_MAX } from '@/theme/heatScale';
+import { HEAT_GRADIENT, HEAT_CONFIG, HEAT_MAX, heatRadiusForLevel } from '@/theme/heatScale';
 import { loadSigunguGeoJson, aggregateByRegion } from '@/assets/boundaries/sigungu';
 import { fillOpacityForCount, CHOROPLETH_COLOR } from '@/theme/choroplethScale';
 import { colors } from '@/theme/colors';
@@ -96,6 +96,7 @@ type MapProjection = {
 type KakaoMap = {
   setCenter: (latlng: unknown) => void;
   setLevel: (level: number) => void;
+  getLevel: () => number;
   setBounds: (bounds: LatLngBounds, pt?: number, pr?: number, pb?: number, pl?: number) => void;
   setDraggable: (v: boolean) => void;
   setZoomable: (v: boolean) => void;
@@ -430,12 +431,15 @@ export function KakaoMapWebView({
       // (화면 밖 점이 h337 colorize 영역을 캔버스 전체로 키우던 비대 차단 — 줌인 pan 비용 감소)
       const W = el.clientWidth;
       const H = el.clientHeight;
-      const R = HEAT_CONFIG.radius;
-      const data: { x: number; y: number; value: number }[] = [];
+      // 극단 줌아웃에선 반경 축소(heatRadiusForLevel) — 커널이 도시보다 커져 '경계 밖
+      // 빨간 원'으로 수렴하는 것 완화. configure({radius})는 h337 store 에 반영되지
+      // 않으므로 점별 radius 로 전달.
+      const R = heatRadiusForLevel(map.getLevel());
+      const data: { x: number; y: number; value: number; radius: number }[] = [];
       for (const p of heatPointsRef.current) {
         const pt = proj.containerPointFromCoords(new k.maps.LatLng(p.lat, p.lng));
         if (pt.x < -R || pt.x > W + R || pt.y < -R || pt.y > H + R) continue;
-        data.push({ x: Math.round(pt.x), y: Math.round(pt.y), value: p.value || 1 });
+        data.push({ x: Math.round(pt.x), y: Math.round(pt.y), value: p.value || 1, radius: R });
       }
       heat.setData({ max: HEAT_MAX, data });
     };
