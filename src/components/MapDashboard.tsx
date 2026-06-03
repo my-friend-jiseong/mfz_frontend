@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useFieldStore } from '@/stores/fieldStore';
 import { useAuthStore } from '@/stores/authStore';
 import { KakaoMapWebView, fieldsToMarkers } from '@/components/KakaoMapWebView';
+import { MapLegend } from '@/components/MapLegend';
 import { requestUserLocation, type LatLng } from '@/utils/geolocation';
 import {
   MapFilterBar,
@@ -204,6 +205,7 @@ export function MapDashboard({ scopeFieldIds }: MapDashboardProps = {}) {
             router.push(`/(tabs)/fields/${fieldId}` as never)
           }
         />
+        <MapLegend displayMode={displayMode} />
       </View>
     </View>
   );
