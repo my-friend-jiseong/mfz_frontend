@@ -508,9 +508,12 @@ export function KakaoMapWebView({
         }}
       />
       {/* KDE 히트맵 캔버스 — 지도 위 투명 오버레이. display 토글 안 함(생성 시 getComputedStyle
-          폭이 auto→NaN 되는 것 회피). heatmap 모드 아니면 빈 데이터로 투명. */}
+          폭이 auto→NaN 되는 것 회피). heatmap 모드 아니면 빈 데이터로 투명.
+          h337 는 생성 시 container.style.position='relative' 를 강제로 덮어쓴다. heatRef 에
+          position:absolute 를 직접 주면 그게 무효화돼, in-flow 인 지도 div 뒤로 흘러내려
+          캔버스가 화면 밖(컨테이너 맨 아래)으로 나간다. → 절대배치 wrapper 로 감싸고 heatRef 는
+          100%×100% 만 줘서, h337 가 relative 로 바꿔도 wrapper 안을 꽉 채워 지도 위에 정렬되게 한다. */}
       <div
-        ref={heatRef}
         style={{
           position: 'absolute',
           top: 0,
@@ -520,7 +523,9 @@ export function KakaoMapWebView({
           pointerEvents: 'none',
           zIndex: 5,
         }}
-      />
+      >
+        <div ref={heatRef} style={{ width: '100%', height: '100%' }} />
+      </div>
       {error ? (
         <View style={styles.errorBox}>
           <Text style={styles.errorText}>지도 로드 실패: {error}</Text>
