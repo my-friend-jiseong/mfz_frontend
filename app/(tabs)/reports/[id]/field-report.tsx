@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
   Image,
   KeyboardAvoidingView,
   Modal,
@@ -12,12 +11,13 @@ import {
 } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useReportStore } from '@/stores/reportStore';
 import { useFieldStore } from '@/stores/fieldStore';
 import { useVisitStore } from '@/stores/visitStore';
 import { fields as fieldsApi, API_BASE_URL } from '@/api';
 import { pickPhoto, promptPhotoSource } from '@/utils/media';
+import { notify } from '@/utils/notify';
 import { safeBack } from '@/utils/backNavigation';
 import { EmptyState } from '@/components/EmptyState';
 import { Card } from '@/components/ui/Card';
@@ -218,9 +218,16 @@ function FieldReportEditor() {
     [allFields, fieldId],
   );
 
+  // 본문 h2 와 Stack 헤더 타이틀 공용 — 마법사 단계가 헤더에도 보이게.
+  const headingText = wizardSeq
+    ? `현장 보고 작성 (${wizardSeq.step}/${wizardSeq.total})`
+    : isEdit
+      ? '현장 보고 수정'
+      : '현장 보고 추가';
+
   const pickPhase = (phase: Phase) => {
     if (!fieldId) {
-      Alert.alert('현장 먼저 선택', '사진을 올릴 현장을 먼저 선택해주세요.');
+      notify('현장 먼저 선택', '사진을 올릴 현장을 먼저 선택해주세요.');
       return;
     }
     promptPhotoSource(async (src) => {
@@ -234,7 +241,7 @@ function FieldReportEditor() {
           [phase]: { ...prev[phase], url: res.photo.fileUrl },
         }));
       } catch {
-        Alert.alert('사진 업로드 실패', '잠시 후 다시 시도해주세요.');
+        notify('사진 업로드 실패', '잠시 후 다시 시도해주세요.');
       } finally {
         setUploading(null);
       }
@@ -251,6 +258,16 @@ function FieldReportEditor() {
     setError(null);
     if (!fieldId) {
       setError('현장을 선택해주세요');
+      return;
+    }
+    // 사진 없는 캡션 차단 — 상세 카드가 '사진 없음 + 캡션' 으로 어색하게 남는 회로.
+    const orphan = PHASES.find(
+      (p) => !slots[p.key].url && slots[p.key].caption.trim(),
+    );
+    if (orphan) {
+      setError(
+        `'${orphan.label}' 단계에 사진 없이 캡션만 입력돼 있습니다. 사진을 추가하거나 캡션을 비워주세요.`,
+      );
       return;
     }
     const body = {
@@ -270,8 +287,15 @@ function FieldReportEditor() {
     setSubmitting(false);
     if (r.ok) {
       // 마법사: 다음 현장으로 이어가기, 일반: 진입했던 화면(상세)으로 복귀.
-      if (wizardSeq) goWizardNext();
-      else safeBack(router);
+      if (wizardSeq) {
+        // 마지막 단계 저장 완료에만 통지 — 건너뛰기/나중에 작성은 미완이라 제외.
+        if (!wizardSeq.nextFrId) {
+          notify('보고서 작성 완료', '작성한 현장 보고가 모두 저장됐습니다.');
+        }
+        goWizardNext();
+      } else {
+        safeBack(router);
+      }
     } else {
       setError(r.error);
     }
@@ -302,6 +326,8 @@ function FieldReportEditor() {
 
   return (
     <SafeScreen>
+      {/* Stack 헤더 타이틀을 마법사 단계와 동기화 — _layout 의 정적 '현장 보고' 를 덮음. */}
+      <Stack.Screen options={{ title: headingText }} />
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -311,11 +337,7 @@ function FieldReportEditor() {
           keyboardShouldPersistTaps="handled"
         >
           <Text variant="h2" weight="heavy" style={styles.heading}>
-            {wizardSeq
-              ? `현장 보고 작성 (${wizardSeq.step}/${wizardSeq.total})`
-              : isEdit
-                ? '현장 보고 수정'
-                : '현장 보고 추가'}
+            {headingText}
           </Text>
           {wizardSeq ? (
             <Text variant="bodySm" color="textMuted" style={styles.wizardHint}>
