@@ -149,9 +149,18 @@ API(`address.json`)가 상호·기관명을 구조적으로 못 잡는 정상 �
 
 ---
 
-## 7. 🟠 보고서 본문(content) 검증 완화 + 직접 저장 분기에 사진 첨부 허용
+## 7. ✅ 보고서 본문(content) 검증 완화 + 사진 첨부 — 새 양식으로 해소 (2026-06-04)
 
-### 배경
+### 종결 사유
+새 보고서 양식(2026-05-31 결정)이 본 항목의 전제를 제거했다:
+- 보고서에 **본문(content)·보고서 레벨 사진 개념 자체가 없음** — 본문 = `field_reports`
+  컬렉션 (ERD v2).
+- 원 요구사항 #2("사진+제목만으로 짧게 보고")는 **생성 마법사**가 해소: 제목+외근 →
+  현장별 전·중·후 사진+캡션. (A) content 완화는 이미 불요 확인(2026-06-01), (B)/(C)
+  사진 첨부 contract 는 `POST /api/reports/{id}/field-reports` 가 그 역할.
+백엔드 추가 작업 없음.
+
+### 배경 (원 기록)
 운용 시나리오: 작업자가 "조치 전/후 사진 + 제목" 만으로 짧게 보고서 남기고 싶음 (예: 길거리 단순 정비, 가로수 한 그루 점검). 현재 막힘 두 군데:
 
 1. `POST /api/reports` (직접 저장) — `content` **10~50,000자** 강제. 본문 없이 진행 불가.
@@ -178,10 +187,10 @@ API(`address.json`)가 상호·기관명을 구조적으로 못 잡는 정상 �
 - **(C) 채택**: `handleManualSave` 가 create → attach 2-step. 실패 시 보고서 롤백 정책 필요.
 
 ### 우선순위
-🟠 중상 — 사용자 요구사항 #2. 운용 시 자주 마주칠 시나리오. 현재 더미 텍스트 우회로만 가능.
+~~🟠 중상~~ → ✅ 종결 — 새 양식(field_reports 경로)으로 요구사항 해소.
 
 ### 발견 시점
-2026-05-10 (요구사항 정리 #2)
+2026-05-10 (요구사항 정리 #2). 종결 2026-06-04.
 
 ### 관련 코드
 - 프론트 [`app/(tabs)/reports/new.tsx:274-301`](../../app/\(tabs\)/reports/new.tsx#L274) `handleManualSave`
@@ -407,9 +416,18 @@ destinations 영속화)은 **계획된(미방문/skipped) 목적지·진행 중 
 
 ---
 
-## 13. 🔴 `POST /api/reports/generate` — 운영에서 500 (AI 보고서 생성 전면 실패)
+## 13. ✅ `POST /api/reports/generate` — 운영 500 → 프론트 미사용으로 종결 (2026-06-04)
 
-### 배경
+### 종결 사유
+새 보고서 양식(2026-05-31 결정 §1)에서 AI 초안 분기가 **프론트에서 완전 제거**됐다
+(`reports.generate` 엔드포인트 바인딩·`handleAiGenerate` 모두 삭제, `/reports/generate`
+라우트는 `/reports/new` redirect 만 잔존). 보고서 작성은 "제목+외근 → 현장 보고
+스캐폴드 → 마법사" 플로우로 대체되어 이 500 이 사용자에게 도달할 경로가 없다.
+
+**백엔드 권고**: 미사용 endpoint 정리(제거 또는 410). AI 초안을 재도입하게 되면
+그때 신규 항목으로 다시 연다 (아래 원 기록 참조).
+
+### 배경 (원 기록)
 ERD v2 통합 검증(2026-05-28) 중 운영 호출 시, multipart 요청(`notes`·`title`·`tripId`·`fieldId`·`before_photo`·`after_photo`) 에 대해 **일관되게 500 `internal_server_error`** 반환. 사진 동봉·미동봉 모두 동일. 같은 토큰으로 호출한 다른 v2 엔드포인트(현장·외근·체크인·보고서 CRUD·field-reports)는 전부 정상이었음.
 
 ```
@@ -428,13 +446,13 @@ POST /api/reports/generate (multipart)  → 500 { code: "internal_server_error",
 - 성공 응답 형태가 확정되면 `ReportGenerateData` · `reportStore.generate` 매핑 재확인.
 
 ### 우선순위
-🔴 높음 — AI 초안 기능이 운영에서 동작 불가.
+~~🔴 높음~~ → ✅ 종결 — 프론트가 더 이상 호출하지 않음.
 
 ### 발견 시점
-2026-05-28 (ERD v2 통합 검증, 실호출).
+2026-05-28 (ERD v2 통합 검증, 실호출). 종결 2026-06-04.
 
 ### 관련 코드
-- 프론트 [`src/api/endpoints/reports.ts`](../../src/api/endpoints/reports.ts) `generate`, [`src/stores/reportStore.ts`](../../src/stores/reportStore.ts) `generate`, [`app/(tabs)/reports/new.tsx`](../../app/\(tabs\)/reports/new.tsx) `handleAiGenerate`
+- ~~프론트 `generate`·`handleAiGenerate`~~ — 2026-05-31 결정 §1 로 삭제됨. 잔존: [`app/(tabs)/reports/generate.tsx`](../../app/\(tabs\)/reports/generate.tsx) (redirect 전용)
 
 ---
 
@@ -746,3 +764,4 @@ headless 브라우저로 새로 그려 사진을 찍는 것**이다. 카카오 �
 - **2026-06-01**: 백엔드 release 브랜치 대조 — 이미 조치된 항목 삭제·재기술. **§1 삭제**(deep-links 가 google 제거하고 kakao+naver 만 반환, 커밋 8aafcec — naver 는 프론트 http 가드로 걸러져 카카오만 남음, 핵심 버그 해소). **§6 삭제**(`?force=true` cascade 구현됨, option B — 백엔드 완료, 프론트가 confirm 후 force 재호출만 붙이면 되는 follow-up). **§16 격상 되돌림 🔴→🟡**: release `toTimelineCard` 가 fieldId 를 이미 포함(git -S 기준 최초 커밋부터) → 전제 오류, 라이브 검증 후 닫기 예정. §7(A) content min 10자 강제 없음 확인(완화 불요)·(B) multipart 만 잔존. §3 핸들러 코드 정상 → '0건' 은 KAKAO_REST_API_KEY 환경 사안(코드 아님).
 - **2026-06-01**: 운영(`ilgayo.co.kr`) read-only probe 로 전제 실측 검증. **§16 닫힘(🟡→✅)**: 라이브 `GET /api/trips/:tripId` timeline entry 가 fieldId 를 실제로 실어옴(`field-…c78aaeb8`/"대연 전기실"). **§3 실측 확인**: 4/4 키워드 여전히 0건 → KAKAO_REST_API_KEY 운영 키 사안 확정(데모 지오코딩도 폴백 중). **§11 실측 확인**: detail 에 destinations 없음 + `/destinations` 404 → 미구현 확정. 단 timeline 의 visit fieldId 로 완료 외근의 현장은 프론트만으로 도출 가능 → 보고된 버그는 프론트 우선 수정 가능, §11 백엔드는 계획 목적지 영속화 범위로 잔존. §18·§19 404(미구현) 확인.
 - **2026-06-01**: 백로그 점검 — 정상 도로명/지역 키워드로 §3 재측정. **§3 🔴→🟡 강등·재기술**: `중앙대로 1001`→1·`낙동대로 550`→1·`해운대구 우동`→4·`중구 중앙대로`→10·`서면`→10·`동래구`→1 정상 응답 → 운영 키는 살아 있음. 앞선 "4/4 0건" 은 우연히 POI/부정확 키워드만 넣은 표본 편향이었고, 실제 0건은 장소명(POI: `부산광역시청`·`해운대해수욕장`·`센텀`)뿐(address.json 구조적 한계, 프론트 키워드검색으로 해소 완료). **§7(A) ✅ 표기**: content 10자 강제 부재 재확인 → 잔여는 (B) 사진 첨부뿐.
+- **2026-06-04**: 보고서 생성 마법사 도입에 따른 정리. **§13 클로즈(🔴→✅)**: AI 초안 분기가 프론트에서 완전 제거(2026-05-31 결정 §1)되어 generate 500 이 사용자에게 도달할 경로 없음 — 백엔드엔 미사용 endpoint 정리 권고만 잔존. **§7 클로즈(🟠→✅)**: 새 양식에서 보고서 본문·보고서 레벨 사진 개념이 제거되어 전제 소멸 — 요구사항 #2 는 마법사(현장별 전·중·후)가 해소, (B)/(C) 사진 contract 는 field-reports 가 그 역할.

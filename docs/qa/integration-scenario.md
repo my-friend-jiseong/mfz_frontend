@@ -1,6 +1,7 @@
 # 통합 테스트 시나리오 — ERD v2 (스키마 단순화 이후)
 
 > 작성: 2026-05-28 · 대상 빌드: `feat/erd-v2-frontend` (HEAD `9b0a67c` 기준)
+> 갱신: 2026-06-04 — S7 을 새 양식(2026-05-31 결정: 본문/AI 제거)+마법사 플로우로 교체, S6·§0 동기화
 > 진행 환경: web (`npm run web` 또는 `npm run build:web` 정적 서브) — 모바일 전용(카메라/마이크 네이티브, expo-secure-store) 은 web fallback 평가
 > 백엔드: `EXPO_PUBLIC_API_BASE_URL` 미설정 시 운영 도메인 `https://ilgayo.co.kr` ([config.ts](../../src/api/config.ts))
 >
@@ -18,7 +19,7 @@
 | **폐기** | 오프라인 큐(S15), 토큰 외 무관, **공유 토큰 페이지(`/shared/{token}`)**, **방문 첨부(메모/사진/음성)**, **음성 메모 전반**, **보고서 본문(content)**, **외근 상태전환 이력**, **공식보고 고지**, geofence 자동 도착 |
 | **신규** | **현장 분류(categories)** 입력, **보고서 현장별 전·중·후 사진(field_reports)** 표시, 현장 메모/사진은 **현장 전용** |
 | **계약 변경** | 현장 생성(roadAddress·detailAddress·lat·lng / title·jibun 제거), 체크인(fieldId 만), 외근 시작(title 만), 보고서 생성(title 필수·content 제거), 보고서 삭제(hard delete), 에러키 `already_active_trip` |
-| **미surface** | `projects` 는 스토어·엔드포인트만 존재(전용 화면 없음). `field_reports` 는 보고서 상세에서 **읽기**, AI 생성 시 before/after 저장 — 수동 현장보고 편집 UI 는 아직 없음 |
+| **미surface** | `projects` 는 스토어·엔드포인트만 존재(전용 화면 없음). ~~`field_reports` 수동 편집 UI 없음~~ → 전용 편집 화면(`field-report`)·생성 마법사로 해소(2026-06-04). AI 생성(`generate`)은 프론트에서 완전 제거(2026-05-31 결정 §1) |
 
 ---
 
@@ -83,17 +84,17 @@
    - ⚠️ §8: 이 엔드포인트 존속·body 는 백엔드 확인 대상. 404/400 시 로그 기록.
 
 ### S6. 외근 종료 / 상세
-1. active 하단 "외근 종료" → `POST /api/trips/end` → `/(tabs)/trips` 이동 + 보고서 작성 prompt.
+1. active 하단 "외근 종료" → `POST /api/trips/end` → **외근 상세(detail) 로 단일 진입** — 보고서 작성은 detail footer CTA 가 담당 (종료 직후 prompt 없음).
 2. 방문 0건 종료 → `confirm_required_zero_visits` → 확인 → `forceEndWithoutVisit=true` 재호출.
 3. 외근 상세 [trips/[id]](<../app/(tabs)/trips/[id].tsx>): 시작/종료 시각, 계획 N곳·실제 방문 M건, 계획 목적지 status, 보고서 CTA. **상태전환 이력 박스 부재** 확인. 방문 행에 첨부 카운트 부재 확인.
 
-### S7. 보고서 — 작성 (통합 폼)
-1. 외근 상세/보고서 탭 → "📝 보고서 작성" → [reports/new](<../app/(tabs)/reports/new.tsx>).
-2. 외근 picker(모달) → 선택 시 카드. 라벨에 raw `#tripId` 미노출.
-3. 입력: **제목(필수)**, 현장 메모(AI 초안용), 조치 전/후 사진. (구 "요약"·"추가 메모"·"작업 위치"·외근 메모/사진 import 부재 확인)
-4. **[✏ 직접 저장]** → `POST /api/reports` (body `{title, tripId?}`) → 상세 이동. (content 미전송 확인)
-5. **[✨ AI 초안]** → `POST /api/reports/generate` (multipart: notes·title·tripId·before/after) → 상세 이동.
-   - ⚠️ §8: generate 신 응답 형태(reportId/fieldReport) 확인 대상.
+### S7. 보고서 — 작성 (새 양식 + 마법사, 2026-06-04)
+1. 외근 상세/보고서 탭 → "보고서 작성" → [reports/new](<../app/(tabs)/reports/new.tsx>).
+2. 외근 picker(모달) → 선택 시 카드 + **위치도 미리보기**(방문 현장 fitToMarkers) + 스캐폴드 안내("현장 N곳 … 차례로 채우는 단계로 넘어갑니다"). 라벨에 raw `#tripId` 미노출.
+3. 입력: **제목(필수)** + 연결 외근뿐. (본문·AI 초안·보고서 레벨 사진 입력 **부재 확인** — 2026-05-31 결정 §1)
+4. "보고서 만들기" → `POST /api/reports` `{title, tripId}` → 방문 현장별 `POST /api/reports/{id}/field-reports` (빈 스캐폴드, 병렬·부분 실패 시 누락 안내 alert) → **마법사 진입** (`field-report?frId=<첫 스캐폴드>&wizard=1`).
+5. **마법사**: 헤더·본문 "현장 보고 작성 (n/N)" / 현장 readonly / 전·중·후 사진+캡션 / [저장 후 다음 현장]·[이 현장 건너뛰기]·[나중에 작성하기], 마지막 단계는 [저장 후 완료]·[건너뛰고 완료] → 상세 복귀. 마지막 저장 시 "보고서 작성 완료" 통지(webAlertPatch 경유).
+6. 가드: **사진 없는 캡션만 입력 시 저장 차단**(인라인 에러) / **방문 0건 외근** → 마법사 없이 상세 직행 / 상세→"수정" 진입은 마법사 아님(단계 버튼 부재 확인).
 
 ### S8. 보고서 — 상세 / 수정 / 삭제
 1. [reports/[id]](<../app/(tabs)/reports/[id]/index.tsx>): 제목·연결 외근·작성 시각·**현장별 전·중·후 사진 카드(field_reports)**·output 파일 다운로드. (본문 content 영역·**공유 버튼 부재** 확인)
@@ -126,7 +127,7 @@
 - [ ] S4 외근 시작 — title 만 / 공식고지·도착감지 부재
 - [ ] S5 체크인 — fieldId 만 / 단일 status / 첨부 입력 부재  *(§8 status 엔드포인트)*
 - [ ] S6 외근 종료·상세 — zero_visits force / 상태이력 부재
-- [ ] S7 보고서 작성 — title 필수·content 미전송 / AI generate  *(§8 generate)*
+- [ ] S7 보고서 작성 — title 필수 / 스캐폴드 자동 생성 / 마법사 (n/N)·건너뛰기·캡션 가드·0방문 폴백
 - [ ] S8 보고서 상세 — field_reports 카드 / 공유 부재 / hard delete
 - [ ] S9 safeBack 폴백
 - [ ] S10 토큰 회전

@@ -31,3 +31,4 @@
 | 파일 | 내용 |
 |---|---|
 | [qa/integration-scenario.md](qa/integration-scenario.md) | 통합 테스트 시나리오 (ERD v2) — "무엇을 어떻게 시도하는가" |
+| [qa/verify-report-wizard.mjs](qa/verify-report-wizard.mjs) | 보고서 생성 마법사 회귀 검증 (Playwright, §S7) — 생성·단계 이동·캡션 가드·폴백, 실행 후 원복 |

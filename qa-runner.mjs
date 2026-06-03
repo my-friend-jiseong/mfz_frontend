@@ -545,10 +545,11 @@ async function flowTripStart(page, ctx) {
 }
 
 async function flowCheckinAndEndTrip(page, ctx) {
-  // S9 체크인 + S10 외근 종료. AI 보고서 prompt 는 cancel.
-  // 외근 종료 후 AI 보고서 confirm 은 webAlertPatch 가 window.confirm 으로 — playwright dialog handler 로 cancel.
+  // S9 체크인 + S10 외근 종료.
+  // (AI 보고서 prompt 는 2026-05-31 새 양식에서 제거 — 종료 후 외근 상세로 단일 진입.
+  //  dialog handler 는 zero-visits confirm 등 잔여 native dialog 방어용으로 유지.)
   page.on('dialog', async (d) => {
-    // 모든 native dialog (alert/confirm) 자동 dismiss/cancel — AI 보고서 prompt 등.
+    // 모든 native dialog (alert/confirm) 자동 dismiss/cancel — webAlertPatch 경유 confirm 등.
     try { await d.dismiss(); } catch { /* ignore */ }
   });
 
