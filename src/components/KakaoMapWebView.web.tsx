@@ -276,6 +276,15 @@ export function KakaoMapWebView({
     myLocOverlayRef.current = overlay;
   }, [ready, myLocation]);
 
+  // 단계구분도 카운트 집계 — 폴리곤 effect 와 분리해, 경계만 토글(markers 불변)할 땐 재집계 생략.
+  const regionCounts = useMemo(() => {
+    if (displayMode !== 'choropleth') return null;
+    return aggregateByRegion(
+      markers.map((m) => ({ id: m.id, lat: m.lat, lng: m.lng })),
+      loadSigunguGeoJson(),
+    );
+  }, [displayMode, markers]);
+
   // 행정구역 경계 + 단계구분도 렌더링 (공통 폴리곤)
   useEffect(() => {
     if (!ready || !mapRef.current) return;
@@ -291,14 +300,7 @@ export function KakaoMapWebView({
 
     try {
       const fc = loadSigunguGeoJson();
-
-      // 단계구분도 모드일 때 현장 카운트 집계 — 절대 건수 구간으로 채색(데이터 양 무관).
-      const counts = isChoropleth
-        ? aggregateByRegion(
-            markers.map((m) => ({ id: m.id, lat: m.lat, lng: m.lng })),
-            fc,
-          )
-        : null;
+      const counts = regionCounts; // 절대 건수 구간으로 채색(데이터 양 무관)
 
       fc.features.forEach((featureItem) => {
         const geom = featureItem.geometry;
@@ -330,7 +332,7 @@ export function KakaoMapWebView({
     } catch (e) {
       console.error('경계/단계구분도 로드 실패', e);
     }
-  }, [ready, showBoundary, displayMode, markers]);
+  }, [ready, showBoundary, displayMode, regionCounts]);
 
   // 오버레이 갱신 (displayMode·markers에 반응)
   useEffect(() => {

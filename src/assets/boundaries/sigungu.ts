@@ -71,17 +71,62 @@ export interface GeoPoint {
   lng: number;
 }
 
-// 각 현장이 속한 시/군/구 코드 → 카운트 집계
+interface FeatureBBox {
+  minLng: number;
+  minLat: number;
+  maxLng: number;
+  maxLat: number;
+}
+
+// feature별 경계 상자(bbox) — ray-cast 전에 점이 상자 밖이면 바로 스킵하기 위함.
+// 지오메트리는 정적이라 fc(싱글톤) 단위로 1회 계산·캐시.
+let bboxCacheFc: SigunguFeatureCollection | null = null;
+let bboxCache: FeatureBBox[] = [];
+
+function getFeatureBBoxes(fc: SigunguFeatureCollection): FeatureBBox[] {
+  if (bboxCacheFc === fc) return bboxCache;
+  bboxCache = fc.features.map((feat) => {
+    let minLng = Infinity;
+    let minLat = Infinity;
+    let maxLng = -Infinity;
+    let maxLat = -Infinity;
+    const geom = feat.geometry;
+    const polygons = geom.type === 'Polygon' ? [geom.coordinates] : geom.coordinates;
+    for (const polygon of polygons) {
+      const outer = polygon[0] as number[][] | undefined;
+      if (!outer) continue;
+      for (const [lng, lat] of outer) {
+        if (lng < minLng) minLng = lng;
+        if (lng > maxLng) maxLng = lng;
+        if (lat < minLat) minLat = lat;
+        if (lat > maxLat) maxLat = lat;
+      }
+    }
+    return { minLng, minLat, maxLng, maxLat };
+  });
+  bboxCacheFc = fc;
+  return bboxCache;
+}
+
+// 각 현장이 속한 시/군/구 코드 → 카운트 집계.
+// bbox 사전 컷으로 점이 상자 밖인 feature 는 ray-cast 생략 (O(점×feature×정점) → 대부분 상자에서 탈락).
 export function aggregateByRegion(
   points: GeoPoint[],
   fc: SigunguFeatureCollection,
 ): Map<string, number> {
   const counts = new Map<string, number>();
+  const bboxes = getFeatureBBoxes(fc);
   for (const p of points) {
-    for (const feat of fc.features) {
-      if (pointInFeature(p.lng, p.lat, feat)) {
-        const code = feat.properties.code;
-        counts.set(code, (counts.get(code) ?? 0) + 1);
+    for (let i = 0; i < fc.features.length; i++) {
+      const b = bboxes[i];
+      if (p.lng < b.minLng || p.lng > b.maxLng || p.lat < b.minLat || p.lat > b.maxLat) {
+        continue;
+      }
+      if (pointInFeature(p.lng, p.lat, fc.features[i])) {
+        counts.set(
+          fc.features[i].properties.code,
+          (counts.get(fc.features[i].properties.code) ?? 0) + 1,
+        );
         break;
       }
     }
