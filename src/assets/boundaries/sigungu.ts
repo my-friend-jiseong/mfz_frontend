@@ -89,14 +89,8 @@ export function aggregateByRegion(
   return counts;
 }
 
-// 카운트를 fillOpacity로 매핑 (0~최댓값 기준)
-export function opacityForCount(count: number, max: number): number {
-  if (count <= 0) return 0;
-  if (max <= 0) return 0;
-  // 최소 가시성 0.15, 최대 0.6
-  const ratio = Math.min(1, count / max);
-  return 0.15 + ratio * 0.45;
-}
+// 카운트 → fillOpacity 매핑은 theme/choroplethScale.fillOpacityForCount 로 이관(절대 구간).
+// 지도 렌더·범례가 같은 척도를 공유하기 위함.
 
 export interface BoundaryRingFeature {
   code: string;

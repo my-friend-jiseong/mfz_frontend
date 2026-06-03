@@ -3,11 +3,8 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import type { Field, FieldStatus } from '@/types/entities';
 import { FIELD_STATUS_LABEL } from '@/types/entities';
 import type { MapDisplayMode } from '@/assets/kakaoMapHtml';
-import {
-  loadSigunguGeoJson,
-  aggregateByRegion,
-  opacityForCount,
-} from '@/assets/boundaries/sigungu';
+import { loadSigunguGeoJson, aggregateByRegion } from '@/assets/boundaries/sigungu';
+import { fillOpacityForCount, CHOROPLETH_COLOR } from '@/theme/choroplethScale';
 import { colors } from '@/theme/colors';
 import { spacing, fontSize, radius } from '@/theme/spacing';
 import { withAlpha } from '@/theme/withAlpha';
@@ -295,16 +292,13 @@ export function KakaoMapWebView({
     try {
       const fc = loadSigunguGeoJson();
 
-      // 단계구분도 모드일 때 현장 카운트 집계
+      // 단계구분도 모드일 때 현장 카운트 집계 — 절대 건수 구간으로 채색(데이터 양 무관).
       const counts = isChoropleth
         ? aggregateByRegion(
             markers.map((m) => ({ id: m.id, lat: m.lat, lng: m.lng })),
             fc,
           )
         : null;
-      const maxCount = counts
-        ? Math.max(0, ...Array.from(counts.values()))
-        : 0;
 
       fc.features.forEach((featureItem) => {
         const geom = featureItem.geometry;
@@ -312,9 +306,7 @@ export function KakaoMapWebView({
           geom.type === 'Polygon' ? [geom.coordinates] : geom.coordinates;
 
         const regionCount = counts?.get(featureItem.properties.code) ?? 0;
-        const choroplethOpacity = counts
-          ? opacityForCount(regionCount, maxCount)
-          : 0;
+        const choroplethOpacity = counts ? fillOpacityForCount(regionCount) : 0;
 
         polygons.forEach((polygon) => {
           const outerRing = polygon[0];
@@ -328,7 +320,7 @@ export function KakaoMapWebView({
             strokeColor: '#004c80',
             strokeOpacity: showBoundary ? 0.6 : 0.3,
             strokeStyle: 'solid',
-            fillColor: '#2563eb',
+            fillColor: CHOROPLETH_COLOR,
             fillOpacity: isChoropleth ? choroplethOpacity : 0,
           });
           poly.setMap(mapRef.current);

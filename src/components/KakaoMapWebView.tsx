@@ -5,9 +5,9 @@ import { buildKakaoMapHtml, type MapDisplayMode } from '@/assets/kakaoMapHtml';
 import {
   loadSigunguGeoJson,
   aggregateByRegion,
-  opacityForCount,
   getBoundaryRings,
 } from '@/assets/boundaries/sigungu';
+import { fillOpacityForCount } from '@/theme/choroplethScale';
 import { KAKAO_WEBVIEW_BASE_URL } from '@/utils/kakaoMap';
 import type { Field, FieldStatus } from '@/types/entities';
 import { FIELD_STATUS_LABEL } from '@/types/entities';
@@ -91,10 +91,9 @@ export function KakaoMapWebView({
       markers.map((m) => ({ id: m.id, lat: m.lat, lng: m.lng })),
       loadSigunguGeoJson(),
     );
-    const max = Math.max(0, ...Array.from(counts.values()));
     const fill: Record<string, number> = {};
     counts.forEach((c, code) => {
-      fill[code] = opacityForCount(c, max);
+      fill[code] = fillOpacityForCount(c);
     });
     return fill;
   }, [displayMode, markers]);
