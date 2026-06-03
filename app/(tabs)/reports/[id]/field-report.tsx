@@ -102,6 +102,11 @@ function FieldReportEditor() {
     };
   }, [isWizard, detailCache, reportId, frId]);
 
+  // 마법사 이탈 → 상세 — 마지막 단계 완료와 '나중에 작성하기' 공용 단일 지점.
+  // 종료 동작을 바꿀 때(완료 토스트 등) 여기 한 곳만 수정.
+  const exitWizardToDetail = () =>
+    router.replace(`/(tabs)/reports/${reportId}` as never);
+
   // 다음 단계로 (마지막이면 상세로) — '저장 후 다음'과 '건너뛰기' 공용.
   // push 가 아닌 replace — 마법사 단계들이 back 스택에 쌓여 뒤로가기가 이전 현장으로
   // 되돌아가는(이미 저장된 단계 재진입) 혼선 차단.
@@ -111,7 +116,7 @@ function FieldReportEditor() {
         `/(tabs)/reports/${reportId}/field-report?frId=${wizardSeq.nextFrId}&wizard=1` as never,
       );
     } else {
-      router.replace(`/(tabs)/reports/${reportId}` as never);
+      exitWizardToDetail();
     }
   };
 
@@ -454,9 +459,7 @@ function FieldReportEditor() {
               </Button>
               {wizardSeq.nextFrId ? (
                 <Button
-                  onPress={() =>
-                    router.replace(`/(tabs)/reports/${reportId}` as never)
-                  }
+                  onPress={exitWizardToDetail}
                   disabled={submitting}
                   variant="ghost"
                   size="sm"

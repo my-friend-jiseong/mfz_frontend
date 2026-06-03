@@ -179,13 +179,12 @@ export default function ComposeReport() {
       const msg = `현장 보고 ${r.attemptedFieldIds.length}건 중 ${r.failedFieldIds.length}건 자동 생성에 실패했습니다.\n\n· ${names}${overflow}\n\n상세 화면에서 직접 추가할 수 있어요.`;
       Alert.alert('일부 현장 보고 누락', msg);
     }
-    // 마법사 진입 — createWithVisitScaffold 가 loadDetail 까지 마친 뒤라
-    // detailCache 에 fieldReports 가 있다. 없으면(방문 0건·loadDetail 실패) 상세로.
-    const frs =
-      useReportStore.getState().detailCache[r.report.id]?.fieldReports ?? [];
-    if (frs.length > 0) {
+    // 마법사 진입 — 스토어가 스캐폴드 후 상세 순서 기준 첫 현장 보고 id 를 돌려준다.
+    // null 이면(방문 0건·loadDetail 실패) 기존처럼 상세로. 에디터 화면이 hydrated
+    // detailCache 에 의존하므로 캐시 없이 마법사 진입은 불가 — 폴백이 올바른 동작.
+    if (r.firstFieldReportId) {
       router.replace(
-        `/(tabs)/reports/${r.report.id}/field-report?frId=${frs[0].id}&wizard=1` as never,
+        `/(tabs)/reports/${r.report.id}/field-report?frId=${r.firstFieldReportId}&wizard=1` as never,
       );
     } else {
       router.replace(`/(tabs)/reports/${r.report.id}` as never);

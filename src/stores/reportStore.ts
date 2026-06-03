@@ -23,6 +23,10 @@ export type CreateWithScaffoldResult =
       report: Report;
       attemptedFieldIds: string[];
       failedFieldIds: string[];
+      // 스캐폴드 직후 상세(detail) 순서 기준 첫 현장 보고 id — 마법사 진입점.
+      // 호출 측이 detailCache 를 직접 피킹하지 않도록 결과로 전달. loadDetail 실패
+      // 또는 스캐폴드 0건이면 null (호출 측은 상세 화면으로 폴백).
+      firstFieldReportId: string | null;
     }
   | { ok: false; error: string };
 
@@ -207,8 +211,9 @@ export const useReportStore = create<ReportState>((set, get) => ({
     });
     // loadDetail 실패는 보고서/카드 생성 자체엔 영향 X — 별도 catch 후 success 유지 (G6).
     // try 안에 두면 5xx 가 catch 로 떨어져 호출 측이 '생성 실패' 로 오인 → 중복 보고서 생성.
+    let detail: Report | null = null;
     try {
-      await get().loadDetail(created.id);
+      detail = await get().loadDetail(created.id);
     } catch {
       // 캐시는 이미 success — 사용자가 상세 진입하면 다시 fetch 시도 가능.
     }
@@ -218,6 +223,7 @@ export const useReportStore = create<ReportState>((set, get) => ({
       report: created,
       attemptedFieldIds: targets,
       failedFieldIds,
+      firstFieldReportId: detail?.fieldReports?.[0]?.id ?? null,
     };
   },
 
