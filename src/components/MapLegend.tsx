@@ -12,12 +12,20 @@ import type { DisplayMode } from '@/components/MapFilterBar';
 const HEATMAP_COLOR = colors.danger; // #dc2626 — renderHeatmap Circle fillColor 와 동일
 const HEATMAP_STEPS = [0.14, 0.28, 0.42, 0.56]; // 밀도 체감 척도(겹칠수록 진해짐) 근사
 
-export function MapLegend({ displayMode }: { displayMode: DisplayMode }) {
+// bottomInset: 지도 위에 깔리는 바텀시트 peek 높이 — 범례가 시트에 가리지 않도록 그만큼 띄운다.
+export function MapLegend({
+  displayMode,
+  bottomInset = 0,
+}: {
+  displayMode: DisplayMode;
+  bottomInset?: number;
+}) {
   if (displayMode === 'markers') return null;
+  const cardStyle = [styles.card, { bottom: bottomInset + spacing.md }];
 
   if (displayMode === 'heatmap') {
     return (
-      <View style={styles.card}>
+      <View style={cardStyle}>
         <Text variant="caption" weight="bold" color="textMuted" style={styles.title}>
           현장 밀집도
         </Text>
@@ -44,7 +52,7 @@ export function MapLegend({ displayMode }: { displayMode: DisplayMode }) {
   // choropleth
   const items = choroplethLegend();
   return (
-    <View style={styles.card}>
+    <View style={cardStyle}>
       <Text variant="caption" weight="bold" color="textMuted" style={styles.title}>
         시/군/구 현장 수
       </Text>

@@ -21,9 +21,14 @@ interface MapDashboardProps {
   // 예: 외근 화면에선 그 외근에 속한 destinations 의 fieldId 만 통과시켜
   // 지도/필터/마커가 다른 현장으로 흐려지지 않도록.
   scopeFieldIds?: string[];
+  // 지도 위에 깔리는 바텀시트 peek 높이(px) — 범례를 그 위로 띄우는 데 사용.
+  legendBottomInset?: number;
 }
 
-export function MapDashboard({ scopeFieldIds }: MapDashboardProps = {}) {
+export function MapDashboard({
+  scopeFieldIds,
+  legendBottomInset,
+}: MapDashboardProps = {}) {
   const router = useRouter();
   const userId = useAuthStore((s) => s.user?.id);
   const allFields = useFieldStore((s) => s.fields);
@@ -205,7 +210,7 @@ export function MapDashboard({ scopeFieldIds }: MapDashboardProps = {}) {
             router.push(`/(tabs)/fields/${fieldId}` as never)
           }
         />
-        <MapLegend displayMode={displayMode} />
+        <MapLegend displayMode={displayMode} bottomInset={legendBottomInset} />
       </View>
     </View>
   );

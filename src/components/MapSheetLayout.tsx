@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, type ReactNode } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BottomSheet from '@gorhom/bottom-sheet';
 import { Ionicons } from '@expo/vector-icons';
@@ -36,7 +36,13 @@ export function MapSheetLayout({
 }: Props) {
   // 마지막 snap = 100% — 탭 진입 시 (initialIndex=2 default) 시트가 화면을 꽉 채움.
   // 이전 92% 는 status bar 위쪽이 살짝 비어 보이던 회로. middle/bottom snap 은 그대로.
-  const snapPoints = useMemo(() => ['18%', '55%', '100%'], []);
+  // 최소 snap(peek) 분율 — 지도 범례를 이 위로 띄우는 데도 재사용(아래 legendBottomInset).
+  const MIN_SNAP_FRACTION = 0.18;
+  const snapPoints = useMemo(
+    () => [`${MIN_SNAP_FRACTION * 100}%`, '55%', '100%'],
+    [],
+  );
+  const { height: screenHeight } = useWindowDimensions();
   const sheetRef = useRef<BottomSheet>(null);
   // gorhom 의 '100%' 는 컨테이너 기준이라 상단 safe area (status bar/노치) 위로는 안 올라감.
   // 루트 SafeAreaView 제거 (app/_layout.tsx) 후 부모 컨테이너가 edge-to-edge 라 sheet 가
@@ -56,7 +62,10 @@ export function MapSheetLayout({
 
   return (
     <View style={styles.root}>
-      <MapDashboard scopeFieldIds={mapFieldIds} />
+      <MapDashboard
+        scopeFieldIds={mapFieldIds}
+        legendBottomInset={screenHeight * MIN_SNAP_FRACTION}
+      />
       <BottomSheet
         ref={sheetRef}
         index={initialIndex}
