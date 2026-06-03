@@ -17,17 +17,19 @@ export const HEAT_GRADIENT: Record<number, string> = {
   1.0: palette.red[600], // #dc2626 — 고밀도(뜨거움)
 };
 
-// h337 create 옵션. radius 는 화면 px(줌 무관 고정) — 작을수록 군집이 또렷.
+// h337 create 옵션. radius 는 화면 px(줌 무관 고정).
+// 현장이 도시 전역에 희소·분산돼 기본값(28/0.6)으론 거의 안 보이던 문제 → 반경·불투명도 상향.
 export const HEAT_CONFIG = {
-  radius: 28,
-  maxOpacity: 0.6,
+  radius: 36,
+  maxOpacity: 0.72,
   minOpacity: 0,
   blur: 0.85,
 } as const;
 
 // setData({ max }) — 몇 건이 겹쳐야 최고온(빨강)에 닿는가.
-// 부산 데모 데이터 규모(현장 수십~수백)에 맞춘 값. 화면이 다 빨개지면 올린다(§6).
-export const HEAT_MAX = 10;
+// 희소 데이터(부산 전역에 수십 건)에선 10이 너무 높아 전부 옅은 파랑에 머물렀다 → 5 로 낮춰
+// 군집이 주황·빨강으로 또렷해지게. 화면이 다 빨개지면 올린다(§6).
+export const HEAT_MAX = 5;
 
 // === 범례용 ===
 // h337 은 stop 사이를 연속 보간하므로, 범례 바도 보간된 셀로 그려 실제 렌더와 일치시킨다.
