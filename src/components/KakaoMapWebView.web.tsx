@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { Field, FieldStatus } from '@/types/entities';
 import { FIELD_STATUS_LABEL } from '@/types/entities';
+import h337 from 'heatmap.js';
 import type { MapDisplayMode } from '@/assets/kakaoMapHtml';
+import { HEAT_GRADIENT, HEAT_CONFIG, HEAT_MAX } from '@/theme/heatScale';
 import { loadSigunguGeoJson, aggregateByRegion } from '@/assets/boundaries/sigungu';
 import { fillOpacityForCount, CHOROPLETH_COLOR } from '@/theme/choroplethScale';
 import { colors } from '@/theme/colors';
@@ -88,12 +90,16 @@ type CustomOverlayCtor = new (opts: {
   zIndex?: number;
 }) => Overlay;
 type LatLngBounds = { extend: (latlng: unknown) => void };
+type MapProjection = {
+  containerPointFromCoords: (latlng: unknown) => { x: number; y: number };
+};
 type KakaoMap = {
   setCenter: (latlng: unknown) => void;
   setLevel: (level: number) => void;
   setBounds: (bounds: LatLngBounds, pt?: number, pr?: number, pb?: number, pl?: number) => void;
   setDraggable: (v: boolean) => void;
   setZoomable: (v: boolean) => void;
+  getProjection: () => MapProjection;
 };
 type KakaoGlobal = {
   maps: {
@@ -112,6 +118,10 @@ type KakaoGlobal = {
       fillColor?: string;
       fillOpacity?: number;
     }) => Overlay;
+    event: {
+      addListener: (target: unknown, type: string, handler: () => void) => void;
+      removeListener: (target: unknown, type: string, handler: () => void) => void;
+    };
   };
 };
 
@@ -172,6 +182,10 @@ export function KakaoMapWebView({
   const overlaysRef = useRef<Overlay[]>([]);
   const myLocOverlayRef = useRef<Overlay | null>(null);
   const boundaryOverlaysRef = useRef<Overlay[]>([]);
+  // KDE 히트맵 — 캔버스 div + h337 인스턴스. redraw 클로저가 최신 모드/점을 읽도록 ref 미러.
+  const heatRef = useRef<HTMLDivElement | null>(null);
+  const heatInstanceRef = useRef<ReturnType<typeof h337.create> | null>(null);
+  const heatScheduleRef = useRef<(() => void) | null>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeGroup, setActiveGroup] = useState<KakaoMapMarker[] | null>(null);
@@ -179,6 +193,16 @@ export function KakaoMapWebView({
 
   // 동일 좌표 마커는 그룹으로 묶어 첫 마커만 표시 + "+N" 뱃지. 좌표 무손실.
   const markerGroups = useMemo(() => groupSameLocationMarkers(markers), [markers]);
+
+  // 히트맵 점 — 군집 크기를 value 로 실어 밀도 가중. 모드/점은 ref 로도 미러(생성 1회 effect 의 redraw 클로저용).
+  const heatPoints = useMemo(
+    () => markerGroups.map((g) => ({ lat: g[0].lat, lng: g[0].lng, value: g.length })),
+    [markerGroups],
+  );
+  const heatPointsRef = useRef(heatPoints);
+  heatPointsRef.current = heatPoints;
+  const displayModeRef = useRef(displayMode);
+  displayModeRef.current = displayMode;
 
   // 지도 인스턴스 1회 생성. 초기 center 는 props.center > myLocation > DEFAULT.
   useEffect(() => {
@@ -344,27 +368,11 @@ export function KakaoMapWebView({
     if (!ready || !mapRef.current) return;
     const k = getKakao();
     if (!k) return;
-    // 기존 마커/히트맵 오버레이 제거
+    // 기존 마커 오버레이 제거 (히트맵은 아래 캔버스 effect 가 별도 처리)
     overlaysRef.current.forEach((o) => o.setMap(null));
     overlaysRef.current = [];
 
-    if (displayMode === 'heatmap') {
-      // 줌 무관 고정 px CSS 블롭 — 겹치면 알파 누적으로 밀도 표현. 밀도는 raw markers 기준이 정확.
-      // (미터 반경 Circle 은 kakao 줌 척도와 안 맞아 줌아웃 시 화면상 커지던 문제 → 픽셀 고정으로 대체)
-      markers.forEach((m) => {
-        const el = document.createElement('div');
-        el.style.cssText =
-          'width:64px;height:64px;border-radius:50%;pointer-events:none;background:radial-gradient(circle, rgba(220,38,38,0.5) 0%, rgba(220,38,38,0) 70%);';
-        const overlay = new k.maps.CustomOverlay({
-          position: new k.maps.LatLng(m.lat, m.lng),
-          content: el,
-          map: mapRef.current,
-          xAnchor: 0.5,
-          yAnchor: 0.5,
-        });
-        overlaysRef.current.push(overlay);
-      });
-    } else if (displayMode === 'markers') {
+    if (displayMode === 'markers') {
       // KWCAG 1.4.1 색+형상+라벨. 동일 좌표 그룹은 첫 마커만 그리고 카운트 뱃지로 표시 — 좌표 무손실.
       // choropleth 는 구역 색만 표시하므로 마커를 그리지 않는다.
       markerGroups.forEach((group) => {
@@ -393,6 +401,73 @@ export function KakaoMapWebView({
       });
     }
   }, [markers, markerGroups, ready, onMarkerPress, displayMode]);
+
+  // 히트맵 인스턴스 1회 생성 + pan/zoom redraw 리스너. redraw 클로저는 ref 로 최신 모드/점을 읽는다.
+  useEffect(() => {
+    if (!ready || !mapRef.current || !heatRef.current) return;
+    const k = getKakao();
+    if (!k) return;
+    const map = mapRef.current;
+    const heat = h337.create({
+      container: heatRef.current,
+      radius: HEAT_CONFIG.radius,
+      maxOpacity: HEAT_CONFIG.maxOpacity,
+      minOpacity: HEAT_CONFIG.minOpacity,
+      blur: HEAT_CONFIG.blur,
+      gradient: HEAT_GRADIENT,
+    });
+    heatInstanceRef.current = heat;
+
+    let pending = false;
+    const redraw = () => {
+      if (displayModeRef.current !== 'heatmap') return;
+      const proj = map.getProjection();
+      const data = heatPointsRef.current.map((p) => {
+        const pt = proj.containerPointFromCoords(new k.maps.LatLng(p.lat, p.lng));
+        return { x: Math.round(pt.x), y: Math.round(pt.y), value: p.value || 1 };
+      });
+      heat.setData({ max: HEAT_MAX, data });
+    };
+    // pan 중 bounds_changed 폭주 → rAF 로 프레임당 1회.
+    const schedule = () => {
+      if (pending) return;
+      pending = true;
+      requestAnimationFrame(() => {
+        pending = false;
+        redraw();
+      });
+    };
+    heatScheduleRef.current = schedule;
+
+    k.maps.event.addListener(map, 'bounds_changed', schedule);
+    k.maps.event.addListener(map, 'zoom_changed', schedule);
+
+    // 컨테이너 리사이즈(회전/레이아웃) — setData 는 캔버스를 안 키우므로 configure 로 리사이즈 후 재계산.
+    const ro = new ResizeObserver(() => {
+      const el = heatRef.current;
+      if (!el) return;
+      heat.configure({ width: el.clientWidth, height: el.clientHeight });
+      schedule();
+    });
+    ro.observe(heatRef.current);
+
+    return () => {
+      k.maps.event.removeListener(map, 'bounds_changed', schedule);
+      k.maps.event.removeListener(map, 'zoom_changed', schedule);
+      ro.disconnect();
+      heatScheduleRef.current = null;
+      heatInstanceRef.current = null;
+    };
+  }, [ready]);
+
+  // 모드/점 변경 → 히트맵 갱신. heatmap 이면 redraw, 아니면 비워서 투명(캔버스는 유지).
+  useEffect(() => {
+    if (!ready) return;
+    const heat = heatInstanceRef.current;
+    if (!heat) return;
+    if (displayMode === 'heatmap') heatScheduleRef.current?.();
+    else heat.setData({ max: HEAT_MAX, data: [] });
+  }, [ready, displayMode, heatPoints]);
 
   if (!kakaoJsKey) {
     return (
@@ -427,6 +502,20 @@ export function KakaoMapWebView({
           height: '100%',
           minHeight: 300,
           backgroundColor: colors.background,
+        }}
+      />
+      {/* KDE 히트맵 캔버스 — 지도 위 투명 오버레이. display 토글 안 함(생성 시 getComputedStyle
+          폭이 auto→NaN 되는 것 회피). heatmap 모드 아니면 빈 데이터로 투명. */}
+      <div
+        ref={heatRef}
+        style={{
+          position: 'absolute',
+          top: 0,
+          right: 0,
+          bottom: 0,
+          left: 0,
+          pointerEvents: 'none',
+          zIndex: 5,
         }}
       />
       {error ? (

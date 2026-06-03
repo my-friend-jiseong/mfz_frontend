@@ -81,8 +81,10 @@ MARKERS.forEach(function(m){
   html,body{margin:0;padding:0;height:100%;width:100%;}
   #mapwrap{position:relative;height:100%;width:100%;}
   #map{position:absolute;inset:0;}
-  /* KDE 히트맵 캔버스 — 지도 위 투명 오버레이. heatmap 모드에서만 display:block. */
-  #heat{position:absolute;inset:0;pointer-events:none;z-index:5;display:none;}
+  /* KDE 히트맵 캔버스 — 지도 위 투명 오버레이. 항상 표시(데이터 없으면 투명)하고
+     heatmap 모드가 아닐 땐 빈 데이터로 비운다. display:none 으로 숨기면 생성 시
+     getComputedStyle 폭이 auto→NaN 이 되어 캔버스가 깨지므로 토글하지 않는다. */
+  #heat{position:absolute;inset:0;pointer-events:none;z-index:5;}
   @keyframes mfzPulse { 0% { transform: scale(0.6); opacity: 0.7; } 100% { transform: scale(2.4); opacity: 0; } }
   .mfz-me-ring { position:absolute; top:50%; left:50%; width:22px; height:22px; margin:-11px 0 0 -11px; border-radius:50%; background:#2563eb; opacity:0.35; animation: mfzPulse 1.6s ease-out infinite; }
   .mfz-me-dot { position:absolute; top:50%; left:50%; width:14px; height:14px; margin:-7px 0 0 -7px; border-radius:50%; background:#2563eb; border:3px solid #fff; box-shadow:0 1px 3px rgba(0,0,0,0.35); }
@@ -147,8 +149,8 @@ MARKERS.forEach(function(m){
       requestAnimationFrame(function(){ heatPending = false; heatRedraw(); });
     }
     function applyHeat(){
-      if (MODE === 'heatmap') { heatEl.style.display = 'block'; heatSchedule(); }
-      else { heatEl.style.display = 'none'; heat.setData({ max: ${HEAT_MAX}, data: [] }); }
+      if (MODE === 'heatmap') heatSchedule();
+      else heat.setData({ max: ${HEAT_MAX}, data: [] }); // 캔버스는 두되 비워서 투명
     }
     kakao.maps.event.addListener(map, 'bounds_changed', heatSchedule);
     kakao.maps.event.addListener(map, 'zoom_changed', heatSchedule);
