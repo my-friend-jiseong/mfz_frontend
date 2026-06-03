@@ -29,6 +29,8 @@ import { opacity } from '@/theme/motion';
 import { SafeScreen } from '@/components/SafeScreen';
 
 // ERD v2: 보고서 본문 = 현장별 전·중·후 사진+캡션(field_reports). 추가/수정 화면.
+// 마법사 모드(2026-06-04 결정): 보고서 생성 직후 ?wizard=1 로 진입해 스캐폴드된
+// 현장 보고를 차례로 채움 — 저장하면 다음 현장으로, 마지막이면 상세로.
 
 type Phase = 'before' | 'pending' | 'after';
 const PHASES: { key: Phase; label: string }[] = [
@@ -42,10 +44,22 @@ function resolveUrl(u: string | null | undefined): string | null {
   return u.startsWith('http') ? u : `${API_BASE_URL}${u}`;
 }
 
-export default function FieldReportEditor() {
+export default function FieldReportEditorScreen() {
   const { id, frId } = useLocalSearchParams<{ id: string; frId?: string }>();
+  // 마법사 단계 전환은 같은 라우트에서 frId 만 바뀜 — key 로 강제 remount 해
+  // 슬롯·제목·prefill ref 가 이전 현장 것으로 남는 회로 차단.
+  return <FieldReportEditor key={`${id ?? ''}:${frId ?? 'new'}`} />;
+}
+
+function FieldReportEditor() {
+  const { id, frId, wizard } = useLocalSearchParams<{
+    id: string;
+    frId?: string;
+    wizard?: string;
+  }>();
   const reportId = id ?? '';
   const isEdit = !!frId;
+  const isWizard = wizard === '1';
   const router = useRouter();
 
   const detailCache = useReportStore((s) => s.detailCache);
@@ -73,6 +87,33 @@ export default function FieldReportEditor() {
     () => detailCache[reportId]?.fieldReports?.find((fr) => fr.id === frId),
     [detailCache, reportId, frId],
   );
+
+  // 마법사 단계 정보 — detailCache 의 fieldReports 순서가 단계 순서.
+  // frId 가 목록에 없으면(캐시 미스 등) null → 일반 수정 화면으로 동작.
+  const wizardSeq = useMemo(() => {
+    if (!isWizard) return null;
+    const frs = detailCache[reportId]?.fieldReports ?? [];
+    const idx = frs.findIndex((fr) => fr.id === frId);
+    if (idx < 0) return null;
+    return {
+      step: idx + 1,
+      total: frs.length,
+      nextFrId: idx + 1 < frs.length ? frs[idx + 1].id : null,
+    };
+  }, [isWizard, detailCache, reportId, frId]);
+
+  // 다음 단계로 (마지막이면 상세로) — '저장 후 다음'과 '건너뛰기' 공용.
+  // push 가 아닌 replace — 마법사 단계들이 back 스택에 쌓여 뒤로가기가 이전 현장으로
+  // 되돌아가는(이미 저장된 단계 재진입) 혼선 차단.
+  const goWizardNext = () => {
+    if (wizardSeq?.nextFrId) {
+      router.replace(
+        `/(tabs)/reports/${reportId}/field-report?frId=${wizardSeq.nextFrId}&wizard=1` as never,
+      );
+    } else {
+      router.replace(`/(tabs)/reports/${reportId}` as never);
+    }
+  };
 
   const [fieldId, setFieldId] = useState<string | null>(null);
   const [title, setTitle] = useState('');
@@ -131,14 +172,23 @@ export default function FieldReportEditor() {
   // 새 보고 모드 + fieldId 선택됨 → 그 field 의 phase 사진을 슬롯에 자동 prefill.
   // 결정 §4 (2026-05-31): backend-backlog §9 응답에 phase 가 포함되면 자동 동작.
   // §9 머지 전엔 attachment.phase 가 모두 undefined → 슬롯은 빈 상태 유지 (회로 정상).
+  // 마법사 모드도 대상 — 빈 스캐폴드를 채우는 흐름이라 의미상 '새 보고 작성'과 동일.
+  // 슬롯이 이미 찬 경우 prev.url ?? 로 보존되므로 기존 사진을 덮어쓰지 않음.
   const fieldAttachments = useFieldStore(
     (s) => (fieldId ? s.directAttachments[fieldId] : undefined),
   );
+  const loadFieldDetail = useFieldStore((s) => s.loadDetail);
+  // 마법사 단계의 현장 첨부 로드 — §4 prefill 재료. 캐시에 이미 있으면 skip.
+  useEffect(() => {
+    if (!isWizard || !fieldId) return;
+    if (useFieldStore.getState().directAttachments[fieldId]) return;
+    void loadFieldDetail(fieldId);
+  }, [isWizard, fieldId, loadFieldDetail]);
   // Set 으로 fieldId 별 1회 가드 (F8) — 단일 ref 였을 때 A→B→A 전환에서 A 의 prefill 이
   // 재실행되어 사용자가 clear 한 슬롯이 부활하던 회로 차단.
   const phasePrefilledFieldsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    if (isEdit) return;
+    if (isEdit && !isWizard) return;
     if (!fieldId || !fieldAttachments) return;
     if (phasePrefilledFieldsRef.current.has(fieldId)) return;
     const byPhase: { before?: string; pending?: string; after?: string } = {};
@@ -156,7 +206,7 @@ export default function FieldReportEditor() {
       pending: { ...prev.pending, url: prev.pending.url ?? byPhase.pending ?? null },
       after: { ...prev.after, url: prev.after.url ?? byPhase.after ?? null },
     }));
-  }, [isEdit, fieldId, fieldAttachments]);
+  }, [isEdit, isWizard, fieldId, fieldAttachments]);
 
   const selectedField = useMemo(
     () => allFields.find((f) => f.id === fieldId),
@@ -214,7 +264,9 @@ export default function FieldReportEditor() {
       : await addFieldReport(reportId, body);
     setSubmitting(false);
     if (r.ok) {
-      safeBack(router);
+      // 마법사: 다음 현장으로 이어가기, 일반: 진입했던 화면(상세)으로 복귀.
+      if (wizardSeq) goWizardNext();
+      else safeBack(router);
     } else {
       setError(r.error);
     }
@@ -254,8 +306,18 @@ export default function FieldReportEditor() {
           keyboardShouldPersistTaps="handled"
         >
           <Text variant="h2" weight="heavy" style={styles.heading}>
-            {isEdit ? '현장 보고 수정' : '현장 보고 추가'}
+            {wizardSeq
+              ? `현장 보고 작성 (${wizardSeq.step}/${wizardSeq.total})`
+              : isEdit
+                ? '현장 보고 수정'
+                : '현장 보고 추가'}
           </Text>
+          {wizardSeq ? (
+            <Text variant="bodySm" color="textMuted" style={styles.wizardHint}>
+              방문한 현장마다 전·중·후 사진을 채워주세요. 지금 건너뛰어도 보고서
+              상세에서 언제든 채울 수 있어요.
+            </Text>
+          ) : null}
 
           <Text variant="bodySm" weight="bold" color="textMuted" style={styles.label}>
             현장 *
@@ -373,11 +435,42 @@ export default function FieldReportEditor() {
             leftIcon="save"
             style={styles.submit}
           >
-            저장
+            {wizardSeq
+              ? wizardSeq.nextFrId
+                ? '저장 후 다음 현장'
+                : '저장 후 완료'
+              : '저장'}
           </Button>
-          <Button onPress={() => safeBack(router)} variant="ghost" size="sm" fullWidth>
-            취소
-          </Button>
+          {wizardSeq ? (
+            <>
+              <Button
+                onPress={goWizardNext}
+                disabled={uploading !== null || submitting}
+                variant="ghost"
+                size="sm"
+                fullWidth
+              >
+                {wizardSeq.nextFrId ? '이 현장 건너뛰기' : '건너뛰고 완료'}
+              </Button>
+              {wizardSeq.nextFrId ? (
+                <Button
+                  onPress={() =>
+                    router.replace(`/(tabs)/reports/${reportId}` as never)
+                  }
+                  disabled={submitting}
+                  variant="ghost"
+                  size="sm"
+                  fullWidth
+                >
+                  나중에 작성하기
+                </Button>
+              ) : null}
+            </>
+          ) : (
+            <Button onPress={() => safeBack(router)} variant="ghost" size="sm" fullWidth>
+              취소
+            </Button>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -525,6 +618,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   scroll: { padding: spacing.xl, paddingBottom: spacing.xxl },
   heading: { marginBottom: spacing.md },
+  wizardHint: { marginTop: -spacing.xs, marginBottom: spacing.sm },
   label: {
     marginTop: spacing.lg,
     marginBottom: spacing.sm,

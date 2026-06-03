@@ -30,7 +30,9 @@ import { fmtDate, fmtTime } from '@/utils/datetime';
 import { SafeScreen } from '@/components/SafeScreen';
 
 // 새 양식(2026-05-31 결정) — 본문/AI/보고서 레벨 사진 제거.
-// 제목 + 외근 선택 → 그 외근의 visits 마다 빈 FieldReport 자동 스캐폴드 → 상세로 이동.
+// 제목 + 외근 선택 → 그 외근의 visits 마다 빈 FieldReport 자동 스캐폴드
+// → 마법사(2026-06-04 결정): 스캐폴드된 현장 보고를 차례로 채우는 단계로 진입.
+//   스캐폴드가 없으면(방문 0건·전체 실패) 기존처럼 상세로.
 
 export default function ComposeReport() {
   const router = useRouter();
@@ -177,7 +179,17 @@ export default function ComposeReport() {
       const msg = `현장 보고 ${r.attemptedFieldIds.length}건 중 ${r.failedFieldIds.length}건 자동 생성에 실패했습니다.\n\n· ${names}${overflow}\n\n상세 화면에서 직접 추가할 수 있어요.`;
       Alert.alert('일부 현장 보고 누락', msg);
     }
-    router.replace(`/(tabs)/reports/${r.report.id}` as never);
+    // 마법사 진입 — createWithVisitScaffold 가 loadDetail 까지 마친 뒤라
+    // detailCache 에 fieldReports 가 있다. 없으면(방문 0건·loadDetail 실패) 상세로.
+    const frs =
+      useReportStore.getState().detailCache[r.report.id]?.fieldReports ?? [];
+    if (frs.length > 0) {
+      router.replace(
+        `/(tabs)/reports/${r.report.id}/field-report?frId=${frs[0].id}&wizard=1` as never,
+      );
+    } else {
+      router.replace(`/(tabs)/reports/${r.report.id}` as never);
+    }
   };
 
   return (
@@ -258,8 +270,9 @@ export default function ComposeReport() {
           </Text>
         ) : selectedTrip && scaffoldFieldIds.length > 0 ? (
           <Text variant="caption" color="textMuted" style={styles.scaffoldHint}>
-            보고서 생성 시 방문한 현장 {scaffoldFieldIds.length}곳에 대한 빈 현장 보고가
-            자동으로 만들어집니다. 사진·캡션은 상세 화면에서 채울 수 있어요.
+            보고서를 만들면 방문한 현장 {scaffoldFieldIds.length}곳의 현장 보고가
+            자동으로 만들어지고, 이어서 현장별 사진·캡션을 차례로 채우는 단계로
+            넘어갑니다. 건너뛴 현장은 상세 화면에서 나중에 채울 수 있어요.
           </Text>
         ) : selectedTrip ? (
           <Text variant="caption" color="textMuted" style={styles.scaffoldHint}>
