@@ -37,8 +37,8 @@ export const HEAT_MAX = 5;
 // 레벨당 1/FACTOR 로 반경을 줄여(하한 MIN) 원이 실제 군집 위치 크기에 수렴하게 한다.
 // 평소 줌(시내 단위, ≤START)에선 기존 반경 그대로 — 가시성 영향 없음.
 // 주의: h337.configure({radius})는 store 의 _cfgRadius 에 반영되지 않으므로(생성 시 고정),
-// 반경 변경은 setData 의 점별 radius 필드로 전달한다. 이 공식은 네이티브 HTML
-// (kakaoMapHtml.ts)에도 동일하게 인라인됨 — 수정 시 양쪽 동기화.
+// 반경 변경은 setData 의 점별 radius 필드로 전달한다. 네이티브 HTML(kakaoMapHtml.ts)은
+// 이 함수를 빌드 시점에 평가한 레벨→반경 표를 주입받는다 — 공식은 여기 한 곳만 고치면 됨.
 export const HEAT_RADIUS_SHRINK_START_LEVEL = 10;
 export const HEAT_RADIUS_SHRINK_FACTOR = 1.5;
 export const HEAT_RADIUS_MIN = 10;

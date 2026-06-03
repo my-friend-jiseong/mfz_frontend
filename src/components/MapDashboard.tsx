@@ -16,6 +16,10 @@ import {
 import type { FieldStatus } from '@/types/entities';
 import { colors } from '@/theme/colors';
 
+// 비로그인 시 myFields — 렌더마다 새 [] 를 만들면 하위 useMemo(scopedFields 등)가
+// 매번 무효화되므로 identity 고정 모듈 상수로.
+const NO_FIELDS: never[] = [];
+
 interface MapDashboardProps {
   // 화면별 현장 화이트리스트. undefined = 내 현장 전체.
   // 예: 외근 화면에선 그 외근에 속한 destinations 의 fieldId 만 통과시켜
@@ -59,10 +63,7 @@ export function MapDashboard({
   // 따라서 클라이언트에서 현장별 owner(userId)로 재필터하지 않는다(로그인 가드만 유지).
   // Before: f.userId === userId 로 한 번 더 걸렀는데, 복사/배정으로 owner 가 내가 아닌 현장
   // (예: 데모 시드, 남이 만들어 나에게 배정)이 통째로 떨어져 지도 마커가 0이 되던 회로 차단.
-  const myFields = useMemo(
-    () => (userId ? allFields : []),
-    [allFields, userId],
-  );
+  const myFields = userId ? allFields : NO_FIELDS;
 
   // scopeFieldIds 가 주어진 화면(외근 상세/진행 중)에선 그 외근의 현장만 통과.
   // undefined 면 전체 노출, 빈 배열이면 0개 (목적지 없는 외근의 의도적 빈 상태).

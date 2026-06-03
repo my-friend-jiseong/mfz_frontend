@@ -10,10 +10,17 @@ import {
   HEAT_GRADIENT,
   HEAT_CONFIG,
   HEAT_MAX,
-  HEAT_RADIUS_SHRINK_START_LEVEL,
-  HEAT_RADIUS_SHRINK_FACTOR,
   HEAT_RADIUS_MIN,
+  heatRadiusForLevel,
 } from '@/theme/heatScale';
+
+// 카카오 레벨(1~14)별 히트 반경 — heatScale.heatRadiusForLevel 을 빌드 시점에 평가해
+// 표로 주입한다. 공식을 템플릿 JS 로 복제하지 않으므로 단일 소스(heatScale)만 고치면 됨.
+const HEAT_RADIUS_BY_LEVEL_JSON = JSON.stringify(
+  Object.fromEntries(
+    Array.from({ length: 14 }, (_, i) => [i + 1, heatRadiusForLevel(i + 1)]),
+  ),
+);
 import { HEATMAP_JS_SOURCE } from '@/assets/heatmapLib';
 
 export type MapDisplayMode = 'markers' | 'heatmap' | 'choropleth';
@@ -144,11 +151,10 @@ MARKERS.forEach(function(m){
     var heatPending = false;
     var heatZooming = false; // 줌 애니메이션 진행 중 플래그 — 전환 프레임마다 재계산하지 않음
     // 극단 줌아웃에서 커널(화면 px 고정)이 도시보다 커져 '경계 밖 빨간 원'으로 수렴하는 것 완화 —
-    // 일정 레벨 초과부터 반경 축소(하한 있음). heatScale.heatRadiusForLevel 과 동일 공식(동기화 주의).
+    // 레벨별 반경. heatScale.heatRadiusForLevel 을 빌드 시점에 평가한 표(공식 단일 소스).
+    var HEAT_RADIUS_BY_LEVEL = ${HEAT_RADIUS_BY_LEVEL_JSON};
     function heatRadiusForLevel(lvl){
-      if (lvl <= ${HEAT_RADIUS_SHRINK_START_LEVEL}) return ${HEAT_CONFIG.radius};
-      var r = ${HEAT_CONFIG.radius} / Math.pow(${HEAT_RADIUS_SHRINK_FACTOR}, lvl - ${HEAT_RADIUS_SHRINK_START_LEVEL});
-      return Math.max(${HEAT_RADIUS_MIN}, Math.round(r));
+      return HEAT_RADIUS_BY_LEVEL[lvl] || ${HEAT_RADIUS_MIN};
     }
     function heatRedraw(){
       if (MODE !== 'heatmap') return;
@@ -316,8 +322,8 @@ MARKERS.forEach(function(m){
 
     // === 세터 (RN injectJavaScript 진입점) ===
     window.__mfzSetMarkers = function(markers){ MARKERS = markers || []; applyData(); };
-    // 히트맵 점 — [{lat,lng,value}]. value 는 동일좌표 군집 count(가중). heatmap 모드일 때만 redraw.
-    window.__mfzSetHeatPoints = function(pts){ HEAT_POINTS = pts || []; if (MODE === 'heatmap') heatSchedule(); };
+    // 히트맵 점 — [{lat,lng,value}]. value 는 동일좌표 군집 count(가중). 모드 가드는 heatSchedule 몫.
+    window.__mfzSetHeatPoints = function(pts){ HEAT_POINTS = pts || []; heatSchedule(); };
     window.__mfzSetMode = function(mode){ MODE = mode; applyData(); applyBoundaryStyle(); applyHeat(); };
     window.__mfzSetShowBoundary = function(sb){ SHOW_BOUNDARY = !!sb; applyBoundaryStyle(); };
     window.__mfzSetRegionFill = function(fill){ REGION_FILL = fill; applyBoundaryStyle(); };

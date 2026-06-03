@@ -108,26 +108,32 @@ WebView가 아니라 SDK 직접. `npm i heatmap.js`(+ `@types`는 없으니 모�
 
 ## 6. 파라미터 (포화 = §2 핵심을 푸는 값)
 
-h337 `create` + `setData` 옵션 (네이티브 HTML / 웹 동일하게):
+> ⚠️ **단일 소스는 `src/theme/heatScale.ts`** — 아래는 구현 후 확정값 기록. 값 변경은 heatScale 만.
 
 ```js
-h337.create({
-  container: heatEl,
-  radius: 28,        // px. 줌 무관 고정. 작을수록 군집 또렷
-  maxOpacity: 0.6,
-  minOpacity: 0,
-  blur: 0.85,
-  gradient: { 0.1:'#378ADD', 0.4:'#1D9E75', 0.7:'#EF9F27', 1.0:'#E24B4A' },
-});
-// setData 시:
-heat.setData({ max: 10, data: [{ x, y, value }] });
+// heatScale.ts 확정값 (초안 28/0.6/10 → 실데이터 검증 후 조정)
+HEAT_CONFIG = { radius: 36, maxOpacity: 0.72, minOpacity: 0, blur: 0.85 }
+HEAT_MAX = 5          // 부산 전역 분산 50건 기준 — 10이면 전부 옅은 파랑(안 보임), 5로 군집이 주황·빨강
+HEAT_GRADIENT         // 팔레트 기반 파랑→초록→주황→빨강 (palette.blue500/green500/amber500/red600)
+heatRadiusForLevel(L) // 레벨 10 초과부터 반경 ÷1.5/레벨, 하한 10px — §6.1
 ```
 
-- **`max`** = "몇 건이 겹쳐야 최고온(빨강)인가". `value=1`, `max=10`이면 10건 겹쳐야 빨강.
-  화면이 다 빨개지면 `max`를 올린다. **부산 데모 데이터 규모**에 맞춰 5~20에서 튜닝(현장 수가 적으면 낮게).
-- **`radius`**(px): 작게=핫스팟 또렷. 지리적 거리 기준 고정을 원하면 `zoom_changed`에서 `map.getLevel()`로 `heat.configure({radius})`.
-- **`gradient`**: 파랑→초록→주황→빨강 다색.
+- **`max`** = "몇 건이 겹쳐야 최고온(빨강)인가". 화면이 다 빨개지면 올리고, 안 보이면 내린다.
 - **`value`**: 동일좌표 군집은 `count`를 넣어 가중(§3).
+
+### 6.1 구현에서 확인된 h337 함정 (이 방식 재사용 시 필독)
+
+- **`h337.create` 는 container 의 `position` 을 `relative` 로 강제 덮어쓴다** → 오버레이 div 에
+  absolute 를 직접 주면 무효화돼 캔버스가 지도 밖으로 흘러내림. **절대배치 wrapper 안에
+  100%×100% 내부 div** 를 h337 에 넘길 것 (네이티브 `#heat>#heatInner`, 웹 wrapper+heatRef).
+- **`configure({radius})` 는 store 의 `_cfgRadius` 에 반영되지 않는다**(생성 시 고정) →
+  동적 반경은 `setData` 의 **점별 `radius` 필드**로 전달 (원안의 configure 제안은 동작 안 함).
+- **container 가 `display:none` 인 상태로 create 하면** getComputedStyle 폭이 auto→NaN 으로
+  캔버스가 깨짐 → display 토글 대신 항상 표시 + 빈 데이터로 투명 처리.
+- **극단 줌아웃**: 커널이 화면 px 고정이라 도시보다 커지면 '경계 밖 빨간 원'으로 수렴 →
+  레벨 연동 반경 축소(`heatRadiusForLevel`)로 완화.
+- **성능**: 줌 애니메이션 중엔 redraw 스킵(`zoom_start`~`zoom_changed`, idle 에서 해제),
+  뷰포트 밖 점은 제외(커널 반경 밖이라 화면 기여 없음 — colorize 영역 비대 차단).
 
 ## 7. 성능 / 엣지
 
