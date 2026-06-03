@@ -21,7 +21,9 @@ jobs:
   build-apk:
     name: Build Android APK & attach to Release
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # 무료 티어 EAS 빌드는 큐 대기가 길어 총 100분+ 걸리기도 함(실측 ~101분).
+    # --wait 로 끝까지 기다렸다가 Release 에 첨부하므로 잡 타임아웃을 넉넉히. (GitHub 한도 6h)
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
 
