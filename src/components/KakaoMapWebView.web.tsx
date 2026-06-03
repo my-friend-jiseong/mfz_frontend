@@ -420,18 +420,31 @@ export function KakaoMapWebView({
 
     let pending = false;
     let rafId = 0;
+    let zooming = false; // 줌 애니메이션 진행 중 — 전환 프레임마다 재계산하지 않음
     const redraw = () => {
       if (displayModeRef.current !== 'heatmap' || !mapRef.current) return;
+      const el = heatRef.current;
+      if (!el) return;
       const proj = map.getProjection();
-      const data = heatPointsRef.current.map((p) => {
+      // 뷰포트 밖 점은 커널 반경(R) 밖이라 화면 픽셀에 기여하지 못함 → 제외.
+      // (화면 밖 점이 h337 colorize 영역을 캔버스 전체로 키우던 비대 차단 — 줌인 pan 비용 감소)
+      const W = el.clientWidth;
+      const H = el.clientHeight;
+      const R = HEAT_CONFIG.radius;
+      const data: { x: number; y: number; value: number }[] = [];
+      for (const p of heatPointsRef.current) {
         const pt = proj.containerPointFromCoords(new k.maps.LatLng(p.lat, p.lng));
-        return { x: Math.round(pt.x), y: Math.round(pt.y), value: p.value || 1 };
-      });
+        if (pt.x < -R || pt.x > W + R || pt.y < -R || pt.y > H + R) continue;
+        data.push({ x: Math.round(pt.x), y: Math.round(pt.y), value: p.value || 1 });
+      }
       heat.setData({ max: HEAT_MAX, data });
     };
     // pan 중 bounds_changed 폭주 → rAF 로 프레임당 1회. heatmap 모드 아니면 스케줄 생략(낭비 방지).
+    // 줌 애니메이션 중에도 스킵 — 타일 로드·스케일 전환만으로 비싼 구간이라 히트 재계산을
+    // 끝난 뒤 1회로 미룬다(전환 중 ~0.3초 히트가 어긋났다 스냅되는 트레이드오프).
     const schedule = () => {
       if (displayModeRef.current !== 'heatmap') return;
+      if (zooming) return;
       if (pending) return;
       pending = true;
       rafId = requestAnimationFrame(() => {
@@ -441,8 +454,18 @@ export function KakaoMapWebView({
     };
     heatScheduleRef.current = schedule;
 
+    const onZoomStart = () => {
+      zooming = true;
+    };
+    // idle 에서도 해제 — zoom_changed 없이 끝나는 제스처(취소 등)로 플래그가 박제되는 것 방지.
+    const onSettled = () => {
+      zooming = false;
+      schedule();
+    };
+    k.maps.event.addListener(map, 'zoom_start', onZoomStart);
+    k.maps.event.addListener(map, 'zoom_changed', onSettled);
+    k.maps.event.addListener(map, 'idle', onSettled);
     k.maps.event.addListener(map, 'bounds_changed', schedule);
-    k.maps.event.addListener(map, 'zoom_changed', schedule);
 
     // 컨테이너 리사이즈(회전/레이아웃) — setData 는 캔버스를 안 키우므로 configure 로 리사이즈 후 재계산.
     const ro = new ResizeObserver(() => {
@@ -455,8 +478,10 @@ export function KakaoMapWebView({
 
     return () => {
       cancelAnimationFrame(rafId); // 언마운트 시 대기 중 rAF 가 분리된 지도에 getProjection 호출하는 것 방지
+      k.maps.event.removeListener(map, 'zoom_start', onZoomStart);
+      k.maps.event.removeListener(map, 'zoom_changed', onSettled);
+      k.maps.event.removeListener(map, 'idle', onSettled);
       k.maps.event.removeListener(map, 'bounds_changed', schedule);
-      k.maps.event.removeListener(map, 'zoom_changed', schedule);
       ro.disconnect();
       heatScheduleRef.current = null;
       heatInstanceRef.current = null;

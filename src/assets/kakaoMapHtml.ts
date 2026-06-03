@@ -83,8 +83,12 @@ MARKERS.forEach(function(m){
   #map{position:absolute;inset:0;}
   /* KDE 히트맵 캔버스 — 지도 위 투명 오버레이. 항상 표시(데이터 없으면 투명)하고
      heatmap 모드가 아닐 땐 빈 데이터로 비운다. display:none 으로 숨기면 생성 시
-     getComputedStyle 폭이 auto→NaN 이 되어 캔버스가 깨지므로 토글하지 않는다. */
+     getComputedStyle 폭이 auto→NaN 이 되어 캔버스가 깨지므로 토글하지 않는다.
+     h337 은 컨테이너의 position 을 relative 로 강제 덮어쓰므로, h337 에는 #heat 가 아니라
+     안쪽 #heatInner(명시적 100%×100%)를 넘긴다 — 안 그러면 컨테이너가 height 0 으로 붕괴해
+     clientHeight 기반 리사이즈·뷰포트 필터가 전부 0 을 읽는다. */
   #heat{position:absolute;inset:0;pointer-events:none;z-index:5;}
+  #heatInner{width:100%;height:100%;}
   @keyframes mfzPulse { 0% { transform: scale(0.6); opacity: 0.7; } 100% { transform: scale(2.4); opacity: 0; } }
   .mfz-me-ring { position:absolute; top:50%; left:50%; width:22px; height:22px; margin:-11px 0 0 -11px; border-radius:50%; background:#2563eb; opacity:0.35; animation: mfzPulse 1.6s ease-out infinite; }
   .mfz-me-dot { position:absolute; top:50%; left:50%; width:14px; height:14px; margin:-7px 0 0 -7px; border-radius:50%; background:#2563eb; border:3px solid #fff; box-shadow:0 1px 3px rgba(0,0,0,0.35); }
@@ -92,7 +96,7 @@ MARKERS.forEach(function(m){
 <script>${HEATMAP_JS_SOURCE}</script>
 <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=${kakaoJsKey}&autoload=false"></script>
 </head><body>
-<div id="mapwrap"><div id="map"></div><div id="heat"></div></div>
+<div id="mapwrap"><div id="map"></div><div id="heat"><div id="heatInner"></div></div></div>
 <script>
 (function(){
   var CENTER = { lat: ${center.lat}, lng: ${center.lng} };
@@ -121,7 +125,7 @@ MARKERS.forEach(function(m){
     // === KDE 히트맵 (heatmap.js / h337) ===
     // 카카오엔 히트맵 레이어가 없어 투명 캔버스에 직접 그린다. 점은 위경도로 보관하고
     // pan/zoom 마다 containerPointFromCoords 로 화면 px 로 변환해 다시 그린다(어긋남 방지).
-    var heatEl = document.getElementById('heat');
+    var heatEl = document.getElementById('heatInner'); // h337 소유 — #heat(wrapper)는 건드리지 않음
     var heat = h337.create({
       container: heatEl,
       radius: ${HEAT_CONFIG.radius},
@@ -131,21 +135,29 @@ MARKERS.forEach(function(m){
       gradient: ${JSON.stringify(HEAT_GRADIENT)},
     });
     var heatPending = false;
+    var heatZooming = false; // 줌 애니메이션 진행 중 플래그 — 전환 프레임마다 재계산하지 않음
     function heatRedraw(){
       if (MODE !== 'heatmap') return;
       var proj = map.getProjection();
+      // 뷰포트 밖 점은 커널 반경(R) 밖이라 화면 픽셀에 기여하지 못함 → 제외.
+      // (화면 밖 점이 h337 colorize 영역을 캔버스 전체로 키우던 비대 차단 — 줌인 pan 비용 감소)
+      var W = heatEl.clientWidth, H = heatEl.clientHeight, R = ${HEAT_CONFIG.radius};
       var data = [];
       for (var i = 0; i < HEAT_POINTS.length; i++) {
         var p = HEAT_POINTS[i];
         var pt = proj.containerPointFromCoords(new kakao.maps.LatLng(p.lat, p.lng));
+        if (pt.x < -R || pt.x > W + R || pt.y < -R || pt.y > H + R) continue;
         data.push({ x: Math.round(pt.x), y: Math.round(pt.y), value: p.value || 1 });
       }
       heat.setData({ max: ${HEAT_MAX}, data: data });
     }
     // pan 중 bounds_changed 가 폭주 → rAF 로 프레임당 1회로 합침.
     // heatmap 모드가 아니면 스케줄 자체를 건너뛴다(기본 markers 모드 pan 마다 rAF 낭비 방지).
+    // 줌 애니메이션 중에도 스킵 — 타일 로드·스케일 전환만으로 비싼 구간이라 히트 재계산을
+    // 끝난 뒤 1회로 미룬다(전환 중 ~0.3초 히트가 어긋났다 스냅되는 트레이드오프).
     function heatSchedule(){
       if (MODE !== 'heatmap') return;
+      if (heatZooming) return;
       if (heatPending) return;
       heatPending = true;
       requestAnimationFrame(function(){ heatPending = false; heatRedraw(); });
@@ -154,8 +166,11 @@ MARKERS.forEach(function(m){
       if (MODE === 'heatmap') heatSchedule();
       else heat.setData({ max: ${HEAT_MAX}, data: [] }); // 캔버스는 두되 비워서 투명
     }
+    kakao.maps.event.addListener(map, 'zoom_start', function(){ heatZooming = true; });
+    kakao.maps.event.addListener(map, 'zoom_changed', function(){ heatZooming = false; heatSchedule(); });
+    // idle 에서도 해제 — zoom_changed 없이 끝나는 제스처(취소 등)로 플래그가 박제되는 것 방지.
+    kakao.maps.event.addListener(map, 'idle', function(){ heatZooming = false; heatSchedule(); });
     kakao.maps.event.addListener(map, 'bounds_changed', heatSchedule);
-    kakao.maps.event.addListener(map, 'zoom_changed', heatSchedule);
     // 회전/리사이즈 시 webview relayout — setData 는 캔버스 치수를 안 바꾸므로 configure 로 리사이즈 후 재계산.
     window.addEventListener('resize', function(){
       heat.configure({ width: heatEl.clientWidth, height: heatEl.clientHeight });
