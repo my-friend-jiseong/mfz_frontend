@@ -4,6 +4,8 @@ import { duration } from '@/theme/motion';
 
 // 임계값(px) — 손 떨림·관성 미세 진동으로 바가 깜박이지 않도록 이만큼 움직여야 방향 전환.
 const THRESHOLD = 8;
+// 목록 바닥 근접 판정 여유(px) — 이 안쪽이면 "끝에 닿음"으로 보고 CTA 강제 노출.
+const BOTTOM_PAD = 24;
 
 /**
  * 리스트를 아래로 내리면 하단 CTA 를 숨기고, 위로 올리면 다시 보여주는 hide-on-scroll 훅.
@@ -34,8 +36,16 @@ export function useHideOnScroll() {
 
   const onScroll = useCallback(
     (e: { nativeEvent: NativeScrollEvent }) => {
-      const y = e.nativeEvent.contentOffset.y;
+      const { contentOffset, layoutMeasurement, contentSize } = e.nativeEvent;
+      const y = contentOffset.y;
       if (y <= 0) {
+        setShown(true);
+        lastY.current = y;
+        return;
+      }
+      // 바닥에 닿으면 더 내릴 게 없으므로 CTA 항상 노출 — 마지막 항목을 보려고 끝까지 내렸을 때
+      // 바가 숨은 채 고착되던 회로 차단. (맨 위 y<=0 가드와 대칭)
+      if (y + layoutMeasurement.height >= contentSize.height - BOTTOM_PAD) {
         setShown(true);
         lastY.current = y;
         return;

@@ -132,15 +132,13 @@ MARKERS.forEach(function(m){
 
     // === 마커 / 히트맵 레이어 ===
     var markerOverlays = [];
-    var heatCircles = [];
-    var heatZoomListener = null;
+    var heatOverlays = [];
 
     function clearMarkerLayer(){
       for (var i = 0; i < markerOverlays.length; i++) markerOverlays[i].setMap(null);
       markerOverlays = [];
-      for (var j = 0; j < heatCircles.length; j++) heatCircles[j].setMap(null);
-      heatCircles = [];
-      if (heatZoomListener) { kakao.maps.event.removeListener(heatZoomListener); heatZoomListener = null; }
+      for (var j = 0; j < heatOverlays.length; j++) heatOverlays[j].setMap(null);
+      heatOverlays = [];
     }
 
     function renderMarkers(){
@@ -166,29 +164,20 @@ MARKERS.forEach(function(m){
       });
     }
 
-    // kakao level↑ = 축소(픽셀당 미터↑). 화면상 블롭 크기를 줌 무관하게 일정히 유지하려
-    // 미터 반경을 level 에 2배씩 비례. (웹: KakaoMapWebView.web.tsx radiusForLevel 과 동일 식)
-    function radiusForLevel(level){
-      var r = 500 * Math.pow(2, level - 6);
-      return Math.max(50, Math.min(50000, r));
-    }
+    // 히트맵 블롭 — 줌 무관 고정 px CSS 원(CustomOverlay). 겹치면 알파 누적으로 밀도 표현.
+    // (미터 반경 Circle 은 kakao 줌 척도와 안 맞아 줌아웃 시 화면상 커지던 문제 → 픽셀 고정으로 대체)
     function renderHeatmap(){
-      // heatmap.js 없이 Circle 오버레이로 밀도 근사. 줌 변화 시 setRadius 로 갱신.
-      var radius = radiusForLevel(map.getLevel());
       MARKERS.forEach(function(m){
-        var circle = new kakao.maps.Circle({
-          center: new kakao.maps.LatLng(m.lat, m.lng),
-          radius: radius,
-          strokeWeight: 0,
-          fillColor: '#dc2626',
-          fillOpacity: 0.28,
+        var el = document.createElement('div');
+        el.style.cssText = 'width:64px;height:64px;border-radius:50%;pointer-events:none;background:radial-gradient(circle, rgba(220,38,38,0.5) 0%, rgba(220,38,38,0) 70%);';
+        var ov = new kakao.maps.CustomOverlay({
+          position: new kakao.maps.LatLng(m.lat, m.lng),
+          content: el,
+          map: map,
+          xAnchor: 0.5,
+          yAnchor: 0.5,
         });
-        circle.setMap(map);
-        heatCircles.push(circle);
-      });
-      heatZoomListener = kakao.maps.event.addListener(map, 'zoom_changed', function(){
-        var r = radiusForLevel(map.getLevel());
-        for (var i = 0; i < heatCircles.length; i++) heatCircles[i].setRadius(r);
+        heatOverlays.push(ov);
       });
     }
 
@@ -210,7 +199,7 @@ MARKERS.forEach(function(m){
     function applyData(){
       clearMarkerLayer();
       if (MODE === 'heatmap') renderHeatmap();
-      else renderMarkers(); // markers · choropleth 모두 마커 표시
+      else if (MODE === 'markers') renderMarkers(); // choropleth 는 구역 색만 — 마커 미표시
       fitBounds();
     }
 

@@ -79,23 +79,22 @@ function ensureMyLocPulseStyle() {
 }
 
 type Overlay = { setMap: (m: unknown | null) => void };
-type Circle = Overlay & { setRadius: (radius: number) => void };
+type CustomOverlayCtor = new (opts: {
+  position: unknown;
+  content: Element;
+  map: unknown;
+  xAnchor?: number;
+  yAnchor?: number;
+  zIndex?: number;
+}) => Overlay;
 type LatLngBounds = { extend: (latlng: unknown) => void };
 type KakaoMap = {
   setCenter: (latlng: unknown) => void;
   setLevel: (level: number) => void;
-  getLevel: () => number;
   setBounds: (bounds: LatLngBounds, pt?: number, pr?: number, pb?: number, pl?: number) => void;
   setDraggable: (v: boolean) => void;
   setZoomable: (v: boolean) => void;
 };
-
-// kakao level↑ = 축소(픽셀당 미터↑). 화면상 블롭 크기를 줌 무관하게 일정히 유지하려
-// 미터 반경을 level 에 2배씩 비례. (네이티브: kakaoMapHtml.ts radiusForLevel 과 동일 식)
-function radiusForLevel(level: number): number {
-  const r = 500 * Math.pow(2, level - 6);
-  return Math.max(50, Math.min(50000, r));
-}
 type KakaoGlobal = {
   maps: {
     load: (cb: () => void) => void;
@@ -103,13 +102,7 @@ type KakaoGlobal = {
     LatLngBounds: new () => LatLngBounds;
     Map: new (container: HTMLElement, options: { center: unknown; level: number }) => KakaoMap;
     Marker: new (options: { position: unknown; map: unknown; title?: string }) => Overlay;
-    Circle: new (options: {
-      center: unknown;
-      radius: number;
-      strokeWeight?: number;
-      fillColor?: string;
-      fillOpacity?: number;
-    }) => Circle;
+    CustomOverlay: CustomOverlayCtor;
     Polygon: new (options: {
       path: unknown[] | unknown[][];
       strokeWeight?: number;
@@ -119,10 +112,6 @@ type KakaoGlobal = {
       fillColor?: string;
       fillOpacity?: number;
     }) => Overlay;
-    event: {
-      addListener: (target: unknown, type: string, handler: () => void) => unknown;
-      removeListener: (listener: unknown) => void;
-    };
   };
 };
 
@@ -181,8 +170,6 @@ export function KakaoMapWebView({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<KakaoMap | null>(null);
   const overlaysRef = useRef<Overlay[]>([]);
-  const heatCirclesRef = useRef<Circle[]>([]);
-  const zoomListenerRef = useRef<unknown>(null);
   const myLocOverlayRef = useRef<Overlay | null>(null);
   const boundaryOverlaysRef = useRef<Overlay[]>([]);
   const [ready, setReady] = useState(false);
@@ -357,43 +344,29 @@ export function KakaoMapWebView({
     if (!ready || !mapRef.current) return;
     const k = getKakao();
     if (!k) return;
-    // 기존 오버레이 + 직전 줌 리스너 제거
+    // 기존 마커/히트맵 오버레이 제거
     overlaysRef.current.forEach((o) => o.setMap(null));
     overlaysRef.current = [];
-    heatCirclesRef.current = [];
-    if (zoomListenerRef.current) {
-      k.maps.event.removeListener(zoomListenerRef.current);
-      zoomListenerRef.current = null;
-    }
 
     if (displayMode === 'heatmap') {
-      // heatmap.js 없이 Circle로 밀도 근사 표현. 밀도는 raw markers 기준이 정확.
-      const radius = radiusForLevel(mapRef.current.getLevel());
+      // 줌 무관 고정 px CSS 블롭 — 겹치면 알파 누적으로 밀도 표현. 밀도는 raw markers 기준이 정확.
+      // (미터 반경 Circle 은 kakao 줌 척도와 안 맞아 줌아웃 시 화면상 커지던 문제 → 픽셀 고정으로 대체)
       markers.forEach((m) => {
-        const circle = new k.maps.Circle({
-          center: new k.maps.LatLng(m.lat, m.lng),
-          radius,
-          strokeWeight: 0,
-          fillColor: '#dc2626',
-          fillOpacity: 0.28,
+        const el = document.createElement('div');
+        el.style.cssText =
+          'width:64px;height:64px;border-radius:50%;pointer-events:none;background:radial-gradient(circle, rgba(220,38,38,0.5) 0%, rgba(220,38,38,0) 70%);';
+        const overlay = new k.maps.CustomOverlay({
+          position: new k.maps.LatLng(m.lat, m.lng),
+          content: el,
+          map: mapRef.current,
+          xAnchor: 0.5,
+          yAnchor: 0.5,
         });
-        circle.setMap(mapRef.current);
-        overlaysRef.current.push(circle);
-        heatCirclesRef.current.push(circle);
+        overlaysRef.current.push(overlay);
       });
-      // 줌 변경 시 블롭 반경을 화면상 일정하게 — 전국 뷰서 점, 거리 뷰서 거대해지던 문제 차단.
-      zoomListenerRef.current = k.maps.event.addListener(
-        mapRef.current,
-        'zoom_changed',
-        () => {
-          if (!mapRef.current) return;
-          const r = radiusForLevel(mapRef.current.getLevel());
-          heatCirclesRef.current.forEach((c) => c.setRadius(r));
-        },
-      );
-    } else {
-      // markers 또는 choropleth(데이터 없어서 마커 폴백) — KWCAG 1.4.1 색+형상+라벨.
-      // 동일 좌표 그룹은 첫 마커만 그리고 카운트 뱃지로 표시 — 좌표 무손실.
+    } else if (displayMode === 'markers') {
+      // KWCAG 1.4.1 색+형상+라벨. 동일 좌표 그룹은 첫 마커만 그리고 카운트 뱃지로 표시 — 좌표 무손실.
+      // choropleth 는 구역 색만 표시하므로 마커를 그리지 않는다.
       markerGroups.forEach((group) => {
         const head = group[0];
         const content = document.createElement('div');
@@ -408,15 +381,7 @@ export function KakaoMapWebView({
             }
           });
         }
-        const overlay = new (k.maps as unknown as {
-          CustomOverlay: new (opts: {
-            position: unknown;
-            content: Element;
-            map: unknown;
-            xAnchor?: number;
-            yAnchor?: number;
-          }) => { setMap: (m: unknown) => void };
-        }).CustomOverlay({
+        const overlay = new k.maps.CustomOverlay({
           position: new k.maps.LatLng(head.lat, head.lng),
           content,
           map: mapRef.current,
@@ -427,15 +392,6 @@ export function KakaoMapWebView({
         overlaysRef.current.push(overlay);
       });
     }
-
-    // 언마운트/재실행 시 줌 리스너 정리 — 다음 실행 전 cleanup 으로도 제거되지만,
-    // 언마운트엔 다음 실행이 없으므로 여기서 떼어내 리스너·stale 클로저 누수 차단.
-    return () => {
-      if (zoomListenerRef.current) {
-        k.maps.event.removeListener(zoomListenerRef.current);
-        zoomListenerRef.current = null;
-      }
-    };
   }, [markers, markerGroups, ready, onMarkerPress, displayMode]);
 
   if (!kakaoJsKey) {
