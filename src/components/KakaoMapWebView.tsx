@@ -2,6 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { buildKakaoMapHtml, type MapDisplayMode } from '@/assets/kakaoMapHtml';
+import {
+  loadSigunguGeoJson,
+  aggregateByRegion,
+  opacityForCount,
+  getBoundaryRings,
+} from '@/assets/boundaries/sigungu';
 import { KAKAO_WEBVIEW_BASE_URL } from '@/utils/kakaoMap';
 import type { Field, FieldStatus } from '@/types/entities';
 import { FIELD_STATUS_LABEL } from '@/types/entities';
@@ -72,6 +78,27 @@ export function KakaoMapWebView({
     }));
   }, [markers]);
 
+  // 경계·단계구분도 지오메트리는 번들 소스에서 — 런타임 fetch/CDN 없이 오프라인 동작.
+  // 외곽 링은 정적이라 모드 진입 시 1회 추출(내부 캐시), code별 채색은 마커 집계로 계산.
+  const needsBoundary = showBoundary || displayMode === 'choropleth';
+  const boundaryRings = useMemo(
+    () => (needsBoundary ? getBoundaryRings() : undefined),
+    [needsBoundary],
+  );
+  const regionFill = useMemo(() => {
+    if (displayMode !== 'choropleth') return undefined;
+    const counts = aggregateByRegion(
+      markers.map((m) => ({ id: m.id, lat: m.lat, lng: m.lng })),
+      loadSigunguGeoJson(),
+    );
+    const max = Math.max(0, ...Array.from(counts.values()));
+    const fill: Record<string, number> = {};
+    counts.forEach((c, code) => {
+      fill[code] = opacityForCount(c, max);
+    });
+    return fill;
+  }, [displayMode, markers]);
+
   // html 빌더 deps 에서 center·myLocation 제거 — 비동기 도착(권한 응답) 시 source 전체
   // 재주입으로 사용자의 pan/zoom/InfoWindow 가 reset 되던 회로 차단. 초기 1회만 HTML 에 박고,
   // 이후 변경은 injectJavaScript 로 in-place 업데이트.
@@ -89,8 +116,19 @@ export function KakaoMapWebView({
         myLocation: initialMyLocationRef.current,
         fitToMarkers,
         interactive,
+        boundaryRings,
+        regionFill,
       }),
-    [kakaoJsKey, groupedMarkers, displayMode, showBoundary, fitToMarkers, interactive],
+    [
+      kakaoJsKey,
+      groupedMarkers,
+      displayMode,
+      showBoundary,
+      fitToMarkers,
+      interactive,
+      boundaryRings,
+      regionFill,
+    ],
   );
 
   // 후속 center 변경 → in-place setCenter (pan/zoom 보존).

@@ -97,3 +97,31 @@ export function opacityForCount(count: number, max: number): number {
   const ratio = Math.min(1, count / max);
   return 0.15 + ratio * 0.45;
 }
+
+export interface BoundaryRingFeature {
+  code: string;
+  rings: number[][][]; // 외곽 링들 (각 ring = [lng,lat][]). holes 는 제외(렌더에서 미사용).
+}
+
+let ringsCache: BoundaryRingFeature[] | null = null;
+
+// 폴리곤 외곽 링만 추출한 슬림 지오메트리.
+// 네이티브 WebView 에 그대로 주입해 런타임 fetch/CDN 없이 경계·단계구분도를 그리기 위함
+// — 좌표 변환·집계는 RN(TS) 한 곳에서만 하고 HTML 은 표시만 담당. 지오메트리는 정적이라 1회 캐시.
+export function getBoundaryRings(): BoundaryRingFeature[] {
+  if (ringsCache) return ringsCache;
+  const fc = loadSigunguGeoJson();
+  const out: BoundaryRingFeature[] = [];
+  for (const feat of fc.features) {
+    const geom = feat.geometry;
+    const polygons = geom.type === 'Polygon' ? [geom.coordinates] : geom.coordinates;
+    const rings: number[][][] = [];
+    for (const polygon of polygons) {
+      const outer = polygon[0];
+      if (outer) rings.push(outer as number[][]);
+    }
+    if (rings.length > 0) out.push({ code: feat.properties.code, rings });
+  }
+  ringsCache = out;
+  return out;
+}

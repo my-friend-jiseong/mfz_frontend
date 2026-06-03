@@ -29,6 +29,11 @@ interface MapHtmlOptions {
   fitToMarkers?: boolean;
   // false 면 드래그/줌 비활성 — BottomSheet 안 등 pan 충돌 회피용 정적 위치도(figure).
   interactive?: boolean;
+  // 시/군/구 외곽 링 슬림 지오메트리 (sigungu.getBoundaryRings). 경계/단계구분도에 필요할 때만 주입.
+  // 있으면 런타임 fetch/CDN 없이 이 좌표로 폴리곤을 그린다.
+  boundaryRings?: { code: string; rings: number[][][] }[];
+  // code → fillOpacity. 단계구분도 채색용. RN 측에서 집계·계산해 주입.
+  regionFill?: Record<string, number>;
 }
 
 export function buildKakaoMapHtml({
@@ -40,6 +45,8 @@ export function buildKakaoMapHtml({
   myLocation = null,
   fitToMarkers = false,
   interactive = true,
+  boundaryRings,
+  regionFill,
 }: MapHtmlOptions): string {
   // RN WebView와 웹 iframe 양쪽에서 메시지 전송 가능한 브리지 스크립트
   const postMsgFn = `function postMsg(msg){var s=JSON.stringify(msg);if(window.ReactNativeWebView){window.ReactNativeWebView.postMessage(s);}else if(window.parent&&window.parent!==window){window.parent.postMessage(s,'*');}}`;
@@ -80,6 +87,8 @@ MARKERS.forEach(function(m){
   const modeLiteral = JSON.stringify(displayMode);
   const showBoundaryLiteral = showBoundary ? 'true' : 'false';
   const myLocationLiteral = myLocation ? JSON.stringify(myLocation) : 'null';
+  const boundaryRingsLiteral = boundaryRings ? JSON.stringify(boundaryRings) : 'null';
+  const regionFillLiteral = regionFill ? JSON.stringify(regionFill) : 'null';
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
@@ -92,7 +101,6 @@ MARKERS.forEach(function(m){
   .mfz-me-dot { position:absolute; top:50%; left:50%; width:14px; height:14px; margin:-7px 0 0 -7px; border-radius:50%; background:#2563eb; border:3px solid #fff; box-shadow:0 1px 3px rgba(0,0,0,0.35); }
 </style>
 <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=${kakaoJsKey}&autoload=false"></script>
-<script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
 </head><body>
 <div id="map"></div>
 <div id="banner"></div>
@@ -105,7 +113,9 @@ MARKERS.forEach(function(m){
   var MY_LOCATION = ${myLocationLiteral};
   var FIT_TO_MARKERS = ${fitToMarkers ? 'true' : 'false'};
   var INTERACTIVE = ${interactive ? 'true' : 'false'};
-  var BOUNDARY_URL = 'https://raw.githubusercontent.com/southkorea/southkorea-maps/master/kostat/2018/json/skorea-municipalities-2018-topo-simple.json';
+  // 슬림 외곽 링 + code별 fillOpacity — RN(sigungu.ts)에서 집계·계산해 주입. 런타임 fetch/CDN 없음.
+  var BOUNDARY_RINGS = ${boundaryRingsLiteral};
+  var REGION_FILL = ${regionFillLiteral};
   ${postMsgFn}
 
   function showBanner(text){
@@ -199,80 +209,29 @@ MARKERS.forEach(function(m){
       });
     }
 
-    function pointInRing(lng, lat, ring){
-      var inside = false;
-      for (var i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-        var xi = ring[i][0], yi = ring[i][1];
-        var xj = ring[j][0], yj = ring[j][1];
-        var intersect = ((yi > lat) !== (yj > lat)) &&
-          (lng < ((xj - xi) * (lat - yi)) / (yj - yi || 1e-12) + xi);
-        if (intersect) inside = !inside;
-      }
-      return inside;
-    }
-    function pointInFeature(lng, lat, ft){
-      var polys = ft.geometry.type === 'Polygon' ? [ft.geometry.coordinates] : ft.geometry.coordinates;
-      for (var i = 0; i < polys.length; i++) {
-        var outer = polys[i][0];
-        if (outer && pointInRing(lng, lat, outer)) return true;
-      }
-      return false;
-    }
-    function opacityForCount(c, max){
-      if (c <= 0 || max <= 0) return 0;
-      return 0.15 + Math.min(1, c / max) * 0.45;
-    }
-
+    // 경계·단계구분도 — RN 에서 주입한 슬림 링(BOUNDARY_RINGS) + code별 fillOpacity(REGION_FILL)로
+    // 폴리곤만 그린다. 좌표 변환·집계는 RN(sigungu.ts)에서 끝났으므로 여기선 네트워크/CDN 불필요.
     function renderPolygons(){
-      if (!window.topojson) return;
       var isChoropleth = MODE === 'choropleth';
       if (!SHOW_BOUNDARY && !isChoropleth) return;
+      if (!BOUNDARY_RINGS) return;
 
-      fetch(BOUNDARY_URL)
-        .then(function(r){ return r.json(); })
-        .then(function(topo){
-          var key = Object.keys(topo.objects)[0];
-          var fc = window.topojson.feature(topo, topo.objects[key]);
-
-          var counts = {};
-          var maxCount = 0;
-          if (isChoropleth) {
-            for (var i = 0; i < MARKERS.length; i++) {
-              var m = MARKERS[i];
-              for (var j = 0; j < fc.features.length; j++) {
-                if (pointInFeature(m.lng, m.lat, fc.features[j])) {
-                  var code = fc.features[j].properties.code;
-                  counts[code] = (counts[code] || 0) + 1;
-                  if (counts[code] > maxCount) maxCount = counts[code];
-                  break;
-                }
-              }
-            }
-          }
-
-          fc.features.forEach(function(ft){
-            var geom = ft.geometry;
-            var polys = geom.type === 'Polygon' ? [geom.coordinates] : geom.coordinates;
-            var regionCount = counts[ft.properties.code] || 0;
-            var choroplethOpacity = isChoropleth ? opacityForCount(regionCount, maxCount) : 0;
-            polys.forEach(function(polygon){
-              var outer = polygon[0];
-              if (!outer) return;
-              var path = outer.map(function(c){ return new kakao.maps.LatLng(c[1], c[0]); });
-              var p = new kakao.maps.Polygon({
-                path: path,
-                strokeWeight: SHOW_BOUNDARY ? 1.5 : 0.8,
-                strokeColor: '#004c80',
-                strokeOpacity: SHOW_BOUNDARY ? 0.6 : 0.3,
-                strokeStyle: 'solid',
-                fillColor: '#2563eb',
-                fillOpacity: isChoropleth ? choroplethOpacity : 0,
-              });
-              p.setMap(map);
-            });
+      BOUNDARY_RINGS.forEach(function(feat){
+        var fillOpacity = isChoropleth && REGION_FILL ? (REGION_FILL[feat.code] || 0) : 0;
+        feat.rings.forEach(function(ring){
+          var path = ring.map(function(c){ return new kakao.maps.LatLng(c[1], c[0]); });
+          var p = new kakao.maps.Polygon({
+            path: path,
+            strokeWeight: SHOW_BOUNDARY ? 1.5 : 0.8,
+            strokeColor: '#004c80',
+            strokeOpacity: SHOW_BOUNDARY ? 0.6 : 0.3,
+            strokeStyle: 'solid',
+            fillColor: '#2563eb',
+            fillOpacity: fillOpacity,
           });
-        })
-        .catch(function(e){ console.error('boundary/choropleth load failed', e); });
+          p.setMap(map);
+        });
+      });
     }
 
     // 현재 위치 마커 — RN 측 in-place 갱신을 위해 overlay ref 보존.
