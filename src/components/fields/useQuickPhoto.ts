@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Alert, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { pickPhoto, type UploadFile } from '@/utils/media';
@@ -51,9 +51,13 @@ export function useQuickPhoto() {
   const [session, setSession] = useState<QuickPhotoSession | null>(null);
   const [preparing, setPreparing] = useState(false);
   const [uploading, setUploading] = useState(false);
+  // state 가드는 같은 프레임의 2번째 탭(stale closure)을 못 막는다 — ref 로 동기 재진입 차단.
+  const startingRef = useRef(false);
+  const uploadingRef = useRef(false);
 
   const start = useCallback(async () => {
-    if (preparing) return;
+    if (startingRef.current) return;
+    startingRef.current = true;
     setPreparing(true);
     try {
       // 갤러리 사진은 촬영 위치 ≠ 현재 위치라 자동 매칭 대상이 아님 — 카메라 직촬영 전용.
@@ -74,12 +78,20 @@ export function useQuickPhoto() {
 
       // 조회 실패 시 store 목록은 화면 필터로 좁혀진 부분집합일 수 있다 —
       // 부분 목록 기준 자동 매칭은 오매칭/가짜 no_nearby 위험이라 수동 선택으로만 강등.
-      let myFields = listResult.ok
+      const fetched = listResult.ok
         ? listResult.fields
         : useFieldStore.getState().fields;
-      if (userId) myFields = myFields.filter((f) => f.userId === userId);
+      const myFields = userId
+        ? fetched.filter((f) => f.userId === userId)
+        : fetched;
 
       if (myFields.length === 0) {
+        if (!listResult.ok) {
+          // 조회 실패 + 폴백 목록도 빈 경우(콜드 스타트 오프라인 등) —
+          // "현장이 없다"고 단정할 근거가 없으므로 조회 실패로 안내.
+          Alert.alert('현장 목록을 불러오지 못했습니다', '네트워크 확인 후 다시 시도해주세요.');
+          return;
+        }
         // §6-3: 현장 0개 → 폴백 시트 대신 새 현장 등록 유도.
         Alert.alert('등록된 현장이 없습니다', '사진을 등록하려면 먼저 현장이 필요해요.', [
           { text: '닫기', style: 'cancel' },
@@ -91,12 +103,11 @@ export function useQuickPhoto() {
         return;
       }
 
-      const fields = myFields;
       const fallback = (reason: QuickPhotoFallbackReason) =>
         setSession({
           file,
           candidates: [],
-          myFields: fields,
+          myFields,
           mode: 'fallback',
           fallbackReason: reason,
         });
@@ -109,15 +120,18 @@ export function useQuickPhoto() {
       if (candidates.length === 0) return fallback('no_nearby');
       setSession({ file, candidates, myFields, mode: 'confirm' });
     } finally {
+      startingRef.current = false;
       setPreparing(false);
     }
-  }, [preparing, router, userId]);
+  }, [router, userId]);
 
   const upload = useCallback(
     async (field: Field) => {
-      if (!session || uploading) return;
+      if (!session || uploadingRef.current) return;
+      uploadingRef.current = true;
       setUploading(true);
       const res = await addPhoto(field.id, session.file);
+      uploadingRef.current = false;
       setUploading(false);
       if (res.ok) {
         setSession(null);
@@ -133,7 +147,7 @@ export function useQuickPhoto() {
         Alert.alert('등록 실패', res.error);
       }
     },
-    [session, uploading, addPhoto, router],
+    [session, addPhoto, router],
   );
 
   /** 확인 모드 → 수동 선택 전환 ("다른 현장 선택"). */
@@ -141,11 +155,11 @@ export function useQuickPhoto() {
     setSession((s) => (s ? { ...s, mode: 'fallback', fallbackReason: 'manual' } : s));
   }, []);
 
-  /** 시트 닫기 — 업로드 중엔 무시 (§6-7). */
+  /** 시트 닫기 — 업로드 중엔 무시 (§6-7). ref 기준 — Alert 콜백 등 stale closure 에서도 안전. */
   const cancel = useCallback(() => {
-    if (uploading) return;
+    if (uploadingRef.current) return;
     setSession(null);
-  }, [uploading]);
+  }, []);
 
   return { session, preparing, uploading, start, upload, toFallback, cancel };
 }
