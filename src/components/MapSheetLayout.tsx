@@ -70,6 +70,13 @@ export function MapSheetLayout({
         ref={sheetRef}
         index={initialIndex}
         snapPoints={snapPoints}
+        // v5 는 enableDynamicSizing 기본값이 true (v4→v5 브레이킹) — 켜져 있으면
+        // 스크롤러블의 컨텐츠 측정 높이로 4번째 detent 를 몰래 끼워넣고 배열을 재정렬한다
+        // (useAnimatedDetents). 그 결과 snapToIndex(2)=100% 가정이 깨져 시트가 덜 펼쳐진
+        // 채 콘텐츠 마스크가 잘리고, 네이티브에서 목록 마지막 1~2개가 스크롤 불가였다
+        // (기기 검증 2026-06-04: overScrollMode='never' 라 끝에서 미동도 없음).
+        // 고정 snapPoints 를 쓰는 시트는 반드시 false.
+        enableDynamicSizing={false}
         enablePanDownToClose={false}
         backgroundStyle={styles.sheetBg}
         handleIndicatorStyle={styles.handle}
