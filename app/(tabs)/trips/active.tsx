@@ -20,6 +20,8 @@ import { CurrentDestCard } from '@/components/trips/CurrentDestCard';
 import { AllDoneCard } from '@/components/trips/AllDoneCard';
 import { DestinationRow } from '@/components/trips/DestinationRow';
 import { AddDestinationModal } from '@/components/trips/AddDestinationModal';
+import { useQuickPhoto } from '@/components/fields/useQuickPhoto';
+import { QuickPhotoSheet } from '@/components/fields/QuickPhotoSheet';
 import { navigateToTripDetail } from '@/utils/postTripFlow';
 import { trips as tripsApi, localizeError } from '@/api';
 import { VISIT_STATUS_LABEL } from '@/types/entities';
@@ -53,6 +55,10 @@ export default function ActiveTrip() {
   const [optimizing, setOptimizing] = useState(false);
   const [elapsedTick, setElapsedTick] = useState(0);
   const [addOpen, setAddOpen] = useState(false);
+
+  // Quick Photo — 외근 중 현장 도착 → 촬영이 주 사용처 (계획 §4-3 진입점 확장).
+  // 훅 호출은 아래 activeTripId early return 보다 위에 — hook 순서 고정.
+  const quickPhoto = useQuickPhoto();
 
   // 외근 진행 시간을 1분 주기로 갱신. 화면이 active 일 때만 동작.
   // deps 를 activeTripId (스칼라) 로 좁힘 — 이전엔 activeTrip 객체 (allTrips memo 결과)
@@ -452,20 +458,39 @@ export default function ActiveTrip() {
       {/* 종료 버튼은 BottomSheet 외부에 둔다 — 시트 내부 absolute 자식의 터치를
           @gorhom/bottom-sheet 의 pan 제스처가 가로채는 회로 차단. */}
       <StickyBottomBar>
-        <Button
-          onPress={handleEnd}
-          disabled={tripBusy}
-          loading={tripBusy}
-          variant="destructive"
-          size="lg"
-          fullWidth
-          leftIcon="stop-circle"
-        >
-          {allDone
-            ? '외근 종료'
-            : `외근 종료 (미완료 ${pendingDests.length}곳)`}
-        </Button>
+        <View style={styles.bottomBarRow}>
+          <Button
+            onPress={handleEnd}
+            disabled={tripBusy}
+            loading={tripBusy}
+            variant="destructive"
+            size="lg"
+            leftIcon="stop-circle"
+            style={styles.bottomBarMain}
+          >
+            {allDone
+              ? '외근 종료'
+              : `외근 종료 (미완료 ${pendingDests.length}곳)`}
+          </Button>
+          <Button
+            onPress={() => void quickPhoto.start()}
+            variant="secondary"
+            size="lg"
+            leftIcon="camera"
+            loading={quickPhoto.preparing}
+            accessibilityLabel="빠른 촬영 — 가까운 현장에 사진 등록"
+          >
+            촬영
+          </Button>
+        </View>
       </StickyBottomBar>
+      <QuickPhotoSheet
+        session={quickPhoto.session}
+        uploading={quickPhoto.uploading}
+        onUpload={(f) => void quickPhoto.upload(f)}
+        onFallback={quickPhoto.toFallback}
+        onClose={quickPhoto.cancel}
+      />
       <AddDestinationModal
         visible={addOpen}
         tripId={activeTripId}
@@ -478,6 +503,8 @@ export default function ActiveTrip() {
 
 const styles = StyleSheet.create({
   screenRoot: { flex: 1 },
+  bottomBarRow: { flexDirection: 'row', gap: spacing.md },
+  bottomBarMain: { flex: 1 },
   list: { paddingHorizontal: spacing.lg, paddingBottom: 120 },
   header: { paddingTop: spacing.md, gap: spacing.sm },
   sectionTitleRow: {

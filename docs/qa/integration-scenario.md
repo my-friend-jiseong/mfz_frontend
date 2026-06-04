@@ -111,7 +111,7 @@
 1. localStorage refresh token 손상 → 새로고침 → `/auth/refresh` 401 → 토큰 폐기 + 로그인 이동.
 
 ### S11. Quick Photo — 촬영 → 최근접 현장 자동 등록 (2026-06-04)
-계획: [AUTO_PICTURE_REGISTRATION_PLAN.md](<../reference/AUTO_PICTURE_REGISTRATION_PLAN.md>) / 진입점: [fields/index](<../app/(tabs)/fields/index.tsx>) 하단 바 [촬영] 버튼.
+계획: [AUTO_PICTURE_REGISTRATION_PLAN.md](<../reference/AUTO_PICTURE_REGISTRATION_PLAN.md>) / 진입점 2곳: **진행 중 외근**([trips/active](<../app/(tabs)/trips/active.tsx>) — 외근 종료 옆 [촬영], 주 사용처) + 현장 탭([fields/index](<../app/(tabs)/fields/index.tsx>) 하단 바 [촬영]). 동일 플로우(useQuickPhoto 공유) — 아래 1~8 은 외근 진입점 기준 1회 + 현장 탭 스모크 1회.
 1. **정상 매칭**: 현장 ~30m 거리에서 [촬영] → 카메라 → 확인 시트에 최근접 현장 1순위 기본 선택 + 거리 표시. [이 현장에 등록] → "등록 완료" 통지 → [현장 보기] → 현장 상세 사진 그리드에 노출 (`POST /api/fields/{id}/photos`, phase 없음).
 2. **후보 다수**: 100m 이내 현장 2+ → 차순위 후보(최대 3) 라디오 행 노출, 선택 변경 후 등록.
 3. **임계값 밖**(>100m): "100m 이내 현장이 없어요" 폴백 시트 → 검색 + 본인 현장 리스트에서 직접 선택 → 등록.
