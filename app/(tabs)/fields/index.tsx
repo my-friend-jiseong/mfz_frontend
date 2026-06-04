@@ -20,6 +20,8 @@ import {
   type FieldStatus,
 } from '@/types/entities';
 import { collectFieldFacets, applyFieldFilters } from '@/utils/fieldFacets';
+import { useQuickPhoto } from '@/components/fields/useQuickPhoto';
+import { QuickPhotoSheet } from '@/components/fields/QuickPhotoSheet';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 
@@ -138,6 +140,9 @@ export default function FieldsList() {
 
   const { onScroll, visible } = useHideOnScroll();
 
+  // Quick Photo — 촬영 → 최근접 현장 자동 매칭 등록 (계획 §4-3 진입점).
+  const quickPhoto = useQuickPhoto();
+
   return (
     <MapSheetLayout title="현장">
       <View style={styles.toolbar}>
@@ -246,15 +251,34 @@ export default function FieldsList() {
         }
       />
       <StickyBottomBar visible={visible}>
-        <Button
-          onPress={() => router.push('/(tabs)/fields/new' as never)}
-          size="lg"
-          fullWidth
-          leftIcon="add-circle"
-        >
-          새 현장
-        </Button>
+        <View style={styles.bottomBarRow}>
+          <Button
+            onPress={() => router.push('/(tabs)/fields/new' as never)}
+            size="lg"
+            leftIcon="add-circle"
+            style={styles.bottomBarMain}
+          >
+            새 현장
+          </Button>
+          <Button
+            onPress={() => void quickPhoto.start()}
+            variant="secondary"
+            size="lg"
+            leftIcon="camera"
+            loading={quickPhoto.preparing}
+            accessibilityLabel="빠른 촬영 — 가까운 현장에 사진 등록"
+          >
+            촬영
+          </Button>
+        </View>
       </StickyBottomBar>
+      <QuickPhotoSheet
+        session={quickPhoto.session}
+        uploading={quickPhoto.uploading}
+        onUpload={(f) => void quickPhoto.upload(f)}
+        onFallback={quickPhoto.toFallback}
+        onClose={quickPhoto.cancel}
+      />
     </MapSheetLayout>
   );
 }
@@ -284,4 +308,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   list: { padding: spacing.lg, paddingBottom: 120 },
+  bottomBarRow: { flexDirection: 'row', gap: spacing.md },
+  bottomBarMain: { flex: 1 },
 });
