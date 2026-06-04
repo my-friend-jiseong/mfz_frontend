@@ -3,7 +3,9 @@
 > **목적**: Claude Code 작업 지시서. 현재 "현장 선택 → 해당 현장에 사진 등록" 플로우에,
 > **"사진을 찍으면 → 촬영 위치에서 가장 가까운 현장에 자동 등록"** 되는 빠른 등록 경로를 추가한다.
 >
-> **상태**: 계획 확정 (2026-06-04). 구현 착수 전.
+> **상태**: 구현 완료 (2026-06-04, `feat/quick-photo`). 아래 §4 의 파일 경로는 구현하며
+> 코드베이스 컨벤션(훅은 컴포넌트와 colocate)에 맞게 일부 조정됨 — 본문에 반영 완료.
+> QA: docs/qa/integration-scenario.md §S11.
 
 ---
 
@@ -74,14 +76,15 @@ export function findNearbyFields(pos: LatLng, fields: Field[], maxDistanceM?: nu
 `StickyBottomBar` 내부를 2버튼 행으로: 기존 "새 현장"(주 버튼) + **카메라 아이콘 보조 버튼**.
 바텀시트 헤더의 빈 상태 버튼(`:238`)은 손대지 않음. 디자인 토큰은 `design-system.md` 준수.
 
-### 4-4. Quick Photo 플로우 훅 — `src/hooks/useQuickPhoto.ts` (신규)
+### 4-4. Quick Photo 플로우 훅 — `src/components/fields/useQuickPhoto.ts` (신규)
 ①~④ + ⑥~⑦ 의 오케스트레이션. 화면이 아닌 훅으로 만들어, 추후 지도 화면 등
 다른 진입점에서도 재사용 가능하게. 상태: `idle | locating | matching | confirming | uploading`.
 
-### 4-5. 확인/폴백 시트 — `src/components/QuickPhotoConfirmSheet.tsx` (신규)
-- 확인 모드: 1순위 현장명 + 주소 + 거리(m 단위 반올림) + [등록] / 차순위 후보 칩(최대 3) / [다른 현장 선택]
-- 폴백 모드: 기존 현장 검색 입력 + 리스트 (FieldCard 간이 재사용)
-- `@gorhom/bottom-sheet` 모달 — 기존 `MapSheetLayout` 패턴과 충돌하지 않게 **별도 BottomSheetModal**.
+### 4-5. 확인/폴백 시트 — `src/components/fields/QuickPhotoSheet.tsx` (신규)
+- 확인 모드: 촬영 썸네일 + 1순위 주소·상세주소·거리 기본 선택 + 차순위 후보 라디오 행(최대 3) + [이 현장에 등록] / [다른 현장 선택]
+- 폴백 모드: 사유 안내 + 현장 검색 입력 + 리스트 행(주소·상세주소) 탭 → 즉시 등록
+- ~~`@gorhom/bottom-sheet` BottomSheetModal~~ → **RN `Modal` 카드** (AddDestinationModal 패턴).
+  코드베이스에 BottomSheetModalProvider 가 없어 gorhom modal 은 루트 변경이 필요했음 — 기존 패턴 재사용이 우위.
 
 ### 4-6. 업로드 & 완료
 - `fieldStore.addPhoto(fieldId, file)` 그대로 (phase 인자 없음).
@@ -110,7 +113,7 @@ export function findNearbyFields(pos: LatLng, fields: Field[], maxDistanceM?: nu
 
 ## 7. QA / 검증
 
-- **단위 테스트** (`src/utils/__tests__/nearestField.test.ts`): 임계값 경계(99/100/101m), 정렬 순서, 빈 목록, 좌표 결측 제외. 부산 실주소 좌표로 픽스처 작성 ([[feedback_demo_data_busan]]).
+- **단위 테스트** (`src/utils/__tests__/nearestField.test.ts`, 실행 `npm test` — tsx 러너 도입): 임계값 경계(99/101m), 정렬 순서, 빈 목록, 좌표 결측 제외, 커스텀 임계값, formatDistanceM. 부산 좌표 픽스처 ([[feedback_demo_data_busan]]).
 - **수동 QA 시나리오** (기존 QA 문서 체계에 추가):
   1. 현장 30m 거리에서 촬영 → 1순위 제안 일치 + 등록 + 현장 상세에서 사진 확인
   2. 임계값 밖(>100m)에서 촬영 → 폴백 시트 → 수동 선택 등록
