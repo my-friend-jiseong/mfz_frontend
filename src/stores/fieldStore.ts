@@ -8,6 +8,7 @@ import type {
   UpdateFieldBody,
   ListMineParams,
   FieldDirectAttachment,
+  FieldListItem,
 } from '@/api';
 import type { AttachmentPhase } from '@/api/endpoints/fields';
 import type { DuplicateAddressDetails, HasRelatedVisitsDetails } from '@/api/errors';
@@ -57,6 +58,25 @@ interface FieldState {
 
 const describeError = localizeError;
 
+// listMine 응답 항목 → Field 정규화.
+// refresh 와 Quick Photo 의 일회성 전체 조회(useQuickPhoto)가 공유.
+export function listItemToField(it: FieldListItem): Field {
+  return {
+    id: it.fieldId,
+    userId: it.userId ?? it.assigneeUserId ?? '',
+    projectId: it.projectId ?? null,
+    projectName: it.projectName ?? null,
+    status: it.status,
+    address: it.address,
+    addressDetail: it.detailAddress ?? '',
+    latitude: it.lat,
+    longitude: it.lng,
+    categories: it.categories ?? it.tags,
+    recentVisitedAt: it.recentVisitedAt,
+    updatedAt: it.updatedAt,
+  };
+}
+
 // v2: 현장 상세의 memos[]/photos[] 를 화면 캐시용 FieldDirectAttachment 로 정규화.
 function memoToAttachment(m: {
   id: string; fieldId: string; content: string; createdAt: string;
@@ -90,21 +110,7 @@ export const useFieldStore = create<FieldState>((set, get) => ({
     try {
       // v2 검증: visitDateScope 미지정 시 목록이 빈다 — 항상 기본 'all' 보장.
       const res = await fieldsApi.listMine({ visitDateScope: 'all', ...params });
-      const items: Field[] = res.items.map((it) => ({
-        id: it.fieldId,
-        userId: it.userId ?? it.assigneeUserId ?? '',
-        projectId: it.projectId ?? null,
-        projectName: it.projectName ?? null,
-        status: it.status,
-        address: it.address,
-        addressDetail: it.detailAddress ?? '',
-        latitude: it.lat,
-        longitude: it.lng,
-        categories: it.categories ?? it.tags,
-        recentVisitedAt: it.recentVisitedAt,
-        updatedAt: it.updatedAt,
-      }));
-      set({ fields: items });
+      set({ fields: res.items.map(listItemToField) });
     } catch (e) {
       if (__DEV__) console.error('[fieldStore.refresh] failed', e);
     }
