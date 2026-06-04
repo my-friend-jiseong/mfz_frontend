@@ -194,6 +194,22 @@ export const fields = {
   listMine: (params?: ListMineParams) =>
     request<FieldListResponse>('/api/fields/mine', { query: params }),
 
+  // listMine 의 기본 limit 은 1페이지 분량만 반환한다 — 데모 시드(현장 30개) 기준
+  // store 가 20개에서 끊겨 "목록 끝까지 스크롤이 안 된다"로 보고된 버그의 실제 원인
+  // (2026-06-05, APK 기기 검증. capture_screens.mjs 가 limit=200 을 명시하는 이유).
+  // hasNext 기반 페이지 순회로 전체 수집. 상한 10페이지(=1000현장)는 무한 루프 방어.
+  listMineAll: async (params?: Omit<ListMineParams, 'page' | 'limit'>) => {
+    const items: FieldListItem[] = [];
+    for (let page = 1; page <= 10; page++) {
+      const res = await request<FieldListResponse>('/api/fields/mine', {
+        query: { ...params, limit: 100, page },
+      });
+      items.push(...res.items);
+      if (!res.pagination?.hasNext) break;
+    }
+    return items;
+  },
+
   detail: (fieldId: string) => request<FieldDetailResponse>(`/api/fields/${fieldId}`),
 
   create: (body: CreateFieldBody) =>

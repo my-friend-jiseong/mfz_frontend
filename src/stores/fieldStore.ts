@@ -109,8 +109,10 @@ export const useFieldStore = create<FieldState>((set, get) => ({
   refresh: async (params) => {
     try {
       // v2 검증: visitDateScope 미지정 시 목록이 빈다 — 항상 기본 'all' 보장.
-      const res = await fieldsApi.listMine({ visitDateScope: 'all', ...params });
-      set({ fields: res.items.map(listItemToField) });
+      // listMineAll: 페이지 순회 — 기본 limit(1페이지)만 받으면 21번째+ 현장이
+      // 목록·지도·현장 선택에서 통째로 사라진다 (2026-06-05 기기 검증 버그).
+      const items = await fieldsApi.listMineAll({ visitDateScope: 'all', ...params });
+      set({ fields: items.map(listItemToField) });
     } catch (e) {
       if (__DEV__) console.error('[fieldStore.refresh] failed', e);
     }

@@ -9,11 +9,11 @@ import { Text } from '@/components/ui/Text';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 
-// gorhom v5 #2347 — 시트 안 스크롤러블(BottomSheetFlatList/ScrollView)에 형제 View
-// (고정 검색·칩 헤더 등)가 있으면 리스트 레이아웃 높이가 잔여 공간보다 커져, 하단이
-// 형제 높이만큼 잘리고 마지막 항목들이 스크롤로 도달 불가가 된다 (네이티브 전용,
-// 기기 검증 2026-06-05 — enableDynamicSizing=false 만으로는 부족했음).
-// 시트 안 모든 스크롤러블의 style 에 이 값을 적용해 뷰포트를 잔여 공간으로 강제한다.
+// 시트 안 스크롤러블(BottomSheetFlatList/ScrollView)은 형제 View(고정 검색·칩 헤더)가
+// 있을 때 뷰포트가 잔여 공간으로 고정되도록 flex:1 을 명시한다 (gorhom v5 #2347 예방).
+// 주의: "목록 끝까지 스크롤 안 됨" 기기 버그(2026-06-05)의 실제 원인은 레이아웃이 아니라
+// fieldStore 의 listMine 1페이지 절단이었다 (fields.listMineAll 참고). 이 스타일은
+// 방어적 하이진으로 유지.
 export const sheetScrollableStyle = { flex: 1 } as const;
 
 interface Props {
@@ -78,11 +78,10 @@ export function MapSheetLayout({
         index={initialIndex}
         snapPoints={snapPoints}
         // v5 는 enableDynamicSizing 기본값이 true (v4→v5 브레이킹) — 켜져 있으면
-        // 스크롤러블의 컨텐츠 측정 높이로 4번째 detent 를 몰래 끼워넣고 배열을 재정렬한다
-        // (useAnimatedDetents). 그 결과 snapToIndex(2)=100% 가정이 깨져 시트가 덜 펼쳐진
-        // 채 콘텐츠 마스크가 잘리고, 네이티브에서 목록 마지막 1~2개가 스크롤 불가였다
-        // (기기 검증 2026-06-04: overScrollMode='never' 라 끝에서 미동도 없음).
-        // 고정 snapPoints 를 쓰는 시트는 반드시 false.
+        // 스크롤러블의 컨텐츠 측정 높이로 4번째 detent 를 몰래 끼워넣고 배열을 재정렬해
+        // snapToIndex(0|1|2) 인덱스 가정이 깨진다 (useAnimatedDetents). 고정 snapPoints
+        // 를 쓰는 시트는 반드시 false. (주의: "목록 끝까지 스크롤 안 됨" 기기 버그의
+        // 원인으로 처음 지목했으나 실제 원인은 listMine 1페이지 절단 — fields.listMineAll.)
         enableDynamicSizing={false}
         enablePanDownToClose={false}
         backgroundStyle={styles.sheetBg}

@@ -30,17 +30,10 @@ export interface QuickPhotoSession {
   fallbackReason?: QuickPhotoFallbackReason;
 }
 
-// listMine 은 기본 limit 이 작아 1페이지만 받으면 21번째+ 현장이 매칭에서 누락된다
-// (capture_screens.mjs 가 같은 API 에 limit=200 을 명시하는 이유). 페이지 순회로 전체 확보.
-// 상한 10페이지(=1000현장)는 무한 루프 방어 — 초과분은 현실적으로 없음.
+// 전체 현장 일회성 조회 — 페이지 순회는 API 레이어(listMineAll)로 승격되어 store.refresh 와 공유.
 async function fetchAllMyFields(): Promise<Field[]> {
-  const out: Field[] = [];
-  for (let page = 1; page <= 10; page++) {
-    const res = await fieldsApi.listMine({ visitDateScope: 'all', limit: 100, page });
-    out.push(...res.items.map(listItemToField));
-    if (!res.pagination?.hasNext) break;
-  }
-  return out;
+  const items = await fieldsApi.listMineAll({ visitDateScope: 'all' });
+  return items.map(listItemToField);
 }
 
 export function useQuickPhoto() {
