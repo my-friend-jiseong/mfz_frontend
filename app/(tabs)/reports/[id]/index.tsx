@@ -20,7 +20,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { API_BASE_URL } from '@/api';
 import { safeBack } from '@/utils/backNavigation';
 import { EmptyState } from '@/components/EmptyState';
-import { MapSheetLayout } from '@/components/MapSheetLayout';
+import { MapSheetLayout, sheetScrollableStyle } from '@/components/MapSheetLayout';
 import { KakaoMapWebView, fieldsToMarkers } from '@/components/KakaoMapWebView';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -270,7 +270,7 @@ export default function ReportDetail() {
       initialIndex={1}
       mapFieldIds={overviewFieldIds}
     >
-      <BottomSheetScrollView contentContainerStyle={styles.scroll}>
+      <BottomSheetScrollView style={sheetScrollableStyle} contentContainerStyle={styles.scroll}>
         <Text variant="h2" weight="heavy">
           {report.title}
         </Text>

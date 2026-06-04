@@ -9,6 +9,13 @@ import { Text } from '@/components/ui/Text';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 
+// gorhom v5 #2347 — 시트 안 스크롤러블(BottomSheetFlatList/ScrollView)에 형제 View
+// (고정 검색·칩 헤더 등)가 있으면 리스트 레이아웃 높이가 잔여 공간보다 커져, 하단이
+// 형제 높이만큼 잘리고 마지막 항목들이 스크롤로 도달 불가가 된다 (네이티브 전용,
+// 기기 검증 2026-06-05 — enableDynamicSizing=false 만으로는 부족했음).
+// 시트 안 모든 스크롤러블의 style 에 이 값을 적용해 뷰포트를 잔여 공간으로 강제한다.
+export const sheetScrollableStyle = { flex: 1 } as const;
+
 interface Props {
   title: string;
   onBack?: () => void;

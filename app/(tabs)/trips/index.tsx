@@ -6,7 +6,7 @@ import { useTripStore } from '@/stores/tripStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useVisitStore } from '@/stores/visitStore';
 import { EmptyState } from '@/components/EmptyState';
-import { MapSheetLayout } from '@/components/MapSheetLayout';
+import { MapSheetLayout, sheetScrollableStyle } from '@/components/MapSheetLayout';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
@@ -86,6 +86,7 @@ export default function TripsList() {
         data={trips}
         keyExtractor={(t) => String(t.id)}
         renderItem={renderItem}
+        style={sheetScrollableStyle}
         contentContainerStyle={styles.list}
         // gorhom 은 onScroll 을 public 타입에서 제외하지만 런타임엔 useScrollHandler 로 전달함.
         {...({ onScroll } as object)}

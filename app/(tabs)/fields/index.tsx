@@ -7,7 +7,7 @@ import { useFieldStore } from '@/stores/fieldStore';
 import { useAuthStore } from '@/stores/authStore';
 import { FieldCard } from '@/components/FieldCard';
 import { EmptyState } from '@/components/EmptyState';
-import { MapSheetLayout } from '@/components/MapSheetLayout';
+import { MapSheetLayout, sheetScrollableStyle } from '@/components/MapSheetLayout';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
@@ -223,6 +223,7 @@ export default function FieldsList() {
         data={fields}
         keyExtractor={keyExtractor}
         renderItem={renderItem}
+        style={sheetScrollableStyle}
         contentContainerStyle={styles.list}
         // gorhom 은 onScroll 을 public 타입에서 제외하지만 런타임엔 useScrollHandler 로 전달함.
         {...({ onScroll } as object)}

@@ -9,7 +9,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useTripStore } from '@/stores/tripStore';
 import { useVisitStore } from '@/stores/visitStore';
 import { EmptyState } from '@/components/EmptyState';
-import { MapSheetLayout } from '@/components/MapSheetLayout';
+import { MapSheetLayout, sheetScrollableStyle } from '@/components/MapSheetLayout';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -117,6 +117,7 @@ export default function ReportsIndex() {
       </View>
       <BottomSheetFlatList
         data={groups}
+        style={sheetScrollableStyle}
         keyExtractor={(g) => (g.trip ? `trip-${g.trip.id}` : 'orphan')}
         renderItem={({ item }) => (
           <View style={styles.group}>

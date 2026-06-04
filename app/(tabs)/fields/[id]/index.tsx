@@ -8,7 +8,7 @@ import { useFieldStore } from '@/stores/fieldStore';
 import { safeBack } from '@/utils/backNavigation';
 import { useVisitStore } from '@/stores/visitStore';
 import { EmptyState } from '@/components/EmptyState';
-import { MapSheetLayout } from '@/components/MapSheetLayout';
+import { MapSheetLayout, sheetScrollableStyle } from '@/components/MapSheetLayout';
 import { promptChoice } from '@/components/WebChoiceModal';
 import { pickPhoto, promptPhotoSource } from '@/utils/media';
 import { openKakaoRouteTo } from '@/utils/kakaoMap';
@@ -418,6 +418,7 @@ export default function FieldDetail() {
         keyExtractor={(v) => String(v.id)}
         renderItem={renderVisit}
         ListHeaderComponent={headerElement}
+        style={sheetScrollableStyle}
         contentContainerStyle={styles.list}
         ListEmptyComponent={
           <EmptyState icon="footsteps-outline" title="방문 이력이 없습니다" />

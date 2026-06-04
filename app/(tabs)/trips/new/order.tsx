@@ -9,7 +9,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useTripStore } from '@/stores/tripStore';
 import { useDestinationStore } from '@/stores/destinationStore';
 import { EmptyState } from '@/components/EmptyState';
-import { MapSheetLayout } from '@/components/MapSheetLayout';
+import { MapSheetLayout, sheetScrollableStyle } from '@/components/MapSheetLayout';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -298,6 +298,7 @@ export default function NewTripOrder() {
         data={list}
         keyExtractor={(f) => String(f.id)}
         renderItem={renderItem}
+        style={sheetScrollableStyle}
         contentContainerStyle={styles.list}
       />
       <StickyBottomBar>

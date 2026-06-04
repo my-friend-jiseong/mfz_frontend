@@ -8,7 +8,7 @@ import { useFieldStore } from '@/stores/fieldStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useTripStore } from '@/stores/tripStore';
 import { EmptyState } from '@/components/EmptyState';
-import { MapSheetLayout } from '@/components/MapSheetLayout';
+import { MapSheetLayout, sheetScrollableStyle } from '@/components/MapSheetLayout';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { safeBack } from '@/utils/backNavigation';
@@ -266,6 +266,7 @@ export default function NewTripSelect() {
         data={fields}
         keyExtractor={(f) => String(f.id)}
         renderItem={renderItem}
+        style={sheetScrollableStyle}
         contentContainerStyle={styles.list}
         ListEmptyComponent={
           <EmptyState

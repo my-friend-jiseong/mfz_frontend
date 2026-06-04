@@ -8,7 +8,7 @@ import { useVisitStore } from '@/stores/visitStore';
 import { useDestinationStore } from '@/stores/destinationStore';
 import { useFieldStore } from '@/stores/fieldStore';
 import { EmptyState } from '@/components/EmptyState';
-import { MapSheetLayout } from '@/components/MapSheetLayout';
+import { MapSheetLayout, sheetScrollableStyle } from '@/components/MapSheetLayout';
 import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
@@ -225,7 +225,7 @@ export default function TripDetail() {
         initialIndex={2}
         mapFieldIds={tripFieldIds}
       >
-        <BottomSheetScrollView contentContainerStyle={styles.scroll}>
+        <BottomSheetScrollView style={sheetScrollableStyle} contentContainerStyle={styles.scroll}>
         <View style={styles.header}>
           <View style={styles.titleRow}>
             <Text variant="h2" weight="heavy" style={styles.titleText}>

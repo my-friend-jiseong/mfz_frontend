@@ -7,7 +7,7 @@ import { useTripStore } from '@/stores/tripStore';
 import { useDestinationStore } from '@/stores/destinationStore';
 import { useFieldStore } from '@/stores/fieldStore';
 import { useVisitStore } from '@/stores/visitStore';
-import { MapSheetLayout } from '@/components/MapSheetLayout';
+import { MapSheetLayout, sheetScrollableStyle } from '@/components/MapSheetLayout';
 import { Button } from '@/components/ui/Button';
 import { StickyBottomBar } from '@/components/ui/StickyBottomBar';
 import {
@@ -452,6 +452,7 @@ export default function ActiveTrip() {
           keyExtractor={(d) => String(d.id)}
           renderItem={renderItem}
           ListHeaderComponent={listHeader}
+          style={sheetScrollableStyle}
           contentContainerStyle={styles.list}
         />
       </MapSheetLayout>
