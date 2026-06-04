@@ -18,7 +18,10 @@ import { spacing, radius } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
 import { withAlpha } from '@/theme/withAlpha';
 import type { Field } from '@/types/entities';
-import type { QuickPhotoSession } from './useQuickPhoto';
+import type {
+  QuickPhotoFallbackReason,
+  QuickPhotoSession,
+} from './useQuickPhoto';
 
 // Quick Photo 확인/폴백 시트 — 계획 §4-5. AddDestinationModal 의 Modal 카드 패턴 재사용
 // (BottomSheetModalProvider 미사용 코드베이스라 @gorhom modal 대신 RN Modal).
@@ -34,9 +37,11 @@ interface Props {
   onClose: () => void;
 }
 
-const FALLBACK_NOTICE: Record<string, string> = {
+// 키를 union 으로 고정 — 새 fallbackReason 추가 시 문구 누락이 컴파일 에러로 잡히게.
+const FALLBACK_NOTICE: Record<QuickPhotoFallbackReason, string> = {
   no_location: '위치를 확인할 수 없어요. 등록할 현장을 직접 선택해 주세요.',
   no_nearby: `${QUICK_PHOTO_MAX_DISTANCE_M}m 이내 현장이 없어요. 등록할 현장을 직접 선택해 주세요.`,
+  list_failed: '현장 목록을 모두 불러오지 못했어요. 등록할 현장을 직접 선택해 주세요.',
   manual: '등록할 현장을 선택해 주세요.',
 };
 

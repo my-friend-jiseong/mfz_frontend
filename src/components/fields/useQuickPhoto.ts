@@ -14,7 +14,11 @@ import type { Field } from '@/types/entities';
 // 화면이 아닌 훅으로 분리 — 현장 목록 외 진입점(지도 등)에서도 재사용 가능.
 // UI 는 QuickPhotoSheet 가 session/uploading 을 받아 렌더.
 
-export type QuickPhotoFallbackReason = 'no_location' | 'no_nearby' | 'manual';
+export type QuickPhotoFallbackReason =
+  | 'no_location'
+  | 'no_nearby'
+  | 'list_failed'
+  | 'manual';
 
 export interface QuickPhotoSession {
   file: UploadFile;
@@ -24,6 +28,19 @@ export interface QuickPhotoSession {
   myFields: Field[];
   mode: 'confirm' | 'fallback';
   fallbackReason?: QuickPhotoFallbackReason;
+}
+
+// listMine 은 기본 limit 이 작아 1페이지만 받으면 21번째+ 현장이 매칭에서 누락된다
+// (capture_screens.mjs 가 같은 API 에 limit=200 을 명시하는 이유). 페이지 순회로 전체 확보.
+// 상한 10페이지(=1000현장)는 무한 루프 방어 — 초과분은 현실적으로 없음.
+async function fetchAllMyFields(): Promise<Field[]> {
+  const out: Field[] = [];
+  for (let page = 1; page <= 10; page++) {
+    const res = await fieldsApi.listMine({ visitDateScope: 'all', limit: 100, page });
+    out.push(...res.items.map(listItemToField));
+    if (!res.pagination?.hasNext) break;
+  }
+  return out;
 }
 
 export function useQuickPhoto() {
@@ -44,18 +61,22 @@ export function useQuickPhoto() {
       const file = await pickPhoto(Platform.OS === 'web' ? 'library' : 'camera');
       if (!file) return; // 취소 또는 권한 거부 (pickPhoto 가 자체 Alert 처리)
 
-      // 촬영 직후 좌표 1회 — 100m 판정이라 Balanced(~100m 오차) 대신 high (§4-1).
-      const pos = await requestUserLocation({ high: true });
+      // GPS fix(high 는 수 초 가능)와 목록 fetch 는 독립 — 병렬로 시트 노출 지연 최소화.
+      // - 좌표: 촬영 직후 1회, 100m 판정이라 Balanced(~100m 오차) 대신 high (§4-1).
+      // - 목록: 화면 필터(방문일 30일 등)와 무관한 전체 스코프 일회성 조회 — store 미오염 (§6-5).
+      const [pos, listResult] = await Promise.all([
+        requestUserLocation({ high: true }),
+        fetchAllMyFields().then(
+          (fields) => ({ ok: true as const, fields }),
+          () => ({ ok: false as const }),
+        ),
+      ]);
 
-      // 화면 필터(방문일 30일 등)와 무관한 전체 스코프 일회성 조회 — store 미오염 (§6-5).
-      let myFields: Field[];
-      try {
-        const res = await fieldsApi.listMine({ visitDateScope: 'all' });
-        myFields = res.items.map(listItemToField);
-      } catch {
-        // 조회 실패 → store 에 이미 있는 목록으로 폴백 (오프라인 등).
-        myFields = useFieldStore.getState().fields;
-      }
+      // 조회 실패 시 store 목록은 화면 필터로 좁혀진 부분집합일 수 있다 —
+      // 부분 목록 기준 자동 매칭은 오매칭/가짜 no_nearby 위험이라 수동 선택으로만 강등.
+      let myFields = listResult.ok
+        ? listResult.fields
+        : useFieldStore.getState().fields;
       if (userId) myFields = myFields.filter((f) => f.userId === userId);
 
       if (myFields.length === 0) {
@@ -70,29 +91,22 @@ export function useQuickPhoto() {
         return;
       }
 
-      if (!pos) {
-        // §6-1: 권한 거부·GPS 실패는 silent 폴백 — 에러 아님.
+      const fields = myFields;
+      const fallback = (reason: QuickPhotoFallbackReason) =>
         setSession({
           file,
           candidates: [],
-          myFields,
+          myFields: fields,
           mode: 'fallback',
-          fallbackReason: 'no_location',
+          fallbackReason: reason,
         });
-        return;
-      }
+
+      if (!listResult.ok) return fallback('list_failed');
+      // §6-1: 권한 거부·GPS 실패는 silent 폴백 — 에러 아님.
+      if (!pos) return fallback('no_location');
 
       const candidates = findNearbyFields(pos, myFields);
-      if (candidates.length === 0) {
-        setSession({
-          file,
-          candidates: [],
-          myFields,
-          mode: 'fallback',
-          fallbackReason: 'no_nearby',
-        });
-        return;
-      }
+      if (candidates.length === 0) return fallback('no_nearby');
       setSession({ file, candidates, myFields, mode: 'confirm' });
     } finally {
       setPreparing(false);
