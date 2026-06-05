@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, type ReactNode } from 'react';
+import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BottomSheet from '@gorhom/bottom-sheet';
@@ -11,10 +11,13 @@ import { spacing } from '@/theme/spacing';
 
 // 시트 안 스크롤러블(BottomSheetFlatList/ScrollView)은 형제 View(고정 검색·칩 헤더)가
 // 있을 때 뷰포트가 잔여 공간으로 고정되도록 flex:1 을 명시한다 (gorhom v5 #2347 예방).
-// 주의: "목록 끝까지 스크롤 안 됨" 기기 버그(2026-06-05)의 실제 원인은 레이아웃이 아니라
-// fieldStore 의 listMine 1페이지 절단이었다 (fields.listMineAll 참고). 이 스타일은
-// 방어적 하이진으로 유지.
+// 주의: flex:1 은 부모 높이가 유한할 때만 의미가 있다 — 아래 SHEET_HANDLE_HEIGHT 주석의
+// 명시적 height 래퍼가 전제. (기기 "목록 끝까지 스크롤 안 됨" 버그의 진짜 원인 참고)
 export const sheetScrollableStyle = { flex: 1 } as const;
+
+// gorhom 기본 핸들 실높이 — indicator 4 + 상하 padding 10×2 (bottomSheetHandle/styles.ts).
+// 시트 콘텐츠 영역 = 컨테이너 높이 - 핸들. 기본 핸들을 교체하면 이 값도 갱신할 것.
+const SHEET_HANDLE_HEIGHT = 24;
 
 interface Props {
   title: string;
@@ -51,6 +54,26 @@ export function MapSheetLayout({
   );
   const { height: screenHeight } = useWindowDimensions();
   const sheetRef = useRef<BottomSheet>(null);
+
+  // ── 기기 "목록 끝까지 스크롤 안 됨" 버그의 진짜 원인 수정 (2026-06-05, 4번째 조치) ──
+  // gorhom v5 는 시트 콘텐츠 래퍼 높이를 useAnimatedStyle 로 주입하는데
+  // (BottomSheetContent.tsx contentMaskContainerAnimatedStyle), 이 worklet 은 컨테이너
+  // 측정 전 `{}` → 측정 후 `{height,...}` 로 반환 키가 달라진다. Fabric(RN 0.81) +
+  // reanimated 4 에선 나중에 추가된 height 키가 네이티브에 적용되지 않아 래퍼가
+  // auto 높이로 자식 크기만큼 자라고(기기 실측: 화면 773dp 에 래퍼 3763dp), 리스트
+  // 뷰포트 하단이 화면 밖에 렌더되어 마지막 항목들이 도달 불가가 된다. 웹 reanimated
+  // 는 DOM 스타일이라 정상 → 웹 미재현. 데이터(listMineAll)·flex:1·dynamicSizing 은
+  // 전부 무관했다 (1~3차 조치 오진).
+  // 해결: gorhom 의 깨진 height 에 기대지 않고, 컨테이너 실측 높이 - 핸들 높이를
+  // children 래퍼에 명시. gorhom 이 정상일 때 계산하는 값과 동일하므로 (sheetHeight
+  // = 최대 detent '100%' = containerHeight) 웹/수정된 future 버전에서도 무해.
+  const [containerHeight, setContainerHeight] = useState<number | null>(null);
+  const onRootLayout = useCallback(
+    (e: { nativeEvent: { layout: { height: number } } }) =>
+      setContainerHeight(e.nativeEvent.layout.height),
+    [],
+  );
+  // ──────────────────────────────────────────────────────────────────────────
   // gorhom 의 '100%' 는 컨테이너 기준이라 상단 safe area (status bar/노치) 위로는 안 올라감.
   // 루트 SafeAreaView 제거 (app/_layout.tsx) 후 부모 컨테이너가 edge-to-edge 라 sheet 가
   // 자연스럽게 status bar 영역까지 닿음. inset 은 sheet 헤더의 paddingTop 보정에만 사용.
@@ -68,7 +91,7 @@ export function MapSheetLayout({
   );
 
   return (
-    <View style={styles.root}>
+    <View style={styles.root} onLayout={onRootLayout}>
       <MapDashboard
         scopeFieldIds={mapFieldIds}
         legendBottomInset={screenHeight * MIN_SNAP_FRACTION}
@@ -81,28 +104,34 @@ export function MapSheetLayout({
         // 스크롤러블의 컨텐츠 측정 높이로 4번째 detent 를 몰래 끼워넣고 배열을 재정렬해
         // snapToIndex(0|1|2) 인덱스 가정이 깨진다 (useAnimatedDetents). 고정 snapPoints
         // 를 쓰는 시트는 반드시 false. (주의: "목록 끝까지 스크롤 안 됨" 기기 버그의
-        // 원인으로 처음 지목했으나 실제 원인은 listMine 1페이지 절단 — fields.listMineAll.)
+        // 원인으로 처음 지목했으나 오진 — 실제 원인은 위 명시적 height 주석 참고.)
         enableDynamicSizing={false}
         enablePanDownToClose={false}
         backgroundStyle={styles.sheetBg}
         handleIndicatorStyle={styles.handle}
       >
-        {/* sheet 가 100% snap 일 때 헤더가 status bar 뒤로 안 깔리도록 inset 만큼 추가 패딩 */}
-        <View style={[styles.sheetHeader, { paddingTop: insets.top + spacing.sm }]}>
-          {onBack ? (
-            <Pressable
-              onPress={onBack}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="뒤로 가기"
-              style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
-            >
-              <Ionicons name="chevron-back" size={22} color={colors.text} />
-            </Pressable>
-          ) : null}
-          <Text variant="h3">{title}</Text>
+        {/* 명시적 height — gorhom 콘텐츠 래퍼 높이 미적용(Fabric+reanimated 4) 우회.
+            측정 전 한 프레임은 화면 높이로 근사 후 실측값으로 보정. */}
+        <View
+          style={{ height: (containerHeight ?? screenHeight) - SHEET_HANDLE_HEIGHT }}
+        >
+          {/* sheet 가 100% snap 일 때 헤더가 status bar 뒤로 안 깔리도록 inset 만큼 추가 패딩 */}
+          <View style={[styles.sheetHeader, { paddingTop: insets.top + spacing.sm }]}>
+            {onBack ? (
+              <Pressable
+                onPress={onBack}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="뒤로 가기"
+                style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
+              >
+                <Ionicons name="chevron-back" size={22} color={colors.text} />
+              </Pressable>
+            ) : null}
+            <Text variant="h3">{title}</Text>
+          </View>
+          <View style={styles.content}>{children}</View>
         </View>
-        <View style={styles.content}>{children}</View>
       </BottomSheet>
     </View>
   );

@@ -194,9 +194,11 @@ export const fields = {
   listMine: (params?: ListMineParams) =>
     request<FieldListResponse>('/api/fields/mine', { query: params }),
 
-  // listMine 의 기본 limit 은 1페이지 분량만 반환한다 — 데모 시드(현장 30개) 기준
-  // store 가 20개에서 끊겨 "목록 끝까지 스크롤이 안 된다"로 보고된 버그의 실제 원인
-  // (2026-06-05, APK 기기 검증. capture_screens.mjs 가 limit=200 을 명시하는 이유).
+  // listMine 의 기본 limit 은 1페이지 분량만 반환한다 — 초과분 현장이 목록·지도·현장
+  // 선택에서 통째로 사라지는 실데이터 절단 버그 (2026-06-05. capture_screens.mjs 가
+  // limit=200 을 명시하는 이유). 주의: "목록 끝까지 스크롤 안 됨" 기기 버그의 원인으로
+  // 지목했었으나 그건 오진 — 그 버그의 실제 원인은 MapSheetLayout 의 시트 콘텐츠 높이
+  // 미적용(Fabric+reanimated 4) 쪽 주석 참고. 절단 자체는 별개의 실문제라 수정 유지.
   // hasNext 기반 페이지 순회로 전체 수집. 상한 10페이지(=1000현장)는 무한 루프 방어.
   listMineAll: async (params?: Omit<ListMineParams, 'page' | 'limit'>) => {
     const items: FieldListItem[] = [];
