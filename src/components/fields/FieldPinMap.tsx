@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import type { PinAddress } from '@/utils/addressSearch';
@@ -17,15 +17,19 @@ interface Props {
   height?: number;
 }
 
-// 새 현장 step 2 에서 핀 드래그로 좌표 미세 조정용 단일 마커 지도.
+// 마운트 후 임의 시점에 핀 이동 + 역지오코딩을 트리거하는 명령형 핸들
+// — "현 위치에서 시작" 재시도처럼 지도가 이미 떠 있는 상태에서 주소를 다시 받아올 때.
+// FieldPinMap.web.tsx 와 동일 shape 유지.
+export interface FieldPinMapHandle {
+  resolveAddress: (lat: number, lng: number) => void;
+}
+
+// 현장 등록/수정에서 핀 드래그로 좌표 미세 조정용 단일 마커 지도.
 // 일반 MapDashboard 와 분리 — 필터/그룹/myLocation 등 무관, 단일 마커만 표시.
-export function FieldPinMap({
-  lat,
-  lng,
-  onDragEnd,
-  resolveInitialAddress = false,
-  height = 220,
-}: Props) {
+export const FieldPinMap = forwardRef<FieldPinMapHandle, Props>(function FieldPinMap(
+  { lat, lng, onDragEnd, resolveInitialAddress = false, height = 220 },
+  ref,
+) {
   const webRef = useRef<WebView>(null);
   const kakaoJsKey = process.env.EXPO_PUBLIC_KAKAO_JS_KEY ?? '';
 
@@ -60,6 +64,16 @@ export function FieldPinMap({
     webRef.current?.injectJavaScript(js);
   }, [lat, lng]);
 
+  useImperativeHandle(ref, () => ({
+    resolveAddress: (la: number, ln: number) => {
+      if (!Number.isFinite(la) || !Number.isFinite(ln)) return;
+      // SDK 로드 전이면 pending 에 적재 — __mfzResolve 정의 직후 flush (silent drop 방지).
+      webRef.current?.injectJavaScript(
+        `if(window.__mfzResolve){window.__mfzResolve(${la},${ln});}else{window.__mfzPendingResolve=[${la},${ln}];}true;`,
+      );
+    },
+  }));
+
   if (!kakaoJsKey) return null;
 
   return (
@@ -90,7 +104,7 @@ export function FieldPinMap({
       />
     </View>
   );
-}
+});
 
 function buildHtml(
   kakaoJsKey: string,
@@ -160,6 +174,17 @@ function buildHtml(
       marker.setPosition(p);
       map.setCenter(p);
     };
+    // 명령형 핸들 — 핀 이동 + 역지오코딩 ("현 위치로 이동" 재시도용).
+    window.__mfzResolve = function(la, ln){
+      window.__mfzPin(la, ln);
+      emitAddress(la, ln);
+    };
+    // SDK 로드 전에 RN 측이 적재해 둔 resolve 요청 flush.
+    if(window.__mfzPendingResolve){
+      var pr = window.__mfzPendingResolve;
+      window.__mfzPendingResolve = null;
+      window.__mfzResolve(pr[0], pr[1]);
+    }
     // 현 위치 시작 플로우 — 초기 좌표의 주소를 1회 역지오코딩해 채운다.
     ${resolveInitial ? `emitAddress(${lat}, ${lng});` : ''}
   });

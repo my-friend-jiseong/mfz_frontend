@@ -28,7 +28,7 @@ import {
 import { requestUserLocation } from '@/utils/geolocation';
 import { ProjectPicker } from '@/components/ProjectPicker';
 import { ManualCoordinateForm } from '@/components/fields/ManualCoordinateForm';
-import { FieldPinMap } from '@/components/fields/FieldPinMap';
+import { FieldPinMap, type FieldPinMapHandle } from '@/components/fields/FieldPinMap';
 import { useKakaoPlaceSearch } from '@/components/fields/useKakaoPlaceSearch';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
@@ -62,6 +62,9 @@ function buildDuplicatePreview(
   return { count: Math.max(duplicateCount, matches.length), lines };
 }
 
+// 측위·검색 선택 모두 없을 때의 지도 초기 중심 — KakaoMapWebView 의 DEFAULT_CENTER 와 동일 부산 중심.
+const DEFAULT_CENTER = { lat: 35.17, lng: 129.07 };
+
 export default function NewField() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
@@ -77,7 +80,8 @@ export default function NewField() {
     [allFields, userId],
   );
 
-  const [step, setStep] = useState<1 | 2>(1);
+  // 검색창은 순수 검색용 — 현재 주소의 진실 출처는 selected(카드에 실시간 표시).
+  // 결과 선택 시 query 를 비워 리스트를 닫는다 (입력창-주소 양방향 동기화로 인한 clobber 회피).
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<AddressSearchItem[]>([]);
   const [emptyMessage, setEmptyMessage] = useState<string | null>(null);
@@ -89,9 +93,12 @@ export default function NewField() {
   const [retryToken, setRetryToken] = useState(0);
 
   const [selected, setSelected] = useState<SelectedAddress | null>(null);
-  // 현 위치 우선 플로우 — 진입 시 자동으로 현 위치를 잡아 step 2 로 직행.
-  // 실패(권한 거부·오류·한국 밖)는 silent — 기존 주소 검색이 그대로 폴백.
+  // 현 위치 우선 — 진입 시 자동 측위, 실패해도 지도는 기본 중심으로 띄워 손으로 바로 지정 가능.
   const [locating, setLocating] = useState(true);
+  // FieldPinMap 마운트 시 초기 역지오코딩 여부 — 현 위치 성공 시에만.
+  // (기본 중심 fallback 은 임의 주소 자동 기입 금지 — 사용자가 고르지 않은 주소가 등록될 위험)
+  const [resolveOnMount, setResolveOnMount] = useState(false);
+  const mapRef = useRef<FieldPinMapHandle>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [categoriesStr, setCategoriesStr] = useState('');
   const [detail, setDetail] = useState('');
@@ -108,6 +115,9 @@ export default function NewField() {
   useEffect(() => {
     const k = query.trim();
     if (k.length < MIN_KEYWORD_LEN) {
+      // 진행 중이던 요청 무효화 — 타이머가 이미 발화해 fetch 가 in-flight 면 clearTimeout 으로는
+      // 못 막으므로, 토큰을 올려 늦은 응답이 결과 리스트를 되살리지 못하게 한다 (선택 직후 setQuery('') 경로).
+      reqIdRef.current++;
       setResults([]);
       setEmptyMessage(null);
       setSearchError(null);
@@ -155,16 +165,15 @@ export default function NewField() {
   }, [query, retryToken, searchPlaces]);
 
   const handleSelectItem = (item: AddressSearchItem) => {
+    Keyboard.dismiss();
     setSelected(itemToSelected(item));
-    setStep(2);
+    setQuery('');
   };
 
-  // 현 위치 → step 2 직행. 주소는 FieldPinMap 마운트 시 역지오코딩(resolveInitialAddress)으로 채움.
-  // auto: 진입 시 자동 시도 — 그 사이 사용자가 검색을 시작했으면 결과를 조용히 폐기.
-  const stepRef = useRef(step);
-  stepRef.current = step;
-  const queryRef = useRef(query);
-  queryRef.current = query;
+  // 현 위치 측위 → 핀 이동 + 역지오코딩.
+  // auto: 진입 시 1회 자동 — 그 사이 사용자가 이미 주소를 골랐으면 폐기, 실패는 silent.
+  const selectedRef = useRef(selected);
+  selectedRef.current = selected;
   const startFromCurrentLocation = async (auto: boolean) => {
     setLocating(true);
     // GPS cold fix·실내에서 getCurrentPositionAsync 가 무기한 대기할 수 있음 — 타임아웃으로 스피너 고정 방지.
@@ -173,26 +182,45 @@ export default function NewField() {
       new Promise<null>((resolve) => setTimeout(() => resolve(null), 10_000)),
     ]);
     setLocating(false);
-    if (auto && (stepRef.current !== 1 || queryRef.current.trim().length > 0)) return;
+    if (auto && selectedRef.current !== null) return;
     if (!pos || !isInKorea(pos.lat, pos.lng)) {
       if (!auto) {
         Alert.alert(
           '현 위치를 사용할 수 없어요',
           '위치 권한을 확인하거나, 주소로 검색해주세요.',
         );
+      } else if (selectedRef.current === null) {
+        // 자동 측위 실패 — 기본 중심으로 지도만 띄워 손으로 바로 지정하게. 주소 자동 기입은 하지 않는다.
+        setSelected({
+          roadAddress: '',
+          jibunAddress: '',
+          buildingName: null,
+          lat: DEFAULT_CENTER.lat,
+          lng: DEFAULT_CENTER.lng,
+          display: '지도를 탭해 위치를 지정하거나 주소를 검색하세요',
+        });
       }
       return;
     }
-    Keyboard.dismiss();
-    setSelected({
+    // 버튼 경로만 키보드 닫기 — 자동 측위가 타이핑 중인 키보드를 닫지 않도록.
+    if (!auto) Keyboard.dismiss();
+    const placeholder: SelectedAddress = {
       roadAddress: '',
       jibunAddress: '',
       buildingName: null,
       lat: pos.lat,
       lng: pos.lng,
       display: '현 위치 (주소 확인 중…)',
-    });
-    setStep(2);
+    };
+    if (selectedRef.current === null) {
+      // 지도 미마운트 — 마운트 시 1회 역지오코딩 (resolveInitialAddress).
+      setResolveOnMount(true);
+      setSelected(placeholder);
+    } else {
+      // 지도 이미 표시 중 — 명령형 핸들로 핀 이동 + 재역지오코딩.
+      setSelected(placeholder);
+      mapRef.current?.resolveAddress(pos.lat, pos.lng);
+    }
   };
 
   // 진입 시 1회 자동 시도.
@@ -201,14 +229,13 @@ export default function NewField() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-
   const handleCreate = async () => {
     if (!user || !selected) return;
-    // 현 위치 플로우에서 역지오코딩이 아직(또는 끝내) 주소를 못 채운 경우 — 빈 주소 등록 차단.
+    // 역지오코딩이 아직(또는 끝내) 주소를 못 채운 경우 — 빈 주소 등록 차단.
     if (!selected.roadAddress.trim() && !selected.jibunAddress.trim()) {
       Alert.alert(
         '주소 확인 필요',
-        '아직 주소를 확인하지 못했어요. 지도의 핀을 살짝 옮겨 주소를 다시 받아오거나, 주소 검색으로 돌아가주세요.',
+        '아직 주소를 확인하지 못했어요. 지도의 핀을 살짝 옮겨 주소를 다시 받아오거나, 주소를 검색해주세요.',
       );
       return;
     }
@@ -296,254 +323,221 @@ export default function NewField() {
     >
       {placeSearchBridge}
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <View style={styles.stepRow}>
-          <View style={[styles.stepDot, styles.stepDotActive]}>
-            <Text variant="caption" weight="bold" color="onPrimary">
-              1
-            </Text>
-          </View>
-          <View style={[styles.stepLine, step === 2 && styles.stepLineActive]} />
-          <View style={[styles.stepDot, step === 2 && styles.stepDotActive]}>
-            <Text
-              variant="caption"
-              weight="bold"
-              color={step === 2 ? 'onPrimary' : 'textMuted'}
-            >
-              2
-            </Text>
-          </View>
-        </View>
         <Text variant="h3" style={styles.title}>
-          {step === 1 ? '주소 검색' : '상세 입력'}
+          현장 등록
         </Text>
 
-        {step === 1 ? (
-          <>
-            <Input
-              label="주소 · 건물명 · 장소명"
-              value={query}
-              onChangeText={setQuery}
-              placeholder="예: 동아대학교, 해운대 우동, 동성로"
-              autoFocus
-              autoCapitalize="none"
-              returnKeyType="search"
-            />
+        {/* 검색·현위치·지도 단일 화면 — 주소 재검색과 핀 이동이 서로를 실시간 갱신 */}
+        <Input
+          label="주소 · 건물명 · 장소명 검색"
+          value={query}
+          onChangeText={setQuery}
+          placeholder="예: 동아대학교, 해운대 우동, 동성로"
+          autoCapitalize="none"
+          returnKeyType="search"
+        />
 
-            {locating ? (
-              <View style={styles.loadingRow}>
-                <LoadingState inline label="현 위치 확인 중" />
-              </View>
-            ) : (
-              <Button
-                onPress={() => void startFromCurrentLocation(false)}
-                variant="secondary"
-                size="sm"
-                leftIcon="locate"
-                style={styles.locateBtn}
-              >
-                현 위치에서 시작
-              </Button>
-            )}
-
-            {searching ? (
-              <View style={styles.loadingRow}>
-                <LoadingState inline label="검색 중" />
-              </View>
-            ) : null}
-
-            {searchError ? (
-              <Text variant="caption" color="danger" style={styles.errorText}>
-                {searchError}
-              </Text>
-            ) : null}
-
-            {providerUnavailable ? (
-              <Card padding="md" style={styles.warnBox}>
-                <Text variant="bodySm" weight="bold">
-                  주소 검색 일시 장애
-                </Text>
-                <Text variant="caption" color="textMuted" style={styles.warnBody}>
-                  카카오 주소 서비스가 일시적으로 응답하지 않습니다. 다시 시도하거나 좌표를 직접 입력하세요.
-                </Text>
-                <Button
-                  onPress={() => {
-                    setProviderUnavailable(false);
-                    setRetryToken((t) => t + 1);
-                  }}
-                  variant="secondary"
-                  size="sm"
-                  leftIcon="refresh"
-                  style={styles.retryBtn}
-                >
-                  다시 시도
-                </Button>
-              </Card>
-            ) : null}
-
-            {showEmptyHint ? (
-              <Text variant="caption" color="textMuted" style={styles.hint}>
-                {emptyMessage ?? '검색 결과가 없습니다'}
-              </Text>
-            ) : null}
-
-            <View style={styles.resultList}>
-              {results.map((r, idx) => {
-                const key = `${r.roadAddress}|${r.jibunAddress}|${idx}`;
-                const sub = [r.sido, r.sigungu].filter(Boolean).join(' ');
-                return (
-                  <Pressable
-                    key={key}
-                    onPress={() => handleSelectItem(r)}
-                    style={({ pressed }) => [
-                      styles.addrItem,
-                      pressed && { opacity: opacity.pressed },
-                    ]}
-                  >
-                    <Text variant="body" weight="semibold">
-                      {r.roadAddress || r.jibunAddress}
-                      {r.buildingName ? ` (${r.buildingName})` : ''}
-                    </Text>
-                    {r.roadAddress && r.jibunAddress && r.roadAddress !== r.jibunAddress ? (
-                      <Text variant="caption" color="textMuted" style={styles.addrJibun}>
-                        지번: {r.jibunAddress}
-                      </Text>
-                    ) : null}
-                    <Text variant="caption" color="textMuted" style={styles.addrCoord}>
-                      {sub ? `${sub} · ` : ''}
-                      {r.lat.toFixed(4)}, {r.lng.toFixed(4)}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            {/* 수동 좌표 입력 fallback — provider unavailable 또는 사용자 명시 진입 */}
-            {showManualEntry ? (
-              <ManualCoordinateForm
-                onResolve={(addr) => {
-                  setSelected(addr);
-                  setStep(2);
-                  setManualMode(false);
-                }}
-              />
-            ) : null}
-
-            {showEmptyHint && !manualMode ? (
-              <Button
-                onPress={() => setManualMode(true)}
-                variant="ghost"
-                size="sm"
-                rightIcon="arrow-forward"
-                style={styles.manualLink}
-              >
-                좌표 직접 입력
-              </Button>
-            ) : null}
-          </>
+        {locating ? (
+          <View style={styles.loadingRow}>
+            <LoadingState inline label="현 위치 확인 중" />
+          </View>
         ) : (
-          <>
-            <Button
-              onPress={() => setStep(1)}
-              variant="ghost"
-              size="sm"
-              leftIcon="arrow-back"
-              style={styles.backBtn}
-            >
-              주소 다시 선택
-            </Button>
+          <Button
+            onPress={() => void startFromCurrentLocation(false)}
+            variant="secondary"
+            size="sm"
+            leftIcon="locate"
+            style={styles.locateBtn}
+          >
+            현 위치로 이동
+          </Button>
+        )}
 
+        {searching ? (
+          <View style={styles.loadingRow}>
+            <LoadingState inline label="검색 중" />
+          </View>
+        ) : null}
+
+        {searchError ? (
+          <Text variant="caption" color="danger" style={styles.errorText}>
+            {searchError}
+          </Text>
+        ) : null}
+
+        {providerUnavailable ? (
+          <Card padding="md" style={styles.warnBox}>
+            <Text variant="bodySm" weight="bold">
+              주소 검색 일시 장애
+            </Text>
+            <Text variant="caption" color="textMuted" style={styles.warnBody}>
+              카카오 주소 서비스가 일시적으로 응답하지 않습니다. 다시 시도하거나 좌표를 직접 입력하세요.
+            </Text>
+            <Button
+              onPress={() => {
+                setProviderUnavailable(false);
+                setRetryToken((t) => t + 1);
+              }}
+              variant="secondary"
+              size="sm"
+              leftIcon="refresh"
+              style={styles.retryBtn}
+            >
+              다시 시도
+            </Button>
+          </Card>
+        ) : null}
+
+        {showEmptyHint ? (
+          <Text variant="caption" color="textMuted" style={styles.hint}>
+            {emptyMessage ?? '검색 결과가 없습니다'}
+          </Text>
+        ) : null}
+
+        <View style={styles.resultList}>
+          {results.map((r, idx) => {
+            const key = `${r.roadAddress}|${r.jibunAddress}|${idx}`;
+            const sub = [r.sido, r.sigungu].filter(Boolean).join(' ');
+            return (
+              <Pressable
+                key={key}
+                onPress={() => handleSelectItem(r)}
+                style={({ pressed }) => [
+                  styles.addrItem,
+                  pressed && { opacity: opacity.pressed },
+                ]}
+              >
+                <Text variant="body" weight="semibold">
+                  {r.roadAddress || r.jibunAddress}
+                  {r.buildingName ? ` (${r.buildingName})` : ''}
+                </Text>
+                {r.roadAddress && r.jibunAddress && r.roadAddress !== r.jibunAddress ? (
+                  <Text variant="caption" color="textMuted" style={styles.addrJibun}>
+                    지번: {r.jibunAddress}
+                  </Text>
+                ) : null}
+                <Text variant="caption" color="textMuted" style={styles.addrCoord}>
+                  {sub ? `${sub} · ` : ''}
+                  {r.lat.toFixed(4)}, {r.lng.toFixed(4)}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {/* 수동 좌표 입력 fallback — provider unavailable 또는 사용자 명시 진입 */}
+        {showManualEntry ? (
+          <ManualCoordinateForm
+            onResolve={(addr) => {
+              setSelected(addr);
+              setManualMode(false);
+              setQuery('');
+            }}
+          />
+        ) : null}
+
+        {showEmptyHint && !manualMode ? (
+          <Button
+            onPress={() => setManualMode(true)}
+            variant="ghost"
+            size="sm"
+            rightIcon="arrow-forward"
+            style={styles.manualLink}
+          >
+            좌표 직접 입력
+          </Button>
+        ) : null}
+
+        {selected ? (
+          <>
             <Card padding="md" style={styles.selectedBox}>
               <Text variant="caption" weight="bold" color="primary">
-                선택한 주소
+                현장 주소
               </Text>
               <Text variant="body" weight="semibold" style={styles.selectedAddr}>
-                {selected?.display}
+                {selected.display}
               </Text>
-              {selected ? (
-                <Text variant="caption" color="textMuted" style={styles.selectedCoord}>
-                  {selected.lat.toFixed(6)}, {selected.lng.toFixed(6)}
-                </Text>
-              ) : null}
+              <Text variant="caption" color="textMuted" style={styles.selectedCoord}>
+                {selected.lat.toFixed(6)}, {selected.lng.toFixed(6)}
+              </Text>
             </Card>
 
-            {selected ? (
-              <>
-                <Text variant="caption" color="textMuted" style={styles.pinHint}>
-                  지도를 탭하거나 핀을 드래그해 위치를 잡으면 주소도 자동으로 갱신돼요
-                </Text>
-                <FieldPinMap
-                  lat={selected.lat}
-                  lng={selected.lng}
-                  // 현 위치 직행이면 주소가 비어 있음 — 마운트 시 역지오코딩 1회로 채움 (마운트 시점 값만 사용).
-                  resolveInitialAddress={!selected.roadAddress && !selected.jibunAddress}
-                  onDragEnd={(la, ln, addr) =>
-                    setSelected((prev) => {
-                      if (!prev) return prev;
-                      const next = { ...prev, lat: la, lng: ln };
-                      // 역지오코딩이 도착하면 주소 필드도 좌표에 맞춰 갱신 (좌표↔주소 불일치 방지).
-                      if (addr) {
-                        next.roadAddress = addr.roadAddress;
-                        next.jibunAddress = addr.jibunAddress;
-                        next.buildingName = addr.buildingName;
-                        next.sido = addr.sido;
-                        next.sigungu = addr.sigungu;
-                        next.display = addr.display;
-                      }
-                      return next;
-                    })
+            <Text variant="caption" color="textMuted" style={styles.pinHint}>
+              지도를 탭하거나 핀을 드래그해 위치를 잡으면 주소도 자동으로 갱신돼요
+            </Text>
+            <FieldPinMap
+              ref={mapRef}
+              lat={selected.lat}
+              lng={selected.lng}
+              // 현 위치 직행 마운트에서만 초기 역지오코딩 (마운트 시점 값만 사용).
+              resolveInitialAddress={resolveOnMount}
+              onDragEnd={(la, ln, addr) =>
+                setSelected((prev) => {
+                  if (!prev) return prev;
+                  const next = { ...prev, lat: la, lng: ln };
+                  // 역지오코딩이 도착하면 주소 필드도 좌표에 맞춰 갱신 (좌표↔주소 불일치 방지).
+                  if (addr) {
+                    next.roadAddress = addr.roadAddress;
+                    next.jibunAddress = addr.jibunAddress;
+                    next.buildingName = addr.buildingName;
+                    next.sido = addr.sido;
+                    next.sigungu = addr.sigungu;
+                    next.display = addr.display;
                   }
-                />
-              </>
-            ) : null}
-
-            <Text variant="bodySm" weight="semibold" color="textMuted" style={styles.label}>
-              프로젝트 (선택)
-            </Text>
-            <ProjectPicker value={projectId} onChange={setProjectId} />
-
-            <Input
-              label="분류 (선택, 쉼표로 구분)"
-              value={categoriesStr}
-              onChangeText={setCategoriesStr}
-              placeholder="예: 가로수, 보수, 긴급"
-              containerStyle={styles.fieldGap}
+                  return next;
+                })
+              }
             />
-
-            <Input
-              label="상세 주소 (동/호수 등)"
-              value={detail}
-              onChangeText={setDetail}
-              placeholder="예: 101동 1203호"
-              containerStyle={styles.fieldGap}
-            />
-
-            <Text variant="bodySm" weight="semibold" color="textMuted" style={styles.label}>
-              상태
-            </Text>
-            <View style={styles.statusRow}>
-              {FIELD_STATUS_VALUES.map((s) => (
-                <FilterChip
-                  key={s}
-                  label={FIELD_STATUS_LABEL[s]}
-                  active={status === s}
-                  activeColor={colors.fieldStatus[s]}
-                  onPress={() => setStatus(s)}
-                />
-              ))}
-            </View>
-
-            <Button
-              onPress={handleCreate}
-              loading={submitting}
-              size="lg"
-              fullWidth
-              leftIcon="checkmark"
-              style={styles.submit}
-            >
-              현장 등록
-            </Button>
           </>
-        )}
+        ) : null}
+
+        <Text variant="bodySm" weight="semibold" color="textMuted" style={styles.label}>
+          프로젝트 (선택)
+        </Text>
+        <ProjectPicker value={projectId} onChange={setProjectId} />
+
+        <Input
+          label="분류 (선택, 쉼표로 구분)"
+          value={categoriesStr}
+          onChangeText={setCategoriesStr}
+          placeholder="예: 가로수, 보수, 긴급"
+          containerStyle={styles.fieldGap}
+        />
+
+        <Input
+          label="상세 주소 (동/호수 등)"
+          value={detail}
+          onChangeText={setDetail}
+          placeholder="예: 101동 1203호"
+          containerStyle={styles.fieldGap}
+        />
+
+        <Text variant="bodySm" weight="semibold" color="textMuted" style={styles.label}>
+          상태
+        </Text>
+        <View style={styles.statusRow}>
+          {FIELD_STATUS_VALUES.map((s) => (
+            <FilterChip
+              key={s}
+              label={FIELD_STATUS_LABEL[s]}
+              active={status === s}
+              activeColor={colors.fieldStatus[s]}
+              onPress={() => setStatus(s)}
+            />
+          ))}
+        </View>
+
+        <Button
+          onPress={handleCreate}
+          loading={submitting}
+          disabled={!selected}
+          size="lg"
+          fullWidth
+          leftIcon="checkmark"
+          style={styles.submit}
+        >
+          현장 등록
+        </Button>
       </ScrollView>
     </KeyboardAvoidingView>
     </SafeScreen>
@@ -553,29 +547,6 @@ export default function NewField() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   scroll: { padding: spacing.xl, paddingBottom: spacing.xxl * 2 },
-  // 단계 표시
-  stepRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  stepDot: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: colors.surfaceMuted,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepDotActive: { backgroundColor: colors.primary },
-  stepLine: {
-    flex: 1,
-    height: 2,
-    backgroundColor: colors.surfaceMuted,
-    borderRadius: 1,
-  },
-  stepLineActive: { backgroundColor: colors.primary },
   title: { marginBottom: spacing.lg },
   label: {
     marginTop: spacing.md,
@@ -606,10 +577,9 @@ const styles = StyleSheet.create({
   addrCoord: { marginTop: 2 },
   manualLink: { marginTop: spacing.md, alignSelf: 'flex-start' },
   locateBtn: { marginTop: spacing.sm, alignSelf: 'flex-start' },
-  backBtn: { alignSelf: 'flex-start', marginBottom: spacing.md },
   selectedBox: {
     backgroundColor: colors.primaryMuted,
-    marginBottom: spacing.md,
+    marginTop: spacing.md,
   },
   selectedAddr: { marginTop: 2 },
   selectedCoord: { marginTop: 4 },

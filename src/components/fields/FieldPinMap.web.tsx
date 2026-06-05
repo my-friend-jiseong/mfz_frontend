@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 import type { PinAddress } from '@/utils/addressSearch';
 import { colors } from '@/theme/colors';
@@ -13,6 +13,13 @@ interface Props {
   // 마운트 시점 값만 사용 (후속 prop 변경 무시).
   resolveInitialAddress?: boolean;
   height?: number;
+}
+
+// 마운트 후 임의 시점에 핀 이동 + 역지오코딩을 트리거하는 명령형 핸들
+// — "현 위치에서 시작" 재시도처럼 지도가 이미 떠 있는 상태에서 주소를 다시 받아올 때.
+// FieldPinMap.tsx(native) 와 동일 shape 유지.
+export interface FieldPinMapHandle {
+  resolveAddress: (lat: number, lng: number) => void;
 }
 
 const SDK_SCRIPT_ID = '__kakao_maps_sdk__';
@@ -110,13 +117,10 @@ function loadKakaoSdk(appkey: string): Promise<void> {
   });
 }
 
-export function FieldPinMap({
-  lat,
-  lng,
-  onDragEnd,
-  resolveInitialAddress = false,
-  height = 220,
-}: Props) {
+export const FieldPinMap = forwardRef<FieldPinMapHandle, Props>(function FieldPinMap(
+  { lat, lng, onDragEnd, resolveInitialAddress = false, height = 220 },
+  ref,
+) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const kakaoJsKey = process.env.EXPO_PUBLIC_KAKAO_JS_KEY ?? '';
   const markerRef = useRef<Overlay | null>(null);
@@ -130,6 +134,10 @@ export function FieldPinMap({
   const initialLatRef = useRef(safeLat);
   const initialLngRef = useRef(safeLng);
   const resolveInitialRef = useRef(resolveInitialAddress);
+  // SDK 로드 후 effect 안에서 만들어지는 emitAddress 를 명령형 핸들에서 쓰기 위한 통로.
+  const emitAddressRef = useRef<((la: number, ln: number) => void) | null>(null);
+  // SDK 로드 전에 들어온 resolveAddress 요청 — 로드 완료 직후 flush (silent drop 방지).
+  const pendingResolveRef = useRef<{ lat: number; lng: number } | null>(null);
 
   // 마운트 1회 — 후속 lat/lng prop 변경은 아래 useEffect 가 in-place 처리.
   useEffect(() => {
@@ -164,6 +172,7 @@ export function FieldPinMap({
           }
         });
       };
+      emitAddressRef.current = emitAddress;
       // 좌표는 즉시, 주소는 역지오코딩 콜백 후 후속 전달.
       const emitMove = (la: number, ln: number) => {
         lastEmittedRef.current = { lat: la, lng: ln };
@@ -183,6 +192,15 @@ export function FieldPinMap({
       // 현 위치 시작 플로우 — 초기 좌표의 주소를 1회 역지오코딩해 채운다.
       if (resolveInitialRef.current) {
         emitAddress(initialLatRef.current, initialLngRef.current);
+      }
+      // SDK 로드 전에 들어온 resolveAddress 요청 flush.
+      const pending = pendingResolveRef.current;
+      if (pending) {
+        pendingResolveRef.current = null;
+        const p = new k.maps.LatLng(pending.lat, pending.lng);
+        marker.setPosition(p);
+        map.setCenter(p);
+        emitAddress(pending.lat, pending.lng);
       }
     });
     return () => {
@@ -204,6 +222,24 @@ export function FieldPinMap({
     mapRef.current.setCenter(p);
   }, [lat, lng]);
 
+  useImperativeHandle(ref, () => ({
+    resolveAddress: (la: number, ln: number) => {
+      if (!Number.isFinite(la) || !Number.isFinite(ln)) return;
+      if (!emitAddressRef.current) {
+        // SDK 로드 전 — 적재해 두면 mount effect 가 로드 완료 직후 flush.
+        pendingResolveRef.current = { lat: la, lng: ln };
+        return;
+      }
+      const k = getKakao();
+      if (k && mapRef.current && markerRef.current) {
+        const p = new k.maps.LatLng(la, ln);
+        markerRef.current.setPosition(p);
+        mapRef.current.setCenter(p);
+      }
+      emitAddressRef.current(la, ln);
+    },
+  }));
+
   if (!kakaoJsKey) return null;
 
   return (
@@ -211,7 +247,7 @@ export function FieldPinMap({
       <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {
