@@ -59,8 +59,12 @@ export default function Login() {
     setSubmitting(false);
 
     if (result.ok) {
-      probeLog('login: replace(/(tabs)) 호출');
-      router.replace('/(tabs)');
+      // '/(tabs)' 로 가면 (tabs)/index 가 마운트되자마자 <Redirect> 로 /trips replace 를
+      // 한 번 더 날린다 — prod(Fabric+screens 4.16)에서 이 같은 프레임 이중 전환이
+      // addViewAt "child already has a parent" FATAL 크래시(로그인 직후 앱 내려감의 진범).
+      // 최종 목적지로 직행해 중간 hop 자체를 제거.
+      probeLog('login: replace(/(tabs)/trips) 호출');
+      router.replace('/(tabs)/trips');
       return;
     }
 

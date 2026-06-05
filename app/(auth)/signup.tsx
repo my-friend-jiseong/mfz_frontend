@@ -144,7 +144,9 @@ export default function Signup() {
     setSubmitting(false);
 
     if (result.ok) {
-      router.replace('/(tabs)');
+      // login.tsx 와 동일 — '/(tabs)' 경유 시 (tabs)/index <Redirect> 가 같은 프레임
+      // 이중 전환을 만들어 prod 에서 Fabric 크래시. 최종 목적지 직행.
+      router.replace('/(tabs)/trips');
       return;
     }
 
