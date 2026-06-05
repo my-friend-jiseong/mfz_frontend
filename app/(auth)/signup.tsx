@@ -141,14 +141,14 @@ export default function Signup() {
 
     setSubmitting(true);
     const result = await signup(email.trim(), password, passwordConfirm, name.trim());
-    setSubmitting(false);
 
     if (result.ok) {
-      // login.tsx 와 동일 — '/(tabs)' 경유 시 (tabs)/index <Redirect> 가 같은 프레임
-      // 이중 전환을 만들어 prod 에서 Fabric 크래시. 최종 목적지 직행.
+      // login.tsx 와 동일 — 성공 시 setSubmitting(false) 금지(같은 커밋 폼 재셔플이
+      // 전환 중 Fabric addViewAt FATAL 유발) + 최종 목적지 직행.
       router.replace('/(tabs)/trips');
       return;
     }
+    setSubmitting(false);
 
     if (result.code === 'email_already_exists') {
       Alert.alert(

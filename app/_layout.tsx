@@ -99,7 +99,10 @@ function RootContent() {
       <TripStatusBanner />
       <SafeAreaInsetsContext.Provider value={downstreamInsets}>
         <View style={styles.content}>
-          <Stack screenOptions={{ headerShown: false }}>
+          {/* animation:'none' — 루트 전환은 auth↔tabs 뿐. 전환 애니메이션 동안 RNSScreen 이
+              removeView 를 보류(startViewTransition)해, 같은 배치의 뷰 재부모화와 충돌 시
+              Fabric FATAL(screens#3249). 애니메이션 제거로 보류 윈도우 자체를 차단(2중 방어). */}
+          <Stack screenOptions={{ headerShown: false, animation: 'none' }}>
             <Stack.Screen name="index" />
             <Stack.Screen name="(auth)" />
             <Stack.Screen name="(tabs)" />

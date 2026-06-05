@@ -56,17 +56,19 @@ export default function Login() {
     probeLog('login: 요청 시작');
     const result = await login(email.trim(), password);
     probeLog('login: 응답', result.ok ? 'ok' : `fail(${result.code ?? '?'})`);
-    setSubmitting(false);
 
     if (result.ok) {
-      // '/(tabs)' 로 가면 (tabs)/index 가 마운트되자마자 <Redirect> 로 /trips replace 를
-      // 한 번 더 날린다 — prod(Fabric+screens 4.16)에서 이 같은 프레임 이중 전환이
-      // addViewAt "child already has a parent" FATAL 크래시(로그인 직후 앱 내려감의 진범).
-      // 최종 목적지로 직행해 중간 hop 자체를 제거.
+      // 성공 시 setSubmitting(false) 를 일부러 호출하지 않는다 — editable/loading 플립이
+      // Fabric 뷰 플래트닝 재계산(EditText 재부모화)을 일으키고, 같은 JS 틱의 replace 와
+      // 한 마운트 배치로 합쳐지면 전환 중 RNSScreen 의 removeView 가 자식을 분리하지 않아
+      // (screens#3249) addViewAt "child already has a parent" FATAL — 로그인 직후 앱이
+      // 조용히 죽던(내려가 보이던) 버그의 진범. 떠나는 화면이라 리셋 불필요, 스피너 유지가
+      // UX 로도 자연스럽다. adb logcat 마운트 배치 덤프로 실측 확인(2026-06-05).
       probeLog('login: replace(/(tabs)/trips) 호출');
       router.replace('/(tabs)/trips');
       return;
     }
+    setSubmitting(false);
 
     // Phase 7 코드 분기 — invalid_credentials 면 비밀번호 비우고 포커스, 인라인 표시.
     if (result.code === 'invalid_credentials') {
