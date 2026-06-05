@@ -1,4 +1,4 @@
-export { API_BASE_URL } from './config';
+export { API_BASE_URL, toAbsoluteFileUrl } from './config';
 export { ApiError, NetworkError, localizeError, errorCode, applyFieldErrors } from './errors';
 export { request, configureAuth } from './client';
 

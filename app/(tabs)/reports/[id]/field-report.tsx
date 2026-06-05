@@ -16,7 +16,7 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useReportStore } from '@/stores/reportStore';
 import { useFieldStore } from '@/stores/fieldStore';
 import { useVisitStore } from '@/stores/visitStore';
-import { fields as fieldsApi, API_BASE_URL } from '@/api';
+import { fields as fieldsApi, toAbsoluteFileUrl } from '@/api';
 import { pickPhoto, promptPhotoSource } from '@/utils/media';
 import { safeBack } from '@/utils/backNavigation';
 import { EmptyState } from '@/components/EmptyState';
@@ -39,10 +39,8 @@ const PHASES: { key: Phase; label: string }[] = [
   { key: 'after', label: '조치 후' },
 ];
 
-function resolveUrl(u: string | null | undefined): string | null {
-  if (!u) return null;
-  return u.startsWith('http') ? u : `${API_BASE_URL}${u}`;
-}
+// 상대 fileUrl 절대화 — 공용 toAbsoluteFileUrl 로 통일 (별칭 유지).
+const resolveUrl = toAbsoluteFileUrl;
 
 export default function FieldReportEditorScreen() {
   const { id, frId } = useLocalSearchParams<{ id: string; frId?: string }>();

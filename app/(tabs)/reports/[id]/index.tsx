@@ -17,7 +17,7 @@ import { useTripStore } from '@/stores/tripStore';
 import { useFieldStore } from '@/stores/fieldStore';
 import { useVisitStore } from '@/stores/visitStore';
 import { useAuthStore } from '@/stores/authStore';
-import { API_BASE_URL } from '@/api';
+import { toAbsoluteFileUrl } from '@/api';
 import { safeBack } from '@/utils/backNavigation';
 import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout, sheetScrollableStyle } from '@/components/MapSheetLayout';
@@ -48,8 +48,7 @@ function FieldReportCard({
     { label: '중', url: fr.pendingPhotoUrl, caption: fr.pendingPhotoCaption },
     { label: '후', url: fr.afterPhotoUrl, caption: fr.afterPhotoCaption },
   ];
-  const resolve = (raw: string) =>
-    raw.startsWith('http') ? raw : `${API_BASE_URL}${raw}`;
+  const resolve = toAbsoluteFileUrl;
   return (
     <Card padding="md" style={styles.frCard}>
       <View style={styles.frHead}>
@@ -353,8 +352,7 @@ export default function ReportDetail() {
         {report.outputFileUrl && report.outputFileUrl.trim() ? (
           <Button
             onPress={() => {
-              const raw = report.outputFileUrl!.trim();
-              const url = raw.startsWith('http') ? raw : `${API_BASE_URL}${raw}`;
+              const url = toAbsoluteFileUrl(report.outputFileUrl!.trim());
               // web 에선 새 탭, 모바일은 외부 앱 — 실패 시 silent 종결되지 않도록 alert.
               if (Platform.OS === 'web') {
                 window.open(url, '_blank', 'noopener,noreferrer');

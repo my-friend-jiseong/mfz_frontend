@@ -1,5 +1,6 @@
 import { Image, Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { toAbsoluteFileUrl } from '@/api';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
@@ -29,7 +30,8 @@ export function PhotoGrid({
       {photos.map((p) => (
         <View key={p.id} style={photoStyles.cell}>
           <Image
-            source={{ uri: p.fileUrl }}
+            // fileUrl 은 '/storage/...' 상대 경로일 수 있다 — 절대화 없인 네이티브에서 빈 칸.
+            source={{ uri: toAbsoluteFileUrl(p.fileUrl) }}
             style={photoStyles.image}
             resizeMode="cover"
             accessibilityLabel="첨부 사진"
