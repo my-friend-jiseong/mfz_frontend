@@ -11,12 +11,21 @@ interface Props {
   lng: number;
   // address 는 역지오코딩 성공 시에만 전달 (좌표는 즉시, 주소는 비동기 후속).
   onDragEnd: (lat: number, lng: number, address?: PinAddress) => void;
+  // 마운트 직후 초기 좌표를 역지오코딩해 pinAddress 를 1회 emit — 현 위치 시작 플로우용.
+  // 마운트 시점 값만 사용 (후속 prop 변경 무시).
+  resolveInitialAddress?: boolean;
   height?: number;
 }
 
 // 새 현장 step 2 에서 핀 드래그로 좌표 미세 조정용 단일 마커 지도.
 // 일반 MapDashboard 와 분리 — 필터/그룹/myLocation 등 무관, 단일 마커만 표시.
-export function FieldPinMap({ lat, lng, onDragEnd, height = 220 }: Props) {
+export function FieldPinMap({
+  lat,
+  lng,
+  onDragEnd,
+  resolveInitialAddress = false,
+  height = 220,
+}: Props) {
   const webRef = useRef<WebView>(null);
   const kakaoJsKey = process.env.EXPO_PUBLIC_KAKAO_JS_KEY ?? '';
 
@@ -26,11 +35,18 @@ export function FieldPinMap({ lat, lng, onDragEnd, height = 220 }: Props) {
   const safeLng = Number.isFinite(lng) ? lng : 0;
   const initialLatRef = useRef(safeLat);
   const initialLngRef = useRef(safeLng);
+  const resolveInitialRef = useRef(resolveInitialAddress);
   // 사용자가 지도에서 방금 옮긴 좌표 — 이 값이 prop 으로 되돌아오면 재센터를 건너뛴다.
   // (재센터하면 핀이 항상 화면 중앙으로 튕겨 "안 움직이는" 것처럼 보이는 피드백 루프 차단)
   const lastEmittedRef = useRef<{ lat: number; lng: number } | null>(null);
   const html = useMemo(
-    () => buildHtml(kakaoJsKey, initialLatRef.current, initialLngRef.current),
+    () =>
+      buildHtml(
+        kakaoJsKey,
+        initialLatRef.current,
+        initialLngRef.current,
+        resolveInitialRef.current,
+      ),
     [kakaoJsKey],
   );
 
@@ -76,7 +92,12 @@ export function FieldPinMap({ lat, lng, onDragEnd, height = 220 }: Props) {
   );
 }
 
-function buildHtml(kakaoJsKey: string, lat: number, lng: number): string {
+function buildHtml(
+  kakaoJsKey: string,
+  lat: number,
+  lng: number,
+  resolveInitial: boolean,
+): string {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
 <style>html,body{margin:0;padding:0;height:100%;width:100%;}#map{height:100%;width:100%;}</style>
@@ -97,10 +118,12 @@ function buildHtml(kakaoJsKey: string, lat: number, lng: number): string {
       draggable: true,
     });
     var geocoder = new kakao.maps.services.Geocoder();
-    // 좌표는 즉시 emit(마커는 이미 이동), 주소는 역지오코딩 콜백 후 후속 emit.
-    function emitMove(la, ln){
-      postMsg({ type: 'pinDragEnd', lat: la, lng: ln });
+    // 주소만 역지오코딩 후 emit — 초기 1회(resolveInitial)와 이동 후속 공용.
+    function emitAddress(la, ln){
       geocoder.coord2Address(ln, la, function(result, status){
+        // stale 가드 — 응답 대기 중 핀이 이동했으면 폐기 (늦게 온 응답이 새 좌표를 되돌리는 race 차단).
+        var cur = marker.getPosition();
+        if(Math.abs(cur.getLat()-la) > 1e-9 || Math.abs(cur.getLng()-ln) > 1e-9) return;
         if(status === kakao.maps.services.Status.OK && result && result[0]){
           var road = result[0].road_address;
           var jibun = result[0].address;
@@ -115,6 +138,11 @@ function buildHtml(kakaoJsKey: string, lat: number, lng: number): string {
           }});
         }
       });
+    }
+    // 좌표는 즉시 emit(마커는 이미 이동), 주소는 역지오코딩 콜백 후 후속 emit.
+    function emitMove(la, ln){
+      postMsg({ type: 'pinDragEnd', lat: la, lng: ln });
+      emitAddress(la, ln);
     }
     kakao.maps.event.addListener(marker, 'dragend', function(){
       var p = marker.getPosition();
@@ -132,6 +160,8 @@ function buildHtml(kakaoJsKey: string, lat: number, lng: number): string {
       marker.setPosition(p);
       map.setCenter(p);
     };
+    // 현 위치 시작 플로우 — 초기 좌표의 주소를 1회 역지오코딩해 채운다.
+    ${resolveInitial ? `emitAddress(${lat}, ${lng});` : ''}
   });
 })();
 </script>

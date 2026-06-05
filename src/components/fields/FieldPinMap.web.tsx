@@ -9,6 +9,9 @@ interface Props {
   lng: number;
   // address 는 역지오코딩 성공 시에만 전달 (좌표는 즉시, 주소는 비동기 후속).
   onDragEnd: (lat: number, lng: number, address?: PinAddress) => void;
+  // 마운트 직후 초기 좌표를 역지오코딩해 pinAddress 를 1회 emit — 현 위치 시작 플로우용.
+  // 마운트 시점 값만 사용 (후속 prop 변경 무시).
+  resolveInitialAddress?: boolean;
   height?: number;
 }
 
@@ -107,7 +110,13 @@ function loadKakaoSdk(appkey: string): Promise<void> {
   });
 }
 
-export function FieldPinMap({ lat, lng, onDragEnd, height = 220 }: Props) {
+export function FieldPinMap({
+  lat,
+  lng,
+  onDragEnd,
+  resolveInitialAddress = false,
+  height = 220,
+}: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const kakaoJsKey = process.env.EXPO_PUBLIC_KAKAO_JS_KEY ?? '';
   const markerRef = useRef<Overlay | null>(null);
@@ -120,6 +129,7 @@ export function FieldPinMap({ lat, lng, onDragEnd, height = 220 }: Props) {
   const safeLng = Number.isFinite(lng) ? lng : 0;
   const initialLatRef = useRef(safeLat);
   const initialLngRef = useRef(safeLng);
+  const resolveInitialRef = useRef(resolveInitialAddress);
 
   // 마운트 1회 — 후속 lat/lng prop 변경은 아래 useEffect 가 in-place 처리.
   useEffect(() => {
@@ -142,16 +152,23 @@ export function FieldPinMap({ lat, lng, onDragEnd, height = 220 }: Props) {
       markerRef.current = marker;
       const geocoder = new k.maps.services.Geocoder();
       geocoderRef.current = geocoder;
-      // 좌표는 즉시, 주소는 역지오코딩 콜백 후 후속 전달.
-      const emitMove = (la: number, ln: number) => {
-        lastEmittedRef.current = { lat: la, lng: ln };
-        onDragEnd(la, ln);
+      // 주소만 역지오코딩 후 emit — 초기 1회(resolveInitial)와 이동 후속 공용.
+      const emitAddress = (la: number, ln: number) => {
         geocoder.coord2Address(ln, la, (result, status) => {
+          // stale 가드 — 응답 대기 중 핀이 이동했으면 폐기 (늦게 온 응답이 새 좌표를 되돌리는 race 차단).
+          const cur = marker.getPosition();
+          if (Math.abs(cur.getLat() - la) > 1e-9 || Math.abs(cur.getLng() - ln) > 1e-9) return;
           if (status === k.maps.services.Status.OK && result[0]) {
             lastEmittedRef.current = { lat: la, lng: ln };
             onDragEnd(la, ln, toPinAddress(result[0]));
           }
         });
+      };
+      // 좌표는 즉시, 주소는 역지오코딩 콜백 후 후속 전달.
+      const emitMove = (la: number, ln: number) => {
+        lastEmittedRef.current = { lat: la, lng: ln };
+        onDragEnd(la, ln);
+        emitAddress(la, ln);
       };
       k.maps.event.addListener(marker, 'dragend', () => {
         const p = marker.getPosition();
@@ -163,6 +180,10 @@ export function FieldPinMap({ lat, lng, onDragEnd, height = 220 }: Props) {
         marker.setPosition(p);
         emitMove(p.getLat(), p.getLng());
       });
+      // 현 위치 시작 플로우 — 초기 좌표의 주소를 1회 역지오코딩해 채운다.
+      if (resolveInitialRef.current) {
+        emitAddress(initialLatRef.current, initialLngRef.current);
+      }
     });
     return () => {
       cancelled = true;

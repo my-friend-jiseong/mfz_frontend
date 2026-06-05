@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -17,12 +18,14 @@ import type { AddressSearchItem } from '@/api';
 import type { Field, FieldStatus } from '@/types/entities';
 import { FIELD_STATUS_VALUES, FIELD_STATUS_LABEL } from '@/types/entities';
 import {
+  isInKorea,
   itemToSelected,
   mergeSearchItems,
   SEARCH_DEBOUNCE_MS,
   MIN_KEYWORD_LEN,
   type SelectedAddress,
 } from '@/utils/addressSearch';
+import { requestUserLocation } from '@/utils/geolocation';
 import { ProjectPicker } from '@/components/ProjectPicker';
 import { ManualCoordinateForm } from '@/components/fields/ManualCoordinateForm';
 import { FieldPinMap } from '@/components/fields/FieldPinMap';
@@ -86,6 +89,9 @@ export default function NewField() {
   const [retryToken, setRetryToken] = useState(0);
 
   const [selected, setSelected] = useState<SelectedAddress | null>(null);
+  // 현 위치 우선 플로우 — 진입 시 자동으로 현 위치를 잡아 step 2 로 직행.
+  // 실패(권한 거부·오류·한국 밖)는 silent — 기존 주소 검색이 그대로 폴백.
+  const [locating, setLocating] = useState(true);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [categoriesStr, setCategoriesStr] = useState('');
   const [detail, setDetail] = useState('');
@@ -153,9 +159,59 @@ export default function NewField() {
     setStep(2);
   };
 
+  // 현 위치 → step 2 직행. 주소는 FieldPinMap 마운트 시 역지오코딩(resolveInitialAddress)으로 채움.
+  // auto: 진입 시 자동 시도 — 그 사이 사용자가 검색을 시작했으면 결과를 조용히 폐기.
+  const stepRef = useRef(step);
+  stepRef.current = step;
+  const queryRef = useRef(query);
+  queryRef.current = query;
+  const startFromCurrentLocation = async (auto: boolean) => {
+    setLocating(true);
+    // GPS cold fix·실내에서 getCurrentPositionAsync 가 무기한 대기할 수 있음 — 타임아웃으로 스피너 고정 방지.
+    const pos = await Promise.race([
+      requestUserLocation({ high: true }),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 10_000)),
+    ]);
+    setLocating(false);
+    if (auto && (stepRef.current !== 1 || queryRef.current.trim().length > 0)) return;
+    if (!pos || !isInKorea(pos.lat, pos.lng)) {
+      if (!auto) {
+        Alert.alert(
+          '현 위치를 사용할 수 없어요',
+          '위치 권한을 확인하거나, 주소로 검색해주세요.',
+        );
+      }
+      return;
+    }
+    Keyboard.dismiss();
+    setSelected({
+      roadAddress: '',
+      jibunAddress: '',
+      buildingName: null,
+      lat: pos.lat,
+      lng: pos.lng,
+      display: '현 위치 (주소 확인 중…)',
+    });
+    setStep(2);
+  };
+
+  // 진입 시 1회 자동 시도.
+  useEffect(() => {
+    void startFromCurrentLocation(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
 
   const handleCreate = async () => {
     if (!user || !selected) return;
+    // 현 위치 플로우에서 역지오코딩이 아직(또는 끝내) 주소를 못 채운 경우 — 빈 주소 등록 차단.
+    if (!selected.roadAddress.trim() && !selected.jibunAddress.trim()) {
+      Alert.alert(
+        '주소 확인 필요',
+        '아직 주소를 확인하지 못했어요. 지도의 핀을 살짝 옮겨 주소를 다시 받아오거나, 주소 검색으로 돌아가주세요.',
+      );
+      return;
+    }
     const categories = categoriesStr
       .split(',')
       .map((c) => c.trim())
@@ -163,7 +219,8 @@ export default function NewField() {
     const baseBody = {
       name: selected.display,
       status,
-      roadAddress: selected.roadAddress,
+      // 산지 등 도로명 미부여 지점의 역지오코딩은 지번만 올 수 있음 — ManualCoordinateForm 과 동일 fallback.
+      roadAddress: selected.roadAddress || selected.jibunAddress,
       detailAddress: detail,
       lat: selected.lat,
       lng: selected.lng,
@@ -271,6 +328,22 @@ export default function NewField() {
               autoCapitalize="none"
               returnKeyType="search"
             />
+
+            {locating ? (
+              <View style={styles.loadingRow}>
+                <LoadingState inline label="현 위치 확인 중" />
+              </View>
+            ) : (
+              <Button
+                onPress={() => void startFromCurrentLocation(false)}
+                variant="secondary"
+                size="sm"
+                leftIcon="locate"
+                style={styles.locateBtn}
+              >
+                현 위치에서 시작
+              </Button>
+            )}
 
             {searching ? (
               <View style={styles.loadingRow}>
@@ -401,6 +474,8 @@ export default function NewField() {
                 <FieldPinMap
                   lat={selected.lat}
                   lng={selected.lng}
+                  // 현 위치 직행이면 주소가 비어 있음 — 마운트 시 역지오코딩 1회로 채움 (마운트 시점 값만 사용).
+                  resolveInitialAddress={!selected.roadAddress && !selected.jibunAddress}
                   onDragEnd={(la, ln, addr) =>
                     setSelected((prev) => {
                       if (!prev) return prev;
@@ -530,6 +605,7 @@ const styles = StyleSheet.create({
   addrJibun: { marginTop: 2 },
   addrCoord: { marginTop: 2 },
   manualLink: { marginTop: spacing.md, alignSelf: 'flex-start' },
+  locateBtn: { marginTop: spacing.sm, alignSelf: 'flex-start' },
   backBtn: { alignSelf: 'flex-start', marginBottom: spacing.md },
   selectedBox: {
     backgroundColor: colors.primaryMuted,
