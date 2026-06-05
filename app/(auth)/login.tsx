@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Text } from '@/components/ui/Text';
 import { SafeScreen } from '@/components/SafeScreen';
+import { probeLog } from '@/utils/loginBounceProbe';
 
 interface FieldErrors {
   email?: string;
@@ -52,10 +53,13 @@ export default function Login() {
     if (Object.keys(errs).length > 0) return;
 
     setSubmitting(true);
+    probeLog('login: 요청 시작');
     const result = await login(email.trim(), password);
+    probeLog('login: 응답', result.ok ? 'ok' : `fail(${result.code ?? '?'})`);
     setSubmitting(false);
 
     if (result.ok) {
+      probeLog('login: replace(/(tabs)) 호출');
       router.replace('/(tabs)');
       return;
     }

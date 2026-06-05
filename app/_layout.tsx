@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Stack } from 'expo-router';
+import { Stack, usePathname } from 'expo-router';
 import { useFonts } from 'expo-font';
 import {
   SafeAreaProvider,
@@ -19,6 +19,7 @@ import { ActivityIndicator, View, StyleSheet } from 'react-native';
 import { TripStatusBanner } from '@/components/TripStatusBanner';
 import { SessionGuardModal } from '@/components/SessionGuardModal';
 import { startSessionActivity, stopSessionActivity } from '@/stores/sessionActivity';
+import { startLoginBounceProbe, probeLog } from '@/utils/loginBounceProbe';
 import { initSentry } from '@/utils/sentry';
 import { applyWebAlertPatch } from '@/utils/webAlertPatch';
 import { useAuthStore } from '@/stores/authStore';
@@ -43,6 +44,7 @@ export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts(FONTS_TO_LOAD);
 
   useEffect(() => {
+    startLoginBounceProbe(); // 로그인 직후 백그라운드 전환 버그 실측 — 원인 확정 후 제거
     void hydrate();
     void useDestinationStore.getState().hydrate();
     startSessionActivity();
@@ -82,6 +84,11 @@ export default function RootLayout() {
 // inset provider 가 SafeAreaProvider 내부에서만 useSafeAreaInsets 호출 가능.
 function RootContent() {
   const insets = useSafeAreaInsets();
+  // [probe] 라우트 전환 타임라인 — background 전환과의 선후 관계 확인용
+  const pathname = usePathname();
+  useEffect(() => {
+    probeLog('route →', pathname);
+  }, [pathname]);
   const bannerVisible = useTripStore((s) => s.activeTripId !== null);
   const downstreamInsets = bannerVisible
     ? { ...insets, top: 0 }
