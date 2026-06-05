@@ -18,7 +18,6 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Text } from '@/components/ui/Text';
 import { SafeScreen } from '@/components/SafeScreen';
-import { probeLog } from '@/utils/loginBounceProbe';
 
 interface FieldErrors {
   email?: string;
@@ -53,9 +52,7 @@ export default function Login() {
     if (Object.keys(errs).length > 0) return;
 
     setSubmitting(true);
-    probeLog('login: 요청 시작');
     const result = await login(email.trim(), password);
-    probeLog('login: 응답', result.ok ? 'ok' : `fail(${result.code ?? '?'})`);
 
     if (result.ok) {
       // 성공 시 setSubmitting(false) 를 일부러 호출하지 않는다 — editable/loading 플립이
@@ -64,7 +61,8 @@ export default function Login() {
       // (screens#3249) addViewAt "child already has a parent" FATAL — 로그인 직후 앱이
       // 조용히 죽던(내려가 보이던) 버그의 진범. 떠나는 화면이라 리셋 불필요, 스피너 유지가
       // UX 로도 자연스럽다. adb logcat 마운트 배치 덤프로 실측 확인(2026-06-05).
-      probeLog('login: replace(/(tabs)/trips) 호출');
+      // 목적지는 '/(tabs)' 가 아닌 '/(tabs)/trips' 직행 — (tabs)/index <Redirect> 경유
+      // 이중 전환 회피.
       router.replace('/(tabs)/trips');
       return;
     }

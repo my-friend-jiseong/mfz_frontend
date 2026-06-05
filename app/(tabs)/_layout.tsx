@@ -9,7 +9,6 @@ import { spacing } from '@/theme/spacing';
 import { useAuthStore } from '@/stores/authStore';
 import { useTripStore } from '@/stores/tripStore';
 import { useFieldStore } from '@/stores/fieldStore';
-import { probeLog } from '@/utils/loginBounceProbe';
 
 type IonName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -66,7 +65,6 @@ export default function TabsLayout() {
   }, [isAuthenticated]);
 
   if (!isAuthenticated) {
-    probeLog('(tabs): 미인증 렌더', graceExpired ? 'grace 만료 → login redirect' : 'grace 보류(null)');
     return graceExpired ? <Redirect href="/(auth)/login" /> : null;
   }
 
