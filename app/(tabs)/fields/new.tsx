@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  Image,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -10,7 +11,7 @@ import {
   View,
 } from 'react-native';
 import { Text } from '@/components/ui/Text';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFieldStore } from '@/stores/fieldStore';
 import { useAuthStore } from '@/stores/authStore';
 import { fields as fieldsApi, errorCode, localizeError } from '@/api';
@@ -29,6 +30,7 @@ import { requestUserLocation } from '@/utils/geolocation';
 import { ProjectPicker } from '@/components/ProjectPicker';
 import { ManualCoordinateForm } from '@/components/fields/ManualCoordinateForm';
 import { FieldPinMap, type FieldPinMapHandle } from '@/components/fields/FieldPinMap';
+import { getQuickPhoto } from '@/components/fields/quickPhotoHandoff';
 import { useKakaoPlaceSearch } from '@/components/fields/useKakaoPlaceSearch';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
@@ -69,6 +71,28 @@ export default function NewField() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const createField = useFieldStore((s) => s.create);
+  const addPhoto = useFieldStore((s) => s.addPhoto);
+
+  // Quick Photo "이 위치에 새 현장 등록" 진입 — 촬영 좌표는 params, 사진은 토큰 매칭 핸드오프.
+  // 화면 수명 동안 불변이어야 하므로 초기 1회만 파싱해 고정 (이후 params 변동 무시).
+  // getQuickPhoto 는 idempotent 읽기라 StrictMode 이중 initializer 호출에도 안전.
+  const params = useLocalSearchParams<{
+    lat?: string;
+    lng?: string;
+    photoToken?: string;
+  }>();
+  const [entry] = useState(() => {
+    const la = Number(params.lat);
+    const ln = Number(params.lng);
+    const pos =
+      Number.isFinite(la) && Number.isFinite(ln) && isInKorea(la, ln)
+        ? { lat: la, lng: ln }
+        : null;
+    const photo = getQuickPhoto(
+      typeof params.photoToken === 'string' ? params.photoToken : undefined,
+    );
+    return { pos, photo };
+  });
   // 중복 매칭용 — 본인 fields 만.
   // selector 안에서 .filter() 호출하면 매 render 마다 새 array reference → Zustand 가
   // store changed 로 판정 → 무한 re-render → React error #185 (Maximum update depth).
@@ -223,11 +247,40 @@ export default function NewField() {
     }
   };
 
-  // 진입 시 1회 자동 시도.
+  // 진입 시 1회 — 촬영 좌표가 넘어왔으면 그 좌표 직행(자동 측위 생략), 아니면 현 위치 자동 시도.
   useEffect(() => {
+    if (entry.pos) {
+      // 지도 마운트 시 역지오코딩으로 주소를 채운다 (현 위치 직행과 동일 패턴).
+      setResolveOnMount(true);
+      setLocating(false);
+      setSelected({
+        roadAddress: '',
+        jibunAddress: '',
+        buildingName: null,
+        lat: entry.pos.lat,
+        lng: entry.pos.lng,
+        display: '촬영 위치 (주소 확인 중…)',
+      });
+      return;
+    }
     void startFromCurrentLocation(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // 생성 성공 공통 후처리 — Quick Photo 에서 넘어온 사진이 있으면 새 현장에 첨부 후 상세로 이동.
+  const finishCreate = async (field: Field) => {
+    if (entry.photo) {
+      const res = await addPhoto(field.id, entry.photo);
+      if (!res.ok) {
+        // 현장 생성은 이미 성공 — 사진만 실패. 상세 화면에서 재시도 가능하므로 이동은 계속한다.
+        Alert.alert(
+          '사진 등록 실패',
+          `현장은 등록됐지만 사진 업로드에 실패했어요. 현장 상세에서 다시 등록해주세요.\n(${res.error})`,
+        );
+      }
+    }
+    router.replace(`/(tabs)/fields/${field.id}` as never);
+  };
 
   const handleCreate = async () => {
     if (!user || !selected) return;
@@ -259,12 +312,18 @@ export default function NewField() {
 
     setSubmitting(true);
     const result = await createField(baseBody);
-    setSubmitting(false);
 
     if (result.ok) {
-      router.replace(`/(tabs)/fields/${result.field.id}` as never);
+      // 사진 첨부까지 끝날 때까지 submitting 유지 — 버튼 재탭(중복 생성) 차단.
+      // finally: addPhoto 가 향후 reject 하게 바뀌어도 버튼이 영구 로딩에 잠기지 않게.
+      try {
+        await finishCreate(result.field);
+      } finally {
+        setSubmitting(false);
+      }
       return;
     }
+    setSubmitting(false);
 
     if ('needsConfirm' in result) {
       // Phase 7 duplicate_address_warning_required — confirm 후 forceCreateWithDuplicate 로 재호출
@@ -273,10 +332,16 @@ export default function NewField() {
         void (async () => {
           setSubmitting(true);
           const forced = await createField({ ...baseBody, forceCreateWithDuplicate: true });
-          setSubmitting(false);
           if (forced.ok) {
-            router.replace(`/(tabs)/fields/${forced.field.id}` as never);
-          } else if (!('needsConfirm' in forced)) {
+            try {
+              await finishCreate(forced.field);
+            } finally {
+              setSubmitting(false);
+            }
+            return;
+          }
+          setSubmitting(false);
+          if (!('needsConfirm' in forced)) {
             Alert.alert('등록 실패', forced.error);
           }
         })();
@@ -326,6 +391,16 @@ export default function NewField() {
         <Text variant="h3" style={styles.title}>
           현장 등록
         </Text>
+
+        {/* Quick Photo 이관 사진 — 등록 완료 시 자동 첨부됨을 미리 안내 */}
+        {entry.photo ? (
+          <Card padding="md" style={styles.photoBox}>
+            <Image source={{ uri: entry.photo.uri }} style={styles.photoThumb} />
+            <Text variant="bodySm" color="textMuted" style={styles.photoText}>
+              현장 등록을 마치면 촬영한 사진이 이 현장에 함께 등록돼요
+            </Text>
+          </Card>
+        ) : null}
 
         {/* 검색·현위치·지도 단일 화면 — 주소 재검색과 핀 이동이 서로를 실시간 갱신 */}
         <Input
@@ -577,6 +652,20 @@ const styles = StyleSheet.create({
   addrCoord: { marginTop: 2 },
   manualLink: { marginTop: spacing.md, alignSelf: 'flex-start' },
   locateBtn: { marginTop: spacing.sm, alignSelf: 'flex-start' },
+  photoBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.surface,
+    marginBottom: spacing.md,
+  },
+  photoThumb: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.md,
+    backgroundColor: colors.background,
+  },
+  photoText: { flex: 1 },
   selectedBox: {
     backgroundColor: colors.primaryMuted,
     marginTop: spacing.md,

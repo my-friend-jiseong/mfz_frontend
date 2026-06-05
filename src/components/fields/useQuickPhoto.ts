@@ -2,8 +2,9 @@ import { useCallback, useRef, useState } from 'react';
 import { Alert, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { pickPhoto, type UploadFile } from '@/utils/media';
-import { requestUserLocation } from '@/utils/geolocation';
+import { requestUserLocation, type LatLng } from '@/utils/geolocation';
 import { findNearbyFields, type NearbyField } from '@/utils/nearestField';
+import { stashQuickPhoto } from './quickPhotoHandoff';
 import { fields as fieldsApi } from '@/api';
 import { useFieldStore, listItemToField } from '@/stores/fieldStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -26,6 +27,8 @@ export interface QuickPhotoSession {
   candidates: Array<NearbyField<Field>>;
   /** 수동 선택 폴백 대상 — 본인 현장 전체 (방문일 스코프 무관, §6-5). */
   myFields: Field[];
+  /** 촬영 직후 측위 좌표 — "이 위치에 새 현장 등록" 진입용. 측위 실패 시 null. */
+  pos: LatLng | null;
   mode: 'confirm' | 'fallback';
   fallbackReason?: QuickPhotoFallbackReason;
 }
@@ -34,6 +37,18 @@ export interface QuickPhotoSession {
 async function fetchAllMyFields(): Promise<Field[]> {
   const items = await fieldsApi.listMineAll({ visitDateScope: 'all' });
   return items.map(listItemToField);
+}
+
+// 현장 등록 화면 진입 href — 사진은 핸드오프에 적재(web data URI 가 URL 에 실리는 것 방지),
+// params 로는 토큰·측위 좌표만 넘긴다. 등록 완료 시 새 현장에 사진이 자동 첨부 (new.tsx 가 소비).
+function buildNewFieldHref(file: UploadFile, pos: LatLng | null) {
+  return {
+    pathname: '/(tabs)/fields/new',
+    params: {
+      photoToken: stashQuickPhoto(file),
+      ...(pos ? { lat: String(pos.lat), lng: String(pos.lng) } : {}),
+    },
+  };
 }
 
 export function useQuickPhoto() {
@@ -85,12 +100,12 @@ export function useQuickPhoto() {
           Alert.alert('현장 목록을 불러오지 못했습니다', '네트워크 확인 후 다시 시도해주세요.');
           return;
         }
-        // §6-3: 현장 0개 → 폴백 시트 대신 새 현장 등록 유도.
+        // §6-3: 현장 0개 → 폴백 시트 대신 새 현장 등록 유도 — 사진·좌표도 함께 넘긴다.
         Alert.alert('등록된 현장이 없습니다', '사진을 등록하려면 먼저 현장이 필요해요.', [
           { text: '닫기', style: 'cancel' },
           {
             text: '새 현장 등록',
-            onPress: () => router.push('/(tabs)/fields/new' as never),
+            onPress: () => router.push(buildNewFieldHref(file, pos) as never),
           },
         ]);
         return;
@@ -101,6 +116,7 @@ export function useQuickPhoto() {
           file,
           candidates: [],
           myFields,
+          pos,
           mode: 'fallback',
           fallbackReason: reason,
         });
@@ -111,7 +127,7 @@ export function useQuickPhoto() {
 
       const candidates = findNearbyFields(pos, myFields);
       if (candidates.length === 0) return fallback('no_nearby');
-      setSession({ file, candidates, myFields, mode: 'confirm' });
+      setSession({ file, candidates, myFields, pos, mode: 'confirm' });
     } finally {
       startingRef.current = false;
       setPreparing(false);
@@ -148,11 +164,19 @@ export function useQuickPhoto() {
     setSession((s) => (s ? { ...s, mode: 'fallback', fallbackReason: 'manual' } : s));
   }, []);
 
+  /** 폴백 "이 위치에 새 현장 등록" — 사진·촬영 좌표를 등록 화면으로 넘기고 시트를 닫는다. */
+  const createNew = useCallback(() => {
+    if (!session || uploadingRef.current) return;
+    const href = buildNewFieldHref(session.file, session.pos);
+    setSession(null);
+    router.push(href as never);
+  }, [session, router]);
+
   /** 시트 닫기 — 업로드 중엔 무시 (§6-7). ref 기준 — Alert 콜백 등 stale closure 에서도 안전. */
   const cancel = useCallback(() => {
     if (uploadingRef.current) return;
     setSession(null);
   }, []);
 
-  return { session, preparing, uploading, start, upload, toFallback, cancel };
+  return { session, preparing, uploading, start, upload, toFallback, createNew, cancel };
 }

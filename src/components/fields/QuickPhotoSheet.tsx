@@ -34,6 +34,8 @@ interface Props {
   uploading: boolean;
   onUpload: (field: Field) => void;
   onFallback: () => void;
+  /** 폴백에서 "이 위치에 새 현장 등록" — 사진·촬영 좌표를 등록 화면으로 이관. */
+  onCreateNew: () => void;
   onClose: () => void;
 }
 
@@ -50,6 +52,7 @@ export function QuickPhotoSheet({
   uploading,
   onUpload,
   onFallback,
+  onCreateNew,
   onClose,
 }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -240,6 +243,17 @@ export function QuickPhotoSheet({
                   ))}
                 </ScrollView>
               )}
+              {/* 기존 현장 선택 외 제3의 선택지 — 촬영 위치에 새 현장을 만들고 사진까지 첨부. */}
+              <Button
+                onPress={onCreateNew}
+                variant="secondary"
+                size="sm"
+                fullWidth
+                leftIcon="add"
+                disabled={uploading}
+              >
+                {session.pos ? '이 위치에 새 현장 등록' : '새 현장 등록'}
+              </Button>
               {uploading ? (
                 <Text variant="caption" color="textMuted" align="center">
                   등록 중…

@@ -278,6 +278,7 @@ export default function FieldsList() {
         uploading={quickPhoto.uploading}
         onUpload={(f) => void quickPhoto.upload(f)}
         onFallback={quickPhoto.toFallback}
+        onCreateNew={quickPhoto.createNew}
         onClose={quickPhoto.cancel}
       />
     </MapSheetLayout>

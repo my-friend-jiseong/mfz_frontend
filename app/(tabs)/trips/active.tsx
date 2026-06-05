@@ -490,6 +490,7 @@ export default function ActiveTrip() {
         uploading={quickPhoto.uploading}
         onUpload={(f) => void quickPhoto.upload(f)}
         onFallback={quickPhoto.toFallback}
+        onCreateNew={quickPhoto.createNew}
         onClose={quickPhoto.cancel}
       />
       <AddDestinationModal
