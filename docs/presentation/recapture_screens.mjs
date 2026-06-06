@@ -50,11 +50,14 @@ async function main() {
   // 빠른 촬영 매칭 기준점 — 첫 현장 좌표를 그대로 브라우저 지오로케이션으로.
   const geoField = fields.find((f) => Number.isFinite(f.lat) && Number.isFinite(f.lng)) ?? null;
   if (!geoField) { console.error('좌표 있는 현장이 없습니다 — 시드 먼저 실행'); process.exit(1); }
-  // 현장 보고 편집 — fieldReports 가 있는 보고서에서 frId 1개.
+  // 현장 보고 편집 — fieldReports 가 있는 보고서. 테스트성 제목은 거르고,
+  // 사진이 실제로 채워진 fr 우선 (hero 컷 품질).
   let reportEditTarget = null;
   for (const r of reports) {
+    if (/테스트|test|ㅁㄴㅇ/i.test(r.title ?? '')) continue;
     const det = (await api('/api/reports/' + r.reportId)).data;
-    const fr = det?.fieldReports?.[0];
+    const frs = det?.fieldReports ?? [];
+    const fr = frs.find((f) => f.beforePhotoUrl || f.pendingPhotoUrl || f.afterPhotoUrl) ?? frs[0];
     if (fr) { reportEditTarget = { reportId: r.reportId, frId: fr.id }; break; }
   }
   console.log(`수집: edit=${fieldEditId} geo=(${geoField.lat},${geoField.lng}) reportEdit=${JSON.stringify(reportEditTarget)}`);
@@ -170,10 +173,17 @@ async function main() {
     await pg.keyboard.press('Escape').catch(() => {});
   });
 
-  // 24) 현장 보고 편집 — 전·중·후 사진+캡션 슬롯
+  // 24) 현장 보고 편집 — 전·중·후 사진+캡션 슬롯.
+  // 딥링크 직행은 페이지 리로드로 스토어 캐시가 비어 폴백("찾을 수 없습니다")이 뜬다 —
+  // 상세를 먼저 띄워 캐시를 채운 뒤 카드의 "수정" 버튼으로 SPA 내 이동해야 한다.
   await step('24_report_field_edit', async () => {
     if (!reportEditTarget) throw new Error('fieldReports 있는 보고서 없음');
-    await go(`/reports/${reportEditTarget.reportId}/field-report?frId=${reportEditTarget.frId}`, 3200);
+    await go('/reports/' + reportEditTarget.reportId, 3200);
+    await pg.mouse.wheel(0, 1200); await sleep(900); // 현장 보고 카드 영역으로
+    // '수정' 은 카드(현장 보고)와 페이지 하단(보고서 제목) 두 군데 — DOM 순서상 first 가 카드.
+    await pg.getByText('수정', { exact: true }).first().click({ timeout: 6000 });
+    await pg.waitForFunction(() => /현장 보고|캡션|사진/.test(document.body.innerText), { timeout: 10000 }).catch(() => {});
+    await sleep(2200);
     await shot('24_report_field_edit');
   });
 
