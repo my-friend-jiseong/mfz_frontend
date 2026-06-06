@@ -743,6 +743,29 @@ headless 브라우저로 새로 그려 사진을 찍는 것**이다. 카카오 �
 
 ---
 
+## 21. 🟡 `visits.reason`('기타' 사유) 영속·노출 여부 확인 — ERD/스키마 정합
+
+### 배경
+- ERD v2 changelog(`docs/reference/ERD_REVOLUTION.md`)는 `visits.status_reason` **제거**로 기록.
+- 그런데 v2 검증(2026-05-28)에서 `PATCH /api/visits/:id` 가 body `{ status, reason? }` 를 받고, `status='other'` 면 **reason 10자 이상을 강제**(`visit_status_reason_required`)하는 것이 확인됨 — "컬럼은 없는데 입력은 필수"인 모순.
+- 어느 조회 응답(`recentVisits`, trip `timeline`)에도 reason 이 내려오지 않아, 프론트에서는 **저장되는지·버려지는지 확인 불가**. 사용자가 10자 이상 정성껏 쓴 사유가 유실되고 있다면 UX 신뢰 문제.
+
+### 백엔드가 해야 할 것
+1. reason 의 실제 처리 확인: (a) 컬럼에 영속 중인데 응답에서 누락 → 조회 응답(`recentVisits[]`·`timeline[]`)에 `reason` 포함, (b) 검증만 하고 폐기 중 → 컬럼 신설(`visits.reason VARCHAR(255)` 등) 후 영속+노출, 둘 중 무엇인지 회신.
+2. 확정되면 ERD 문서(`docs/diagram/ERD.drawio` visits 테이블)에 반영할 수 있게 스키마 공유.
+
+### 프론트엔드 영향
+- 현재 전송은 이미 구현됨(`visitsApi.setStatus`). 응답에 reason 이 추가되면 방문 상세/외근 상세에 '기타 사유' 표시만 붙이면 됨 (optional 선반영 가능).
+
+### 발견 시점
+2026-06-06 (MVP 동결 ERD 검토 — 다이어그램·실코드 정합 점검 중).
+
+### 관련 코드
+- 프론트 [`src/api/endpoints/visits.ts`](../../src/api/endpoints/visits.ts) (`setStatus` — `{ status, reason? }`)
+- 프론트 [`src/types/entities.ts`](../../src/types/entities.ts) (`VisitStatus` 주석 — v2 컬럼 제거 vs reason 필수 검증의 모순 기록)
+
+---
+
 ## 변경 이력
 
 - **2026-05-08**: 백로그 신설. §1 길찾기 카카오-only 정책 반영. (이전 §1 title 은 백엔드 처리 완료로 제거)
@@ -764,4 +787,5 @@ headless 브라우저로 새로 그려 사진을 찍는 것**이다. 카카오 �
 - **2026-06-01**: 백엔드 release 브랜치 대조 — 이미 조치된 항목 삭제·재기술. **§1 삭제**(deep-links 가 google 제거하고 kakao+naver 만 반환, 커밋 8aafcec — naver 는 프론트 http 가드로 걸러져 카카오만 남음, 핵심 버그 해소). **§6 삭제**(`?force=true` cascade 구현됨, option B — 백엔드 완료, 프론트가 confirm 후 force 재호출만 붙이면 되는 follow-up). **§16 격상 되돌림 🔴→🟡**: release `toTimelineCard` 가 fieldId 를 이미 포함(git -S 기준 최초 커밋부터) → 전제 오류, 라이브 검증 후 닫기 예정. §7(A) content min 10자 강제 없음 확인(완화 불요)·(B) multipart 만 잔존. §3 핸들러 코드 정상 → '0건' 은 KAKAO_REST_API_KEY 환경 사안(코드 아님).
 - **2026-06-01**: 운영(`ilgayo.co.kr`) read-only probe 로 전제 실측 검증. **§16 닫힘(🟡→✅)**: 라이브 `GET /api/trips/:tripId` timeline entry 가 fieldId 를 실제로 실어옴(`field-…c78aaeb8`/"대연 전기실"). **§3 실측 확인**: 4/4 키워드 여전히 0건 → KAKAO_REST_API_KEY 운영 키 사안 확정(데모 지오코딩도 폴백 중). **§11 실측 확인**: detail 에 destinations 없음 + `/destinations` 404 → 미구현 확정. 단 timeline 의 visit fieldId 로 완료 외근의 현장은 프론트만으로 도출 가능 → 보고된 버그는 프론트 우선 수정 가능, §11 백엔드는 계획 목적지 영속화 범위로 잔존. §18·§19 404(미구현) 확인.
 - **2026-06-01**: 백로그 점검 — 정상 도로명/지역 키워드로 §3 재측정. **§3 🔴→🟡 강등·재기술**: `중앙대로 1001`→1·`낙동대로 550`→1·`해운대구 우동`→4·`중구 중앙대로`→10·`서면`→10·`동래구`→1 정상 응답 → 운영 키는 살아 있음. 앞선 "4/4 0건" 은 우연히 POI/부정확 키워드만 넣은 표본 편향이었고, 실제 0건은 장소명(POI: `부산광역시청`·`해운대해수욕장`·`센텀`)뿐(address.json 구조적 한계, 프론트 키워드검색으로 해소 완료). **§7(A) ✅ 표기**: content 10자 강제 부재 재확인 → 잔여는 (B) 사진 첨부뿐.
+- **2026-06-06**: §21 추가 — MVP 동결 ERD 검토 중 발견. `visits.reason`('기타' 사유)이 "컬럼 제거(ERD v2) vs 입력 필수 검증(`visit_status_reason_required`)" 모순 상태(🟡). 영속/폐기 여부 회신 요청.
 - **2026-06-04**: 보고서 생성 마법사 도입에 따른 정리. **§13 클로즈(🔴→✅)**: AI 초안 분기가 프론트에서 완전 제거(2026-05-31 결정 §1)되어 generate 500 이 사용자에게 도달할 경로 없음 — 백엔드엔 미사용 endpoint 정리 권고만 잔존. **§7 클로즈(🟠→✅)**: 새 양식에서 보고서 본문·보고서 레벨 사진 개념이 제거되어 전제 소멸 — 요구사항 #2 는 마법사(현장별 전·중·후)가 해소, (B)/(C) 사진 contract 는 field-reports 가 그 역할.
