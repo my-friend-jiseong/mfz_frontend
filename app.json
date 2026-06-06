@@ -19,8 +19,7 @@
       "infoPlist": {
         "NSCameraUsageDescription": "방문 기록에 사진을 첨부하기 위해 카메라를 사용합니다.",
         "NSPhotoLibraryUsageDescription": "방문 기록에 사진을 첨부하기 위해 사진 라이브러리에 접근합니다.",
-        "NSMicrophoneUsageDescription": "방문 기록에 음성 메모를 첨부하기 위해 마이크를 사용합니다.",
-        "NSLocationWhenInUseUsageDescription": "외근 중 현장 도착을 자동으로 감지하기 위해 위치 정보를 사용합니다."
+        "NSLocationWhenInUseUsageDescription": "현장 위치 등록, 가까운 현장 자동 매칭(빠른 촬영), 지도의 내 위치 표시를 위해 위치 정보를 사용합니다."
       }
     },
     "android": {
@@ -30,10 +29,12 @@
       },
       "package": "com.mfz.app",
       "permissions": [
-        "android.permission.RECORD_AUDIO",
-        "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION"
+      ],
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
       ]
     },
     "web": {
@@ -60,15 +61,9 @@
         }
       ],
       [
-        "expo-av",
-        {
-          "microphonePermission": "방문 기록에 음성 메모를 첨부하기 위해 마이크를 사용합니다."
-        }
-      ],
-      [
         "expo-location",
         {
-          "locationWhenInUsePermission": "외근 중 현장 도착을 자동으로 감지하기 위해 위치 정보를 사용합니다."
+          "locationWhenInUsePermission": "현장 위치 등록, 가까운 현장 자동 매칭(빠른 촬영), 지도의 내 위치 표시를 위해 위치 정보를 사용합니다."
         }
       ],
       "@sentry/react-native"

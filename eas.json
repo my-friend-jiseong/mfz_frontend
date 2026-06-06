@@ -17,6 +17,10 @@
     "production": {
       "android": {
         "buildType": "app-bundle"
+      },
+      "env": {
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true",
+        "EXPO_PUBLIC_KAKAO_JS_KEY": "7630c9f0e85eb8bbfd4d1731a86355e3"
       }
     }
   },
