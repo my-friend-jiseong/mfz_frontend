@@ -21,8 +21,10 @@ import { opacity } from '@/theme/motion';
 import { fmtDate } from '@/utils/datetime';
 
 const APP_VERSION = '0.1.0';
-const TERMS_URL = 'https://ilgayo.kr/terms';
-const PRIVACY_URL = 'https://ilgayo.kr/privacy';
+// 운영 도메인(ilgayo.co.kr)으로 선반영 — 이전 ilgayo.kr 은 도메인 자체가 미해석.
+// 정적 페이지 서빙은 backend-backlog §23. 배포되면 이 링크가 그대로 살아난다.
+const TERMS_URL = 'https://ilgayo.co.kr/terms';
+const PRIVACY_URL = 'https://ilgayo.co.kr/privacy';
 
 function initialOf(name: string | undefined): string {
   if (!name) return '?';

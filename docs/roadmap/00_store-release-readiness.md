@@ -19,7 +19,7 @@
 | # | 차단 요소 | 실측 근거 | 해소 방법 | 담당 |
 |---|---|---|---|---|
 | 1 | **앱 아이콘 플레이스홀더** | `assets/icon.png`·`adaptive-icon.png` 둘 다 파란 바탕 "M" (이미지 열어 확인) | 일가요 브랜드 아이콘 제작 (1024px + adaptive foreground), 스플래시도 함께 점검 | 디자인(사용자) |
-| 2 | **개인정보 처리방침 URL 사망** | 앱 내 링크 `ilgayo.kr/terms`·`/privacy` → 도메인 미해석(000). `ilgayo.co.kr` 쪽도 404 | 정적 페이지 2장(처리방침·이용약관) 호스팅 — 백엔드 1시간 작업. 호스팅 후 `app/(tabs)/profile.tsx` 의 URL 상수 교체. **Play Console 은 살아있는 처리방침 URL 필수** (위치+사진 수집 앱이라 데이터 안전 양식과 교차 검증됨) | 백엔드 (착수 시 backlog 등재) |
+| 2 | **개인정보 처리방침 URL 사망** | 앱 내 링크 `ilgayo.kr/terms`·`/privacy` → 도메인 미해석(000). `ilgayo.co.kr` 쪽도 404 | **backlog §23 등재 (2026-06-07)** — 백엔드가 `/privacy`·`/terms` 정적 페이지 호스팅 + 본문은 팀 공동 작성. 프론트 URL 은 운영 도메인으로 **선반영 완료** (배포 즉시 링크 살아남). **Play Console 은 살아있는 처리방침 URL 필수** | 백엔드 (§23) |
 | 3 | ~~production 빌드에 카카오 키 미주입~~ | `eas.json` 의 키가 preview 프로필에만 존재 → production aab 는 지도가 placeholder 인 채로 빌드됨 | **✅ 해소 (2026-06-07)** — production env 에 키 주입. `EXPO_PUBLIC_*` 키는 어차피 번들에 포함되는 공개 키(카카오 콘솔의 도메인/앱 제한으로 통제)라 eas.json 명시를 허용. **EAS env 이전 + 키 재발급은 권장 후속** (`eas env:create` — 계정 인증 필요해 사용자 작업) | 프론트 ✅ |
 | 4 | ~~폐기 기능 권한 잔재 + 문구 불일치~~ | 음성 메모는 ERD v2 폐기인데 `RECORD_AUDIO`·`MODIFY_AUDIO_SETTINGS`·`expo-av` 플러그인·마이크 문구 잔존. 위치 문구는 "도착 자동 감지"(제거된 기능) 기준 | **✅ 해소 (2026-06-07)** — `expo-av` 의존·플러그인·iOS 마이크 문구 제거(소스 import 0건 확인), 오디오 권한은 `blockedPermissions` 로 매니페스트 머지까지 차단, 위치 문구를 실제 용도(현장 위치 등록·빠른 촬영 매칭·내 위치 표시)로 교체. `expo config --type prebuild` 반영 검증 | 프론트 ✅ |
 
