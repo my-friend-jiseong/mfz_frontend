@@ -787,7 +787,7 @@ headless 브라우저로 새로 그려 사진을 찍는 것**이다. 카카오 �
 
 ### 관련 코드
 - 프론트 [`src/assets/kakaoMapHtml.ts`](../../src/assets/kakaoMapHtml.ts) (마커·경계 렌더 — 폴리라인 추가 지점)
-- 프론트 [`src/utils/nearestNeighbor*`](../../src/utils/) (직선거리 ETA — 2단계에서 실도로 값으로 대체)
+- 프론트 [`src/utils/routeOptimize.ts`](../../src/utils/routeOptimize.ts) (`nearestNeighborOrder` — 직선거리 ETA, 2단계에서 실도로 값으로 대체)
 
 ---
 
