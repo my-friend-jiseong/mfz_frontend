@@ -16,3 +16,4 @@
 | [field-redefinition.md](field-redefinition.md) | 검토 (2학기 헤드라인) | — (ERD v3) | 현장을 거점에서 점(point) 자산으로 재정의 |
 | [excel-field-io.md](excel-field-io.md) | 확정 | — (분해 예정) | 엑셀로 현장 일괄 등록 + 필터 반영 내보내기 |
 | [report-export-formats.md](report-export-formats.md) | 확정 | §19·§20 | 보고서 PDF(우선)·HWP(HWPX 타깃) 내보내기 |
+| [store-release-readiness.md](store-release-readiness.md) | 검토 (2026-06-07 감사) | §11 연관 | 안드로이드 스토어 출시 차단 4건 + 절차 요인 정리 |
