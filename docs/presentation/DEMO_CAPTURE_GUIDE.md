@@ -37,6 +37,7 @@
 | 9 | 지도 대시보드 — 마커→히트맵→단계구분도 + 기간 필터 | (기존 컷 유효) | — |
 
 > 기존 22장 중 ⚠️ 4장(`11`~`14`)만 교체하면 되고, 나머지는 현행 UI와 일치한다 (`MVP_INFORMATION.md` §7 인벤토리 참조).
+> **정지컷은 기기 없이도 가능**: `QA_PW=<demo2 비밀번호> node docs/presentation/recapture_screens.mjs` (Expo web 필요) — ⚠️ 4장 교체 + `23_quick_photo`·`24_report_field_edit` 신규까지 자동. **기기 캡처가 꼭 필요한 건 데모 영상뿐.**
 
 ## 3. 도식은 Claude Desktop 재량
 
