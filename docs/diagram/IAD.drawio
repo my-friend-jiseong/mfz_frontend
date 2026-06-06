@@ -77,7 +77,15 @@
                     <mxGeometry relative="1" as="geometry">
                         <Array as="points">
                             <mxPoint x="590" y="100"/>
-                            <mxPoint x="4480" y="100"/>
+                            <mxPoint x="4790" y="100"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="ME_MAP" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" parent="1" source="M1" target="C2" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="590" y="100"/>
+                            <mxPoint x="2940" y="100"/>
                         </Array>
                     </mxGeometry>
                 </mxCell>
@@ -307,10 +315,13 @@
 
                 <!-- ============ FIELDS C ============ -->
                 <mxCell id="C1" value="현장 탭" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#cce5ff;strokeColor=#36393d;" parent="1" vertex="1">
-                    <mxGeometry x="4420" y="120" width="120" height="40" as="geometry"/>
+                    <mxGeometry x="4730" y="120" width="120" height="40" as="geometry"/>
                 </mxCell>
-                <mxCell id="C2" value="지도 대시보드" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#cce5ff;strokeColor=#36393d;" parent="1" vertex="1">
+                <mxCell id="C2" value="지도 대시보드" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#cce5ff;strokeColor=#36393d;fontStyle=1;" parent="1" vertex="1">
                     <mxGeometry x="2840" y="200" width="200" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="C2N" value="※ 모든 탭 화면의 공통 지도 배경 (바텀시트 뒤)&#xa;— 화면별로 표시할 현장 스코프만 다름" style="text;html=1;whiteSpace=wrap;align=right;verticalAlign=middle;fontSize=10;fontStyle=2;fontColor=#666666;" parent="1" vertex="1">
+                    <mxGeometry x="2440" y="190" width="360" height="50" as="geometry"/>
                 </mxCell>
                 <mxCell id="C3" value="표시 방식" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
                     <mxGeometry x="2570" y="280" width="120" height="40" as="geometry"/>
@@ -428,18 +439,10 @@
                 </mxCell>
 
                 <!-- C 엣지 -->
-                <mxCell id="CE1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=none;endFill=0;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" parent="1" source="C1" target="C2" edge="1">
-                    <mxGeometry relative="1" as="geometry">
-                        <Array as="points">
-                            <mxPoint x="4480" y="180"/>
-                            <mxPoint x="2940" y="180"/>
-                        </Array>
-                    </mxGeometry>
-                </mxCell>
                 <mxCell id="CE2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=none;endFill=0;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" parent="1" source="C1" target="C6" edge="1">
                     <mxGeometry relative="1" as="geometry">
                         <Array as="points">
-                            <mxPoint x="4480" y="180"/>
+                            <mxPoint x="4790" y="180"/>
                             <mxPoint x="3560" y="180"/>
                         </Array>
                     </mxGeometry>
@@ -447,7 +450,7 @@
                 <mxCell id="CE3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=none;endFill=0;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" parent="1" source="C1" target="C7" edge="1">
                     <mxGeometry relative="1" as="geometry">
                         <Array as="points">
-                            <mxPoint x="4480" y="180"/>
+                            <mxPoint x="4790" y="180"/>
                             <mxPoint x="4190" y="180"/>
                         </Array>
                     </mxGeometry>
@@ -455,7 +458,7 @@
                 <mxCell id="CE4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=none;endFill=0;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" parent="1" source="C1" target="C8" edge="1">
                     <mxGeometry relative="1" as="geometry">
                         <Array as="points">
-                            <mxPoint x="4480" y="180"/>
+                            <mxPoint x="4790" y="180"/>
                             <mxPoint x="5160" y="180"/>
                         </Array>
                     </mxGeometry>
@@ -463,7 +466,7 @@
                 <mxCell id="CE5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=none;endFill=0;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" parent="1" source="C1" target="C9" edge="1">
                     <mxGeometry relative="1" as="geometry">
                         <Array as="points">
-                            <mxPoint x="4480" y="180"/>
+                            <mxPoint x="4790" y="180"/>
                             <mxPoint x="6020" y="180"/>
                         </Array>
                     </mxGeometry>
