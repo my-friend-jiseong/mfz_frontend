@@ -24,4 +24,9 @@ for (const [src, name] of files) fs.copyFileSync(src, path.join(OUT, name));
 const shots = fs.readdirSync(path.join(HERE, 'screenshots')).filter((f) => f.endsWith('.png'));
 for (const f of shots) fs.copyFileSync(path.join(HERE, 'screenshots', f), path.join(OUT, 'screenshots', f));
 
-console.log(`handoff/ 재생성 완료 — 문서 ${files.length} + 스크린샷 ${shots.length}장`);
+// 데모 영상 (있으면) — pptx 임베드용 mp4 만 패키지에 포함.
+let demo = 0;
+const demoMp4 = path.join(HERE, 'demo', 'demo.mp4');
+if (fs.existsSync(demoMp4)) { fs.copyFileSync(demoMp4, path.join(OUT, 'demo.mp4')); demo = 1; }
+
+console.log(`handoff/ 재생성 완료 — 문서 ${files.length} + 스크린샷 ${shots.length}장 + 데모 영상 ${demo}건`);
