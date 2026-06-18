@@ -17,6 +17,12 @@ type EndResult =
 
 type GenericResult = { ok: true } | { ok: false; error: string };
 
+// 외근 삭제 — 방문·보고서 연결 시 needsConfirm(=force 재확인). end 와 동일 패턴.
+type RemoveResult =
+  | { ok: true }
+  | { ok: false; needsConfirm: true; message: string }
+  | { ok: false; error: string };
+
 interface TripState {
   trips: Trip[];
   activeTripId: string | null;
@@ -33,7 +39,7 @@ interface TripState {
   start: (title?: string, plannedFieldIds?: string[]) => Promise<StartResult>;
   end: (force?: boolean) => Promise<EndResult>;
   update: (id: string, body: TripUpdateBody) => Promise<GenericResult>;
-  remove: (id: string) => Promise<GenericResult>;
+  remove: (id: string, force?: boolean) => Promise<RemoveResult>;
 
   getById: (id: string) => Trip | undefined;
   byWorker: (workerId: string) => Trip[];
@@ -230,13 +236,13 @@ export const useTripStore = create<TripState>((set, get) => ({
     }
   },
 
-  remove: async (id) => {
+  remove: async (id, force = false) => {
     // 진행 중 외근은 종료 후 삭제 — UI 가드와 별개로 store 차원에서도 거부.
     if (get().activeTripId === id) {
       return { ok: false, error: '진행 중인 외근은 종료 후 삭제할 수 있습니다.' };
     }
     try {
-      await tripsApi.remove(id);
+      await tripsApi.remove(id, force);
       set((s) => ({ trips: s.trips.filter((t) => t.id !== id) }));
       // 그 외근에 묶인 visit·destination 둘 다 로컬 정리.
       // optional chain 제거 — 인터페이스가 required 라 ?. 는 dead code 였고,
@@ -245,6 +251,10 @@ export const useTripStore = create<TripState>((set, get) => ({
       useDestinationStore.getState().removeByTrip(id);
       return { ok: true };
     } catch (e) {
+      // 방문·보고서 연결(409) → 강제 삭제 재확인 유도 (백엔드 ?force=true 지원).
+      if (e instanceof ApiError && e.code === 'has_related_trip_records' && !force) {
+        return { ok: false, needsConfirm: true, message: e.message };
+      }
       return { ok: false, error: describeError(e) };
     }
   },

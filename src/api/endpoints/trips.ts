@@ -189,8 +189,13 @@ export const trips = {
 
   // backend-backlog §2 — DELETE /api/trips/:tripId 신설 요청. 미배포 상태에서 호출 시
   // 404/405 가 떨어지면 호출 측에서 ApiError 로 잡아 안내. 응답 body 는 빈 객체로 가정.
-  remove: (tripId: string) =>
-    request<Record<string, never>>(`/api/trips/${tripId}`, { method: 'DELETE' }),
+  // backend-backlog §2 — 방문·보고서 연결 외근은 409 has_related_trip_records →
+  // ?force=true 재호출로 강제 삭제(release 2026-06).
+  remove: (tripId: string, force = false) =>
+    request<Record<string, never>>(`/api/trips/${tripId}`, {
+      method: 'DELETE',
+      query: force ? { force: true } : undefined,
+    }),
 
   // backend-backlog §2 — release 2026-06: 제목·시간 보정.
   // 운영은 TripDetailResponse 본문을 반환하나(OpenAPI 엔 미기재) 그 detail 의 status 는

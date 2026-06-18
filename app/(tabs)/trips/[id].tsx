@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { Alert, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { Ionicons } from '@expo/vector-icons';
 import { useTripStore } from '@/stores/tripStore';
@@ -195,27 +195,37 @@ export default function TripDetail() {
   const handleDelete = () => {
     if (!canDelete || deleting || tripBusy) return;
     const tripLabel = trip.title || `${fmtDate(trip.startedAt)} 외근`;
-    const confirmText = `${tripLabel} 을(를) 삭제할까요?\n방문 기록도 함께 사라지며 되돌릴 수 없습니다.`;
-    const runDelete = async () => {
+    // Alert.alert 는 webAlertPatch 가 web 에서도 동작시킴 — Platform 분기 불필요.
+    const runDelete = async (force: boolean) => {
       setDeleting(true);
-      const r = await removeTrip(id);
+      const r = await removeTrip(id, force);
       setDeleting(false);
       if (r.ok) {
         router.replace('/(tabs)/trips' as never);
-      } else if (Platform.OS === 'web') {
-        window.alert(`삭제 실패: ${r.error}`);
-      } else {
-        Alert.alert('삭제 실패', r.error);
+        return;
       }
+      if ('needsConfirm' in r) {
+        // 방문·보고서 연결 → 강제 삭제 재확인 (백엔드 ?force=true).
+        Alert.alert(
+          '연결된 기록이 있어요',
+          `${r.message}\n\n방문·보고서까지 모두 삭제하고 외근을 지울까요?`,
+          [
+            { text: '취소', style: 'cancel' },
+            { text: '강제 삭제', style: 'destructive', onPress: () => void runDelete(true) },
+          ],
+        );
+        return;
+      }
+      Alert.alert('삭제 실패', r.error);
     };
-    if (Platform.OS === 'web') {
-      if (window.confirm(confirmText)) void runDelete();
-    } else {
-      Alert.alert('외근 삭제', confirmText, [
+    Alert.alert(
+      '외근 삭제',
+      `${tripLabel} 을(를) 삭제할까요?\n방문 기록도 함께 사라지며 되돌릴 수 없습니다.`,
+      [
         { text: '취소', style: 'cancel' },
-        { text: '삭제', style: 'destructive', onPress: () => void runDelete() },
-      ]);
-    }
+        { text: '삭제', style: 'destructive', onPress: () => void runDelete(false) },
+      ],
+    );
   };
 
   return (
