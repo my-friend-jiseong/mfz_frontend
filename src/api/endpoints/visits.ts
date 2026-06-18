@@ -24,6 +24,8 @@ export interface VisitDetailResponse {
   siteName?: string;        // 현장명 (field.name)
   visitedAt: string;
   status: string;           // visits.status
+  // backend-backlog §21 — release 2026-06: status='other' 사유 영속·노출.
+  reason?: string;
 }
 
 export const visits = {

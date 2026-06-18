@@ -8,6 +8,7 @@ export type { ApiUser, AuthSession, SignupBody, LoginBody } from './endpoints/au
 export { trips } from './endpoints/trips';
 export type {
   TripStartBody,
+  TripUpdateBody,
   TripStartResponse,
   TripEndResponse,
   ActiveTripResponse,

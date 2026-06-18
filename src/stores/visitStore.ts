@@ -28,11 +28,11 @@ interface VisitState {
   // 같은 visit id 면 status 만 갱신 (기존 행 보존), 새 id 면 추가.
   syncFromTimeline: (
     tripId: string,
-    timeline: ReadonlyArray<{ visitId: string; fieldId?: string; visitedAt: string; status?: string }>,
+    timeline: ReadonlyArray<{ visitId: string; fieldId?: string; visitedAt: string; status?: string; reason?: string }>,
   ) => void;
   syncFromRecentVisits: (
     fieldId: string,
-    visits: ReadonlyArray<{ visitId: string; tripId: string; visitedAt: string; status?: string }>,
+    visits: ReadonlyArray<{ visitId: string; tripId: string; visitedAt: string; status?: string; reason?: string }>,
   ) => void;
 
   byTrip: (tripId: string) => Visit[];
@@ -86,7 +86,9 @@ export const useVisitStore = create<VisitState>((set, get) => ({
       await visitsApi.setStatus(visitId, status, reason);
       set((s) => ({
         visits: s.visits.map((v) =>
-          v.id === visitId ? { ...v, status } : v,
+          v.id === visitId
+            ? { ...v, status, reason: status === 'other' ? reason : undefined }
+            : v,
         ),
       }));
       return { ok: true };
@@ -105,6 +107,7 @@ export const useVisitStore = create<VisitState>((set, get) => ({
       tripId,
       fieldId: t.fieldId ?? '',
       visitedAt: t.visitedAt,
+      reason: t.reason,
     }));
     set((s) => ({ visits: mergeVisits(s.visits, incoming) }));
   },
@@ -117,6 +120,7 @@ export const useVisitStore = create<VisitState>((set, get) => ({
       tripId: r.tripId,
       fieldId,
       visitedAt: r.visitedAt,
+      reason: r.reason,
     }));
     set((s) => ({ visits: mergeVisits(s.visits, incoming) }));
   },

@@ -238,6 +238,11 @@ export default function FieldDetail() {
           <Text variant="bodySm">{fmtDateTime(item.visitedAt)}</Text>
           <Badge label={VISIT_STATUS_LABEL[item.status]} tone={badge.tone} shape={badge.shape} />
         </View>
+        {item.status === 'other' && item.reason ? (
+          <Text variant="caption" color="textMuted" numberOfLines={2} style={styles.visitReason}>
+            사유: {item.reason}
+          </Text>
+        ) : null}
       </Card>
     );
   };
@@ -519,4 +524,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  visitReason: { marginTop: spacing.xs },
 });

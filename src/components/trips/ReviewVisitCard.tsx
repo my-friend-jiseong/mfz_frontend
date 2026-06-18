@@ -62,7 +62,8 @@ export function ReviewVisitCard({
 
   const [expanded, setExpanded] = useState(initiallyExpanded);
   const [status, setStatus] = useState<VisitStatus>(visit.status);
-  const [reason, setReason] = useState('');
+  // 저장된 'other' 사유를 prefill — 사용자가 입력을 손대기 전까지 외부(store) 값을 따라감.
+  const [reason, setReason] = useState(visit.reason ?? '');
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -76,6 +77,13 @@ export function ReviewVisitCard({
     if (statusTouchedRef.current) return;
     setStatus(visit.status);
   }, [visit.status]);
+
+  // 사유도 status 와 동일 touched-guard — 외부 갱신(저장 후 등)은 따라가되, 사용자가 입력 중이면 보존.
+  const reasonTouchedRef = useRef(false);
+  useEffect(() => {
+    if (reasonTouchedRef.current) return;
+    setReason(visit.reason ?? '');
+  }, [visit.reason]);
 
   const [memoInput, setMemoInput] = useState('');
   const [memoSubmitting, setMemoSubmitting] = useState(false);
@@ -114,8 +122,12 @@ export function ReviewVisitCard({
   };
 
   const reasonTrim = reason.trim();
+  const savedReasonTrim = (visit.reason ?? '').trim();
   const otherReasonValid = status !== 'other' || reasonTrim.length >= 10;
-  const dirty = status !== visit.status || (status === 'other' && reasonTrim.length > 0);
+  // 저장된 값과 같으면 dirty 아님 — prefill 된 사유만으로 저장 버튼이 켜지지 않게.
+  const dirty =
+    status !== visit.status ||
+    (status === 'other' && reasonTrim !== savedReasonTrim);
 
   const headBadge = VISIT_STATUS_BADGE[visit.status];
 
@@ -132,9 +144,9 @@ export function ReviewVisitCard({
     if (r.ok) {
       setSavedAt(Date.now());
       // 저장 성공 후엔 store 가 진실 — 다시 외부 동기화 허용.
+      // store(visit.reason) 갱신이 effect 로 흘러 reason 입력을 저장값으로 재동기화.
       statusTouchedRef.current = false;
-      // 'other' reason 은 한 번 저장되면 비움 — 같은 카드에서 다시 다른 status 로 옮길 때 잔존 X.
-      if (status !== 'other') setReason('');
+      reasonTouchedRef.current = false;
     } else {
       setError(r.error);
     }
@@ -171,6 +183,11 @@ export function ReviewVisitCard({
           {fieldAddressDetail ? (
             <Text variant="caption" color="textMuted" numberOfLines={1}>
               {fieldAddressDetail}
+            </Text>
+          ) : null}
+          {visit.status === 'other' && savedReasonTrim ? (
+            <Text variant="caption" color="textMuted" numberOfLines={1}>
+              사유: {savedReasonTrim}
             </Text>
           ) : null}
         </View>
@@ -230,7 +247,10 @@ export function ReviewVisitCard({
             <Input
               label="기타 사유 (10자 이상)"
               value={reason}
-              onChangeText={setReason}
+              onChangeText={(t) => {
+                reasonTouchedRef.current = true;
+                setReason(t);
+              }}
               placeholder="현장 상황을 10자 이상 설명해주세요"
               maxLength={500}
               multiline

@@ -76,6 +76,7 @@ export default function VisitDetail() {
   const badge = VISIT_STATUS_BADGE[status];
   const fieldId = data.fieldId ?? visitInStore?.fieldId ?? null;
   const siteName = data.siteName ?? (fieldId ? getField(fieldId)?.address : null);
+  const reason = data.reason ?? visitInStore?.reason ?? null;
 
   return (
     <MapSheetLayout title="방문 상세" onBack={() => safeBack(router)} initialIndex={2}>
@@ -94,6 +95,12 @@ export default function VisitDetail() {
         <Text variant="bodySm" color="textMuted" style={styles.meta}>
           방문 시각: {fmtDateTime(data.visitedAt)}
         </Text>
+
+        {status === 'other' && reason ? (
+          <Text variant="body" style={styles.reason}>
+            기타 사유: {reason}
+          </Text>
+        ) : null}
 
         {fieldId ? (
           <Button
@@ -115,5 +122,6 @@ const styles = StyleSheet.create({
   scroll: { padding: spacing.lg, paddingBottom: spacing.xxl },
   badgeRow: { marginTop: spacing.sm, flexDirection: 'row' },
   meta: { marginTop: spacing.sm },
+  reason: { marginTop: spacing.sm },
   toField: { marginTop: spacing.lg },
 });

@@ -73,6 +73,8 @@ export interface Visit {
   tripId: string;
   fieldId: string;
   visitedAt: string;
+  // backend-backlog §21 — status='other' 시 사유. 백엔드 release 2026-06 부터 응답에 포함.
+  reason?: string;
 }
 
 // 외근 계획상의 목적지 (Trip 시작 시점에 N개 생성)

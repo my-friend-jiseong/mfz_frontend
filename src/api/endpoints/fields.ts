@@ -70,6 +70,8 @@ export interface RecentVisitItem {
   tripId: string;
   visitedAt: string;
   status?: string;          // visits.status
+  // backend-backlog §21 — release 2026-06: status='other' 사유 영속·노출.
+  reason?: string;
   memoPreview?: string;
 }
 

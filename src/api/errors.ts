@@ -100,6 +100,10 @@ const ERROR_MESSAGES: Record<string, string> = {
   trip_not_active: '외근 시작 후 체크인 가능합니다',
   confirm_required_zero_visits: '방문 기록이 없습니다. 종료하시겠습니까?',
   already_ended_trip: '외근이 이미 종료되었습니다',
+  // backend-backlog §2 — release 2026-06: trip soft delete / destinations.
+  has_related_trip_records: '방문·보고서가 연결된 외근입니다',
+  trip_still_active: '진행 중인 외근은 종료 후 삭제할 수 있습니다',
+  destination_status_invalid: '목적지 상태 값이 올바르지 않습니다',
   // 현장 (Field)
   field_not_found: '현장을 찾을 수 없습니다',
   // backend-backlog §4 (A) — 백엔드 optional 완화 전까지의 안전망 메시지.
@@ -122,6 +126,12 @@ const ERROR_MESSAGES: Record<string, string> = {
   report_tripid_immutable: '연결 외근은 변경할 수 없습니다',
   report_not_found: '이미 삭제되었거나 찾을 수 없는 보고서입니다',
   report_forbidden: '본인 작성 보고서만 변경할 수 있습니다',
+  // backend-backlog §6·§18 — release 2026-06: from-trip · 슬롯 multipart 업로드 · Word.
+  report_not_found_for_trip: '이 외근에 연결된 보고서가 없습니다',
+  report_no_field_reports: '현장 보고가 없습니다',
+  report_no_photos: '업로드된 사진이 없습니다',
+  field_report_slot_invalid: '사진 위치(전/중/후)가 올바르지 않습니다',
+  photo_process_failed: '사진 처리에 실패했습니다. 다시 시도해주세요',
   // 프로젝트 (Projects) — ERD v2 신규
   project_name_required: '프로젝트 이름을 입력해주세요',
   project_status_invalid: '프로젝트 상태 값이 올바르지 않습니다',

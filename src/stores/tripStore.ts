@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Trip } from '@/types/entities';
 import { trips as tripsApi, ApiError, localizeError } from '@/api';
+import type { TripUpdateBody } from '@/api';
 import { useAuthStore } from './authStore';
 import { useVisitStore } from './visitStore';
 import { useDestinationStore } from './destinationStore';
@@ -31,6 +32,7 @@ interface TripState {
   loadDetail: (id: string) => Promise<void>;
   start: (title?: string) => Promise<StartResult>;
   end: (force?: boolean) => Promise<EndResult>;
+  update: (id: string, body: TripUpdateBody) => Promise<GenericResult>;
   remove: (id: string) => Promise<GenericResult>;
 
   getById: (id: string) => Trip | undefined;
@@ -177,6 +179,29 @@ export const useTripStore = create<TripState>((set, get) => ({
       if (e instanceof ApiError && e.code === 'confirm_required_zero_visits') {
         return { ok: false, needsConfirm: true, message: e.message };
       }
+      return { ok: false, error: describeError(e) };
+    }
+  },
+
+  update: async (id, body) => {
+    try {
+      const res = await tripsApi.update(id, body);
+      // 응답(TripDetailResponse) 기준으로 로컬 trips 행 메타 갱신.
+      set((s) => ({
+        trips: s.trips.map((t) =>
+          t.id === id
+            ? {
+                ...t,
+                title: res.title ?? t.title,
+                startedAt: res.startedAt ?? t.startedAt,
+                endedAt: res.endedAt ?? t.endedAt,
+                status: (res.status as Trip['status']) ?? t.status,
+              }
+            : t,
+        ),
+      }));
+      return { ok: true };
+    } catch (e) {
       return { ok: false, error: describeError(e) };
     }
   },

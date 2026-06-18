@@ -16,6 +16,14 @@ export interface TripStartBody {
 }
 
 // v2 검증(2026-05-28): start/end 응답엔 banner·toast 없음 — optional.
+// backend-backlog §2 — release 2026-06: PATCH /api/trips/:tripId.
+// startedAt/endedAt(ISO8601) 도 백엔드가 수용하나, 프론트 UI 는 제목만 우선 노출(피커 미도입).
+export interface TripUpdateBody {
+  title?: string;
+  startedAt?: string;
+  endedAt?: string;
+}
+
 export interface TripStartResponse {
   tripId: string;
   startedAt: string;
@@ -75,6 +83,8 @@ export interface TripTimelineEntry {
   siteName?: string;        // 현장명 (field.name)
   visitedAt: string;
   status?: string;          // visits.status
+  // backend-backlog §21 — release 2026-06: status='other' 사유 영속·노출.
+  reason?: string;
   memoPreview?: string;
 }
 
@@ -160,6 +170,10 @@ export const trips = {
   // 404/405 가 떨어지면 호출 측에서 ApiError 로 잡아 안내. 응답 body 는 빈 객체로 가정.
   remove: (tripId: string) =>
     request<Record<string, never>>(`/api/trips/${tripId}`, { method: 'DELETE' }),
+
+  // backend-backlog §2 — release 2026-06: 제목·시간 보정. 응답은 TripDetailResponse.
+  update: (tripId: string, body: TripUpdateBody) =>
+    request<TripDetailResponse>(`/api/trips/${tripId}`, { method: 'PATCH', body }),
 
   /** 외부 지도 앱 길안내 딥링크 — providers wrap 객체로 응답 */
   navigationDeepLinks: (tripId: string, body: NavigationDeepLinksBody) =>

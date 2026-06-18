@@ -233,6 +233,22 @@ export default function TripDetail() {
             </Text>
             {canDelete ? (
               <Pressable
+                onPress={() => router.push(`/(tabs)/trips/${id}/edit` as never)}
+                disabled={deleting || tripBusy}
+                accessibilityRole="button"
+                accessibilityLabel="외근 수정"
+                hitSlop={8}
+                style={({ pressed }) => [
+                  styles.editBtn,
+                  (deleting || tripBusy) && { opacity: 0.4 },
+                  pressed && { opacity: 0.6 },
+                ]}
+              >
+                <Ionicons name="create-outline" size={20} color={colors.textMuted} />
+              </Pressable>
+            ) : null}
+            {canDelete ? (
+              <Pressable
                 onPress={handleDelete}
                 disabled={deleting || tripBusy}
                 accessibilityRole="button"
@@ -392,6 +408,14 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   titleText: { flex: 1 },
+  editBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceMuted,
+  },
   deleteBtn: {
     width: 36,
     height: 36,
