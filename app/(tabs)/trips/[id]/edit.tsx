@@ -216,7 +216,7 @@ export default function EditTrip() {
           <View style={styles.dangerZone}>
             <Button
               onPress={handleDelete}
-              variant="ghost"
+              variant="dangerGhost"
               size="sm"
               fullWidth
               leftIcon="trash"

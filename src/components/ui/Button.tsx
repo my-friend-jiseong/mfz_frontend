@@ -17,7 +17,12 @@ import { opacity } from '@/theme/motion';
 
 type IonName = React.ComponentProps<typeof Ionicons>['name'];
 
-export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'destructive';
+export type ButtonVariant =
+  | 'primary'
+  | 'secondary'
+  | 'ghost'
+  | 'destructive'
+  | 'dangerGhost';
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
 interface Props {
@@ -61,6 +66,13 @@ const VARIANT: Record<
     container: { backgroundColor: colors.danger },
     text: { color: colors.onDanger },
     tint: colors.onDanger,
+  },
+  // 낮은 비중 + 파괴적 — '위험 구역' 삭제 버튼용(투명 배경 + 빨강 글자).
+  // ghost(파랑)는 비파괴 액션 전용으로 두어 '빨강=파괴' 규칙과 정합. (UI/UX P1)
+  dangerGhost: {
+    container: { backgroundColor: 'transparent' },
+    text: { color: colors.danger },
+    tint: colors.danger,
   },
 };
 

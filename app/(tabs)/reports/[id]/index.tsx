@@ -414,7 +414,13 @@ export default function ReportDetail() {
         ) : null}
 
         {isOwner ? (
-          <View style={styles.actions}>
+          <View
+            style={[
+              styles.actions,
+              // Word 영역(다운로드/생성)이 위에 있을 때만 구분선 — '허공 구분선' 방지.
+              (hasOutput || fieldReports.length > 0) && styles.actionsDivider,
+            ]}
+          >
             <Button
               onPress={() =>
                 router.push(`/(tabs)/reports/${report.id}/edit` as never)
@@ -428,7 +434,7 @@ export default function ReportDetail() {
             </Button>
             <Button
               onPress={handleDelete}
-              variant="ghost"
+              variant="dangerGhost"
               fullWidth
               leftIcon="trash"
               style={styles.actionFlex}
@@ -503,11 +509,14 @@ const styles = StyleSheet.create({
   downloadBtn: { marginTop: spacing.md },
   // '다시 생성'은 보조 — 폭을 줄여(self) 다운로드 primary 보다 약하게.
   regenBtn: { alignSelf: 'center', marginTop: spacing.xs },
-  // 보고서 관리(수정/삭제) 그룹 — Word 영역과 구분선으로 분리.
+  // 보고서 관리(수정/삭제) 그룹.
   actions: {
     flexDirection: 'row',
     gap: spacing.sm,
     marginTop: spacing.xl,
+  },
+  // Word 영역과 구분선으로 분리 — Word 버튼이 위에 있을 때만 적용.
+  actionsDivider: {
     paddingTop: spacing.lg,
     borderTopWidth: 1,
     borderTopColor: colors.borderMuted,

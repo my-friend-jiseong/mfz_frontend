@@ -652,16 +652,19 @@ export default function EditField() {
           취소
         </Button>
 
-        <Button
-          onPress={handleDelete}
-          variant="ghost"
-          size="sm"
-          fullWidth
-          leftIcon="trash"
-          style={styles.dangerBtn}
-        >
-          현장 삭제
-        </Button>
+        {/* 위험 구역 — 파괴적 삭제는 저장 동선과 분리(구분선) + 낮은 비중(dangerGhost). trips edit 와 동일. */}
+        <View style={styles.dangerZone}>
+          <Button
+            onPress={handleDelete}
+            variant="dangerGhost"
+            size="sm"
+            fullWidth
+            leftIcon="trash"
+            style={styles.dangerBtn}
+          >
+            현장 삭제
+          </Button>
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
     </SafeScreen>
@@ -697,7 +700,13 @@ const styles = StyleSheet.create({
   error: { marginTop: spacing.md },
   statusRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
   submit: { marginTop: spacing.xl },
-  dangerBtn: { marginTop: spacing.md },
+  dangerZone: {
+    marginTop: spacing.xxl,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderMuted,
+  },
+  dangerBtn: { marginTop: spacing.xs },
   // 주소 검색·현위치·지도
   locateBtn: { marginTop: spacing.sm, alignSelf: 'flex-start' },
   loadingRow: {
