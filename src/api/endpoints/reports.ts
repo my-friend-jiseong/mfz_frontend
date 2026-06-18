@@ -1,4 +1,5 @@
 import { request } from '../client';
+import { appendUploadFile } from '@/utils/media';
 import type { FieldReport } from '@/types/entities';
 
 // ERD v2 정렬 — reports 슬림화:
@@ -154,4 +155,26 @@ export const reports = {
     request<null>(`/api/reports/${reportId}/field-reports/${fieldReportId}`, {
       method: 'DELETE',
     }),
+
+  // backend-backlog §6 — release 2026-06 권장: 슬롯별 사진 직업로드(서버 압축).
+  // 파일 파트 직렬화 플랫폼 분기는 appendUploadFile(media) 단일 출처.
+  // 응답 본문은 미보장(OpenAPI 미기재) → 호출 측은 loadDetail 로 슬롯 URL 재동기화.
+  uploadFieldReportPhoto: async (
+    reportId: string,
+    fieldReportId: string,
+    p: {
+      slot: 'before' | 'pending' | 'after';
+      file: { uri: string; name: string; type: string };
+      caption?: string;
+    },
+  ) => {
+    const fd = new FormData();
+    fd.append('slot', p.slot);
+    if (p.caption) fd.append('caption', p.caption);
+    await appendUploadFile(fd, 'file', p.file);
+    return request<FieldReport>(
+      `/api/reports/${reportId}/field-reports/${fieldReportId}/photos`,
+      { method: 'POST', body: fd, multipart: true },
+    );
+  },
 };

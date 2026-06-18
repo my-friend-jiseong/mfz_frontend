@@ -16,7 +16,7 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useReportStore } from '@/stores/reportStore';
 import { useFieldStore } from '@/stores/fieldStore';
 import { useVisitStore } from '@/stores/visitStore';
-import { fields as fieldsApi, toAbsoluteFileUrl } from '@/api';
+import { toAbsoluteFileUrl } from '@/api';
 import { pickPhoto, promptPhotoSource } from '@/utils/media';
 import { safeBack } from '@/utils/backNavigation';
 import { EmptyState } from '@/components/EmptyState';
@@ -38,6 +38,12 @@ const PHASES: { key: Phase; label: string }[] = [
   { key: 'pending', label: '조치 중' },
   { key: 'after', label: '조치 후' },
 ];
+// slot(Phase) ↔ FieldReport URL 필드 단일 매핑 — 중첩 삼항(default fallthrough) 대신.
+const PHASE_URL_KEY: Record<Phase, 'beforePhotoUrl' | 'pendingPhotoUrl' | 'afterPhotoUrl'> = {
+  before: 'beforePhotoUrl',
+  pending: 'pendingPhotoUrl',
+  after: 'afterPhotoUrl',
+};
 
 // 상대 fileUrl 절대화 — 공용 toAbsoluteFileUrl 로 통일 (별칭 유지).
 const resolveUrl = toAbsoluteFileUrl;
@@ -63,6 +69,7 @@ function FieldReportEditor() {
   const detailCache = useReportStore((s) => s.detailCache);
   const addFieldReport = useReportStore((s) => s.addFieldReport);
   const updateFieldReport = useReportStore((s) => s.updateFieldReport);
+  const uploadPhoto = useReportStore((s) => s.uploadFieldReportPhoto);
   const allFields = useFieldStore((s) => s.fields);
   const refreshFields = useFieldStore((s) => s.refresh);
   // 이 보고서가 연결된 trip 의 visits — 그 fields 가 picker 에서 우선 노출.
@@ -128,6 +135,11 @@ function FieldReportEditor() {
     after: { url: null, caption: '' },
   });
   const [uploading, setUploading] = useState<Phase | null>(null);
+  // 신규("현장 보고 추가") 모드에서 첫 사진 업로드 직전 lazy-create 한 field report id.
+  // 슬롯 업로드는 field report 가 먼저 존재해야 함 → frId 없으면 여기에 생성 id 보관.
+  // ref 가 동기 진실(렌더 의존 없음). promise ref 는 동시 픽 시 중복 생성(=중복 field report) 락.
+  const createdFrIdRef = useRef<string | null>(null);
+  const ensureFrPromiseRef = useRef<Promise<string | null> | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldPickerOpen, setFieldPickerOpen] = useState(false);
@@ -223,6 +235,30 @@ function FieldReportEditor() {
       ? '현장 보고 수정'
       : '현장 보고 추가';
 
+  // field report 보장 — frId(수정/마법사) 있으면 그대로, 없으면 1회만 lazy-create.
+  // promise 락으로 동시 픽이 같은 약속을 await → 중복 field report 생성 차단.
+  const ensureFieldReport = async (): Promise<string | null> => {
+    if (frId) return frId;
+    if (createdFrIdRef.current) return createdFrIdRef.current;
+    if (!fieldId) return null;
+    if (!ensureFrPromiseRef.current) {
+      ensureFrPromiseRef.current = (async () => {
+        const created = await addFieldReport(reportId, {
+          fieldId,
+          title: title.trim() || undefined,
+        });
+        if (!created.ok) {
+          Alert.alert('사진 업로드 실패', created.error);
+          ensureFrPromiseRef.current = null; // 실패 시 재시도 허용
+          return null;
+        }
+        createdFrIdRef.current = created.fieldReportId;
+        return created.fieldReportId;
+      })();
+    }
+    return ensureFrPromiseRef.current;
+  };
+
   const pickPhase = (phase: Phase) => {
     if (!fieldId) {
       Alert.alert('현장 먼저 선택', '사진을 올릴 현장을 먼저 선택해주세요.');
@@ -233,10 +269,24 @@ function FieldReportEditor() {
       if (!file) return;
       setUploading(phase);
       try {
-        const res = await fieldsApi.addPhoto(fieldId, file);
+        // 슬롯 업로드는 field report 가 먼저 존재해야 함 — 신규 모드면 첫 사진에 lazy-create.
+        // 동시 픽이 각자 create 해 중복 field report 가 생기지 않게 promise 락으로 직렬화.
+        const targetFrId = await ensureFieldReport();
+        if (!targetFrId) return; // 생성 실패(에러는 ensureFieldReport 가 alert)
+        // 슬롯에 직접 multipart 업로드(서버 압축) → 응답 비의존, loadDetail 로 슬롯 URL 동기화.
+        const r = await uploadPhoto(reportId, targetFrId, { slot: phase, file });
+        if (!r.ok) {
+          Alert.alert('사진 업로드 실패', r.error);
+          return;
+        }
+        // 서버가 압축·저장한 실제 URL 을 권위 있는 detailCache 에서 읽어 슬롯 반영.
+        const fr = useReportStore
+          .getState()
+          .detailCache[reportId]?.fieldReports?.find((x) => x.id === targetFrId);
+        const url = fr ? fr[PHASE_URL_KEY[phase]] : null;
         setSlots((prev) => ({
           ...prev,
-          [phase]: { ...prev[phase], url: res.photo.fileUrl },
+          [phase]: { ...prev[phase], url: url ?? prev[phase].url },
         }));
       } catch {
         Alert.alert('사진 업로드 실패', '잠시 후 다시 시도해주세요.');
@@ -268,19 +318,21 @@ function FieldReportEditor() {
       );
       return;
     }
+    // 사진 URL 은 슬롯 엔드포인트가 서버에 직접 갱신·소유 → 저장 시 재전송하지 않는다
+    // (슬롯 mirror 가 stale 하면 권위 URL 을 덮어쓸 위험). 저장은 title·캡션만 영속.
     const body = {
       fieldId,
       title: title.trim() || undefined,
-      beforePhotoUrl: slots.before.url ?? undefined,
       beforePhotoCaption: slots.before.caption.trim() || undefined,
-      pendingPhotoUrl: slots.pending.url ?? undefined,
       pendingPhotoCaption: slots.pending.caption.trim() || undefined,
-      afterPhotoUrl: slots.after.url ?? undefined,
       afterPhotoCaption: slots.after.caption.trim() || undefined,
     };
     setSubmitting(true);
-    const r = isEdit
-      ? await updateFieldReport(reportId, frId!, body)
+    // frId(수정/마법사) 또는 신규모드에서 사진 업로드로 lazy-create 된 id 가 있으면 갱신,
+    // 둘 다 없으면(사진 0장 신규) 생성.
+    const effectiveFrId = frId ?? createdFrIdRef.current;
+    const r = effectiveFrId
+      ? await updateFieldReport(reportId, effectiveFrId, body)
       : await addFieldReport(reportId, body);
     setSubmitting(false);
     if (r.ok) {

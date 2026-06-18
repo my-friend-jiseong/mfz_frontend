@@ -60,9 +60,19 @@ interface ReportState {
   exportWord: (reportId: string, regenerate?: boolean) => Promise<GenericResult>;
   remove: (id: string) => Promise<GenericResult>;
   // 현장별 전·중·후 보고(field_reports) CRUD — 성공 시 상세 재로드로 fieldReports 갱신.
-  addFieldReport: (reportId: string, body: FieldReportInput) => Promise<GenericResult>;
+  // addFieldReport: 생성된 fieldReportId 반환 (즉시 사진 업로드 lazy-create 에 사용).
+  addFieldReport: (
+    reportId: string,
+    body: FieldReportInput,
+  ) => Promise<{ ok: true; fieldReportId: string } | { ok: false; error: string }>;
   updateFieldReport: (reportId: string, fieldReportId: string, body: Partial<FieldReportInput>) => Promise<GenericResult>;
   removeFieldReport: (reportId: string, fieldReportId: string) => Promise<GenericResult>;
+  // 슬롯(전/중/후) 사진 multipart 직업로드(서버 압축) → loadDetail 로 슬롯 URL 재동기화.
+  uploadFieldReportPhoto: (
+    reportId: string,
+    fieldReportId: string,
+    params: { slot: 'before' | 'pending' | 'after'; file: { uri: string; name: string; type: string }; caption?: string },
+  ) => Promise<GenericResult>;
   clearAll: () => void;
 
   getById: (id: string) => Report | undefined;
@@ -324,7 +334,18 @@ export const useReportStore = create<ReportState>((set, get) => ({
 
   addFieldReport: async (reportId, body) => {
     try {
-      await reportsApi.addFieldReport(reportId, body);
+      const created = await reportsApi.addFieldReport(reportId, body);
+      await get().loadDetail(reportId);
+      return { ok: true, fieldReportId: created.id };
+    } catch (e) {
+      return { ok: false, error: describeError(e) };
+    }
+  },
+
+  uploadFieldReportPhoto: async (reportId, fieldReportId, params) => {
+    try {
+      await reportsApi.uploadFieldReportPhoto(reportId, fieldReportId, params);
+      // 응답 본문 비의존 — 권위 있는 상세 GET 으로 슬롯 URL 갱신.
       await get().loadDetail(reportId);
       return { ok: true };
     } catch (e) {

@@ -1,5 +1,5 @@
-import { Platform } from 'react-native';
 import { request } from '../client';
+import { appendUploadFile } from '@/utils/media';
 import type { FieldStatus } from '@/types/entities';
 
 // ERD v2 정렬 — fields 슬림화: 주소·좌표는 locations(1:1), 분류는 field_categories.
@@ -247,24 +247,14 @@ export const fields = {
 
   // opts.phase: backend-backlog §9 visit 단계. 백엔드 미지원 동안엔 silently 무시되지만
   // 프론트 source 가 phase 를 보내야 머지 직후 보고서 prefill 이 살아남.
-  //
-  // multipart serialize platform 분기 — RN FormData 는 `{uri, name, type}` 셰이프를
-  // 인식하는 커스텀 serializer 가 있어 uri 를 직접 fetch 해 파트로 박지만, web 의 표준
-  // DOM FormData 는 `Blob | File | string` 만 받는다. 객체를 그대로 append 하면
-  // `String(obj)` = `"[object Object]"` 가 file 필드에 들어가 백엔드가
-  // "사진 파일이 필요합니다" 를 반환한다. web 에선 uri 를 fetch 해 진짜 Blob 으로 변환.
+  // 파일 파트 직렬화 플랫폼 분기는 appendUploadFile(media) 단일 출처.
   addPhoto: async (
     fieldId: string,
     file: { uri: string; name: string; type: string },
     opts?: { phase?: AttachmentPhase },
   ) => {
     const fd = new FormData();
-    if (Platform.OS === 'web') {
-      const blob = await fetch(file.uri).then((r) => r.blob());
-      fd.append('file', blob, file.name);
-    } else {
-      fd.append('file', file as unknown as Blob);
-    }
+    await appendUploadFile(fd, 'file', file);
     if (opts?.phase) fd.append('phase', opts.phase);
     return request<FieldPhotoResponse>(`/api/fields/${fieldId}/photos`, {
       method: 'POST',

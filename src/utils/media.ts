@@ -4,8 +4,25 @@ import * as ImagePicker from 'expo-image-picker';
 // ERD v2: 음성 메모 폐기 — 녹음·재생(expo-av) 유틸 제거. 사진 첨부만 유지.
 
 // 첨부 업로드 시 백엔드 multipart 가 받는 file 객체 형태.
-// RN FormData 는 { uri, name, type } 객체를 받아 동작 (web 분기는 fields.addPhoto 참고).
 export type UploadFile = { uri: string; name: string; type: string };
+
+// multipart 파일 파트 append — 플랫폼 분기 단일 출처.
+// RN FormData 는 { uri, name, type } 객체를 커스텀 serializer 가 인식해 uri 를 직접 파트로 박는다.
+// web 의 표준 DOM FormData 는 Blob | File | string 만 받아, 객체를 그대로 append 하면
+// String(obj) = "[object Object]" 가 들어가 백엔드가 "사진 파일이 필요합니다" 를 반환한다 →
+// web 은 uri 를 fetch 해 진짜 Blob 으로 변환해 넣는다.
+export async function appendUploadFile(
+  fd: FormData,
+  field: string,
+  file: UploadFile,
+): Promise<void> {
+  if (Platform.OS === 'web') {
+    const blob = await fetch(file.uri).then((r) => r.blob());
+    fd.append(field, blob, file.name);
+  } else {
+    fd.append(field, file as unknown as Blob);
+  }
+}
 
 function inferMime(uri: string, fallback: string): string {
   const m = uri.match(/\.([a-zA-Z0-9]+)(?:\?|$)/);
