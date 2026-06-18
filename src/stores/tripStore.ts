@@ -206,17 +206,20 @@ export const useTripStore = create<TripState>((set, get) => ({
 
   update: async (id, body) => {
     try {
-      const res = await tripsApi.update(id, body);
-      // 응답(TripDetailResponse) 기준으로 로컬 trips 행 메타 갱신.
+      await tripsApi.update(id, body);
+      // PATCH /trips/:id 는 본문 없이 200 만 반환(운영 OpenAPI 확인) → 보낸 값으로 로컬 패치.
+      // 응답을 읽으면 null.title 로 throw → 성공인데 '수정 실패' 로 오인되던 회로를 차단.
       set((s) => ({
         trips: s.trips.map((t) =>
           t.id === id
             ? {
                 ...t,
-                title: res.title ?? t.title,
-                startedAt: res.startedAt ?? t.startedAt,
-                endedAt: res.endedAt ?? t.endedAt,
-                status: (res.status as Trip['status']) ?? t.status,
+                ...(body.title !== undefined ? { title: body.title } : {}),
+                ...(body.startedAt !== undefined ? { startedAt: body.startedAt } : {}),
+                // endedAt 보정 시 종료 처리로 간주.
+                ...(body.endedAt !== undefined
+                  ? { endedAt: body.endedAt, status: 'ended' as const }
+                  : {}),
               }
             : t,
         ),

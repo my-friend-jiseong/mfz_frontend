@@ -291,19 +291,12 @@ export const useReportStore = create<ReportState>((set, get) => ({
   exportWord: async (reportId, regenerate = false) => {
     set({ busy: true });
     try {
-      const res = await reportsApi.exportWord(reportId, regenerate);
-      set((s) => ({
-        reports: s.reports.map((x) =>
-          x.id === reportId ? { ...x, outputFileUrl: res.outputFileUrl } : x,
-        ),
-        detailCache: s.detailCache[reportId]
-          ? {
-              ...s.detailCache,
-              [reportId]: { ...s.detailCache[reportId], outputFileUrl: res.outputFileUrl },
-            }
-          : s.detailCache,
-        busy: false,
-      }));
+      await reportsApi.exportWord(reportId, regenerate);
+      // export/word 는 본문 없이 200 만 반환할 수 있어(운영 OpenAPI) 응답에 의존하지 않고
+      // 권위 있는 상세 GET 으로 outputFileUrl 을 갱신 → 다운로드 버튼 노출.
+      // (응답을 읽으면 null.outputFileUrl 로 throw → 생성됐는데 '실패' 로 오인되던 회로 차단)
+      set({ busy: false });
+      await get().loadDetail(reportId);
       return { ok: true };
     } catch (e) {
       set({ busy: false });

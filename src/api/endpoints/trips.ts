@@ -192,9 +192,10 @@ export const trips = {
   remove: (tripId: string) =>
     request<Record<string, never>>(`/api/trips/${tripId}`, { method: 'DELETE' }),
 
-  // backend-backlog §2 — release 2026-06: 제목·시간 보정. 응답은 TripDetailResponse.
+  // backend-backlog §2 — release 2026-06: 제목·시간 보정. 운영 OpenAPI 확인 결과
+  // 본문 없이 200 만 반환 → 호출 측은 보낸 body 로 로컬 패치(응답 의존 금지).
   update: (tripId: string, body: TripUpdateBody) =>
-    request<TripDetailResponse>(`/api/trips/${tripId}`, { method: 'PATCH', body }),
+    request<void>(`/api/trips/${tripId}`, { method: 'PATCH', body }),
 
   // backend-backlog §11 — release 2026-06: 계획 목적지 조회·상태/순서 갱신.
   listDestinations: (tripId: string) =>
