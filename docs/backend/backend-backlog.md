@@ -681,65 +681,52 @@ body: { format: 'word' | 'pdf' }
 
 ---
 
-## 20. 🟡 보고서 Word/PDF 출력에 "위치도" 이미지 자동 삽입
+## 20. 🟡 보고서 Word(추후 PDF)에 "위치도" 이미지 삽입 — 네이티브 캡처 → 백엔드 임베드 (2안 확정)
 
 ### 배경
-프론트는 보고서 작성·상세 화면에 그 외근의 **현장 전체를 한 화면에 담는 위치도**를
-이미 렌더한다 (`KakaoMapWebView` + `fitToMarkers` — 모든 마커가 들어오도록 `setBounds`).
-그러나 이건 **카카오 JS SDK 로 그리는 라이브 지도(DOM/WebView)** 이지 래스터 이미지가 아니다.
-사용자 요구는 이 위치도가 **다운로드되는 Word(추후 PDF) 문서 안에도 그림으로** 들어가는 것.
+프론트는 보고서 상세 화면에 그 외근의 **현장 전체를 한 화면에 담는 위치도**를 이미 렌더한다
+(`KakaoMapWebView` + `fitToMarkers`). 그러나 이건 **카카오 JS SDK 로 그리는 라이브 지도
+(DOM/WebView)** 이지 래스터 이미지가 아니라, 다운로드되는 Word 문서엔 안 들어간다.
+현재 Word 구조(release §6)는 현장별 전·중·후 사진뿐 — **위치도 없음.**
 
-### 제약 — 카카오는 정적지도 REST 이미지 API 가 없음
-구글 Static Maps / 네이버 Static Map 과 달리 카카오는 `markers=...` 를 URL 로 받아 PNG 를
-돌려주는 서버사이드 엔드포인트가 없다 (정적지도는 JS SDK `StaticMap` 뿐). 따라서 URL 한 줄로
-이미지를 얻는 길은 막혀 있고, 아래 둘 중 하나가 필요:
+### 결정 (2026-06-19) — 2안(프론트 네이티브 캡처) 확정
+**실사용 플랫폼이 Android 네이티브뿐**(web 은 테스트 전용)이라, 가장 단순·정합적인 경로로 확정:
+**프론트가 네이티브에서 위치도를 PNG 로 캡처 → 업로드 → 백엔드는 그 이미지를 Word 에 임베드만.**
 
-1. **(권장) 백엔드가 export 시 렌더** — headless 브라우저(puppeteer 등)로 카카오 JS 지도를
-   띄워 마커·fitBounds 적용 후 스크린샷 → docx 에 삽입. 서버 생성 문서라 결과가 일관됨.
-2. **프론트 캡처 후 업로드** — 네이티브는 `react-native-view-shot` 으로 WebView 픽셀 캡처가
-   가능(크로스오리진 타일도 native 캡처라 무방). **단 웹은 html2canvas 가 카카오 타일을
-   canvas-taint 로 못 담아 불가** → 크로스플랫폼 신뢰성이 떨어짐.
+- **1안(백엔드 headless 렌더) 기각**: 소형 서버에 Chromium(+~300MB)·렌더당 ~150–400MB RAM
+  (OOM 위험)·한글(CJK)폰트·카카오 키 referer 처리 등 **비용 대비 과함.**
+- **3안(카카오 정적지도 REST) 불가**: 카카오는 `markers=...`→PNG 서버 API 가 없음(구글/네이버와 달리).
+- **2안이 되는 이유**: 네이티브 `react-native-view-shot` 은 화면을 **OS 레벨 래스터화**라
+  cross-origin 타일도 그대로 찍힘 → **앱에서 보던 카카오 위치도 그대로** 들어감. 백엔드는 렌더 불요.
+- **web 한계(무방)**: web 은 `html2canvas` 가 cross-origin 카카오 타일을 **canvas-taint** 로
+  못 담아 캡처 불가 → web 빌드는 위치도 없이 진행. 실사용 아님이라 수용.
 
-### 백엔드 렌더 동작 원리 (1안 상세)
-"프론트가 그린 화면을 서버가 가져오는" 게 아니라, **서버가 동일한 지도 웹페이지를 자기
-headless 브라우저로 새로 그려 사진을 찍는 것**이다. 카카오 지도는 사용자 기기에 묶인 게
-아니라 `sdk.js`(JS) + 카카오 서버에서 받는 타일 PNG 로 이뤄진 그냥 웹페이지라, 브라우저
-환경이면 서버 안에서도 똑같이 렌더된다.
+### 백엔드가 해야 할 것 (요청 — 작음)
+1. **`POST /api/reports/:reportId/overview-photo`** (multipart: `file`, 서버 압축) →
+   `report.overviewMapUrl` 저장. **field-report 슬롯 사진 업로드(release §6)와 동일 패턴 재사용.**
+2. **`POST /api/reports/:reportId/export/word`** 가 `overviewMapUrl` 있으면 **문서 최상단에
+   "위치도" figure 1장** 삽입(현장별 섹션들 앞). 없으면 기존대로(위치도 생략).
+3. DB: `reports.overview_map_url` nullable 컬럼.
+※ 백엔드는 **지도를 그리지 않는다** — 받은 이미지를 넣기만. (headless/chromium 불필요)
 
-```
-[Word/PDF export 요청]
-  → 서버가 headless Chromium(puppeteer/playwright) 실행
-  → buildKakaoMapHtml() 과 사실상 같은 HTML 로드 (SDK → 마커 → fitBounds)
-  → 타일 로드 완료 대기: kakao.maps.event.addListener(map,'tilesloaded'|'idle', …)
-  → page.screenshot()  →  지도 PNG 1장
-  → docx 에 그림으로 삽입
-```
+### 프론트엔드가 할 일 (백엔드 준비 후, 별도 사이클)
+- `react-native-view-shot` 도입(네이티브 dep → **EAS 리빌드 필요**).
+- 위치도 뷰(`KakaoMapWebView`+`fitToMarkers`)를 **타일 로드 완료(tilesloaded) 후 캡처** →
+  `overview-photo` 로 업로드 → 이후 `export/word`. (Word 생성 직전 캡처가 자연스러움)
+- **web 분기: 캡처 skip**(taint).
+- ⚠️ **검증 스파이크 1회 필요**: 안드로이드에서 WebView 를 view-shot 으로 캡처 시 하드웨어
+  레이어 때문에 **빈칸으로 나오는 알려진 케이스**가 있음 → 실기기 선검증. 실패 시 대안:
+  캡처 전용 풀스크린 위치도를 잠깐 띄워 캡처, 또는 1안(백엔드 렌더)로 폴백 재검토.
 
-**왜 이건 되고 웹 프론트 html2canvas 는 안 되나**: html2canvas 는 DOM 을 `<canvas>` 에 다시
-그린 뒤 `toDataURL()` 로 픽셀을 빼는데, 교차출처(cross-origin) 타일이 올라가는 순간 canvas
-가 taint 되어 추출이 차단된다. headless 스크린샷은 canvas 를 안 거치고 브라우저 엔진이
-화면 전체를 OS 레벨로 래스터화하는 진짜 사진이라 taint 개념이 적용되지 않는다.
-
-**실무상 주의 — 카카오 JS 키 도메인(referer)**: 카카오 JS SDK 는 개발자콘솔에 등록된 웹
-도메인에서만 동작한다(referer 검사). headless 크롬이 로드하는 페이지도 등록된 도메인에서
-서빙하거나, puppeteer `page.setExtraHTTPHeaders({ Referer: '<등록 도메인>' })` 로 referer
-를 맞춰야 지도가 뜬다. 이 한 가지만 처리하면 나머지는 정형적인 작업(대기→캡처→삽입)이다.
-
-### 백엔드가 해야 할 것
-- export(`outputFileUrl` 생성 / §19 PDF) 파이프라인에 위치도 figure 1장 삽입.
-- 입력: 그 보고서/외근의 현장 좌표 목록(이미 보유) + 마커 색/형상은 status 기준(프론트와 동일 규칙).
-- fitBounds 동등 프레이밍(현장 전체 포함) + 적당한 패딩.
-
-### 프론트엔드 영향
-- 백엔드 렌더(1안) 채택 시 프론트 추가 작업 없음 — 화면 위치도와 문서 위치도가 따로 살아도 OK.
-- 2안 채택 시 네이티브에서 캡처→업로드 훅 추가 필요. (웹 미지원 한계 명시)
-
-### 발견 시점
-2026-06-01 (보고서 위치도 인라인화 사이클 — 사용자가 "Word 로 가져올 때도 있어야" 확인).
+### 발견 시점 / 갱신
+2026-06-01 최초. 2026-06-19 — web=테스트전용·실사용 Android 확정에 따라 **2안(네이티브 캡처)로
+구체화**(1안 기각). [[feedback_frontend_first]] 패턴: 프론트가 캡처+업로드를 optional 로 선반영하되
+백엔드 `overview-photo`/Word 임베드 도착 후 완결.
 
 ### 관련 코드
 - 프론트 [`src/components/KakaoMapWebView.tsx`](../../src/components/KakaoMapWebView.tsx) · [`src/assets/kakaoMapHtml.ts`](../../src/assets/kakaoMapHtml.ts) (`fitToMarkers`)
-- 프론트 [`app/(tabs)/reports/new.tsx`](../../app/\(tabs\)/reports/new.tsx) · [`app/(tabs)/reports/[id]/index.tsx`](../../app/\(tabs\)/reports/\[id\]/index.tsx) (인라인 위치도)
+- 프론트 [`app/(tabs)/reports/[id]/index.tsx`](../../app/\(tabs\)/reports/\[id\]/index.tsx) (인라인 위치도 — 캡처 대상)
+- 프론트 [`src/api/endpoints/reports.ts`](../../src/api/endpoints/reports.ts) (`uploadFieldReportPhoto` — overview-photo 가 따를 multipart 패턴)
 
 ---
 
@@ -856,6 +843,7 @@ body: { fieldId: string; order?: number }   // order 미지정 시 말미 append
 
 ## 변경 이력
 
+- **2026-06-19**: §20 구체화 — Word 위치도를 **2안(프론트 네이티브 캡처→업로드, 백엔드는 임베드만)**으로 확정. web=테스트전용·실사용 Android 라 1안(백엔드 headless 렌더)은 비용 과다로 기각. 백엔드 요청: `POST /reports/:id/overview-photo` + export/word 최상단 위치도 삽입 + `reports.overview_map_url`.
 - **2026-06-19**: §24 추가 — 진행 중 외근 목적지 단건 추가 `POST /trips/:id/destinations`(🟡). §11 destinations 서버 전환 구현 중 add 엔드포인트 부재 확인, 프론트는 로컬 temp 로 우회 중.
 - **2026-05-08**: 백로그 신설. §1 길찾기 카카오-only 정책 반영. (이전 §1 title 은 백엔드 처리 완료로 제거)
 - **2026-05-08**: §2 추가 — Trip PATCH/DELETE 신설 요청 (Field 와 비대칭 해소).
