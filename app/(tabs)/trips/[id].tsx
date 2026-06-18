@@ -206,9 +206,11 @@ export default function TripDetail() {
       }
       if ('needsConfirm' in r) {
         // 방문·보고서 연결 → 강제 삭제 재확인 (백엔드 ?force=true).
+        // 백엔드 원문(r.message)엔 'force=true 로 재시도' 같은 기술 문구가 섞여 있어
+        // 사용자에겐 노출하지 않고 자체 안내 문구로 대체.
         Alert.alert(
           '연결된 기록이 있어요',
-          `${r.message}\n\n방문·보고서까지 모두 삭제하고 외근을 지울까요?`,
+          '이 외근에는 방문·보고서 기록이 연결돼 있습니다.\n방문·보고서까지 모두 삭제하고 외근을 지울까요?',
           [
             { text: '취소', style: 'cancel' },
             { text: '강제 삭제', style: 'destructive', onPress: () => void runDelete(true) },
