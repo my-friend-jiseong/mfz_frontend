@@ -244,7 +244,7 @@ MARKERS.forEach(function(m){
           position: new kakao.maps.LatLng(m.lat, m.lng),
           content: content,
           map: map,
-          // anchor 박스 = SVG 36×36. 중앙(0.5,0.5)이 좌표에 정확히 정렬되어 줌 무관 정확.
+          // anchor 박스 = SVG 26×26. 중앙(0.5,0.5)이 좌표에 정확히 정렬되어 줌 무관 정확.
           xAnchor: 0.5,
           yAnchor: 0.5,
         });
