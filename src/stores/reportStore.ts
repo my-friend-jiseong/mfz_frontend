@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Report } from '@/types/entities';
-import { reports as reportsApi, localizeError, errorCode } from '@/api';
+import { reports as reportsApi, localizeError, errorCode, ApiError } from '@/api';
 import type {
   ReportListItem,
   ReportDetailResponse,
@@ -56,6 +56,8 @@ interface ReportState {
     visitFieldIds: string[],
   ) => Promise<CreateWithScaffoldResult>;
   update: (id: string, body: UpdateReportBody) => Promise<GenericResult>;
+  // field_reports → Word 생성/재생성. 성공 시 outputFileUrl 갱신 (다운로드 버튼 노출).
+  exportWord: (reportId: string, regenerate?: boolean) => Promise<GenericResult>;
   remove: (id: string) => Promise<GenericResult>;
   // 현장별 전·중·후 보고(field_reports) CRUD — 성공 시 상세 재로드로 fieldReports 갱신.
   addFieldReport: (reportId: string, body: FieldReportInput) => Promise<GenericResult>;
@@ -174,6 +176,47 @@ export const useReportStore = create<ReportState>((set, get) => ({
   createWithVisitScaffold: async (body, visitFieldIds) => {
     // busy 는 create + scaffold + loadDetail 끝까지 유지 (F10).
     set({ busy: true });
+
+    // (1) from-trip 단축 우선 — 서버가 visits 별 FieldReport 를 일괄 스캐폴드 (round-trip 절감).
+    // 미배포(404/405) 면 아래 레거시 경로로 폴백. 그 외 에러는 부분 생성 가능성이 있어 surface.
+    if (body.tripId) {
+      try {
+        const res = await reportsApi.createFromTrip(body.tripId, { title: body.title });
+        const detail = await get().loadDetail(res.reportId);
+        set({ busy: false });
+        const report: Report =
+          detail ?? {
+            id: res.reportId,
+            creatorId: useAuthStore.getState().user?.id ?? '',
+            tripId: body.tripId,
+            title: body.title,
+            outputFileUrl: null,
+            fieldReports: res.fieldReports,
+            createdAt: '',
+            updatedAt: '',
+          };
+        return {
+          ok: true,
+          report,
+          attemptedFieldIds: res.fieldReports.map((fr) => fr.fieldId),
+          failedFieldIds: [],
+          // detail 캐시가 채워졌을 때만 마법사 진입 — field-report.tsx 가 detailCache 의
+          // fieldReports 에 의존하므로, loadDetail 실패 시 res 의 frId 로 진입하면 빈 캐시로
+          // '현장 보고 없음' 막다른 화면이 된다. 레거시 경로와 동일하게 detail 기준만 사용.
+          firstFieldReportId: detail?.fieldReports?.[0]?.id ?? null,
+        };
+      } catch (e) {
+        const notDeployed =
+          e instanceof ApiError && (e.status === 404 || e.status === 405);
+        if (!notDeployed) {
+          set({ busy: false });
+          return { ok: false, error: describeError(e) };
+        }
+        // 404/405 → 미배포. 레거시 경로로 폴백 (busy 유지).
+      }
+    }
+
+    // (2) 레거시: create + N×addFieldReport.
     let created: Report;
     try {
       // create 가 자체 busy=false flip 하지 않도록 직접 api 호출 + 캐시 반영.
@@ -242,6 +285,29 @@ export const useReportStore = create<ReportState>((set, get) => ({
     } catch (e) {
       set({ busy: false });
       return { ok: false, error: describeError(e), code: errorCode(e) ?? undefined };
+    }
+  },
+
+  exportWord: async (reportId, regenerate = false) => {
+    set({ busy: true });
+    try {
+      const res = await reportsApi.exportWord(reportId, regenerate);
+      set((s) => ({
+        reports: s.reports.map((x) =>
+          x.id === reportId ? { ...x, outputFileUrl: res.outputFileUrl } : x,
+        ),
+        detailCache: s.detailCache[reportId]
+          ? {
+              ...s.detailCache,
+              [reportId]: { ...s.detailCache[reportId], outputFileUrl: res.outputFileUrl },
+            }
+          : s.detailCache,
+        busy: false,
+      }));
+      return { ok: true };
+    } catch (e) {
+      set({ busy: false });
+      return { ok: false, error: describeError(e) };
     }
   },
 

@@ -57,6 +57,22 @@ export interface UpdateReportBody {
   outputFileUrl?: string;
 }
 
+// backend-backlog §18 — release 2026-06: 외근 visits 별 FieldReport 일괄 스캐폴드 단축.
+export interface FromTripBody {
+  title: string;
+}
+export interface FromTripResponse {
+  reportId: string;
+  fieldReports: FieldReport[];
+}
+
+// backend-backlog §6 — release 2026-06: field_reports → Word 통합 생성.
+export interface ExportWordResponse {
+  outputFileUrl: string;
+  downloadUrl?: string;
+  photoCount?: number;
+}
+
 export interface ListReportsParams {
   page?: number;
   limit?: number;
@@ -103,6 +119,20 @@ export const reports = {
   // ERD v2: hard delete.
   remove: (reportId: string) =>
     request<null>(`/api/reports/${reportId}`, { method: 'DELETE' }),
+
+  // backend-backlog §18 — release 2026-06: 보고서 + 현장보고 스캐폴드 단축 생성.
+  createFromTrip: (tripId: string, body: FromTripBody) =>
+    request<FromTripResponse>(`/api/reports/from-trip/${tripId}`, {
+      method: 'POST',
+      body,
+    }),
+
+  // backend-backlog §6 — release 2026-06: field_reports → Word 생성/재생성.
+  exportWord: (reportId: string, regenerate = false) =>
+    request<ExportWordResponse>(`/api/reports/${reportId}/export/word`, {
+      method: 'POST',
+      body: regenerate ? { regenerate: true } : {},
+    }),
 
   // ----- field-reports CRUD -----
   listFieldReports: (reportId: string) =>

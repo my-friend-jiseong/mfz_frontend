@@ -111,6 +111,7 @@ export default function ReportDetail() {
   const detailCache = useReportStore((s) => s.detailCache);
   const loadDetail = useReportStore((s) => s.loadDetail);
   const remove = useReportStore((s) => s.remove);
+  const exportWord = useReportStore((s) => s.exportWord);
   const removeFieldReport = useReportStore((s) => s.removeFieldReport);
   const allTrips = useTripStore((s) => s.trips);
   const getField = useFieldStore((s) => s.getById);
@@ -120,6 +121,7 @@ export default function ReportDetail() {
   const userId = useAuthStore((s) => s.user?.id);
 
   const [deleting, setDeleting] = useState(false);
+  const [exporting, setExporting] = useState(false);
   // store 가 id 별 fetch 진행 상태를 노출 — 로컬 가드 대신 단일 진실 출처 사용.
   const detailStatus = useReportStore((s) => s.detailStatus[reportId]);
   const fetchedRef = useRef<string | null>(null);
@@ -209,6 +211,16 @@ export default function ReportDetail() {
   }
 
   const isOwner = userId === report.creatorId;
+  const hasOutput = !!(report.outputFileUrl && report.outputFileUrl.trim());
+
+  const handleExport = async (regenerate: boolean) => {
+    if (exporting) return;
+    setExporting(true);
+    const r = await exportWord(report.id, regenerate);
+    setExporting(false);
+    // web 은 webAlertPatch 가 window.alert 로 라우팅 — 분기 불필요.
+    if (!r.ok) Alert.alert('Word 생성 실패', r.error);
+  };
 
   const handleDeleteFr = (frId: string) => {
     const doDelete = async () => {
@@ -349,7 +361,7 @@ export default function ReportDetail() {
           ))
         )}
 
-        {report.outputFileUrl && report.outputFileUrl.trim() ? (
+        {hasOutput ? (
           <Button
             onPress={() => {
               const url = toAbsoluteFileUrl(report.outputFileUrl!.trim());
@@ -371,6 +383,21 @@ export default function ReportDetail() {
             style={styles.downloadBtn}
           >
             Word 파일 다운로드
+          </Button>
+        ) : null}
+
+        {/* Word 생성 트리거 (소유자) — 미생성이면 생성, 생성됨이면 다시 생성.
+            현장 보고가 없으면 서버가 report_no_photos 로 거절하므로 버튼 자체를 숨김. */}
+        {isOwner && fieldReports.length > 0 ? (
+          <Button
+            onPress={() => void handleExport(hasOutput)}
+            loading={exporting}
+            variant={hasOutput ? 'ghost' : 'primary'}
+            fullWidth
+            leftIcon="document-text-outline"
+            style={styles.downloadBtn}
+          >
+            {hasOutput ? 'Word 다시 생성' : 'Word 생성'}
           </Button>
         ) : null}
 
