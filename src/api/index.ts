@@ -9,6 +9,8 @@ export { trips } from './endpoints/trips';
 export type {
   TripStartBody,
   TripUpdateBody,
+  PlannedFieldInput,
+  DestinationResponse,
   TripStartResponse,
   TripEndResponse,
   ActiveTripResponse,

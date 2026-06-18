@@ -86,6 +86,9 @@ export interface Destination {
   fieldId: string;
   order: number;
   status: DestinationStatus;
+  // 클라이언트에서 발급된 미영속 행(진행 중 add·legacy 폴백) 표시 — 서버 PATCH 가드·
+  // setFromServer 보존에 사용. 서버 hydrate 행은 이 플래그가 없다(undefined). (backend-backlog §11/§24)
+  local?: boolean;
 }
 
 // ERD v2: memos 테이블은 현장(field) 전용 — visit 연결·좌표 컬럼 없음.

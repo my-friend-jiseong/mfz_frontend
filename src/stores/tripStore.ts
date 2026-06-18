@@ -30,7 +30,7 @@ interface TripState {
   refreshList: () => Promise<void>;
   // trips.detail 페치 + visitStore 로 timeline sync. trips/[id] / review 진입 시 호출.
   loadDetail: (id: string) => Promise<void>;
-  start: (title?: string) => Promise<StartResult>;
+  start: (title?: string, plannedFieldIds?: string[]) => Promise<StartResult>;
   end: (force?: boolean) => Promise<EndResult>;
   update: (id: string, body: TripUpdateBody) => Promise<GenericResult>;
   remove: (id: string) => Promise<GenericResult>;
@@ -96,6 +96,11 @@ export const useTripStore = create<TripState>((set, get) => ({
       if (res.timeline && res.timeline.length > 0) {
         useVisitStore.getState().syncFromTimeline(id, res.timeline);
       }
+      // backend-backlog §11 — 상세 응답의 계획 목적지를 destinationStore 로 하이드레이트
+      // (다른 기기·세션·캐시정리 후에도 '계획 N곳'·지도 마커 노출). legacy 백엔드는 미포함.
+      if (res.destinations) {
+        useDestinationStore.getState().setFromServer(id, res.destinations);
+      }
       // 자체 trips 항목의 메타 갱신 — visitCount 가 list 응답보다 최신일 수 있음.
       set((s) => ({
         trips: s.trips.map((t) =>
@@ -117,11 +122,19 @@ export const useTripStore = create<TripState>((set, get) => ({
     }
   },
 
-  start: async (title) => {
+  start: async (title, plannedFieldIds) => {
     set({ busy: true });
     try {
       const trimmed = title?.trim();
-      const res = await tripsApi.start(trimmed ? { title: trimmed } : undefined);
+      // backend-backlog §11 — 계획 목적지를 함께 전송해 서버에 영속.
+      const plannedFields = plannedFieldIds?.length
+        ? plannedFieldIds.map((fieldId, order) => ({ fieldId, order }))
+        : undefined;
+      const body =
+        trimmed || plannedFields
+          ? { ...(trimmed ? { title: trimmed } : {}), ...(plannedFields ? { plannedFields } : {}) }
+          : undefined;
+      const res = await tripsApi.start(body);
       const trip: Trip = {
         id: res.tripId,
         workerId: currentUserId(),
@@ -136,6 +149,14 @@ export const useTripStore = create<TripState>((set, get) => ({
         activeTripId: trip.id,
         busy: false,
       }));
+      // destinations 하이드레이트: 서버 응답 우선, 없으면(레거시) 로컬 폴백.
+      if (plannedFieldIds?.length) {
+        if (res.destinations) {
+          useDestinationStore.getState().setFromServer(trip.id, res.destinations);
+        } else {
+          useDestinationStore.getState().bulkCreate(trip.id, plannedFieldIds);
+        }
+      }
       return { ok: true, trip };
     } catch (e) {
       set({ busy: false });

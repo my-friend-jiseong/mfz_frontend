@@ -10,9 +10,26 @@ export interface TripBanner {
   message: string | null;
 }
 
+// backend-backlog §11 — release 2026-06: 외근 시작 시 계획 목적지 영속.
+export interface PlannedFieldInput {
+  fieldId: string;
+  order: number;
+}
+
 export interface TripStartBody {
-  // ERD v2: title 만. startLocation·plannedFields 제거.
   title?: string;
+  // 계획 목적지 (최대 200건). 미전달 시 빈 배열 처리(legacy 호환).
+  plannedFields?: PlannedFieldInput[];
+}
+
+// backend-backlog §11 — destinations 서버 영속 응답.
+export interface DestinationResponse {
+  destinationId: string;
+  fieldId: string;
+  order: number;
+  status: 'pending' | 'arrived' | 'skipped';
+  siteName?: string;
+  siteAddress?: string;
 }
 
 // v2 검증(2026-05-28): start/end 응답엔 banner·toast 없음 — optional.
@@ -28,6 +45,8 @@ export interface TripStartResponse {
   tripId: string;
   startedAt: string;
   title?: string;
+  // backend-backlog §11 — 계획 목적지 영속 후 응답에 포함. legacy 백엔드는 미포함.
+  destinations?: DestinationResponse[];
   banner?: TripBanner;
   toast?: string;
 }
@@ -99,6 +118,8 @@ export interface TripDetailResponse {
   approximateDistanceKm?: number;
   status: string;
   lifecycleStatus?: string;
+  // backend-backlog §11 — 계획 목적지 (다른 기기·세션에서도 조회). legacy 백엔드는 미포함.
+  destinations?: DestinationResponse[];
   timeline: TripTimelineEntry[];
   reportEntryPoint: { label: string; createUrl: string } | null;
 }
@@ -174,6 +195,20 @@ export const trips = {
   // backend-backlog §2 — release 2026-06: 제목·시간 보정. 응답은 TripDetailResponse.
   update: (tripId: string, body: TripUpdateBody) =>
     request<TripDetailResponse>(`/api/trips/${tripId}`, { method: 'PATCH', body }),
+
+  // backend-backlog §11 — release 2026-06: 계획 목적지 조회·상태/순서 갱신.
+  listDestinations: (tripId: string) =>
+    request<{ items: DestinationResponse[] }>(`/api/trips/${tripId}/destinations`),
+
+  updateDestination: (
+    tripId: string,
+    destinationId: string,
+    body: { status?: 'arrived' | 'skipped'; order?: number },
+  ) =>
+    request<DestinationResponse>(
+      `/api/trips/${tripId}/destinations/${destinationId}`,
+      { method: 'PATCH', body },
+    ),
 
   /** 외부 지도 앱 길안내 딥링크 — providers wrap 객체로 응답 */
   navigationDeepLinks: (tripId: string, body: NavigationDeepLinksBody) =>

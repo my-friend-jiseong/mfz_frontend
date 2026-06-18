@@ -819,8 +819,44 @@ headless 브라우저로 새로 그려 사진을 찍는 것**이다. 카카오 �
 
 ---
 
+## 24. 🟡 `POST /api/trips/:tripId/destinations` — 진행 중 외근 목적지 단건 추가
+
+### 배경
+2026-06 릴리스로 destinations 가 서버 영속화됐고(§11), 프론트도 서버 전환 완료:
+외근 시작 시 `plannedFields` 전송 → `GET /destinations` 조회 → `PATCH .../destinations/:id` 로
+status(skipped)·order 갱신. 그러나 **진행 중 외근에 목적지를 한 건 더 추가**하는 경로
+([`AddDestinationModal`](../../src/components/trips/AddDestinationModal.tsx))는 대응 엔드포인트가 없다.
+릴리스 API 에 단건 add(POST)가 빠져 있어, 프론트는 이 추가를 **로컬 temp(미영속)** 로만 처리 중 —
+다른 기기·세션·캐시정리 후엔 사라진다(크로스 기기 동기화 안 됨).
+
+### 백엔드가 해야 할 것
+```
+POST /api/trips/:tripId/destinations
+body: { fieldId: string; order?: number }   // order 미지정 시 말미 append
+→ 200: Destination (destinationId, fieldId, order, status='pending')
+```
+- 진행 중(active) 외근에만 허용. 중복 fieldId 거부(또는 기존 destination 반환).
+- 응답 shape 는 기존 destinations(§11)와 동일.
+
+### 프론트엔드 영향 / 현황
+- 현재 `destinationStore.add` 는 로컬 temp(`dest-` 접두) 로만 생성, `setFromServer` 가 temp 를 보존해
+  세션 내에서는 유지되나 영속 X. 엔드포인트 도착 시 add 를 서버 호출 후 응답(서버 id)로 교체하면 끝.
+
+### 우선순위
+🟡 중간 — 핵심 cross-device 정합(계획 목적지)은 §11 로 닫힘. 진행 중 단건 추가는 빈도 낮은 보조 경로.
+
+### 발견 시점
+2026-06-19 (§11 destinations 서버 전환 구현 중 add 엔드포인트 부재 확인).
+
+### 관련 코드
+- 프론트 [`src/stores/destinationStore.ts`](../../src/stores/destinationStore.ts) (`add` — 로컬 temp)
+- 프론트 [`src/components/trips/AddDestinationModal.tsx`](../../src/components/trips/AddDestinationModal.tsx)
+
+---
+
 ## 변경 이력
 
+- **2026-06-19**: §24 추가 — 진행 중 외근 목적지 단건 추가 `POST /trips/:id/destinations`(🟡). §11 destinations 서버 전환 구현 중 add 엔드포인트 부재 확인, 프론트는 로컬 temp 로 우회 중.
 - **2026-05-08**: 백로그 신설. §1 길찾기 카카오-only 정책 반영. (이전 §1 title 은 백엔드 처리 완료로 제거)
 - **2026-05-08**: §2 추가 — Trip PATCH/DELETE 신설 요청 (Field 와 비대칭 해소).
 - **2026-05-09**: §3·§4·§5 추가 — 통합 자동화 재실행 중 발견. §3 카카오 Local 검색 0건 (high), §4 detailAddress 정책 정합 (medium), §5 optimize-preview 404 (low).

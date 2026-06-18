@@ -7,7 +7,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFieldStore } from '@/stores/fieldStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useTripStore } from '@/stores/tripStore';
-import { useDestinationStore } from '@/stores/destinationStore';
 import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout, sheetScrollableStyle } from '@/components/MapSheetLayout';
 import { Card } from '@/components/ui/Card';
@@ -37,7 +36,6 @@ export default function NewTripOrder() {
   const userId = useAuthStore((s) => s.user?.id);
   const getField = useFieldStore((s) => s.getById);
   const startTrip = useTripStore((s) => s.start);
-  const bulkCreate = useDestinationStore((s) => s.bulkCreate);
 
   const initialList = useMemo<OrderedField[]>(() => {
     const ids = (params.fieldIds ?? '')
@@ -124,16 +122,13 @@ export default function NewTripOrder() {
   const handleConfirm = async () => {
     if (!userId || list.length === 0 || submitting) return;
     setSubmitting(true);
-    const r = await startTrip(title);
+    // 계획 목적지를 외근 시작과 함께 서버에 영속 — tripStore.start 가 응답으로 destinationStore 하이드레이트.
+    const r = await startTrip(title, list.map((f) => f.id));
     setSubmitting(false);
     if (!r.ok) {
       Alert.alert('외근 시작 실패', r.error);
       return;
     }
-    bulkCreate(
-      r.trip.id,
-      list.map((f) => f.id),
-    );
     router.replace('/(tabs)/trips/active' as never);
   };
 

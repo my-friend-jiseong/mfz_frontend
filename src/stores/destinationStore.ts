@@ -1,21 +1,43 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Destination } from '@/types/entities';
+import { trips as tripsApi } from '@/api';
+import type { DestinationResponse } from '@/api';
 
-// ERD v2: trip_planned_stops 테이블이 제거되어 목적지는 백엔드에 영속화되지 않는다.
-// 프론트가 AsyncStorage 에 로컬 영속화 — 외근 진행 보조용(순수 클라이언트). 멀티 디바이스
-// 동기화는 되지 않으며, 페이지 새로고침·앱 재기동 시 활성 외근의 목적지가 살아남도록 한다.
+// backend-backlog §11 (release 2026-06): destinations 는 백엔드에 영속화된다.
+// 본 스토어는 서버 소스 + AsyncStorage 오프라인 캐시로 동작:
+//   - 외근 시작/상세 로드/active 진입 시 서버 데이터로 setFromServer 하이드레이트.
+//   - skip/reorder 는 낙관적 로컬 갱신 + fire-and-forget PATCH (드리프트는 다음 fetch 가 정정).
+//   - 도착(arrived)은 체크인 시 백엔드 자동 → markArrived 는 로컬 낙관 표시만(서버콜 불요).
+//   - add(진행 중 단건 추가)는 아직 백엔드 엔드포인트가 없어 로컬 temp 로만 동작(비영속).
+//     로컬 행은 `local: true` 플래그로 표시 → PATCH 가드·setFromServer 보존에 사용
+//     (id 접두사 sniffing 대신 명시 플래그 — 서버 id 스킴 변화에 견고). (backend-backlog §24)
 //
 // zustand persist 미들웨어는 일부 환경에서 모듈 초기화 단계 충돌이 보고된 적 있어
 // 단순 manual persist 패턴으로 통일.
 
 const STORAGE_KEY = 'mfz.destinations.v1';
 
+function serverToDestination(tripId: string, d: DestinationResponse): Destination {
+  return {
+    id: d.destinationId,
+    tripId,
+    fieldId: d.fieldId,
+    order: d.order,
+    status: d.status,
+    // 서버 행은 local 플래그 없음(undefined) → PATCH 대상.
+  };
+}
+
 interface DestinationState {
   destinations: Destination[];
   hydrated: boolean;
 
   hydrate: () => Promise<void>;
+  // 서버 destinations 로 그 trip 의 목적지를 교체 (로컬 temp 행은 보존). start/loadDetail/fetch 공용.
+  setFromServer: (tripId: string, items: DestinationResponse[]) => void;
+  // GET /destinations 로 그 trip 목적지를 서버에서 가져와 하이드레이트 (active 진입·콜드스타트).
+  fetchForTrip: (tripId: string) => Promise<void>;
   bulkCreate: (tripId: string, fieldIds: string[]) => Destination[];
   // 진행 중 외근에 destination 단건 추가. 이미 같은 field 가 있거나 (어떤 status 든)
   // pending 이 아닌 destination 으로 들어가야 할 case 는 없으므로 중복은 거부 (null 반환).
@@ -69,13 +91,36 @@ export const useDestinationStore = create<DestinationState>((set, get) => ({
     }
   },
 
+  setFromServer: (tripId, items) => {
+    const incoming = items.map((d) => serverToDestination(tripId, d));
+    // 다른 trip 의 행 + 이 trip 의 로컬(미영속 add) 행은 보존, 서버 행만 교체.
+    const preserved = get().destinations.filter(
+      (d) => d.tripId !== tripId || d.local,
+    );
+    const next = [...preserved, ...incoming];
+    set({ destinations: next });
+    void persist(next);
+  },
+
+  fetchForTrip: async (tripId) => {
+    try {
+      const res = await tripsApi.listDestinations(tripId);
+      get().setFromServer(tripId, res.items);
+    } catch {
+      // 네트워크·미배포(404) 등 — 캐시 유지. 다음 진입 때 재시도.
+    }
+  },
+
+  // 레거시 폴백 전용 — start 응답에 서버 destinations 가 없을 때만 tripStore.start 가 호출.
+  // 정상 경로에선 setFromServer 가 서버 id 로 하이드레이트.
   bulkCreate: (tripId, fieldIds) => {
     const created: Destination[] = fieldIds.map((fieldId, idx) => ({
       id: nextDestId(),
       tripId,
       fieldId,
-      order: idx + 1,
+      order: idx,
       status: 'pending',
+      local: true,
     }));
     const next = [...get().destinations, ...created];
     set({ destinations: next });
@@ -83,6 +128,8 @@ export const useDestinationStore = create<DestinationState>((set, get) => ({
     return created;
   },
 
+  // 진행 중 외근 단건 추가 — 백엔드 add 엔드포인트 부재로 로컬 temp 만(비영속).
+  // temp 행은 setFromServer 가 보존하나, 백엔드 POST 신설 전까진 크로스 기기 동기화 안 됨.
   add: (tripId, fieldId) => {
     const existing = get().destinations.filter((d) => d.tripId === tripId);
     if (existing.some((d) => d.fieldId === fieldId)) return null;
@@ -93,6 +140,7 @@ export const useDestinationStore = create<DestinationState>((set, get) => ({
       fieldId,
       order: maxOrder + 1,
       status: 'pending',
+      local: true,
     };
     const next = [...get().destinations, created];
     set({ destinations: next });
@@ -115,6 +163,8 @@ export const useDestinationStore = create<DestinationState>((set, get) => ({
       (d) => d.tripId === tripId && d.fieldId === fieldId,
     ),
 
+  // 도착은 체크인 시 백엔드가 자동 처리 → 여기선 즉시 UI 반영용 로컬 낙관 표시만(서버콜 불요).
+  // 다음 setFromServer(상세/active fetch)가 서버 상태로 정정·확정한다(서버가 진실).
   markArrived: (id) => {
     const next = get().destinations.map((d) =>
       d.id === id ? { ...d, status: 'arrived' as const } : d,
@@ -124,21 +174,40 @@ export const useDestinationStore = create<DestinationState>((set, get) => ({
   },
 
   markSkipped: (id) => {
+    const target = get().destinations.find((d) => d.id === id);
     const next = get().destinations.map((d) =>
       d.id === id ? { ...d, status: 'skipped' as const } : d,
     );
     set({ destinations: next });
     void persist(next);
+    // 서버 영속 (fire-and-forget) — 로컬(미영속) 행은 제외. 실패는 무시(다음 fetch 정정).
+    if (target && !target.local) {
+      void tripsApi
+        .updateDestination(target.tripId, target.id, { status: 'skipped' })
+        .catch(() => {});
+    }
   },
 
   reorder: (tripId, orderedIds) => {
+    // 이전 order 스냅샷 — 실제로 바뀐 행만 PATCH 하기 위함.
+    const prevOrder = new Map(get().destinations.map((d) => [d.id, d.order]));
     const next = get().destinations.map((d) => {
       if (d.tripId !== tripId) return d;
       const idx = orderedIds.indexOf(d.id);
-      return idx >= 0 ? { ...d, order: idx + 1 } : d;
+      return idx >= 0 ? { ...d, order: idx } : d; // 0-based (start 전송과 동일 base)
     });
     set({ destinations: next });
     void persist(next);
+    // 서버 영속 (fire-and-forget) — order 가 실제로 바뀐 서버 행만 PATCH. 로컬 행은 제외.
+    const byId = new Map(next.map((d) => [d.id, d]));
+    orderedIds.forEach((destId, idx) => {
+      const d = byId.get(destId);
+      if (!d || d.local) return;
+      if (prevOrder.get(destId) === idx) return; // 순서 변동 없음 → skip
+      void tripsApi
+        .updateDestination(tripId, destId, { order: idx })
+        .catch(() => {});
+    });
   },
 
   removeByTrip: (tripId) => {

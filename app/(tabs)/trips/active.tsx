@@ -41,6 +41,7 @@ export default function ActiveTrip() {
   const markSkipped = useDestinationStore((s) => s.markSkipped);
   const removeByTrip = useDestinationStore((s) => s.removeByTrip);
   const reorderDestinations = useDestinationStore((s) => s.reorder);
+  const fetchDestinations = useDestinationStore((s) => s.fetchForTrip);
 
   const getField = useFieldStore((s) => s.getById);
   const loadFieldDetail = useFieldStore((s) => s.loadDetail);
@@ -59,6 +60,17 @@ export default function ActiveTrip() {
   // Quick Photo — 외근 중 현장 도착 → 촬영이 주 사용처 (계획 §4-3 진입점 확장).
   // 훅 호출은 아래 activeTripId early return 보다 위에 — hook 순서 고정.
   const quickPhoto = useQuickPhoto();
+
+  // 진입 시 서버에서 목적지 하이드레이트 — 다른 기기/세션/캐시정리 후 콜드스타트 대비
+  // (backend-backlog §11). 로컬 캐시가 비었을 때만 fetch:
+  //   - 방금 start 하이드레이트했거나 진행 중 낙관적 skip/reorder 가 있는 경우, in-flight GET 가
+  //     이를 stale 서버 스냅샷으로 되돌리는 race 를 차단하고 중복 GET 도 제거.
+  //   - 캐시가 비면(콜드스타트·크로스 기기) 그때만 서버에서 받아온다.
+  useEffect(() => {
+    if (!activeTripId) return;
+    if (useDestinationStore.getState().byTrip(activeTripId).length > 0) return;
+    void fetchDestinations(activeTripId);
+  }, [activeTripId, fetchDestinations]);
 
   // 외근 진행 시간을 1분 주기로 갱신. 화면이 active 일 때만 동작.
   // deps 를 activeTripId (스칼라) 로 좁힘 — 이전엔 activeTrip 객체 (allTrips memo 결과)
@@ -405,7 +417,7 @@ export default function ActiveTrip() {
     </View>
   );
 
-  const renderItem = ({ item }: { item: Destination }) => {
+  const renderItem = ({ item, index }: { item: Destination; index: number }) => {
     const field = getField(item.fieldId);
     const isCurrent = item.id === currentDest?.id;
     // arrived 인 경우 visit 결과 라벨 우선 노출 (정상/부재/거절 등).
@@ -427,7 +439,7 @@ export default function ActiveTrip() {
 
     return (
       <DestinationRow
-        order={item.order}
+        order={index + 1}
         address={field?.address ?? '알 수 없는 현장'}
         addressDetail={field?.addressDetail ?? undefined}
         statusLabel={m.label}
