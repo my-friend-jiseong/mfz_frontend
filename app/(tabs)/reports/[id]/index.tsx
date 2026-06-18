@@ -361,43 +361,55 @@ export default function ReportDetail() {
           ))
         )}
 
+        {/* Word 영역 — 주 행동(다운로드 또는 생성)만 primary 로 강조, '다시 생성'은 보조(ghost·축소).
+            현장 보고가 없으면 서버가 report_no_photos 로 거절하므로 생성 버튼은 숨김. */}
         {hasOutput ? (
+          <>
+            <Button
+              onPress={() => {
+                const url = toAbsoluteFileUrl(report.outputFileUrl!.trim());
+                // web 에선 새 탭, 모바일은 외부 앱 — 실패 시 silent 종결되지 않도록 alert.
+                if (Platform.OS === 'web') {
+                  window.open(url, '_blank', 'noopener,noreferrer');
+                  return;
+                }
+                Linking.openURL(url).catch(() => {
+                  Alert.alert(
+                    '다운로드 실패',
+                    '파일을 열 수 없습니다. 잠시 후 다시 시도해주세요.',
+                  );
+                });
+              }}
+              variant="primary"
+              fullWidth
+              leftIcon="download-outline"
+              style={styles.downloadBtn}
+            >
+              Word 파일 다운로드
+            </Button>
+            {isOwner && fieldReports.length > 0 ? (
+              <Button
+                onPress={() => void handleExport(true)}
+                loading={exporting}
+                variant="ghost"
+                size="sm"
+                leftIcon="refresh"
+                style={styles.regenBtn}
+              >
+                Word 다시 생성
+              </Button>
+            ) : null}
+          </>
+        ) : isOwner && fieldReports.length > 0 ? (
           <Button
-            onPress={() => {
-              const url = toAbsoluteFileUrl(report.outputFileUrl!.trim());
-              // web 에선 새 탭, 모바일은 외부 앱 — 실패 시 silent 종결되지 않도록 alert.
-              if (Platform.OS === 'web') {
-                window.open(url, '_blank', 'noopener,noreferrer');
-                return;
-              }
-              Linking.openURL(url).catch(() => {
-                Alert.alert(
-                  '다운로드 실패',
-                  '파일을 열 수 없습니다. 잠시 후 다시 시도해주세요.',
-                );
-              });
-            }}
-            variant="secondary"
-            fullWidth
-            leftIcon="download-outline"
-            style={styles.downloadBtn}
-          >
-            Word 파일 다운로드
-          </Button>
-        ) : null}
-
-        {/* Word 생성 트리거 (소유자) — 미생성이면 생성, 생성됨이면 다시 생성.
-            현장 보고가 없으면 서버가 report_no_photos 로 거절하므로 버튼 자체를 숨김. */}
-        {isOwner && fieldReports.length > 0 ? (
-          <Button
-            onPress={() => void handleExport(hasOutput)}
+            onPress={() => void handleExport(false)}
             loading={exporting}
-            variant={hasOutput ? 'ghost' : 'primary'}
+            variant="primary"
             fullWidth
             leftIcon="document-text-outline"
             style={styles.downloadBtn}
           >
-            {hasOutput ? 'Word 다시 생성' : 'Word 생성'}
+            Word 생성
           </Button>
         ) : null}
 
@@ -489,10 +501,16 @@ const styles = StyleSheet.create({
   },
   frCaption: { marginTop: 4 },
   downloadBtn: { marginTop: spacing.md },
+  // '다시 생성'은 보조 — 폭을 줄여(self) 다운로드 primary 보다 약하게.
+  regenBtn: { alignSelf: 'center', marginTop: spacing.xs },
+  // 보고서 관리(수정/삭제) 그룹 — Word 영역과 구분선으로 분리.
   actions: {
     flexDirection: 'row',
     gap: spacing.sm,
     marginTop: spacing.xl,
+    paddingTop: spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderMuted,
   },
   actionFlex: { flex: 1 },
 });
