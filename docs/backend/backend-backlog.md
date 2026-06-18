@@ -10,56 +10,20 @@
 
 ---
 
-## 2. 🟡 `PATCH /api/trips/:tripId` / `DELETE /api/trips/:tripId` 신설
+## 2. ✅ `PATCH /api/trips/:tripId` / `DELETE /api/trips/:tripId` — 완료 (2026-06)
 
-### 배경
-Trip 자원에 Update·Delete 엔드포인트가 없음. Field 는 `PATCH /api/fields/:fieldId` / `DELETE /api/fields/:fieldId` 가 있어 [`fields/[id]/edit.tsx`](../../app/\(tabs\)/fields/\[id\]/edit.tsx) 에서 사용 중인데 Trip 만 비대칭. 프론트의 외근 상세 화면 ([`trips/[id].tsx`](../../app/\(tabs\)/trips/\[id\].tsx)) 에 수정·삭제 UI 가 들어갈 자리가 없음.
-
-### 백엔드가 해야 할 것
-
-**(A) `PATCH /api/trips/:tripId` — 부분 갱신**
-```ts
-PATCH /api/trips/:tripId
-body: {
-  title?: string;        // 사용자 입력 제목 (50자 이하)
-  startedAt?: ISO8601;   // 시작 시각 보정 (시작 깜빡한 경우)
-  endedAt?: ISO8601;     // 종료 시각 보정 (종료 깜빡한 경우)
-}
-→ 200: TripDetailResponse
-```
-
-검증:
-- 본인 trip 만 수정 가능 (`requesterId === trip.userId`)
-- `startedAt > endedAt` 케이스는 400
-- 활성 외근(`endedAt = null`) 의 `endedAt` 갱신은 종료 처리로 위임 (별도 endpoint 와 충돌 방지) — 또는 허용하면 lifecycle 정합 정책 명시
-- title trim, 50자 초과 거부
-
-**(B) `DELETE /api/trips/:tripId` — soft delete 권장**
-```ts
-DELETE /api/trips/:tripId
-→ 204
-```
-
-검증·정책:
-- visit·report 가 연결된 trip 삭제 시 cascade 정책 정의 — Field 의 `has_related_visits` 코드와 같은 패턴 권장 (관련 데이터 있으면 차단·확인 요청)
-- soft delete (deletedAt 컬럼) 권장 — 통계·이력 보존 목적
-- 활성 외근 삭제는 차단 (먼저 종료해야 함)
-
-### 프론트엔드가 할 일 (백엔드 준비 후)
-- `tripStore.update(tripId, body)` / `tripStore.remove(tripId)` 추가
-- `tripsApi.update` / `tripsApi.remove` 추가
-- 외근 상세 ([`trips/[id].tsx`](../../app/\(tabs\)/trips/\[id\].tsx)) 에 "수정 / 삭제" CTA 추가, 또는 별도 edit 화면 (`trips/[id]/edit.tsx`) 구성 — Field 패턴 그대로
-- 활성 외근일 땐 삭제 버튼 비활성
-
-### 우선순위
-🟡 중간 — 종료된 외근의 제목 오기·시간 오기 보정 + 잘못 시작한 외근 삭제 모두 실사용에서 흔한 시나리오.
-
-### 발견 시점
-2026-05-08 — 외근 상세 화면 점검 중 CRUD 비대칭 발견.
+백엔드 배포 + 프론트 연동·검증 완료.
+- **PATCH(제목·시간 보정)**: 운영은 본문 없이 200(상세응답 status 가 `normal|abnormal` 라 응답 비의존 — 보낸 body 로 로컬 패치). `tripStore.update` + 외근 상세 '수정' CTA + `trips/[id]/edit.tsx`. (현재 UI 는 제목만; 시간 보정은 피커 도입 후)
+- **DELETE**: 방문·보고서 연결 시 `409 has_related_trip_records` → `?force=true` 강제 삭제. `tripStore.remove(force)` + 수정 화면 하단 '위험 구역'.
+- 검증: 운영 probe(409→force→204) + web UI. 커밋 `18414f6`·`10b4cd0`·`ec6ab90`.
 
 ---
 
 ## 3. 🟡 주소검색 — 백엔드 keyword.json 병합(POI) 선택적 보강 (운영 키 정상 확인)
+
+> **갱신 (release 2026-06)**: 백엔드가 `address.json + keyword.json` 병합·중복제거를 배포(release §7) →
+> **백엔드 측 요청은 충족.** 잔여는 프론트 선택 정리뿐 — 클라이언트 카카오 JS SDK 키워드검색(헤드리스
+> WebView) 의존을 걷어낼 수 있음(차단 아님, 미적용). 그래서 🟡 유지.
 
 ### 현황 (2026-06-01 read-only probe 로 정정)
 **과거 전제("어떤 키워드든 0건 = `KAKAO_REST_API_KEY` 만료/권한")는 무효.** 운영
@@ -99,39 +63,11 @@ API(`address.json`)가 상호·기관명을 구조적으로 못 잡는 정상 �
 
 ---
 
-## 4. 🟡 `detailAddress` optional 완화 요청 — 백엔드 nullable 화 (방향 (A) 확정)
+## 4. ✅ `detailAddress` optional 완화 — 완료 (release 2026-06)
 
-### 배경
-`POST /api/fields` 가 `detailAddress` 빠진 요청에 대해 400 응답:
-
-```json
-{ "code": "detail_address_required", "message": "상세 주소를 입력해주세요" }
-```
-
-그런데 클라이언트 [`fields/new.tsx`](../../app/\(tabs\)/fields/new.tsx) 의 "상세 주소 (동/호수 등)" 입력은 placeholder 만 있고 강제 입력 없음. 사용자가 빈 채로 "현장 등록" 누르면 백엔드가 거부 → 일반 Alert (`등록 실패`) 로 떨어짐.
-
-### 결정 — (A) 백엔드 optional 완화로 확정 (2026-06-01)
-- **(A) ✅ 채택**: `detailAddress` 를 optional 로 완화 — 없으면 빈 문자열/null 로 저장하고 `detail_address_required` 400 을 던지지 않음. 이유: 모든 현장이 동·호수 단위로 식별 가능한 건 아님 (가로수, 광장, 교차로 등 point 성 현장). 프론트가 이미 optional 로 다루는 UX 와도 정합.
-- **(B) ✗ 기각**: 프론트 강제(별표+가드). 위 사유로 데이터 모델상 부적절.
-
-### 백엔드가 할 일
-- `POST /api/fields` · `PATCH /api/fields/:id` 에서 `detailAddress` 를 optional 로 — 미전송/빈 값 허용, 빈 문자열(또는 null)로 저장.
-- `detail_address_required` 검증 제거 (또는 해당 경로 비활성).
-- ERD `location.detail_address` 컬럼 nullable 확인.
-
-### 프론트엔드 (완료)
-- `detail_address_required` → `src/api/errors.ts` ERROR_MESSAGES 추가 (백엔드 완화 배포 전까지 안전망 메시지). 2026-06-01 반영.
-- 프론트는 이미 detail 을 강제하지 않으므로 추가 UI 변경 없음.
-
-### 우선순위
-🟡 중간 — 사용자가 첫 현장 등록에서 알 수 없는 이유로 차단됨. 새 사용자 첫 인상 관련.
-
-### 발견 시점
-2026-05-09 (Playwright 자동화 spec 의 빈 detail 등록 시도에서 캡처). 2026-06-01 방향 (A) 확정.
-
-### 관련 코드
-- 프론트 [`app/(tabs)/fields/new.tsx:360-366`](../../app/\(tabs\)/fields/new.tsx#L360) detail 입력
-- 프론트 [`src/api/errors.ts`](../../src/api/errors.ts) ERROR_MESSAGES (`detail_address_required` 추가 완료)
+방향 (A) 확정대로 백엔드가 `POST /api/fields`·`PATCH /api/fields/:id` 의 `detailAddress` 를 optional 로
+완화(빈 값 허용, `detail_address_required` 400 제거 — release §4). 프론트는 원래 detail 을 강제하지
+않으므로 추가 UI 변경 없음(에러 안전망 메시지만 선반영해 둔 상태). point 성 현장(가로수·광장 등) 등록 OK.
 
 ---
 
@@ -287,91 +223,14 @@ API(`address.json`)가 상호·기관명을 구조적으로 못 잡는 정상 �
 
 ---
 
-## 11. 🔴 외근 destinations 영속화 + GET endpoint — 다른 디바이스·세션에서 "계획 0곳" 회로 차단
+## 11. ✅ 외근 destinations 영속화 + GET/PATCH — 완료 (release 2026-06, batch3)
 
-### 배경
-프론트의 `destinationStore` ([`src/stores/destinationStore.ts`](../../src/stores/destinationStore.ts)) 는 **로컬 + AsyncStorage 전용**. 사용자가 외근을 시작할 때 `bulkCreate(tripId, fieldIds[])` 로 로컬에만 적재되고, 백엔드엔 destinations 데이터가 보내지지 않음. 그래서 다음 회로가 깨짐:
-
-- 사용자 A 가 디바이스 1 에서 외근 시작 (현장 3곳) → destinations 로컬 적재.
-- 같은 사용자 A 가 디바이스 2 (또는 새 브라우저) 에서 같은 외근 조회 → trip 자체는 `GET /api/trips/list` 응답에 들어 있지만 destinations 가 로컬에 없으므로 **"계획 0곳 · 실제 방문 0건"** 으로 표시. 사용자는 "분명 3곳 골랐는데" 로 혼란.
-- 같은 디바이스라도 로그아웃 (`useDestinationStore.clearAll()` 호출됨) 후 재로그인 → 로컬 비어 있음 → 같은 증상.
-- AsyncStorage 손상·정리 케이스도 동일.
-
-부수적으로:
-- 트립 상세 화면의 "계획된 목적지" 섹션 ([`trips/[id].tsx`](../../app/\(tabs\)/trips/\[id\].tsx) `planBox`) 도 로컬 destinations 없으면 비노출.
-- 진행 중 외근의 다음 목적지 / 순서 변경 / 건너뛰기 / 도착 마크 같은 lifecycle 도 사용자가 시작한 디바이스에서만 일관성 보장.
-
-### 백엔드가 해야 할 것
-
-**(A) Trip 시작 시 destinations 영속화**
-```ts
-POST /api/trips/start
-body: {
-  startLocation?: { lat, lng };
-  title?: string;
-  destinations: Array<{ fieldId: string; order: number }>;   // ← 신규
-}
-→ 200: TripStartResponse & { destinations: Destination[] }
-```
-
-destinations 미전달 시 호환성 위해 빈 배열로 처리 (legacy 클라이언트 그대로 동작).
-
-**(B) Destinations 조회**
-```ts
-GET /api/trips/:tripId/destinations
-→ 200: {
-  items: Array<{
-    destinationId: string;
-    fieldId: string;
-    order: number;
-    status: 'pending' | 'arrived' | 'skipped';
-    siteName?: string;
-    siteAddress?: string;
-  }>;
-}
-```
-
-**(C) Destination 상태 업데이트**
-```ts
-PATCH /api/trips/:tripId/destinations/:destinationId
-body: { status?: 'arrived' | 'skipped'; order?: number; }
-→ 200: Destination
-```
-체크인이 자동으로 destination 상태도 갱신할지(`POST /api/visits/check-in` 의 부수효과) 백엔드에서 정책 결정. 결정에 따라 (C) 가 선택적 호출이 됨.
-
-**(D) Trip 상세에 destinations 포함 (옵션)**
-`TripDetailResponse` 에 `destinations: Destination[]` 추가하면 (B) 별도 호출 없이 트립 상세 한 번으로 끝.
-
-### 프론트엔드 영향
-
-- `destinationStore` 를 server-source 로 전환:
-  - hydrate 가 AsyncStorage 가 아니라 trip 별 GET 으로 (또는 (D) 적용 시 trip 상세 로드 시점 부수효과).
-  - bulkCreate 가 로컬 임시 적재 → API 응답 결과로 교체 (server id 로 키 정렬).
-  - markArrived/markSkipped/reorder 는 (C) PATCH 호출 후 응답 반영. 오프라인 큐 지원.
-- 트립 상세 [`trips/[id].tsx:215`](../../app/\(tabs\)/trips/\[id\].tsx#L215) 의 "계획 N곳 · 실제 방문 M건" 라인 — 본 사이클에서 `trip.siteCount` (`TripListItem.siteCount`) 우선 사용으로 1차 회피 적용. 백엔드 destinations endpoint 가 들어오면 server-truth 단일화.
-
-### 라이브 재확인 (2026-06-01)
-운영 read-only probe 로 미구현 확정: `GET /api/trips/:tripId` 응답에 `destinations` 키 없음 +
-`GET /api/trips/:tripId/destinations` → **404**. 단, 같은 응답의 `timeline[]` 은 visit 별 `fieldId` 를
-정상 제공(§16 닫힘). 따라서 **완료된 외근의 "관련 현장" 표시는 destinations 없이도 timeline 의 visit
-fieldId 로 도출 가능** → 프론트 우선 수정으로 보고된 버그를 백엔드 없이 해소. **적용됨(2026-06-01)**:
-[`trips/[id].tsx`](../../app/\(tabs\)/trips/\[id\].tsx) `tripFieldIds` 가 destinations(순서 보존) +
-visit fieldId 보완으로 union 도출 → 다른 세션/기기에서도 완료 외근 마커가 뜸. 본 항목(백엔드
-destinations 영속화)은 **계획된(미방문/skipped) 목적지·진행 중 외근·크로스 기기** 일관성용으로 여전히 유효.
-
-### 우선순위
-🔴 높음 — "외근 선택 시 관련 현장 안 보임" 의 지도측 절반(인라인 지도 마커가 client-only destinations 의존).
-모바일·웹 동시 사용 / 디바이스 교체 / 캐시 정리 후 재진입 시 즉시 노출. 단 보고된 버그의 즉효 수정은
-프론트(지도 마커를 visit fieldId 에서 도출)로 가능 — 본 백엔드 항목은 계획 목적지 영속화 범위로 잔존.
-
-### 발견 시점
-2026-05-11 (사용자 보고: "외근 생성할 땐 3곳 골랐는데 트립 상세에 계획 0곳·실제 방문 0건 으로 나옴")
-
-### 관련 코드
-- 프론트 [`src/stores/destinationStore.ts`](../../src/stores/destinationStore.ts) — 현 로컬 전용 구현
-- 프론트 [`app/(tabs)/trips/new/order.tsx:158`](../../app/\(tabs\)/trips/new/order.tsx#L158) — `bulkCreate` 호출 지점 (server-side 로 옮길 자리)
-- 프론트 [`app/(tabs)/trips/[id].tsx:215`](../../app/\(tabs\)/trips/\[id\].tsx#L215) — 카운트 라인 (siteCount fallback 1차 적용 지점)
-- 백엔드 trips/destinations 라우트 신설 — 위 (A)~(C) (선택적으로 (D))
+"계획 0곳" 크로스 기기 회로 해소. 백엔드 배포 + 프론트 서버 전환·검증 완료.
+- 백엔드: `POST /trips/start` 가 `plannedFields` 수용·응답에 `destinations[]`, `GET /trips/:id/destinations`,
+  `PATCH /trips/:id/destinations/:id`(status/order), `GET /trips/:id` 에 `destinations[]`, 체크인 시 pending→arrived 자동.
+- 프론트: `destinationStore` 를 **서버 소스 + AsyncStorage 캐시**로 전환 — 시작 시 plannedFields 전송·`setFromServer` 하이드레이트, trip 상세/active 진입 시 서버 조회(빈 캐시일 때만 — race/중복 GET 차단), skip/reorder 낙관적+fire-and-forget PATCH. 표시 번호는 정렬 인덱스(서버 order base 비의존).
+- 검증: 운영 probe(start→destinations 영속·shape·자동 arrived·skip) + web UI(active 번호·skip·현장추가). 커밋 `ea9a33f`·`caf2d1f`.
+- 잔여: 진행 중 단건 add 는 백엔드 엔드포인트 부재로 로컬 temp → [§24](#24) 로 분리.
 
 ---
 
@@ -456,40 +315,11 @@ POST /api/reports/generate (multipart)  → 500 { code: "internal_server_error",
 
 ---
 
-## 14. 🟠 현장 메모/사진 개별 삭제 — `DELETE /api/fields/:id/memos/:memoId`, `DELETE /api/fields/:id/photos/:photoId`
+## 14. ✅ 현장 메모/사진 개별 삭제 — 완료 (release 2026-06)
 
-### 배경
-현장 상세(`fields/[id]/index.tsx`) 의 직접 메모·사진은 **추가만 가능, 삭제 불가**. 사용자가 잘못 올린 메모/사진을 정정할 방법이 없어 누적된 노이즈가 그대로 남는다. ERD v2 검증 시 백엔드 endpoint 가 존재하지 않음을 확인.
-
-### 백엔드가 해야 할 것
-
-```
-DELETE /api/fields/:fieldId/memos/:memoId
-DELETE /api/fields/:fieldId/photos/:photoId
-```
-
-- 본인 소유 현장의 본인 작성 메모/사진만 삭제 허용 (단일 actor 정책).
-- 성공 응답: 본문 없음(204) 또는 `{ fieldId, memoId|photoId }` 단순 echo.
-- 에러: Phase 7 단일 shape `{ code, message }`. `not_found` / `forbidden` 분기.
-- 사진 삭제 시 파일 저장소(현재 임시 또는 §10 MinIO) 의 실제 객체도 같이 정리.
-
-### 프론트엔드 영향 / 현황 (2026-05-30 기준)
-- 프론트는 호출 path/응답 contract 를 위 가정으로 **선반영** 했음:
-  - `src/api/endpoints/fields.ts` 의 `removeTextMemo` / `removePhoto`
-  - `src/stores/fieldStore.ts` 의 동명 메서드 — 성공 시 `directAttachments` 에서 해당 id 제거
-  - `app/(tabs)/fields/[id]/index.tsx` 메모 카드 우상단 ×, PhotoGrid 셀 우상단 × — 둘 다 confirm 후 호출
-- 백엔드 부재 상태에서 사용자가 시도하면 **404/405 → 사용자 친화적 에러 alert** 로 폴백. 데이터 손상 없음.
-
-### 우선순위
-🟠 중상 — 일상 운영 노이즈 정리에 필요. 외근 종료 후 review 화면에서 추가된 콘텐츠도 동일 자산.
-
-### 발견 시점
-2026-05-30 (현장 라이프사이클 UX 검토 — C9-C).
-
-### 관련 코드
-- 프론트 API: [`src/api/endpoints/fields.ts`](../../src/api/endpoints/fields.ts) `removeTextMemo`, `removePhoto`
-- 프론트 스토어: [`src/stores/fieldStore.ts`](../../src/stores/fieldStore.ts)
-- UI: [`app/(tabs)/fields/[id]/index.tsx`](../../app/\(tabs\)/fields/\[id\]/index.tsx), [`src/components/AttachmentPreview.tsx`](../../src/components/AttachmentPreview.tsx) `PhotoGrid` `onDelete`
+백엔드가 `DELETE /api/fields/:id/memos/:memoId`·`.../photos/:photoId` 배포(204, 디스크 객체도 정리 — release §4).
+프론트는 `removeTextMemo`/`removePhoto`(fields.ts·fieldStore) + 메모카드 ×·PhotoGrid × 로 이미 선반영돼 있어
+추가 작업 없이 동작. 운영 probe(추가→204 삭제→사라짐) + web UI(추가→×→삭제 반영) 검증 완료.
 
 ---
 
@@ -623,31 +453,11 @@ export interface TripTimelineEntry {
 
 ---
 
-## 18. 🟢 `POST /api/reports/from-trip/:tripId` — 보고서+현장보고 단축 생성
+## 18. ✅ `POST /api/reports/from-trip/:tripId` — 완료 (release 2026-06, batch2)
 
-### 배경
-새 보고서 양식(2026-05-31)에서
-보고서 생성 = 그 외근의 visits 별 FieldReport 자동 스캐폴드. 프론트는 현재 `POST /api/reports`
-1회 + `POST /api/reports/:id/field-reports` N회 (순차) 로 처리. N 회 round-trip 비용 절감용 단축 endpoint.
-
-### 백엔드가 해야 할 것
-```
-POST /api/reports/from-trip/:tripId
-body: { title }
-response: { reportId, fieldReports: [...] }
-```
-서버가 그 trip 의 visits 를 조회해 fieldId 별 FieldReport 1개씩 일괄 생성.
-skipped destination 은 제외.
-
-### 프론트엔드 영향
-- `reportStore.createWithVisitScaffold` 가 1회 호출로 단순화.
-- 본 endpoint 도착 전에는 N회 호출 폴백 (이미 구현).
-
-### 발견 시점
-2026-05-31 (보고서 양식 변경 — RP2).
-
-### 관련 코드
-- 프론트 [`src/stores/reportStore.ts`](../../src/stores/reportStore.ts) `createWithVisitScaffold`
+백엔드 `POST /reports/from-trip/:tripId {title}`→`{reportId, fieldReports[]}` 배포. 프론트
+`reportStore.createWithVisitScaffold` 가 from-trip 1콜 우선 + 404/405(미배포) 시 레거시 create+N콜 폴백.
+운영 probe(from-trip→reportId+fieldReports) + web UI(마법사 진입) 검증. 커밋 `df6fc2d`.
 
 ---
 
@@ -730,26 +540,12 @@ body: { format: 'word' | 'pdf' }
 
 ---
 
-## 21. 🟡 `visits.reason`('기타' 사유) 영속·노출 여부 확인 — ERD/스키마 정합
+## 21. ✅ `visits.reason`('기타' 사유) 영속·노출 — 완료 (release 2026-06, batch1)
 
-### 배경
-- ERD v2 changelog(`docs/reference/ERD_REVOLUTION.md`)는 `visits.status_reason` **제거**로 기록.
-- 그런데 v2 검증(2026-05-28)에서 `PATCH /api/visits/:id` 가 body `{ status, reason? }` 를 받고, `status='other'` 면 **reason 10자 이상을 강제**(`visit_status_reason_required`)하는 것이 확인됨 — "컬럼은 없는데 입력은 필수"인 모순.
-- 어느 조회 응답(`recentVisits`, trip `timeline`)에도 reason 이 내려오지 않아, 프론트에서는 **저장되는지·버려지는지 확인 불가**. 사용자가 10자 이상 정성껏 쓴 사유가 유실되고 있다면 UX 신뢰 문제.
-
-### 백엔드가 해야 할 것
-1. reason 의 실제 처리 확인: (a) 컬럼에 영속 중인데 응답에서 누락 → 조회 응답(`recentVisits[]`·`timeline[]`)에 `reason` 포함, (b) 검증만 하고 폐기 중 → 컬럼 신설(`visits.reason VARCHAR(255)` 등) 후 영속+노출, 둘 중 무엇인지 회신.
-2. 확정되면 ERD 문서(`docs/diagram/ERD.drawio` visits 테이블)에 반영할 수 있게 스키마 공유.
-
-### 프론트엔드 영향
-- 현재 전송은 이미 구현됨(`visitsApi.setStatus`). 응답에 reason 이 추가되면 방문 상세/외근 상세에 '기타 사유' 표시만 붙이면 됨 (optional 선반영 가능).
-
-### 발견 시점
-2026-06-06 (MVP 동결 ERD 검토 — 다이어그램·실코드 정합 점검 중).
-
-### 관련 코드
-- 프론트 [`src/api/endpoints/visits.ts`](../../src/api/endpoints/visits.ts) (`setStatus` — `{ status, reason? }`)
-- 프론트 [`src/types/entities.ts`](../../src/types/entities.ts) (`VisitStatus` 주석 — v2 컬럼 제거 vs reason 필수 검증의 모순 기록)
+모순(컬럼 없는데 입력 필수) 해소: 백엔드가 `status_reason` 영속 + 조회 응답에 `reason` 노출(release §5 —
+방문상태 응답·trip `timeline[]`·현장 `recentVisits[]`). 프론트는 4개 타입에 `reason?` + visitStore 보존
+(`mergeVisits` 가 누락 sync 에 덮어쓰지 않게 보존) + 방문상세·외근정리 카드·현장 방문이력에 '사유:' 표시.
+검증: 운영 probe(other+reason 저장→timeline.reason 회수) + web UI(카드에 사유 노출). 커밋 `18414f6`·`bacdd47`.
 
 ---
 
@@ -783,26 +579,12 @@ body: { format: 'word' | 'pdf' }
 
 ---
 
-## 23. 🟠 개인정보 처리방침·이용약관 정적 페이지 호스팅 — 스토어 출시 차단
+## 23. ✅ 처리방침·약관 정적 페이지 호스팅 — 완료 (release 2026-06)
 
-### 배경
-- 앱 내(내 정보 탭) "이용약관"·"개인정보 처리방침" 링크가 **둘 다 죽어 있음** (2026-06-07 실측): 기존 링크 `ilgayo.kr/terms`·`/privacy` 는 도메인 자체가 미해석(curl 000), 운영 도메인 `ilgayo.co.kr/terms`·`/privacy` 는 404.
-- **Google Play 는 살아있는 개인정보 처리방침 URL 이 등록 필수** — 위치+사진+계정정보를 수집하는 앱이라 데이터 안전 양식과 교차 검증됨. 안드로이드 스토어 출시의 잔여 차단 2건 중 하나 (`docs/roadmap/00_store-release-readiness.md` ⛔-2).
-- 출시 일정 확정 시 🟠 → 🔴 격상.
-
-### 백엔드가 해야 할 것
-1. `GET /privacy` · `GET /terms` 정적 HTML 2장 서빙 (Express static 또는 라우트 — API prefix 밖, 비인증). 모바일 브라우저 가독만 되면 디자인 불요.
-2. 본문은 팀 공동 작성(법적 문서 — 백엔드는 서빙만). 처리방침에 최소 포함: 수집 항목(이메일·이름 / 위치 / 사진 / 방문·외근 기록), 수집·이용 목적, 보유 기간, 제3자 제공(카카오 지도/지오코딩 API 호출 시 좌표·주소 전달), 처리 위탁(호스팅), 이용자 권리(열람·삭제 — 계정 삭제 절차 포함), 책임자 연락처.
-3. HTTPS 로 접근 가능해야 함 (Play Console 등록 URL 조건).
-
-### 프론트엔드 영향
-- **선반영 완료 (2026-06-07)**: `app/(tabs)/profile.tsx` 의 URL 상수를 `ilgayo.co.kr/terms`·`/privacy` 로 교체 — 백엔드 배포 즉시 앱 링크가 그대로 살아남. 프론트 추가 작업 없음.
-
-### 발견 시점
-2026-06-07 (스토어 출시 준비도 감사 — `docs/roadmap/00_store-release-readiness.md`).
-
-### 관련 코드
-- 프론트 [`app/(tabs)/profile.tsx`](../../app/\(tabs\)/profile.tsx) (`TERMS_URL`·`PRIVACY_URL` 상수)
+백엔드가 `GET /privacy`·`GET /terms` 정적 HTML 서빙(release §7). 운영 probe 로 **둘 다 200 확인** →
+Play Console 등록용 라이브 HTTPS URL 차단 해소. 프론트는 `profile.tsx` 가 이미 `ilgayo.co.kr/terms`·`/privacy`
+로 가리켜 추가 작업 없음.
+> ⚠️ 잔여(코드 아님): 서빙 본문은 **초안** — 법적 문구는 팀이 작성·교체 필요(수집항목·목적·보유기간·제3자제공·이용자권리·연락처).
 
 ---
 
