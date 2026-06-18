@@ -207,8 +207,8 @@ export const useTripStore = create<TripState>((set, get) => ({
   update: async (id, body) => {
     try {
       await tripsApi.update(id, body);
-      // PATCH /trips/:id 는 본문 없이 200 만 반환(운영 OpenAPI 확인) → 보낸 값으로 로컬 패치.
-      // 응답을 읽으면 null.title 로 throw → 성공인데 '수정 실패' 로 오인되던 회로를 차단.
+      // 응답 본문에 의존하지 않고 보낸 값으로 로컬 패치 — 상세응답 status 가
+      // normal|abnormal 이라 Trip.status 로 쓰면 어긋나기 때문(2026-06-19 운영 probe 확인).
       set((s) => ({
         trips: s.trips.map((t) =>
           t.id === id

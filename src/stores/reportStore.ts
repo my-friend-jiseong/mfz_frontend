@@ -292,9 +292,8 @@ export const useReportStore = create<ReportState>((set, get) => ({
     set({ busy: true });
     try {
       await reportsApi.exportWord(reportId, regenerate);
-      // export/word 는 본문 없이 200 만 반환할 수 있어(운영 OpenAPI) 응답에 의존하지 않고
-      // 권위 있는 상세 GET 으로 outputFileUrl 을 갱신 → 다운로드 버튼 노출.
-      // (응답을 읽으면 null.outputFileUrl 로 throw → 생성됐는데 '실패' 로 오인되던 회로 차단)
+      // 응답 shape 에 의존하지 않고 권위 있는 상세 GET 으로 outputFileUrl 갱신 → 다운로드 버튼 노출.
+      // (사진 0건이면 400 으로 throw → catch 에서 friendly 에러. 2026-06-19 운영 probe 확인)
       set({ busy: false });
       await get().loadDetail(reportId);
       return { ok: true };

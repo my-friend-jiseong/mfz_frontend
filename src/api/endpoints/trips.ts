@@ -192,8 +192,10 @@ export const trips = {
   remove: (tripId: string) =>
     request<Record<string, never>>(`/api/trips/${tripId}`, { method: 'DELETE' }),
 
-  // backend-backlog §2 — release 2026-06: 제목·시간 보정. 운영 OpenAPI 확인 결과
-  // 본문 없이 200 만 반환 → 호출 측은 보낸 body 로 로컬 패치(응답 의존 금지).
+  // backend-backlog §2 — release 2026-06: 제목·시간 보정.
+  // 운영은 TripDetailResponse 본문을 반환하나(OpenAPI 엔 미기재) 그 detail 의 status 는
+  // normal|abnormal(=resultStatus)이라 Trip.status(active|ended)로 쓰면 어긋난다 → 응답을
+  // 읽지 않고 호출 측이 보낸 body 로 로컬 패치한다(응답 비의존, void 로 둠).
   update: (tripId: string, body: TripUpdateBody) =>
     request<void>(`/api/trips/${tripId}`, { method: 'PATCH', body }),
 
