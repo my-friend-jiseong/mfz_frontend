@@ -69,7 +69,7 @@ export function KakaoMapWebView({
 
   const kakaoJsKey = process.env.EXPO_PUBLIC_KAKAO_JS_KEY ?? '';
 
-  // 동일 좌표 마커는 head 1개로 압축하고 count/groupIds 메타를 첨부 → HTML 측은 단순히 표시만.
+  // 동일 좌표 군집 — 히트맵 가중치(value=count)용. 마커 표시 클러스터링은 webview 가 줌별로 따로 한다.
   const groupedMarkers = useMemo(() => {
     return groupSameLocationMarkers(markers).map((group) => ({
       ...group[0],
@@ -114,7 +114,8 @@ export function KakaoMapWebView({
   // pan/zoom 보존 + 경계 지오메트리(~3MB) 재직렬화·전체 리로드 회피.
   // markers/center 는 placeholder·초기 프레이밍용 mount 시점 값만 HTML 에 박는다(deps 제외).
   const initialCenterRef = useRef(center ?? myLocation ?? DEFAULT_CENTER);
-  const initialMarkersRef = useRef(groupedMarkers);
+  // webview 가 줌별 픽셀 클러스터링을 직접 하므로 원본(미그룹) 마커를 넘긴다.
+  const initialMarkersRef = useRef(markers);
   const html = useMemo(
     () =>
       buildKakaoMapHtml({
@@ -137,13 +138,13 @@ export function KakaoMapWebView({
     webRef.current?.injectJavaScript(`${js};true;`);
   }, []);
 
-  // 마커 — head 마커 배열 주입. 변경마다 in-place 재렌더.
+  // 마커 — 원본 배열 주입(클러스터링은 webview 가 줌별로 수행). 변경마다 in-place 재렌더.
   useEffect(() => {
     if (!ready) return;
     inject(
-      `window.__mfzSetMarkers&&window.__mfzSetMarkers(${JSON.stringify(groupedMarkers)})`,
+      `window.__mfzSetMarkers&&window.__mfzSetMarkers(${JSON.stringify(markers)})`,
     );
-  }, [ready, groupedMarkers, inject]);
+  }, [ready, markers, inject]);
 
   // 히트맵 점 — {lat,lng,value}. 동일좌표 군집 count 를 value 로 실어 밀도에 가중(10건>1건).
   const heatPoints = useMemo(

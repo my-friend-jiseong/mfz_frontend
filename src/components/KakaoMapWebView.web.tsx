@@ -30,27 +30,79 @@ const STATUS_TO_SHAPE: Record<FieldStatus, 'triangle' | 'circle' | 'check'> = {
 };
 const STATUS_TO_BADGE: Record<FieldStatus, string> = FIELD_STATUS_LABEL;
 
-function buildMarkerHtml(m: KakaoMapMarker, count = 1): string {
+// 라벨은 레벨 ≤ LABEL_MAX_LEVEL 일 때만 — 밀집 시 라벨 박스 겹침으로 난잡해지는 것 방지.
+const LABEL_MAX_LEVEL = 5;
+// 화면상 이 픽셀 반경 안의 마커는 한 클러스터로 묶는다(줌마다 재계산).
+const CLUSTER_PX = 44;
+
+function buildMarkerHtml(m: KakaoMapMarker, count = 1, showLabel = true): string {
   const color = m.color || '#2563eb';
   const shape = m.shape || 'circle';
   const badge = m.badge || '';
   let svg: string;
   if (shape === 'triangle') {
-    svg = `<svg width="36" height="36" viewBox="0 0 36 36"><polygon points="18,4 32,30 4,30" fill="${color}" stroke="#fff" stroke-width="2"/></svg>`;
+    svg = `<svg width="26" height="26" viewBox="0 0 36 36"><polygon points="18,4 32,30 4,30" fill="${color}" stroke="#fff" stroke-width="2"/></svg>`;
   } else if (shape === 'check') {
-    svg = `<svg width="36" height="36" viewBox="0 0 36 36"><circle cx="18" cy="18" r="14" fill="${color}" stroke="#fff" stroke-width="2"/><polyline points="11,18 16,23 25,13" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    svg = `<svg width="26" height="26" viewBox="0 0 36 36"><circle cx="18" cy="18" r="14" fill="${color}" stroke="#fff" stroke-width="2"/><polyline points="11,18 16,23 25,13" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   } else {
-    svg = `<svg width="36" height="36" viewBox="0 0 36 36"><circle cx="18" cy="18" r="14" fill="${color}" stroke="#fff" stroke-width="2"/></svg>`;
+    svg = `<svg width="26" height="26" viewBox="0 0 36 36"><circle cx="18" cy="18" r="14" fill="${color}" stroke="#fff" stroke-width="2"/></svg>`;
   }
-  // 동일 좌표 그룹: 마커 우상단에 카운트 뱃지 — 좌표는 안 움직임, 다중임만 명시.
+  // 클러스터(count>1): 우상단 카운트 뱃지 — head 좌표는 안 움직임, 다중임만 명시.
   const countBadge =
     count > 1
       ? `<div style="position:absolute;top:-4px;right:-6px;min-width:20px;height:20px;padding:0 5px;border-radius:10px;background:#dc2626;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 1px 2px rgba(0,0,0,0.25);box-sizing:border-box;">${count}</div>`
       : '';
-  // 라벨은 absolute 로 SVG 아래에 띄움 — anchor 박스를 SVG(36×36) 로 한정해서
-  // 줌 변화에 관계없이 SVG 중앙이 좌표에 정확히 정렬되도록.
-  const labelHtml = `<div style="position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:4px;background:#fff;padding:2px 6px;border-radius:8px;font-size:11px;font-weight:600;color:#0f172a;border:1px solid ${color};white-space:nowrap;box-shadow:0 1px 2px rgba(0,0,0,0.15);">${badge ? `<span style="color:${color};">${badge}</span> · ` : ''}${m.label || ''}</div>`;
-  return `<div style="position:relative;width:36px;height:36px;cursor:pointer;">${svg}${countBadge}${labelHtml}</div>`;
+  // 라벨은 absolute 로 SVG(26×26) 아래에 띄움 — anchor 박스를 SVG 로 한정해 줌 무관 정렬.
+  const labelHtml = showLabel
+    ? `<div style="position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:4px;background:#fff;padding:2px 6px;border-radius:8px;font-size:11px;font-weight:600;color:#0f172a;border:1px solid ${color};white-space:nowrap;box-shadow:0 1px 2px rgba(0,0,0,0.15);">${badge ? `<span style="color:${color};">${badge}</span> · ` : ''}${m.label || ''}</div>`
+    : '';
+  return `<div style="position:relative;width:26px;height:26px;cursor:pointer;">${svg}${countBadge}${labelHtml}</div>`;
+}
+
+type PixelCluster = { head: KakaoMapMarker; count: number; ids: string[] };
+
+// 화면 픽셀 거리 기반 클러스터링. 두 좌표의 화면 거리는 pan 에 불변·줌에만 의존하므로
+// 줌 변화 시에만 재계산하면 된다. 그리드 버킷으로 인접 3×3 셀만 검사해 O(n) 에 가깝게 묶는다.
+function clusterByPixel(
+  markers: KakaoMapMarker[],
+  proj: MapProjection,
+  makeLatLng: (lat: number, lng: number) => unknown,
+): PixelCluster[] {
+  type Node = PixelCluster & { px: number; py: number };
+  const buckets = new Map<string, Node[]>();
+  const clusters: Node[] = [];
+  for (const m of markers) {
+    const pt = proj.containerPointFromCoords(makeLatLng(m.lat, m.lng));
+    const gx = Math.floor(pt.x / CLUSTER_PX);
+    const gy = Math.floor(pt.y / CLUSTER_PX);
+    let placed: Node | null = null;
+    for (let dx = -1; dx <= 1 && !placed; dx++) {
+      for (let dy = -1; dy <= 1 && !placed; dy++) {
+        const arr = buckets.get(`${gx + dx}:${gy + dy}`);
+        if (!arr) continue;
+        for (const cl of arr) {
+          const ddx = cl.px - pt.x;
+          const ddy = cl.py - pt.y;
+          if (ddx * ddx + ddy * ddy <= CLUSTER_PX * CLUSTER_PX) {
+            placed = cl;
+            break;
+          }
+        }
+      }
+    }
+    if (placed) {
+      placed.count++;
+      placed.ids.push(m.id);
+    } else {
+      const node: Node = { head: m, count: 1, ids: [m.id], px: pt.x, py: pt.y };
+      clusters.push(node);
+      const bk = `${gx}:${gy}`;
+      const arr = buckets.get(bk);
+      if (arr) arr.push(node);
+      else buckets.set(bk, [node]);
+    }
+  }
+  return clusters;
 }
 
 interface Props {
@@ -364,44 +416,64 @@ export function KakaoMapWebView({
     }
   }, [ready, showBoundary, displayMode, regionCounts]);
 
-  // 오버레이 갱신 (displayMode·markers에 반응)
+  // 오버레이 갱신 (displayMode·markers에 반응) + 줌 변화마다 재클러스터/라벨 토글.
   useEffect(() => {
     if (!ready || !mapRef.current) return;
     const k = getKakao();
     if (!k) return;
-    // 기존 마커 오버레이 제거 (히트맵은 아래 캔버스 effect 가 별도 처리)
-    overlaysRef.current.forEach((o) => o.setMap(null));
-    overlaysRef.current = [];
+    const map = mapRef.current;
 
-    if (displayMode === 'markers') {
-      // KWCAG 1.4.1 색+형상+라벨. 동일 좌표 그룹은 첫 마커만 그리고 카운트 뱃지로 표시 — 좌표 무손실.
-      // choropleth 는 구역 색만 표시하므로 마커를 그리지 않는다.
-      markerGroups.forEach((group) => {
-        const head = group[0];
+    // KWCAG 1.4.1 색+형상+라벨. 픽셀 거리로 묶고 카운트 뱃지로 다중임을 표시 — head 좌표 무손실.
+    // choropleth 는 구역 색만 표시하므로 마커를 그리지 않는다. 라벨은 줌인(레벨 ≤ 임계) 단일 마커만.
+    const render = () => {
+      // 기존 마커 오버레이 제거 (히트맵은 아래 캔버스 effect 가 별도 처리)
+      overlaysRef.current.forEach((o) => o.setMap(null));
+      overlaysRef.current = [];
+      if (displayMode !== 'markers') return;
+      const proj = map.getProjection();
+      const showLabel = map.getLevel() <= LABEL_MAX_LEVEL;
+      const clusters = clusterByPixel(
+        markers,
+        proj,
+        (lat, lng) => new k.maps.LatLng(lat, lng),
+      );
+      clusters.forEach((cl) => {
         const content = document.createElement('div');
-        content.innerHTML = buildMarkerHtml(head, group.length);
+        content.innerHTML = buildMarkerHtml(
+          cl.head,
+          cl.count,
+          showLabel && cl.count === 1,
+        );
         const child = content.firstChild as HTMLElement | null;
         if (child) {
           child.addEventListener('click', () => {
-            if (group.length === 1) {
-              onMarkerPress?.(head.id);
+            if (cl.count === 1) {
+              onMarkerPress?.(cl.head.id);
             } else {
-              setActiveGroup(group);
+              const idSet = new Set(cl.ids);
+              setActiveGroup(markers.filter((m) => idSet.has(m.id)));
             }
           });
         }
         const overlay = new k.maps.CustomOverlay({
-          position: new k.maps.LatLng(head.lat, head.lng),
+          position: new k.maps.LatLng(cl.head.lat, cl.head.lng),
           content,
-          map: mapRef.current,
-          // anchor 박스 = SVG 36×36. 중앙(0.5, 0.5)이 좌표에 정확히 정렬되어 줌 무관 정확.
+          map,
+          // anchor 박스 = SVG 26×26. 중앙(0.5, 0.5)이 좌표에 정확히 정렬되어 줌 무관 정확.
           xAnchor: 0.5,
           yAnchor: 0.5,
         });
         overlaysRef.current.push(overlay);
       });
-    }
-  }, [markers, markerGroups, ready, onMarkerPress, displayMode]);
+    };
+
+    render();
+    // pan 은 픽셀 거리 불변이라 재계산 불필요 — 줌에서만 다시 묶고 라벨을 토글.
+    k.maps.event.addListener(map, 'zoom_changed', render);
+    return () => {
+      k.maps.event.removeListener(map, 'zoom_changed', render);
+    };
+  }, [markers, ready, onMarkerPress, displayMode]);
 
   // 히트맵 인스턴스 1회 생성 + pan/zoom redraw 리스너. redraw 클로저는 ref 로 최신 모드/점을 읽는다.
   useEffect(() => {

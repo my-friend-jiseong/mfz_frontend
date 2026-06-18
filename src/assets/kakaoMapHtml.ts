@@ -199,13 +199,18 @@ MARKERS.forEach(function(m){
       heatSchedule();
     });
 
+    // 라벨은 일정 줌 이상(레벨 ≤ 이 값)에서만 노출 — 밀집 시 라벨 박스가 서로 겹쳐
+    // 난잡해지는 것 방지. 멀리서 보면 점만, 가까이 가면 동 이름이 붙는 단계적 디테일.
+    var LABEL_MAX_LEVEL = 5;
+    // 화면상 이 픽셀 반경 안의 마커는 한 클러스터로 묶는다(줌마다 재계산).
+    var CLUSTER_PX = 44;
+
     // KWCAG 1.4.1 — status 별 색 + 형상 + 라벨 3중 인코딩 SVG.
-    // count>1: 우상단 카운트 뱃지 + 라벨 absolute(좌표 정확도 무손실).
-    function buildMarkerHtml(m){
+    // count>1: 우상단 카운트 뱃지. showLabel 일 때만 동 이름 라벨을 SVG 아래에 띄움.
+    function buildMarkerHtml(m, count, showLabel){
       var color = m.color || '#2563eb';
       var shape = m.shape || 'circle';
       var badge = m.badge || '';
-      var count = m.count || 1;
       var svg;
       if (shape === 'triangle') {
         svg = '<svg width="26" height="26" viewBox="0 0 36 36"><polygon points="18,4 32,30 4,30" fill="' + color + '" stroke="#fff" stroke-width="2"/></svg>';
@@ -217,8 +222,46 @@ MARKERS.forEach(function(m){
       var countBadge = count > 1
         ? '<div style="position:absolute;top:-4px;right:-6px;min-width:20px;height:20px;padding:0 5px;border-radius:10px;background:#dc2626;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 1px 2px rgba(0,0,0,0.25);box-sizing:border-box;">' + count + '</div>'
         : '';
-      var labelHtml = '<div style="position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:4px;background:#fff;padding:2px 6px;border-radius:8px;font-size:11px;font-weight:600;color:#0f172a;border:1px solid ' + color + ';white-space:nowrap;box-shadow:0 1px 2px rgba(0,0,0,0.15);">' + (badge ? '<span style="color:' + color + ';">' + badge + '</span> · ' : '') + (m.label||'') + '</div>';
+      var labelHtml = showLabel
+        ? '<div style="position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:4px;background:#fff;padding:2px 6px;border-radius:8px;font-size:11px;font-weight:600;color:#0f172a;border:1px solid ' + color + ';white-space:nowrap;box-shadow:0 1px 2px rgba(0,0,0,0.15);">' + (badge ? '<span style="color:' + color + ';">' + badge + '</span> · ' : '') + (m.label||'') + '</div>'
+        : '';
       return '<div style="position:relative;width:26px;height:26px;cursor:pointer;">' + svg + countBadge + labelHtml + '</div>';
+    }
+
+    // 화면 픽셀 거리 기반 클러스터링. 두 좌표의 화면상 거리는 pan 에 불변(평행이동)이고
+    // 줌에만 의존하므로 줌 변화 시에만 재계산하면 된다. 그리드 버킷으로 인접 3×3 셀만 검사해
+    // O(n) 에 가깝게 묶는다. 각 클러스터는 head(첫 마커) 좌표에 그려 좌표 무손실.
+    function clusterMarkers(){
+      var proj = map.getProjection();
+      var buckets = {}; // "gx:gy" -> [cluster]
+      var clusters = [];
+      for (var i = 0; i < MARKERS.length; i++) {
+        var m = MARKERS[i];
+        var pt = proj.containerPointFromCoords(new kakao.maps.LatLng(m.lat, m.lng));
+        var gx = Math.floor(pt.x / CLUSTER_PX), gy = Math.floor(pt.y / CLUSTER_PX);
+        var placed = null;
+        for (var dx = -1; dx <= 1 && !placed; dx++) {
+          for (var dy = -1; dy <= 1 && !placed; dy++) {
+            var arr = buckets[(gx + dx) + ':' + (gy + dy)];
+            if (!arr) continue;
+            for (var c = 0; c < arr.length; c++) {
+              var cl = arr[c];
+              var ddx = cl.px - pt.x, ddy = cl.py - pt.y;
+              if (ddx * ddx + ddy * ddy <= CLUSTER_PX * CLUSTER_PX) { placed = cl; break; }
+            }
+          }
+        }
+        if (placed) {
+          placed.count++;
+          placed.ids.push(m.id);
+        } else {
+          var nc = { head: m, px: pt.x, py: pt.y, count: 1, ids: [m.id] };
+          clusters.push(nc);
+          var bk = gx + ':' + gy;
+          (buckets[bk] = buckets[bk] || []).push(nc);
+        }
+      }
+      return clusters;
     }
 
     // === 마커 레이어 (히트맵은 위 캔버스로 분리) ===
@@ -230,18 +273,23 @@ MARKERS.forEach(function(m){
     }
 
     function renderMarkers(){
-      MARKERS.forEach(function(m){
+      var showLabel = map.getLevel() <= LABEL_MAX_LEVEL;
+      clusterMarkers().forEach(function(cl){
+        var head = cl.head;
         var content = document.createElement('div');
-        content.innerHTML = buildMarkerHtml(m);
-        content.firstChild.addEventListener('click', function(){
-          if ((m.count || 1) > 1) {
-            postMsg({ type: 'markerGroupPress', groupIds: m.groupIds || [m.id] });
-          } else {
-            postMsg({ type: 'markerPress', fieldId: m.id });
-          }
-        });
+        // 라벨은 단일 마커이면서 충분히 줌인했을 때만 — 클러스터는 카운트 뱃지로 다중임을 표현.
+        content.innerHTML = buildMarkerHtml(head, cl.count, showLabel && cl.count === 1);
+        (function(c){
+          content.firstChild.addEventListener('click', function(){
+            if (c.count > 1) {
+              postMsg({ type: 'markerGroupPress', groupIds: c.ids });
+            } else {
+              postMsg({ type: 'markerPress', fieldId: c.head.id });
+            }
+          });
+        })(cl);
         var ov = new kakao.maps.CustomOverlay({
-          position: new kakao.maps.LatLng(m.lat, m.lng),
+          position: new kakao.maps.LatLng(head.lat, head.lng),
           content: content,
           map: map,
           // anchor 박스 = SVG 26×26. 중앙(0.5,0.5)이 좌표에 정확히 정렬되어 줌 무관 정확.
@@ -251,6 +299,22 @@ MARKERS.forEach(function(m){
         markerOverlays.push(ov);
       });
     }
+
+    // 줌이 바뀌면 클러스터 묶임과 라벨 노출이 달라지므로 마커 레이어만 다시 그린다(프레이밍은 유지).
+    // pan 은 픽셀 거리 불변이라 재계산 불필요. zoom_changed 폭주는 rAF 로 프레임당 1회로 합침.
+    var markerRerenderPending = false;
+    function scheduleMarkerRerender(){
+      if (MODE !== 'markers') return;
+      if (markerRerenderPending) return;
+      markerRerenderPending = true;
+      requestAnimationFrame(function(){
+        markerRerenderPending = false;
+        if (MODE !== 'markers') return;
+        clearMarkerLayer();
+        renderMarkers();
+      });
+    }
+    kakao.maps.event.addListener(map, 'zoom_changed', scheduleMarkerRerender);
 
     // 모든 마커가 한 화면에 들어오도록 자동 프레이밍 — center/level 고정 대신.
     // 1개면 setBounds 가 최대 줌으로 튀어 부적절 → 그 점에 센터 + 적당한 level.
