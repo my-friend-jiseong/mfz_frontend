@@ -8,7 +8,13 @@
 
 ---
 
-## 1. 🟡 `Trip.title` / `Field.title` 컬럼 추가 (프론트 선행)
+## 1. ✅ `Trip.title` / `Field.title` 컬럼 추가 (프론트 선행) — 완료 (2026-06-18)
+
+> **처리 결과**:
+> - `Trip.title` — **end-to-end 완료**. 백엔드 schema `trips.title VARCHAR(50)` 추가, `POST /api/trips/start` 가 trim·저장·null 정규화 후 list/detail 응답에 echo. 프론트 `src/api/endpoints/trips.ts` 정렬.
+> - `Field.title` — **상호 철회**. ERD v2 에서 프론트가 현장 생성 입력에서 title 을 제거(`src/api/endpoints/fields.ts`: "생성 시 title 불필요"), 백엔드도 `Field` 모델에 컬럼 미추가 → 양쪽 합의로 불필요. `Field.name`(자동 표시 라벨) 만 유지.
+>
+> 아래 원 요청 본문은 기록용으로 보존.
 
 ### 배경
 외근·현장 카드의 제목이 "시작 날짜" / "주소" 로 자동 결정돼 사람이 의미 단위로 식별하기 어려웠음 — 같은 주소에 가로수가 여러 그루 있거나, 같은 날 외근 종류가 달라도 카드만 보고 구분 불가. 사용자 입력 제목(예: "1번 가로수", "가로수 보수 공사") 을 받아 카드 헤더에 노출.
@@ -69,3 +75,4 @@
 - **2026-05-06**: 백엔드 handoff-response 머지 — §1·§2·§3·§5·§6·§9b·§13 처리 완료, §4·§8·§9a·§12 합의 보류.
 - **2026-05-07**: §14 추가 — `Trip.title` / `Field.title` 사용자 입력 제목 (프론트 선행 머지).
 - **2026-05-08**: 완료 항목·보류 항목 모두 제거. 신규 요청 1건(`title`)만 잔존. 보류 항목은 다음 사이클 작업 시점에 다시 정식 요청 형태로 추가.
+- **2026-06-18**: §1 `title` 완료 처리 — `Trip.title` end-to-end 반영(schema·trips/start·list·detail), `Field.title` 은 ERD v2 에서 상호 철회. 활성 요청 0건. 프론트 측 `backend-handoff-response.md` 중복본은 canonical(백엔드 repo) 존속으로 제거.

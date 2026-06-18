@@ -22,8 +22,7 @@
 | 파일 | 내용 |
 |---|---|
 | [backend/backend-backlog.md](backend/backend-backlog.md) | 프런트 측 누적 백엔드 요청 큐 |
-| [backend/backend-handoff.md](backend/backend-handoff.md) | 백엔드 보충 가이드라인 — 프런트 선행 개발 항목 중 백엔드 활성화/명세 필요분 |
-| [backend/backend-handoff-response.md](backend/backend-handoff-response.md) | 백엔드의 handoff 응답 (항목별 처리 결과) |
+| [backend/backend-handoff.md](backend/backend-handoff.md) | 백엔드 보충 가이드라인 — 프런트 선행 개발 항목 중 백엔드 활성화/명세 필요분 (활성 요청 0건, §1 `title` 완료) |
 | [backend/demo-seed-request.md](backend/demo-seed-request.md) | 발표용 데모 데이터 — 프론트 자가 시드(`presentation/seed_demo_data.mjs`)로 전부 해결, 백엔드 작업 불필요(probe 검증) |
 
 ## QA — `qa/`
