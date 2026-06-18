@@ -33,7 +33,8 @@ const STATUS_TO_BADGE: Record<FieldStatus, string> = FIELD_STATUS_LABEL;
 // 라벨은 레벨 ≤ LABEL_MAX_LEVEL 일 때만 — 밀집 시 라벨 박스 겹침으로 난잡해지는 것 방지.
 const LABEL_MAX_LEVEL = 5;
 // 화면상 이 픽셀 반경 안의 마커는 한 클러스터로 묶는다(줌마다 재계산).
-const CLUSTER_PX = 44;
+// 마커 SVG 가 26px 이라 28 이면 사실상 겹치는 것만 묶음 — 점을 최대한 살려 허전함 방지.
+const CLUSTER_PX = 28;
 
 function buildMarkerHtml(m: KakaoMapMarker, count = 1, showLabel = true): string {
   const color = m.color || '#2563eb';

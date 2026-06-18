@@ -203,7 +203,8 @@ MARKERS.forEach(function(m){
     // 난잡해지는 것 방지. 멀리서 보면 점만, 가까이 가면 동 이름이 붙는 단계적 디테일.
     var LABEL_MAX_LEVEL = 5;
     // 화면상 이 픽셀 반경 안의 마커는 한 클러스터로 묶는다(줌마다 재계산).
-    var CLUSTER_PX = 44;
+    // 마커 SVG 가 26px 이라 28 이면 사실상 겹치는 것만 묶음 — 점을 최대한 살려 허전함 방지.
+    var CLUSTER_PX = 28;
 
     // KWCAG 1.4.1 — status 별 색 + 형상 + 라벨 3중 인코딩 SVG.
     // count>1: 우상단 카운트 뱃지. showLabel 일 때만 동 이름 라벨을 SVG 아래에 띄움.
