@@ -63,7 +63,7 @@ function FieldReportCard({
               </Button>
             ) : null}
             {onDelete ? (
-              <Button onPress={onDelete} variant="ghost" size="sm" leftIcon="trash">
+              <Button onPress={onDelete} variant="dangerGhost" size="sm" leftIcon="trash">
                 삭제
               </Button>
             ) : null}
