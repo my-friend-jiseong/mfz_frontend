@@ -43,18 +43,23 @@ interface VisitState {
 }
 
 // merge 헬퍼 — 같은 visit.id 면 새 값으로 갱신, 없으면 추가. 결과는 새 array.
-// timeline 응답은 fieldId 가 없어 ''로 채워져 들어오는데, 이전에 recentVisits 로 적재된
-// 진짜 fieldId 를 ''로 덮으면 byField 조회가 깨짐. 빈 fieldId 면 existing 값 보존.
+// 단, incoming 이 일부 필드를 비워서 들어오는 sync 소스가 있어 (timeline 은 fieldId 를 ''로,
+// 일부 응답은 reason 을 누락) 이전에 채워둔 진짜 값을 덮으면 조회·표시가 깨진다.
+//   - 빈 fieldId 면 existing fieldId 보존 (byField 조회 유지).
+//   - reason 누락이면 existing reason 보존 (저장된 '기타' 사유 유실 방지, backend-backlog §21).
 function mergeVisits(existing: Visit[], incoming: Visit[]): Visit[] {
   if (incoming.length === 0) return existing;
   const byId = new Map(existing.map((v) => [v.id, v]));
   for (const v of incoming) {
     const prev = byId.get(v.id);
-    if (prev && !v.fieldId && prev.fieldId) {
-      byId.set(v.id, { ...v, fieldId: prev.fieldId });
-    } else {
+    if (!prev) {
       byId.set(v.id, v);
+      continue;
     }
+    const merged = { ...v };
+    if (!v.fieldId && prev.fieldId) merged.fieldId = prev.fieldId;
+    if (v.reason == null && prev.reason != null) merged.reason = prev.reason;
+    byId.set(v.id, merged);
   }
   return Array.from(byId.values());
 }

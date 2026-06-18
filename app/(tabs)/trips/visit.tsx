@@ -98,7 +98,7 @@ export default function VisitDetail() {
 
         {status === 'other' && reason ? (
           <Text variant="body" style={styles.reason}>
-            기타 사유: {reason}
+            사유: {reason}
           </Text>
         ) : null}
 
