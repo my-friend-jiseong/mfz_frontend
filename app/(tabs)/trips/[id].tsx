@@ -109,10 +109,11 @@ export default function TripDetail() {
       if (b.order != null) return 1;
       return a.visit.visitedAt.localeCompare(b.visit.visitedAt);
     });
-    // order 가 없는 카드는 그 자리 순번을 부여.
+    // 표시 순번은 정렬된 위치(1-based) — destination.order 의 base(서버 0-based 등)에 비의존.
+    // 0-based order 를 raw 로 쓰면 "0번째" 가 나오던 회로 차단 (active.tsx 와 동일 규칙).
     return annotated.map((c, i) => ({
       ...c,
-      displayOrder: c.order ?? i + 1,
+      displayOrder: i + 1,
     }));
   }, [visits, destinationByFieldId]);
 
@@ -348,14 +349,14 @@ export default function TripDetail() {
                 >
                   건너뛴 현장 ({skippedDestinations.length})
                 </Text>
-                {skippedDestinations.map((d) => {
+                {skippedDestinations.map((d, i) => {
                   const field = getField(d.fieldId);
                   return (
                     <Card key={d.id} padding="md" style={styles.skippedCard}>
                       <View style={styles.skippedHead}>
                         <View style={styles.skippedOrderBadge}>
                           <Text variant="caption" weight="bold" color="textMuted">
-                            {d.order}
+                            {i + 1}
                           </Text>
                         </View>
                         <View style={styles.skippedBody}>
