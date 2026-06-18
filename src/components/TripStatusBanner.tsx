@@ -72,12 +72,12 @@ export function TripStatusBanner() {
         <Ionicons name="navigate" size={14} color={colors.tripBanner} />
       </View>
       <View style={styles.body}>
-        <Text variant="bodySm" weight="semibold" color="onDanger">
+        <Text variant="bodySm" weight="semibold" color="onPrimary">
           외근 중 · {formatElapsed(trip.startedAt)}
           {total > 0 ? ` · ${resolved}/${total}` : ''}
         </Text>
       </View>
-      <Ionicons name="chevron-forward" size={18} color={colors.onDanger} />
+      <Ionicons name="chevron-forward" size={18} color={colors.onPrimary} />
     </Pressable>
   );
 }
@@ -95,7 +95,7 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: colors.onDanger,
+    backgroundColor: colors.onPrimary,
     alignItems: 'center',
     justifyContent: 'center',
   },

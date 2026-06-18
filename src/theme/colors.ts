@@ -81,5 +81,7 @@ export const colors = {
   },
 
   // === Other ===
-  tripBanner: palette.red[600],
+  // 진행 중 외근 상단 배너 — '활성 세션' 의미는 brand(파랑). 빨강은 파괴적 액션(외근 종료)에만
+  // 두어 색의 의미를 1:1 로 유지 (UI/UX P1-2). 이전엔 red[600] 이라 종료 버튼과 빨강이 중복됐음.
+  tripBanner: palette.blue[600],
 } as const;

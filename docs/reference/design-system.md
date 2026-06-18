@@ -124,7 +124,7 @@ visitStatus = {
   other:           slate.600,
 }
 
-tripBanner = red.600
+tripBanner = blue.600   # 활성 외근 배너 = brand. 빨강은 파괴적 액션 전용 (UI/UX P1-2)
 ```
 
 ### 5.7 Alpha 합성
