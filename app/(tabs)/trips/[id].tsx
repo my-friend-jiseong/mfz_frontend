@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { Alert, Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { Ionicons } from '@expo/vector-icons';
 import { useTripStore } from '@/stores/tripStore';
@@ -29,9 +29,6 @@ export default function TripDetail() {
   const trip = useTripStore((s) => (id ? s.getById(id) : undefined));
   const activeTripId = useTripStore((s) => s.activeTripId);
   const loadTripDetail = useTripStore((s) => s.loadDetail);
-  const removeTrip = useTripStore((s) => s.remove);
-  const tripBusy = useTripStore((s) => s.busy);
-  const [deleting, setDeleting] = useState(false);
   // selector 안에서 .filter().sort() 호출하면 매 호출마다 새 array reference →
   // useSyncExternalStoreWithSelector 가 무한 re-render → React error #185.
   // raw 배열 구독 + useMemo 로 도출 (fields/new 와 동일 패턴).
@@ -192,44 +189,6 @@ export default function TripDetail() {
   const isActiveTrip = activeTripId === id;
   const canDelete = !isActiveTrip;
 
-  const handleDelete = () => {
-    if (!canDelete || deleting || tripBusy) return;
-    const tripLabel = trip.title || `${fmtDate(trip.startedAt)} 외근`;
-    // Alert.alert 는 webAlertPatch 가 web 에서도 동작시킴 — Platform 분기 불필요.
-    const runDelete = async (force: boolean) => {
-      setDeleting(true);
-      const r = await removeTrip(id, force);
-      setDeleting(false);
-      if (r.ok) {
-        router.replace('/(tabs)/trips' as never);
-        return;
-      }
-      if ('needsConfirm' in r) {
-        // 방문·보고서 연결 → 강제 삭제 재확인 (백엔드 ?force=true).
-        // 백엔드 원문(r.message)엔 'force=true 로 재시도' 같은 기술 문구가 섞여 있어
-        // 사용자에겐 노출하지 않고 자체 안내 문구로 대체.
-        Alert.alert(
-          '연결된 기록이 있어요',
-          '이 외근에는 방문·보고서 기록이 연결돼 있습니다.\n방문·보고서까지 모두 삭제하고 외근을 지울까요?',
-          [
-            { text: '취소', style: 'cancel' },
-            { text: '강제 삭제', style: 'destructive', onPress: () => void runDelete(true) },
-          ],
-        );
-        return;
-      }
-      Alert.alert('삭제 실패', r.error);
-    };
-    Alert.alert(
-      '외근 삭제',
-      `${tripLabel} 을(를) 삭제할까요?\n방문 기록도 함께 사라지며 되돌릴 수 없습니다.`,
-      [
-        { text: '취소', style: 'cancel' },
-        { text: '삭제', style: 'destructive', onPress: () => void runDelete(false) },
-      ],
-    );
-  };
-
   return (
     <View style={styles.screenRoot}>
       <MapSheetLayout
@@ -244,36 +203,20 @@ export default function TripDetail() {
             <Text variant="h2" weight="heavy" style={styles.titleText}>
               {trip.title || `${fmtDate(trip.startedAt)} 외근`}
             </Text>
+            {/* 수정 진입만 노출. 삭제(파괴적)는 수정 화면 하단 '위험 구역'으로 이동해
+                일상 동작 옆 빨강 휴지통의 오탭·과대 비중을 제거. (fields edit 패턴과 일치) */}
             {canDelete ? (
               <Pressable
                 onPress={() => router.push(`/(tabs)/trips/${id}/edit` as never)}
-                disabled={deleting || tripBusy}
                 accessibilityRole="button"
                 accessibilityLabel="외근 수정"
                 hitSlop={8}
                 style={({ pressed }) => [
                   styles.editBtn,
-                  (deleting || tripBusy) && { opacity: 0.4 },
                   pressed && { opacity: 0.6 },
                 ]}
               >
                 <Ionicons name="create-outline" size={20} color={colors.textMuted} />
-              </Pressable>
-            ) : null}
-            {canDelete ? (
-              <Pressable
-                onPress={handleDelete}
-                disabled={deleting || tripBusy}
-                accessibilityRole="button"
-                accessibilityLabel="외근 삭제"
-                hitSlop={8}
-                style={({ pressed }) => [
-                  styles.deleteBtn,
-                  (deleting || tripBusy) && { opacity: 0.4 },
-                  pressed && { opacity: 0.6 },
-                ]}
-              >
-                <Ionicons name="trash-outline" size={20} color={colors.danger} />
               </Pressable>
             ) : null}
           </View>
@@ -428,14 +371,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surfaceMuted,
-  },
-  deleteBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.dangerMuted,
   },
   metaRow: {
     flexDirection: 'row',

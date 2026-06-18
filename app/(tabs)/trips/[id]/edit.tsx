@@ -32,6 +32,7 @@ export default function EditTrip() {
   const activeTripId = useTripStore((s) => s.activeTripId);
   const loadDetail = useTripStore((s) => s.loadDetail);
   const update = useTripStore((s) => s.update);
+  const remove = useTripStore((s) => s.remove);
 
   const fetchedRef = useRef<string | null>(null);
   useEffect(() => {
@@ -53,6 +54,7 @@ export default function EditTrip() {
   }, [trip?.title]);
 
   const [submitting, setSubmitting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!trip) {
@@ -81,7 +83,7 @@ export default function EditTrip() {
   const hasChanges = titleTrim !== initialRef.current.trim();
 
   const handleSave = async () => {
-    if (!hasChanges || submitting) return;
+    if (!hasChanges || submitting || deleting) return;
     if (titleTrim.length === 0) {
       setError('제목을 입력해주세요');
       return;
@@ -104,6 +106,42 @@ export default function EditTrip() {
     } else {
       setError(r.error);
     }
+  };
+
+  // 삭제(파괴적)는 화면 하단 '위험 구역'에 배치 — 상세 제목행의 빨강 휴지통에서 이동.
+  const handleDelete = () => {
+    if (deleting) return;
+    const label = trip.title || `${fmtDate(trip.startedAt)} 외근`;
+    const runDelete = async (force: boolean) => {
+      setDeleting(true);
+      const r = await remove(tripId, force);
+      setDeleting(false);
+      if (r.ok) {
+        router.replace('/(tabs)/trips' as never);
+        return;
+      }
+      if ('needsConfirm' in r) {
+        // 방문·보고서 연결 → 강제 삭제 재확인(백엔드 ?force=true). 백엔드 원문은 노출 안 함.
+        Alert.alert(
+          '연결된 기록이 있어요',
+          '이 외근에는 방문·보고서 기록이 연결돼 있습니다.\n방문·보고서까지 모두 삭제하고 외근을 지울까요?',
+          [
+            { text: '취소', style: 'cancel' },
+            { text: '강제 삭제', style: 'destructive', onPress: () => void runDelete(true) },
+          ],
+        );
+        return;
+      }
+      Alert.alert('삭제 실패', r.error);
+    };
+    Alert.alert(
+      '외근 삭제',
+      `${label} 을(를) 삭제할까요?\n방문 기록도 함께 사라지며 되돌릴 수 없습니다.`,
+      [
+        { text: '취소', style: 'cancel' },
+        { text: '삭제', style: 'destructive', onPress: () => void runDelete(false) },
+      ],
+    );
   };
 
   const handleCancel = () => {
@@ -146,7 +184,7 @@ export default function EditTrip() {
               setTitle(v);
               if (error) setError(null);
             }}
-            editable={!submitting}
+            editable={!submitting && !deleting}
             maxLength={TITLE_MAX}
             placeholder="예: 오전 순회"
             returnKeyType="done"
@@ -160,7 +198,7 @@ export default function EditTrip() {
 
           <Button
             onPress={handleSave}
-            disabled={!hasChanges}
+            disabled={!hasChanges || deleting}
             loading={submitting}
             size="lg"
             fullWidth
@@ -170,9 +208,24 @@ export default function EditTrip() {
             {hasChanges ? '저장' : '변경 사항 없음'}
           </Button>
 
-          <Button onPress={handleCancel} variant="ghost" size="sm" fullWidth>
+          <Button onPress={handleCancel} variant="ghost" size="sm" fullWidth disabled={deleting}>
             취소
           </Button>
+
+          {/* 위험 구역 — 파괴적 삭제는 저장 동선과 분리, 낮은 비중(ghost)으로 하단 배치. */}
+          <View style={styles.dangerZone}>
+            <Button
+              onPress={handleDelete}
+              variant="ghost"
+              size="sm"
+              fullWidth
+              leftIcon="trash"
+              loading={deleting}
+              style={styles.deleteBtn}
+            >
+              외근 삭제
+            </Button>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeScreen>
@@ -193,4 +246,11 @@ const styles = StyleSheet.create({
   },
   error: { marginTop: spacing.md },
   submit: { marginTop: spacing.xl },
+  dangerZone: {
+    marginTop: spacing.xxl,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderMuted,
+  },
+  deleteBtn: { marginTop: spacing.xs },
 });
