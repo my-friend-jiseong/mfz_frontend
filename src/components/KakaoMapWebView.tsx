@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
 import { buildKakaoMapHtml, type MapDisplayMode } from '@/assets/kakaoMapHtml';
 import {
@@ -36,6 +37,8 @@ export interface KakaoMapMarker {
   color: string;
   shape?: MarkerShape;
   badge?: string;
+  // 현장 선택 모드 — true 면 마커에 brand 링+✓ 오버레이(상태색은 유지). (외근 시작 현장 선택)
+  selected?: boolean;
 }
 
 interface Props {
@@ -279,6 +282,9 @@ export function KakaoMapWebView({
                   <Text variant="bodySm" style={styles.modalItemLabel} numberOfLines={1}>
                     {m.label}
                   </Text>
+                  {m.selected ? (
+                    <Ionicons name="checkmark-circle" size={18} color={colors.primary} />
+                  ) : null}
                 </Pressable>
               ))}
             </ScrollView>

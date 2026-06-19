@@ -164,7 +164,15 @@ export default function NewTripSelect() {
   };
 
   return (
-    <MapSheetLayout title="방문할 현장 선택" onBack={() => safeBack(router)}>
+    <MapSheetLayout
+      title="방문할 현장 선택"
+      onBack={() => safeBack(router)}
+      // 진입 시 시트를 55%(index 1)로 — 위 절반에 지도가 보여 마커 탭으로 바로 선택 가능.
+      initialIndex={1}
+      // 배경 지도 마커 탭 → 리스트와 동일한 toggle 로 선택 동기화.
+      selectedFieldIds={selectedIds}
+      onSelectField={toggle}
+    >
       <View style={styles.head}>
         <View style={styles.headRow}>
           <Text variant="body" weight="bold">

@@ -212,6 +212,15 @@ MARKERS.forEach(function(m){
       var color = m.color || '#2563eb';
       var shape = m.shape || 'circle';
       var badge = m.badge || '';
+      // 선택 표시(현장 선택 모드) — 상태색·형상은 유지하고 brand 링 + ✓ 만 덧댄다(KWCAG: 색 단독 X).
+      // 클러스터(count>1)는 카운트 뱃지와 충돌·의미 모호 → 단일 마커에만. (그룹은 모달이 개별 표시)
+      var selected = m.selected && count === 1;
+      var selRing = selected
+        ? '<div style="position:absolute;top:50%;left:50%;width:34px;height:34px;transform:translate(-50%,-50%);border:3px solid #2563eb;border-radius:50%;box-sizing:border-box;box-shadow:0 0 0 2px #fff;"></div>'
+        : '';
+      var selCheck = selected
+        ? '<div style="position:absolute;bottom:-5px;right:-5px;width:16px;height:16px;border-radius:50%;background:#2563eb;border:2px solid #fff;display:flex;align-items:center;justify-content:center;box-sizing:border-box;"><svg width="9" height="9" viewBox="0 0 24 24"><polyline points="4,12 10,18 20,6" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>'
+        : '';
       var svg;
       if (shape === 'triangle') {
         svg = '<svg width="26" height="26" viewBox="0 0 36 36"><polygon points="18,4 32,30 4,30" fill="' + color + '" stroke="#fff" stroke-width="2"/></svg>';
@@ -226,7 +235,7 @@ MARKERS.forEach(function(m){
       var labelHtml = showLabel
         ? '<div style="position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:4px;background:#fff;padding:2px 6px;border-radius:8px;font-size:11px;font-weight:600;color:#0f172a;border:1px solid ' + color + ';white-space:nowrap;box-shadow:0 1px 2px rgba(0,0,0,0.15);">' + (badge ? '<span style="color:' + color + ';">' + badge + '</span> · ' : '') + (m.label||'') + '</div>'
         : '';
-      return '<div style="position:relative;width:26px;height:26px;cursor:pointer;">' + svg + countBadge + labelHtml + '</div>';
+      return '<div style="position:relative;width:26px;height:26px;cursor:pointer;">' + selRing + svg + countBadge + selCheck + labelHtml + '</div>';
     }
 
     // 화면 픽셀 거리 기반 클러스터링. 두 좌표의 화면상 거리는 pan 에 불변(평행이동)이고

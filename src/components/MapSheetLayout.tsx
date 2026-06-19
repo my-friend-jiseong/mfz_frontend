@@ -26,6 +26,9 @@ interface Props {
   // 지도 배경에 노출할 현장 화이트리스트. 외근 상세/진행 중 화면에서
   // 해당 외근의 destinations.fieldId 만 넘기면 다른 현장이 흐려지지 않음.
   mapFieldIds?: string[];
+  // 현장 선택 모드(외근 시작) — 배경 지도 마커를 탭해 선택 토글. 리스트와 동기화.
+  selectedFieldIds?: string[];
+  onSelectField?: (fieldId: string) => void;
   children: ReactNode;
 }
 
@@ -42,6 +45,8 @@ export function MapSheetLayout({
   onBack,
   initialIndex = 2,
   mapFieldIds,
+  selectedFieldIds,
+  onSelectField,
   children,
 }: Props) {
   // 마지막 snap = 100% — 탭 진입 시 (initialIndex=2 default) 시트가 화면을 꽉 채움.
@@ -95,6 +100,8 @@ export function MapSheetLayout({
       <MapDashboard
         scopeFieldIds={mapFieldIds}
         legendBottomInset={screenHeight * MIN_SNAP_FRACTION}
+        selectedFieldIds={selectedFieldIds}
+        onSelectField={onSelectField}
       />
       <BottomSheet
         ref={sheetRef}

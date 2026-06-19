@@ -27,11 +27,17 @@ interface MapDashboardProps {
   scopeFieldIds?: string[];
   // 지도 위에 깔리는 바텀시트 peek 높이(px) — 범례를 그 위로 띄우는 데 사용.
   legendBottomInset?: number;
+  // 현장 선택 모드(외근 시작) — 선택된 현장 id. 마커에 brand 링+✓ 로 표시.
+  selectedFieldIds?: string[];
+  // 마커 탭 동작 오버라이드 — 주어지면 현장 상세 이동 대신 이 콜백으로 선택 토글.
+  onSelectField?: (fieldId: string) => void;
 }
 
 export function MapDashboard({
   scopeFieldIds,
   legendBottomInset,
+  selectedFieldIds,
+  onSelectField,
 }: MapDashboardProps = {}) {
   const router = useRouter();
   const userId = useAuthStore((s) => s.user?.id);
@@ -158,19 +164,25 @@ export function MapDashboard({
     return myLocation ?? undefined;
   }, [scopeFieldIds, scopedFields, myLocation]);
 
+  // 선택된 현장 집합 — 선택 모드에서만 채워짐(아니면 빈 Set → 마커에 selected 미부여).
+  const selectedSet = useMemo(
+    () => new Set(selectedFieldIds ?? []),
+    [selectedFieldIds],
+  );
+
   const markers = useMemo(() => {
     const base = fieldsToMarkers(visibleFields);
     return base.map((m) => {
+      const selected = selectedSet.has(m.id);
       const presence = attachmentPresenceByField.get(m.id);
-      if (!presence) return m;
+      if (!presence) return selected ? { ...m, selected } : m;
       const tags: string[] = [];
       if (visibleAttachments.text && presence.text) tags.push('메모');
       if (visibleAttachments.photo && presence.photo) tags.push('사진');
-      return tags.length > 0
-        ? { ...m, label: `${m.label} · ${tags.join('·')}` }
-        : m;
+      const label = tags.length > 0 ? `${m.label} · ${tags.join('·')}` : m.label;
+      return { ...m, label, selected };
     });
-  }, [visibleFields, attachmentPresenceByField, visibleAttachments]);
+  }, [visibleFields, attachmentPresenceByField, visibleAttachments, selectedSet]);
 
   const toggleStatus = (s: FieldStatus) =>
     setSelectedStatuses((prev) =>
@@ -212,7 +224,10 @@ export function MapDashboard({
           myLocation={myLocation}
           center={mapCenter}
           onMarkerPress={(fieldId) =>
-            router.push(`/(tabs)/fields/${fieldId}` as never)
+            // 선택 모드(onSelectField 주어짐)에선 토글, 아니면 현장 상세로 이동.
+            onSelectField
+              ? onSelectField(fieldId)
+              : router.push(`/(tabs)/fields/${fieldId}` as never)
           }
         />
         <MapLegend displayMode={displayMode} bottomInset={legendBottomInset} />
