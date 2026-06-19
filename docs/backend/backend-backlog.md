@@ -519,17 +519,21 @@ body: { format: 'word' | 'pdf' }
 3. DB: `reports.overview_map_url` VARCHAR(500) nullable (`20260619120000_report_overview_map`).
 ※ 백엔드는 **지도를 그리지 않는다** — 받은 이미지를 넣기만. (headless/chromium 불필요)
 
-### 프론트엔드가 할 일 (별도 사이클)
+### 프론트엔드 — ✅ 코드 배선 완료 (2026-06-19), 잔여는 EAS 리빌드 + 실기기 스파이크
 
-**API/타입 선반영 ✅ (2026-06-19, 커밋 `5e5844b`)**: `reports.uploadOverviewPhoto`(multipart) + `ReportListItem`·`ReportDetailResponse.overviewMapUrl`. 아래 네이티브 캡처·UI 배선만 남음 — 깔린 API 위에 캡처+호출+export 순서만 붙이면 완결.
+**API/타입 선반영 (커밋 `5e5844b`)**: `reports.uploadOverviewPhoto`(multipart) + `ReportListItem`·`ReportDetailResponse.overviewMapUrl`.
 
-- `react-native-view-shot` 도입(네이티브 dep → **EAS 리빌드 필요**).
-- 위치도 뷰(`KakaoMapWebView`+`fitToMarkers`)를 **타일 로드 완료(tilesloaded) 후 캡처** →
-  `overview-photo` 로 업로드 → 이후 `export/word`. (Word 생성 직전 캡처가 자연스러움)
-- **web 분기: 캡처 skip**(taint).
-- ⚠️ **검증 스파이크 1회 필요**: 안드로이드에서 WebView 를 view-shot 으로 캡처 시 하드웨어
-  레이어 때문에 **빈칸으로 나오는 알려진 케이스**가 있음 → 실기기 선검증. 실패 시 대안:
-  캡처 전용 풀스크린 위치도를 잠깐 띄워 캡처, 또는 1안(백엔드 렌더)로 폴백 재검토.
+**캡처→업로드→export 배선 (커밋 `2c48874`)**:
+- `react-native-view-shot@4.0.3` 도입(네이티브 dep → **EAS 리빌드 필요**).
+- `kakaoMapHtml` 에 `tilesloaded` 신호 + `KakaoMapWebView.onTilesLoaded` prop → 타일 로드 후 캡처.
+- `captureView` 유틸 — native(`captureRef`→PNG, 실패 시 null) / `captureView.web.ts`(taint → 항상 skip, web 번들에서 네이티브 모듈 격리).
+- 보고서 상세: 위치도 View `ref`+`collapsable={false}`, **Word 생성/재생성 직전** 캡처→`uploadOverviewPhoto`→`exportWord`. 캡처/업로드 실패는 best-effort(위치도 없이 진행).
+
+**잔여 (코드 아님, 본인 몫)**:
+1. `release` 푸시 → **EAS 빌드 트리거**(네이티브 모듈 추가라 JS 번들론 안 나감).
+2. ⚠️ **실기기 캡처 스파이크 1회**: 안드로이드에서 WebView 를 view-shot 으로 찍을 때 하드웨어
+   레이어 때문에 **빈칸으로 나오는 알려진 케이스** → 실기기 선검증. 빈칸이면 대안:
+   캡처 전용 풀스크린 위치도를 잠깐 띄워 캡처(이때 `captureView.ts` 만 수정), 또는 1안(백엔드 렌더) 폴백 재검토.
 
 ### 발견 시점 / 갱신
 2026-06-01 최초. 2026-06-19 — web=테스트전용·실사용 Android 확정에 따라 **2안(네이티브 캡처)로
