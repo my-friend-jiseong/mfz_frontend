@@ -9,9 +9,11 @@ import type { DestinationResponse } from '@/api';
 //   - 외근 시작/상세 로드/active 진입 시 서버 데이터로 setFromServer 하이드레이트.
 //   - skip/reorder 는 낙관적 로컬 갱신 + fire-and-forget PATCH (드리프트는 다음 fetch 가 정정).
 //   - 도착(arrived)은 체크인 시 백엔드 자동 → markArrived 는 로컬 낙관 표시만(서버콜 불요).
-//   - add(진행 중 단건 추가)는 아직 백엔드 엔드포인트가 없어 로컬 temp 로만 동작(비영속).
-//     로컬 행은 `local: true` 플래그로 표시 → PATCH 가드·setFromServer 보존에 사용
-//     (id 접두사 sniffing 대신 명시 플래그 — 서버 id 스킴 변화에 견고). (backend-backlog §24)
+//   - add(진행 중 단건 추가)는 낙관적 로컬 temp 를 즉시 만든 뒤 POST /destinations 를
+//     fire-and-forget → 성공 시 temp 행을 서버 destinationId 로 교체·local 해제(영속화).
+//     미배포(404)·실패 시 로컬 temp 유지(local: true → PATCH 가드·setFromServer 보존)로
+//     graceful degrade. local 플래그는 id 접두사 sniffing 대신 명시 표식 — 서버 id 스킴
+//     변화에 견고. (backend-backlog §24, release 2026-06-19)
 //
 // zustand persist 미들웨어는 일부 환경에서 모듈 초기화 단계 충돌이 보고된 적 있어
 // 단순 manual persist 패턴으로 통일.
@@ -128,14 +130,15 @@ export const useDestinationStore = create<DestinationState>((set, get) => ({
     return created;
   },
 
-  // 진행 중 외근 단건 추가 — 백엔드 add 엔드포인트 부재로 로컬 temp 만(비영속).
-  // temp 행은 setFromServer 가 보존하나, 백엔드 POST 신설 전까진 크로스 기기 동기화 안 됨.
+  // 진행 중 외근 단건 추가 — 낙관적 로컬 temp 즉시 생성(모달 UX 유지) 후 서버 POST.
+  // 성공 시 temp 행을 서버 destinationId 로 교체·local 해제로 영속화. (backend-backlog §24)
   add: (tripId, fieldId) => {
     const existing = get().destinations.filter((d) => d.tripId === tripId);
     if (existing.some((d) => d.fieldId === fieldId)) return null;
     const maxOrder = existing.reduce((m, d) => Math.max(m, d.order), 0);
+    const tempId = nextDestId();
     const created: Destination = {
-      id: nextDestId(),
+      id: tempId,
       tripId,
       fieldId,
       order: maxOrder + 1,
@@ -145,6 +148,34 @@ export const useDestinationStore = create<DestinationState>((set, get) => ({
     const next = [...get().destinations, created];
     set({ destinations: next });
     void persist(next);
+
+    // 서버 영속 (fire-and-forget). 성공 → temp 를 서버 행으로 확정.
+    // 멱등 응답(기존 destination)으로 같은 id 가 이미 있으면 temp 폐기(중복 방지).
+    // 404(미배포)·네트워크 실패 → temp 유지, 다음 setFromServer 가 정정.
+    void tripsApi
+      .addDestination(tripId, { fieldId })
+      .then((res) => {
+        const cur = get().destinations;
+        const dupExists = cur.some(
+          (d) => d.id === res.destinationId && d.id !== tempId,
+        );
+        const after = dupExists
+          ? cur.filter((d) => d.id !== tempId)
+          : cur.map((d) =>
+              d.id === tempId
+                ? {
+                    ...d,
+                    id: res.destinationId,
+                    order: res.order,
+                    status: res.status,
+                    local: undefined,
+                  }
+                : d,
+            );
+        set({ destinations: after });
+        void persist(after);
+      })
+      .catch(() => {});
     return created;
   },
 

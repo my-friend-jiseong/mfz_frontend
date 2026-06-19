@@ -15,6 +15,8 @@ export interface ReportListItem {
   createdAt: string;
   updatedAt: string | null;
   outputFileUrl: string | null;
+  // backend-backlog §20 — release 2026-06-19: 위치도 이미지 URL(미첨부 시 null).
+  overviewMapUrl?: string | null;
 }
 
 export interface ReportListResponse {
@@ -29,6 +31,8 @@ export interface ReportDetailResponse {
   trip: { startedAt: string | null; endedAt: string | null; visitCount: number | null };
   title: string;
   outputFileUrl: string | null;
+  // backend-backlog §20 — release 2026-06-19: 위치도 이미지 URL(미첨부 시 null).
+  overviewMapUrl?: string | null;
   createdAt: string;
   updatedAt: string | null;
   creator: { id: string; name: string };
@@ -72,6 +76,12 @@ export interface ExportWordResponse {
   outputFileUrl: string;
   downloadUrl?: string;
   photoCount?: number;
+}
+
+// backend-backlog §20 — release 2026-06-19: 위치도 업로드 응답.
+export interface OverviewPhotoResponse {
+  reportId: string;
+  overviewMapUrl: string;
 }
 
 export interface ListReportsParams {
@@ -174,6 +184,22 @@ export const reports = {
     await appendUploadFile(fd, 'file', p.file);
     return request<FieldReport>(
       `/api/reports/${reportId}/field-reports/${fieldReportId}/photos`,
+      { method: 'POST', body: fd, multipart: true },
+    );
+  },
+
+  // backend-backlog §20 — release 2026-06-19: 위치도(개요 지도) 이미지 업로드.
+  // 프론트가 네이티브 캡처한 위치도 → 서버 압축 후 reports.overview_map_url 갱신,
+  // export/word 시 문서 최상단 임베드. 재업로드 시 백엔드가 outputFileUrl 을 null 로
+  // 초기화 → Word 재생성 필요. 파일 파트 직렬화는 appendUploadFile(media) 단일 출처.
+  uploadOverviewPhoto: async (
+    reportId: string,
+    file: { uri: string; name: string; type: string },
+  ) => {
+    const fd = new FormData();
+    await appendUploadFile(fd, 'file', file);
+    return request<OverviewPhotoResponse>(
+      `/api/reports/${reportId}/overview-photo`,
       { method: 'POST', body: fd, multipart: true },
     );
   },

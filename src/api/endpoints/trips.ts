@@ -218,6 +218,16 @@ export const trips = {
       { method: 'PATCH', body },
     ),
 
+  // backend-backlog §24 — release 2026-06-19: 진행 중(active) 외근에 목적지 단건 추가.
+  // order 미지정 시 백엔드가 말미 append(max(order)+1). 중복 fieldId 는 멱등 — 기존
+  // destination 을 그대로 반환(새로 만들지 않음). 미배포 시 404 가 떨어지면 호출 측이
+  // 로컬 temp 로 graceful degrade.
+  addDestination: (tripId: string, body: { fieldId: string; order?: number }) =>
+    request<DestinationResponse>(`/api/trips/${tripId}/destinations`, {
+      method: 'POST',
+      body,
+    }),
+
   /** 외부 지도 앱 길안내 딥링크 — providers wrap 객체로 응답 */
   navigationDeepLinks: (tripId: string, body: NavigationDeepLinksBody) =>
     request<NavigationDeepLinksResponse>(
