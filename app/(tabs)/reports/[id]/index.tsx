@@ -19,6 +19,7 @@ import { useVisitStore } from '@/stores/visitStore';
 import { useAuthStore } from '@/stores/authStore';
 import { toAbsoluteFileUrl } from '@/api';
 import { safeBack } from '@/utils/backNavigation';
+import { captureOverviewMap } from '@/utils/captureView';
 import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout, sheetScrollableStyle } from '@/components/MapSheetLayout';
 import { KakaoMapWebView, fieldsToMarkers } from '@/components/KakaoMapWebView';
@@ -112,6 +113,7 @@ export default function ReportDetail() {
   const loadDetail = useReportStore((s) => s.loadDetail);
   const remove = useReportStore((s) => s.remove);
   const exportWord = useReportStore((s) => s.exportWord);
+  const uploadOverviewPhoto = useReportStore((s) => s.uploadOverviewPhoto);
   const removeFieldReport = useReportStore((s) => s.removeFieldReport);
   const allTrips = useTripStore((s) => s.trips);
   const getField = useFieldStore((s) => s.getById);
@@ -122,6 +124,10 @@ export default function ReportDetail() {
 
   const [deleting, setDeleting] = useState(false);
   const [exporting, setExporting] = useState(false);
+  // 위치도 캡처(§20) — 캡처 대상 View ref + 타일 페인트 완료 여부. tilesReady 전에는
+  // 빈 지도를 찍지 않도록 캡처를 건너뛴다. web 은 captureOverviewMap 가 항상 null(taint).
+  const overviewMapRef = useRef<View>(null);
+  const [tilesReady, setTilesReady] = useState(false);
   // store 가 id 별 fetch 진행 상태를 노출 — 로컬 가드 대신 단일 진실 출처 사용.
   const detailStatus = useReportStore((s) => s.detailStatus[reportId]);
   const fetchedRef = useRef<string | null>(null);
@@ -216,6 +222,13 @@ export default function ReportDetail() {
   const handleExport = async (regenerate: boolean) => {
     if (exporting) return;
     setExporting(true);
+    // 위치도 네이티브 캡처 → 업로드(§20) — best-effort. Word 생성 직전에 찍어 최신 위치도 반영.
+    // 캡처/업로드 실패(안드 WebView 빈칸·네트워크 등)는 throw 하지 않고 위치도 없이 진행.
+    // web 은 captureOverviewMap 가 null 반환(taint) → 자연 skip. 타일 미로드 시도 skip.
+    if (overviewMarkers.length > 0 && tilesReady) {
+      const file = await captureOverviewMap(overviewMapRef);
+      if (file) await uploadOverviewPhoto(report.id, file);
+    }
     const r = await exportWord(report.id, regenerate);
     setExporting(false);
     // web 은 webAlertPatch 가 window.alert 로 라우팅 — 분기 불필요.
@@ -315,8 +328,13 @@ export default function ReportDetail() {
             <Text variant="bodySm" weight="bold" color="textMuted" style={styles.mapLabel}>
               위치도 — 현장 {overviewMarkers.length}곳
             </Text>
-            <View style={styles.overviewMap}>
-              <KakaoMapWebView markers={overviewMarkers} fitToMarkers interactive={false} />
+            <View ref={overviewMapRef} collapsable={false} style={styles.overviewMap}>
+              <KakaoMapWebView
+                markers={overviewMarkers}
+                fitToMarkers
+                interactive={false}
+                onTilesLoaded={() => setTilesReady(true)}
+              />
             </View>
           </>
         ) : null}

@@ -416,6 +416,12 @@ MARKERS.forEach(function(m){
     };
     window.__mfzSetMyLocation = applyMyLocation;
 
+    // 타일 페인트 완료 신호 — 보고서 위치도 네이티브 캡처(view-shot)가 빈 지도를 찍지
+    // 않도록 호출 측이 이 신호 후 캡처. 초기·pan/zoom 마다 발화하므로 캡처 측이 디바운스.
+    kakao.maps.event.addListener(map, 'tilesloaded', function(){
+      postMsg({ type: 'tilesloaded' });
+    });
+
     // 초기엔 빈 지도 — 마커·경계·현재위치는 ready 직후 RN 이 주입.
     postMsg({ type: 'ready' });
   });

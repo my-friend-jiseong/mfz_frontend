@@ -121,6 +121,8 @@ export interface Report {
   tripId: string | null;
   title: string;
   outputFileUrl?: string | null;
+  // backend-backlog §20 — 위치도 이미지 URL(네이티브 캡처 업로드, 미첨부 시 null).
+  overviewMapUrl?: string | null;
   fieldReports?: FieldReport[];
   createdAt: string;
   updatedAt: string | null;

@@ -58,6 +58,13 @@ interface ReportState {
   update: (id: string, body: UpdateReportBody) => Promise<GenericResult>;
   // field_reports → Word 생성/재생성. 성공 시 outputFileUrl 갱신 (다운로드 버튼 노출).
   exportWord: (reportId: string, regenerate?: boolean) => Promise<GenericResult>;
+  // 위치도(개요 지도) 캡처 이미지 업로드 (backend-backlog §20). 서버가 압축·저장하고
+  // 재업로드 시 outputFileUrl 을 null 로 초기화 → 곧이은 exportWord 가 새 위치도로 재생성.
+  // 응답 비의존 — loadDetail 로 overviewMapUrl/outputFileUrl 재동기화.
+  uploadOverviewPhoto: (
+    reportId: string,
+    file: { uri: string; name: string; type: string },
+  ) => Promise<GenericResult>;
   remove: (id: string) => Promise<GenericResult>;
   // 현장별 전·중·후 보고(field_reports) CRUD — 성공 시 상세 재로드로 fieldReports 갱신.
   // addFieldReport: 생성된 fieldReportId 반환 (즉시 사진 업로드 lazy-create 에 사용).
@@ -87,6 +94,7 @@ function listItemToReport(item: ReportListItem, currentUserId: string): Report {
     tripId: item.tripId,
     title: item.title,
     outputFileUrl: item.outputFileUrl,
+    overviewMapUrl: item.overviewMapUrl ?? null,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
   };
@@ -99,6 +107,7 @@ function detailToReport(d: ReportDetailResponse): Report {
     tripId: d.tripId,
     title: d.title,
     outputFileUrl: d.outputFileUrl,
+    overviewMapUrl: d.overviewMapUrl ?? null,
     fieldReports: d.fieldReports,
     createdAt: d.createdAt,
     updatedAt: d.updatedAt,
@@ -309,6 +318,18 @@ export const useReportStore = create<ReportState>((set, get) => ({
       return { ok: true };
     } catch (e) {
       set({ busy: false });
+      return { ok: false, error: describeError(e) };
+    }
+  },
+
+  uploadOverviewPhoto: async (reportId, file) => {
+    try {
+      await reportsApi.uploadOverviewPhoto(reportId, file);
+      // 응답 본문 비의존 — 권위 있는 상세 GET 으로 overviewMapUrl(+재업로드 시 null 된
+      // outputFileUrl) 갱신. 호출 측이 곧장 exportWord 하므로 다운로드 버튼은 그쪽이 재노출.
+      await get().loadDetail(reportId);
+      return { ok: true };
+    } catch (e) {
       return { ok: false, error: describeError(e) };
     }
   },

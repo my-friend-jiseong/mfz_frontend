@@ -50,6 +50,8 @@ interface Props {
   // false 면 드래그/줌 비활성 — BottomSheet 안 등 pan 충돌 회피용 정적 위치도.
   interactive?: boolean;
   onMarkerPress?: (fieldId: string) => void;
+  // 타일 페인트 완료 — 보고서 위치도 네이티브 캡처 타이밍용(초기·pan/zoom 마다 발화).
+  onTilesLoaded?: () => void;
 }
 
 const DEFAULT_CENTER = { lat: 35.17, lng: 129.07 }; // 부산 중심
@@ -63,6 +65,7 @@ export function KakaoMapWebView({
   fitToMarkers = false,
   interactive = true,
   onMarkerPress,
+  onTilesLoaded,
 }: Props) {
   const webRef = useRef<WebView>(null);
   const [activeGroup, setActiveGroup] = useState<KakaoMapMarker[] | null>(null);
@@ -219,6 +222,8 @@ export function KakaoMapWebView({
             const msg = JSON.parse(event.nativeEvent.data);
             if (msg.type === 'ready') {
               setReady(true);
+            } else if (msg.type === 'tilesloaded') {
+              onTilesLoaded?.();
             } else if (msg.type === 'markerPress' && typeof msg.fieldId === 'string') {
               onMarkerPress?.(msg.fieldId);
             } else if (msg.type === 'markerGroupPress' && Array.isArray(msg.groupIds)) {
