@@ -511,15 +511,18 @@ body: { format: 'word' | 'pdf' }
 - **web 한계(무방)**: web 은 `html2canvas` 가 cross-origin 카카오 타일을 **canvas-taint** 로
   못 담아 캡처 불가 → web 빌드는 위치도 없이 진행. 실사용 아님이라 수용.
 
-### 백엔드가 해야 할 것 (요청 — 작음)
-1. **`POST /api/reports/:reportId/overview-photo`** (multipart: `file`, 서버 압축) →
-   `report.overviewMapUrl` 저장. **field-report 슬롯 사진 업로드(release §6)와 동일 패턴 재사용.**
-2. **`POST /api/reports/:reportId/export/word`** 가 `overviewMapUrl` 있으면 **문서 최상단에
-   "위치도" figure 1장** 삽입(현장별 섹션들 앞). 없으면 기존대로(위치도 생략).
-3. DB: `reports.overview_map_url` nullable 컬럼.
+### 백엔드 — ✅ 배포 완료 (release 2026-06-19, `ae4d2b9`)
+아래 3건 모두 배포. 추가 보강: 위치도 **재업로드 시 `outputFileUrl` null 초기화**(Word 재생성 강제) + 보고서 **목록·상세 응답에 `overviewMapUrl` 포함**.
+1. **`POST /api/reports/:reportId/overview-photo`** (multipart `file`/`photo`, `sharp` JPEG q82 압축) →
+   `reports.overview_map_url` 저장. 201 `{ reportId, overviewMapUrl }`. **field-report 슬롯 사진 업로드(release §6)와 동일 패턴.**
+2. **`POST /api/reports/:reportId/export/word`** 가 `overviewMapUrl` 있으면 **문서 최상단**(제목·메타 다음, 현장 섹션 **앞**)에 「위치도」 figure 1장 삽입. 없으면 기존대로(생략).
+3. DB: `reports.overview_map_url` VARCHAR(500) nullable (`20260619120000_report_overview_map`).
 ※ 백엔드는 **지도를 그리지 않는다** — 받은 이미지를 넣기만. (headless/chromium 불필요)
 
-### 프론트엔드가 할 일 (백엔드 준비 후, 별도 사이클)
+### 프론트엔드가 할 일 (별도 사이클)
+
+**API/타입 선반영 ✅ (2026-06-19, 커밋 `5e5844b`)**: `reports.uploadOverviewPhoto`(multipart) + `ReportListItem`·`ReportDetailResponse.overviewMapUrl`. 아래 네이티브 캡처·UI 배선만 남음 — 깔린 API 위에 캡처+호출+export 순서만 붙이면 완결.
+
 - `react-native-view-shot` 도입(네이티브 dep → **EAS 리빌드 필요**).
 - 위치도 뷰(`KakaoMapWebView`+`fitToMarkers`)를 **타일 로드 완료(tilesloaded) 후 캡처** →
   `overview-photo` 로 업로드 → 이후 `export/word`. (Word 생성 직전 캡처가 자연스러움)
@@ -588,43 +591,28 @@ Play Console 등록용 라이브 HTTPS URL 차단 해소. 프론트는 `profile.
 
 ---
 
-## 24. 🟡 `POST /api/trips/:tripId/destinations` — 진행 중 외근 목적지 단건 추가
+## 24. ✅ `POST /api/trips/:tripId/destinations` — 진행 중 외근 목적지 단건 추가 (백엔드 배포 + 프론트 연동, release 2026-06-19)
 
-### 배경
-2026-06 릴리스로 destinations 가 서버 영속화됐고(§11), 프론트도 서버 전환 완료:
-외근 시작 시 `plannedFields` 전송 → `GET /destinations` 조회 → `PATCH .../destinations/:id` 로
-status(skipped)·order 갱신. 그러나 **진행 중 외근에 목적지를 한 건 더 추가**하는 경로
-([`AddDestinationModal`](../../src/components/trips/AddDestinationModal.tsx))는 대응 엔드포인트가 없다.
-릴리스 API 에 단건 add(POST)가 빠져 있어, 프론트는 이 추가를 **로컬 temp(미영속)** 로만 처리 중 —
-다른 기기·세션·캐시정리 후엔 사라진다(크로스 기기 동기화 안 됨).
+§11 로 계획 목적지 cross-device 정합은 닫혔고, **진행 중 단건 추가**만 로컬 temp(미영속)로 남아 있던 보조 경로. 백엔드·프론트 양쪽 완료.
 
-### 백엔드가 해야 할 것
-```
-POST /api/trips/:tripId/destinations
-body: { fieldId: string; order?: number }   // order 미지정 시 말미 append
-→ 200: Destination (destinationId, fieldId, order, status='pending')
-```
-- 진행 중(active) 외근에만 허용. 중복 fieldId 거부(또는 기존 destination 반환).
-- 응답 shape 는 기존 destinations(§11)와 동일.
-
-### 프론트엔드 영향 / 현황
-- 현재 `destinationStore.add` 는 로컬 temp(`dest-` 접두) 로만 생성, `setFromServer` 가 temp 를 보존해
-  세션 내에서는 유지되나 영속 X. 엔드포인트 도착 시 add 를 서버 호출 후 응답(서버 id)로 교체하면 끝.
-
-### 우선순위
-🟡 중간 — 핵심 cross-device 정합(계획 목적지)은 §11 로 닫힘. 진행 중 단건 추가는 빈도 낮은 보조 경로.
+- **백엔드(release `ae4d2b9`)**: `POST /api/trips/:tripId/destinations { fieldId, order? }` → 200 Destination(§11 동일 shape). order 미지정 시 말미 append(`max(order)+1`), 동일 `tripId`+`fieldId` 는 **멱등(기존 destination 반환)**, **active 외근만**(종료 외근 `409 already_ended_trip`, 타인 현장 `403 planned_field_not_assignee`).
+- **프론트(커밋 `5e5844b`, typecheck green)**: `tripsApi.addDestination` 추가 + `destinationStore.add` 를 낙관적 로컬 temp → **fire-and-forget POST** 로 전환 — 성공 시 temp 를 서버 `destinationId` 로 교체·`local` 해제(영속화), 멱등 응답으로 같은 id 가 이미 있으면 temp 폐기(중복 방지), `404`(미배포)·실패는 temp 유지로 graceful degrade. `AddDestinationModal` 은 `add` 동기 반환 유지라 무수정.
+- 잔여(코드 아님): 운영 probe 검증(active 추가→200 · 재POST 멱등 · 크로스기기 반영)은 다음 기회.
 
 ### 발견 시점
-2026-06-19 (§11 destinations 서버 전환 구현 중 add 엔드포인트 부재 확인).
+2026-06-19 (§11 destinations 서버 전환 구현 중 add 엔드포인트 부재 확인). 같은 날 백엔드 배포·프론트 연동.
 
 ### 관련 코드
-- 프론트 [`src/stores/destinationStore.ts`](../../src/stores/destinationStore.ts) (`add` — 로컬 temp)
+- 프론트 [`src/api/endpoints/trips.ts`](../../src/api/endpoints/trips.ts) (`addDestination`)
+- 프론트 [`src/stores/destinationStore.ts`](../../src/stores/destinationStore.ts) (`add` — 서버 연동)
 - 프론트 [`src/components/trips/AddDestinationModal.tsx`](../../src/components/trips/AddDestinationModal.tsx)
 
 ---
 
 ## 변경 이력
 
+- **2026-06-19**: §24 ✅ 종결(🟡→✅) — 백엔드 `POST /trips/:id/destinations` 배포(`ae4d2b9`, 멱등·active-only) + 프론트 연동(커밋 `5e5844b`): `tripsApi.addDestination` + `destinationStore.add` 낙관적 temp→fire-and-forget POST→서버 id 교체. 잔여는 운영 probe 검증뿐.
+- **2026-06-19**: §20 백엔드 배포(`ae4d2b9`: overview-photo·export/word 임베드·`overview_map_url` 컬럼 + 재업로드 시 outputFileUrl null·응답 overviewMapUrl 보강) + 프론트 API/타입 선반영(커밋 `5e5844b`: `uploadOverviewPhoto`·`overviewMapUrl`). 🟡 유지 — 네이티브 캡처(view-shot, EAS 리빌드·실기기 스파이크)는 별도 사이클.
 - **2026-06-19**: §20 구체화 — Word 위치도를 **2안(프론트 네이티브 캡처→업로드, 백엔드는 임베드만)**으로 확정. web=테스트전용·실사용 Android 라 1안(백엔드 headless 렌더)은 비용 과다로 기각. 백엔드 요청: `POST /reports/:id/overview-photo` + export/word 최상단 위치도 삽입 + `reports.overview_map_url`.
 - **2026-06-19**: §24 추가 — 진행 중 외근 목적지 단건 추가 `POST /trips/:id/destinations`(🟡). §11 destinations 서버 전환 구현 중 add 엔드포인트 부재 확인, 프론트는 로컬 temp 로 우회 중.
 - **2026-05-08**: 백로그 신설. §1 길찾기 카카오-only 정책 반영. (이전 §1 title 은 백엔드 처리 완료로 제거)
