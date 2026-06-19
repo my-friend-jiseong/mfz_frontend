@@ -599,7 +599,7 @@ Play Console 등록용 라이브 HTTPS URL 차단 해소. 프론트는 `profile.
 
 - **백엔드(release `ae4d2b9`)**: `POST /api/trips/:tripId/destinations { fieldId, order? }` → 200 Destination(§11 동일 shape). order 미지정 시 말미 append(`max(order)+1`), 동일 `tripId`+`fieldId` 는 **멱등(기존 destination 반환)**, **active 외근만**(종료 외근 `409 already_ended_trip`, 타인 현장 `403 planned_field_not_assignee`).
 - **프론트(커밋 `5e5844b`, typecheck green)**: `tripsApi.addDestination` 추가 + `destinationStore.add` 를 낙관적 로컬 temp → **fire-and-forget POST** 로 전환 — 성공 시 temp 를 서버 `destinationId` 로 교체·`local` 해제(영속화), 멱등 응답으로 같은 id 가 이미 있으면 temp 폐기(중복 방지), `404`(미배포)·실패는 temp 유지로 graceful degrade. `AddDestinationModal` 은 `add` 동기 반환 유지라 무수정.
-- 잔여(코드 아님): 운영 probe 검증(active 추가→200 · 재POST 멱등 · 크로스기기 반영)은 다음 기회.
+- **운영 probe 검증 ✅ (2026-06-19, 테스트계정)**: 6/6 PASS — active 추가→`200·pending` · `GET` 포함 · 재POST **멱등**(동일 destinationId, 중복 없음) · 누락→`400 field_id_required` · 없는 현장→`404 field_not_found` · 종료 외근→`409 already_ended_trip`. (타인 현장 `403 planned_field_not_assignee` 는 2계정 필요로 미커버 — 코드상 검증됨.)
 
 ### 발견 시점
 2026-06-19 (§11 destinations 서버 전환 구현 중 add 엔드포인트 부재 확인). 같은 날 백엔드 배포·프론트 연동.
@@ -613,6 +613,7 @@ Play Console 등록용 라이브 HTTPS URL 차단 해소. 프론트는 `profile.
 
 ## 변경 이력
 
+- **2026-06-19**: §24 운영 probe 검증 ✅ — 테스트계정으로 ilgayo.co.kr 라이브 6/6 PASS(200·pending / GET 포함 / 재POST 멱등 / 400·404·409 에러코드 일치). 403(타인 현장)만 2계정 필요로 미커버.
 - **2026-06-19**: §20 ✅ 종결(🟡→✅) — 캡처→업로드→export 배선(`2c48874`) + release EAS 빌드 성공(`apk-v0.1.0-15`) + **실기기 검증 통과**(안드 WebView view-shot 빈칸 케이스 미발생, 카카오 위치도 정상 캡처·Word 임베드). fallback 불요.
 - **2026-06-19**: §24 ✅ 종결(🟡→✅) — 백엔드 `POST /trips/:id/destinations` 배포(`ae4d2b9`, 멱등·active-only) + 프론트 연동(커밋 `5e5844b`): `tripsApi.addDestination` + `destinationStore.add` 낙관적 temp→fire-and-forget POST→서버 id 교체. 잔여는 운영 probe 검증뿐.
 - **2026-06-19**: §20 백엔드 배포(`ae4d2b9`: overview-photo·export/word 임베드·`overview_map_url` 컬럼 + 재업로드 시 outputFileUrl null·응답 overviewMapUrl 보강) + 프론트 API/타입 선반영(커밋 `5e5844b`: `uploadOverviewPhoto`·`overviewMapUrl`). 🟡 유지 — 네이티브 캡처(view-shot, EAS 리빌드·실기기 스파이크)는 별도 사이클.
