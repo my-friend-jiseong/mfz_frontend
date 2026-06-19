@@ -491,7 +491,7 @@ body: { format: 'word' | 'pdf' }
 
 ---
 
-## 20. 🟡 보고서 Word(추후 PDF)에 "위치도" 이미지 삽입 — 네이티브 캡처 → 백엔드 임베드 (2안 확정)
+## 20. ✅ 보고서 Word 위치도 — 네이티브 캡처 → 백엔드 임베드 (백엔드·프론트 완료 + 실기기 검증, 2026-06-19)
 
 ### 배경
 프론트는 보고서 상세 화면에 그 외근의 **현장 전체를 한 화면에 담는 위치도**를 이미 렌더한다
@@ -529,11 +529,9 @@ body: { format: 'word' | 'pdf' }
 - `captureView` 유틸 — native(`captureRef`→PNG, 실패 시 null) / `captureView.web.ts`(taint → 항상 skip, web 번들에서 네이티브 모듈 격리).
 - 보고서 상세: 위치도 View `ref`+`collapsable={false}`, **Word 생성/재생성 직전** 캡처→`uploadOverviewPhoto`→`exportWord`. 캡처/업로드 실패는 best-effort(위치도 없이 진행).
 
-**잔여 (코드 아님, 본인 몫)**:
-1. `release` 푸시 → **EAS 빌드 트리거**(네이티브 모듈 추가라 JS 번들론 안 나감).
-2. ⚠️ **실기기 캡처 스파이크 1회**: 안드로이드에서 WebView 를 view-shot 으로 찍을 때 하드웨어
-   레이어 때문에 **빈칸으로 나오는 알려진 케이스** → 실기기 선검증. 빈칸이면 대안:
-   캡처 전용 풀스크린 위치도를 잠깐 띄워 캡처(이때 `captureView.ts` 만 수정), 또는 1안(백엔드 렌더) 폴백 재검토.
+**빌드·검증 ✅ (2026-06-19)**:
+- `release` 푸시 → EAS Release APK 빌드 **성공**(`apk-v0.1.0-15`, run `27812153717`). 네이티브 모듈 추가가 안드 빌드를 깨지 않음.
+- **실기기 캡처 검증 통과** — 우려했던 "안드 WebView 를 view-shot 으로 찍을 때 하드웨어 레이어로 빈칸" 케이스는 **발생하지 않음**. 카카오 위치도가 그대로 캡처돼 Word 최상단에 정상 삽입. → fallback(캡처 전용 풀스크린)·1안(백엔드 렌더) 폴백 불필요.
 
 ### 발견 시점 / 갱신
 2026-06-01 최초. 2026-06-19 — web=테스트전용·실사용 Android 확정에 따라 **2안(네이티브 캡처)로
@@ -615,6 +613,7 @@ Play Console 등록용 라이브 HTTPS URL 차단 해소. 프론트는 `profile.
 
 ## 변경 이력
 
+- **2026-06-19**: §20 ✅ 종결(🟡→✅) — 캡처→업로드→export 배선(`2c48874`) + release EAS 빌드 성공(`apk-v0.1.0-15`) + **실기기 검증 통과**(안드 WebView view-shot 빈칸 케이스 미발생, 카카오 위치도 정상 캡처·Word 임베드). fallback 불요.
 - **2026-06-19**: §24 ✅ 종결(🟡→✅) — 백엔드 `POST /trips/:id/destinations` 배포(`ae4d2b9`, 멱등·active-only) + 프론트 연동(커밋 `5e5844b`): `tripsApi.addDestination` + `destinationStore.add` 낙관적 temp→fire-and-forget POST→서버 id 교체. 잔여는 운영 probe 검증뿐.
 - **2026-06-19**: §20 백엔드 배포(`ae4d2b9`: overview-photo·export/word 임베드·`overview_map_url` 컬럼 + 재업로드 시 outputFileUrl null·응답 overviewMapUrl 보강) + 프론트 API/타입 선반영(커밋 `5e5844b`: `uploadOverviewPhoto`·`overviewMapUrl`). 🟡 유지 — 네이티브 캡처(view-shot, EAS 리빌드·실기기 스파이크)는 별도 사이클.
 - **2026-06-19**: §20 구체화 — Word 위치도를 **2안(프론트 네이티브 캡처→업로드, 백엔드는 임베드만)**으로 확정. web=테스트전용·실사용 Android 라 1안(백엔드 headless 렌더)은 비용 과다로 기각. 백엔드 요청: `POST /reports/:id/overview-photo` + export/word 최상단 위치도 삽입 + `reports.overview_map_url`.
