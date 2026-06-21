@@ -1,5 +1,6 @@
 import { Alert, Linking, Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 
 // ERD v2: 음성 메모 폐기 — 녹음·재생(expo-av) 유틸 제거. 사진 첨부만 유지.
 
@@ -86,6 +87,35 @@ export async function pickPhoto(source: 'camera' | 'library'): Promise<UploadFil
   const name = a.fileName ?? basenameFromUri(a.uri, `photo-${Date.now()}.jpg`);
   const type = a.mimeType ?? inferMime(a.uri, 'image/jpeg');
   return { uri: a.uri, name, type };
+}
+
+/**
+ * 현장에 이미 등록된 원격 사진을 보고서 슬롯에 재사용하기 위한 업로드 파일 변환.
+ * (backend-backlog §9 phase 미머지 동안의 프론트 임시 대안 — 현장 사진을 슬롯으로 수동 불러오기.)
+ *
+ * web: appendUploadFile 의 web 분기가 원격 URL 을 fetch→blob 으로 처리하므로 URL 그대로 전달.
+ * native: RN multipart serializer 는 file://·content:// uri 만 인식 → 원격 URL 은 직렬화 못 함.
+ *         캐시 디렉터리로 다운로드해 로컬 file:// uri 를 만든 뒤 그걸 업로드.
+ *
+ * absoluteUrl 은 호출부에서 toAbsoluteFileUrl 로 절대화한 URL. 다운로드 실패 시 null.
+ */
+export async function remotePhotoToUploadFile(
+  absoluteUrl: string,
+): Promise<UploadFile | null> {
+  const type = inferMime(absoluteUrl, 'image/jpeg');
+  const name = basenameFromUri(absoluteUrl, `field-photo-${Date.now()}.jpg`);
+  if (Platform.OS === 'web') {
+    return { uri: absoluteUrl, name, type };
+  }
+  try {
+    const dir = FileSystem.cacheDirectory ?? '';
+    if (!dir) return null;
+    const target = `${dir}field-photo-${Date.now()}.jpg`;
+    const res = await FileSystem.downloadAsync(absoluteUrl, target);
+    return { uri: res.uri, name, type };
+  } catch {
+    return null;
+  }
 }
 
 /**

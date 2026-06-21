@@ -17,7 +17,12 @@ import { useReportStore } from '@/stores/reportStore';
 import { useFieldStore } from '@/stores/fieldStore';
 import { useVisitStore } from '@/stores/visitStore';
 import { toAbsoluteFileUrl } from '@/api';
-import { pickPhoto, promptPhotoSource } from '@/utils/media';
+import {
+  pickPhoto,
+  promptPhotoSource,
+  remotePhotoToUploadFile,
+  type UploadFile,
+} from '@/utils/media';
 import { safeBack } from '@/utils/backNavigation';
 import { EmptyState } from '@/components/EmptyState';
 import { Card } from '@/components/ui/Card';
@@ -193,12 +198,21 @@ function FieldReportEditor() {
     (s) => (fieldId ? s.directAttachments[fieldId] : undefined),
   );
   const loadFieldDetail = useFieldStore((s) => s.loadDetail);
-  // 마법사 단계의 현장 첨부 로드 — §4 prefill 재료. 캐시에 이미 있으면 skip.
+  // 현장 첨부 로드 — §4 phase prefill 재료이자 '현장 사진에서 불러오기' 갤러리 재료.
+  // 마법사뿐 아니라 신규·수정 모드 모두에서 fieldId 가 정해지면 로드(캐시 있으면 skip).
   useEffect(() => {
-    if (!isWizard || !fieldId) return;
+    if (!fieldId) return;
     if (useFieldStore.getState().directAttachments[fieldId]) return;
     void loadFieldDetail(fieldId);
-  }, [isWizard, fieldId, loadFieldDetail]);
+  }, [fieldId, loadFieldDetail]);
+  // 이 현장에 이미 등록된 사진(현장 직접 첨부) — 슬롯으로 수동 불러올 후보.
+  // §9(phase 자동 prefill) 머지 전까지의 임시 대안: 사용자가 직접 골라 슬롯에 넣는다.
+  const fieldPhotos = useMemo(
+    () => (fieldAttachments ?? []).filter((a) => a.type === 'photo' && a.fileUrl),
+    [fieldAttachments],
+  );
+  // '현장 사진에서 불러오기' 갤러리 — 어느 슬롯(phase)에 넣을지 보관. null 이면 닫힘.
+  const [galleryPhase, setGalleryPhase] = useState<Phase | null>(null);
   // Set 으로 fieldId 별 1회 가드 (F8) — 단일 ref 였을 때 A→B→A 전환에서 A 의 prefill 이
   // 재실행되어 사용자가 clear 한 슬롯이 부활하던 회로 차단.
   const phasePrefilledFieldsRef = useRef<Set<string>>(new Set());
@@ -259,6 +273,36 @@ function FieldReportEditor() {
     return ensureFrPromiseRef.current;
   };
 
+  // 주어진 파일을 한 슬롯(phase)에 업로드 — 카메라/갤러리 픽과 '현장 사진 불러오기' 공용 경로.
+  const uploadToPhase = async (phase: Phase, file: UploadFile) => {
+    setUploading(phase);
+    try {
+      // 슬롯 업로드는 field report 가 먼저 존재해야 함 — 신규 모드면 첫 사진에 lazy-create.
+      // 동시 픽이 각자 create 해 중복 field report 가 생기지 않게 promise 락으로 직렬화.
+      const targetFrId = await ensureFieldReport();
+      if (!targetFrId) return; // 생성 실패(에러는 ensureFieldReport 가 alert)
+      // 슬롯에 직접 multipart 업로드(서버 압축) → 응답 비의존, loadDetail 로 슬롯 URL 동기화.
+      const r = await uploadPhoto(reportId, targetFrId, { slot: phase, file });
+      if (!r.ok) {
+        Alert.alert('사진 업로드 실패', r.error);
+        return;
+      }
+      // 서버가 압축·저장한 실제 URL 을 권위 있는 detailCache 에서 읽어 슬롯 반영.
+      const fr = useReportStore
+        .getState()
+        .detailCache[reportId]?.fieldReports?.find((x) => x.id === targetFrId);
+      const url = fr ? fr[PHASE_URL_KEY[phase]] : null;
+      setSlots((prev) => ({
+        ...prev,
+        [phase]: { ...prev[phase], url: url ?? prev[phase].url },
+      }));
+    } catch {
+      Alert.alert('사진 업로드 실패', '잠시 후 다시 시도해주세요.');
+    } finally {
+      setUploading(null);
+    }
+  };
+
   const pickPhase = (phase: Phase) => {
     if (!fieldId) {
       Alert.alert('현장 먼저 선택', '사진을 올릴 현장을 먼저 선택해주세요.');
@@ -267,33 +311,25 @@ function FieldReportEditor() {
     promptPhotoSource(async (src) => {
       const file = await pickPhoto(src);
       if (!file) return;
-      setUploading(phase);
-      try {
-        // 슬롯 업로드는 field report 가 먼저 존재해야 함 — 신규 모드면 첫 사진에 lazy-create.
-        // 동시 픽이 각자 create 해 중복 field report 가 생기지 않게 promise 락으로 직렬화.
-        const targetFrId = await ensureFieldReport();
-        if (!targetFrId) return; // 생성 실패(에러는 ensureFieldReport 가 alert)
-        // 슬롯에 직접 multipart 업로드(서버 압축) → 응답 비의존, loadDetail 로 슬롯 URL 동기화.
-        const r = await uploadPhoto(reportId, targetFrId, { slot: phase, file });
-        if (!r.ok) {
-          Alert.alert('사진 업로드 실패', r.error);
-          return;
-        }
-        // 서버가 압축·저장한 실제 URL 을 권위 있는 detailCache 에서 읽어 슬롯 반영.
-        const fr = useReportStore
-          .getState()
-          .detailCache[reportId]?.fieldReports?.find((x) => x.id === targetFrId);
-        const url = fr ? fr[PHASE_URL_KEY[phase]] : null;
-        setSlots((prev) => ({
-          ...prev,
-          [phase]: { ...prev[phase], url: url ?? prev[phase].url },
-        }));
-      } catch {
-        Alert.alert('사진 업로드 실패', '잠시 후 다시 시도해주세요.');
-      } finally {
-        setUploading(null);
-      }
+      await uploadToPhase(phase, file);
     });
+  };
+
+  // 현장에 이미 등록된 원격 사진을 슬롯으로 불러오기 — §9 phase 자동 prefill 의 임시 대안.
+  // native: 원격 URL 을 캐시로 다운로드해 로컬 파일로 재업로드, web: URL 그대로 blob 변환.
+  const pickFromField = async (phase: Phase, fileUrl: string) => {
+    setGalleryPhase(null);
+    const abs = resolveUrl(fileUrl);
+    if (!abs) return;
+    setUploading(phase);
+    const file = await remotePhotoToUploadFile(abs);
+    if (!file) {
+      setUploading(null);
+      Alert.alert('사진 불러오기 실패', '현장 사진을 가져오지 못했습니다. 잠시 후 다시 시도해주세요.');
+      return;
+    }
+    // uploadToPhase 가 자체적으로 setUploading 을 관리하므로 여기서 해제하지 않는다.
+    await uploadToPhase(phase, file);
   };
 
   const setCaption = (phase: Phase, caption: string) =>
@@ -487,6 +523,19 @@ function FieldReportEditor() {
                     </Button>
                   ) : null}
                 </View>
+                {/* 현장에 이미 등록된 사진이 있으면 슬롯으로 불러오기 — §9 임시 대안. */}
+                {fieldPhotos.length > 0 ? (
+                  <Button
+                    onPress={() => setGalleryPhase(p.key)}
+                    disabled={uploading !== null}
+                    variant="ghost"
+                    size="sm"
+                    leftIcon="images"
+                    fullWidth
+                  >
+                    현장 사진에서 불러오기
+                  </Button>
+                ) : null}
                 <Input
                   value={slot.caption}
                   onChangeText={(v) => setCaption(p.key, v)}
@@ -686,6 +735,64 @@ function FieldReportEditor() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* 현장 사진 갤러리 — 이 현장에 등록된 사진을 골라 선택한 슬롯에 넣는다. */}
+      <Modal
+        visible={galleryPhase !== null}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setGalleryPhase(null)}
+      >
+        <Pressable
+          style={styles.pickerBackdrop}
+          onPress={() => setGalleryPhase(null)}
+        >
+          <Pressable style={styles.pickerCard} onPress={() => undefined}>
+            <Text variant="h3">현장 사진에서 선택</Text>
+            <Text variant="bodySm" color="textMuted">
+              {`'${PHASES.find((p) => p.key === galleryPhase)?.label ?? ''}' 슬롯에 넣을 사진을 선택하세요.`}
+            </Text>
+            <ScrollView
+              style={styles.pickerList}
+              contentContainerStyle={styles.galleryGrid}
+            >
+              {fieldPhotos.map((ph) => {
+                const uri = resolveUrl(ph.fileUrl ?? null);
+                return (
+                  <Pressable
+                    key={ph.id}
+                    onPress={() =>
+                      galleryPhase && ph.fileUrl
+                        ? void pickFromField(galleryPhase, ph.fileUrl)
+                        : undefined
+                    }
+                    accessibilityRole="imagebutton"
+                    accessibilityLabel="현장 사진 선택"
+                    style={({ pressed }) => [
+                      styles.galleryItem,
+                      pressed && { opacity: opacity.pressed },
+                    ]}
+                  >
+                    <Image
+                      source={{ uri: uri ?? undefined }}
+                      style={styles.galleryThumb}
+                      resizeMode="cover"
+                    />
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+            <Button
+              onPress={() => setGalleryPhase(null)}
+              variant="ghost"
+              size="sm"
+              fullWidth
+            >
+              닫기
+            </Button>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeScreen>
   );
 }
@@ -780,4 +887,19 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primaryMuted,
   },
   pickerItemMeta: { marginTop: 2 },
+  // 현장 사진 갤러리 그리드 — 3열 썸네일.
+  galleryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    paddingVertical: spacing.xs,
+  },
+  galleryItem: {
+    width: '31.5%',
+    aspectRatio: 1,
+    borderRadius: radius.sm,
+    overflow: 'hidden',
+    backgroundColor: colors.surfaceMuted,
+  },
+  galleryThumb: { width: '100%', height: '100%' },
 });
