@@ -1,21 +1,25 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import { WebView } from 'react-native-webview';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/Text';
 import { EmptyState } from '@/components/EmptyState';
 import { Button } from '@/components/ui/Button';
+import { KakaoMapWebView, type KakaoMapMarker } from '@/components/KakaoMapWebView';
 import { openKakaoRouteTo } from '@/utils/kakaoMap';
+import { requestUserLocation, type LatLng } from '@/utils/geolocation';
 import { safeBack } from '@/utils/backNavigation';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
 import { SafeScreen } from '@/components/SafeScreen';
 
-// 인앱 카카오 길안내 — 외부 앱(카카오맵/Linking.openURL) 의존 차단.
-// `https://map.kakao.com/link/to/...` web URL 은 WebView 안에서 정상 렌더되며
-// 카카오 정책상 단일 채널이라 backlog §1 (deep-links 단순화) 와 일관.
+// 인앱 카카오 길안내 — 목적지를 카카오 JS SDK 인앱 지도(KakaoMapWebView)로 렌더한다.
+// 과거엔 `https://map.kakao.com/link/to/...` 를 WebView 에 직접 로드했으나, 그 URL 은
+// 렌더용 지도가 아니라 카카오맵 앱을 띄우는 딥링크 브리지라 실기기에서 kakaomap:// 스킴으로
+// 리다이렉트 → WebView unknown-scheme(onError) → '지도 로드 실패' 로 깨졌다. 검증된 JS SDK
+// 임베드(히트맵·현장 탭과 동일 인프라)로 목적지+내 위치를 표시하고, 실제 턴바이턴은 하단
+// '카카오맵으로 열기' CTA(openKakaoRouteTo) 로 위임한다.
 export default function TripNavigate() {
   const router = useRouter();
   const params = useLocalSearchParams<{ name?: string; lat?: string; lng?: string }>();
@@ -24,14 +28,24 @@ export default function TripNavigate() {
   // useLocalSearchParams 는 동일 키 중복 시 string[] 도 돌려줌 — 첫 토큰 우선.
   const rawName = params.name;
   const name = (Array.isArray(rawName) ? rawName[0] : rawName) ?? '목적지';
-  const [error, setError] = useState<string | null>(null);
 
-  const url = useMemo(() => {
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-    return `https://map.kakao.com/link/to/${encodeURIComponent(name)},${lat},${lng}`;
-  }, [name, lat, lng]);
+  const hasCoords = Number.isFinite(lat) && Number.isFinite(lng);
 
-  if (!url) {
+  // 내 위치(파란 점) — 권한 거부·실패는 silent(null), 지도는 목적지 중심으로 동작.
+  const [myLocation, setMyLocation] = useState<LatLng | null>(null);
+  useEffect(() => {
+    void requestUserLocation().then((loc) => {
+      if (loc) setMyLocation(loc);
+    });
+  }, []);
+
+  const markers = useMemo<KakaoMapMarker[]>(() => {
+    if (!hasCoords) return [];
+    // 목적지 단일 마커 — 도착 의미라 brand 색 + check 형상으로 강조.
+    return [{ id: 'dest', lat, lng, label: name, color: colors.primary, shape: 'check' }];
+  }, [hasCoords, lat, lng, name]);
+
+  if (!hasCoords) {
     return (
       <SafeScreen>
         <EmptyState
@@ -65,68 +79,25 @@ export default function TripNavigate() {
           {name}
         </Text>
       </View>
-      <WebView
-        source={{ uri: url }}
-        originWhitelist={['*']}
-        javaScriptEnabled
-        domStorageEnabled
-        // onError 는 renderer/network 실패에만 발화 — kakao 가 200 으로 dead page 를 돌려주는
-        // case 까지는 못 잡음. onHttpError 도 함께 등록 + 항상 노출되는 'open in app' 폴백 CTA 유지.
-        onError={() => setError('지도 로드 실패')}
-        onHttpError={(syntheticEvent) => {
-          const code = syntheticEvent.nativeEvent.statusCode;
-          if (code >= 400) setError(`지도 응답 오류 (HTTP ${code})`);
-        }}
-        renderError={() => (
-          <View style={styles.errorOverlay} pointerEvents="box-none">
-            <EmptyState
-              icon="warning-outline"
-              title="인앱 길안내를 불러올 수 없습니다"
-              description="카카오맵 앱 또는 외부 브라우저로 열어보세요"
-              action={
-                <Button
-                  onPress={() => void openKakaoRouteTo(name, lat, lng)}
-                  leftIcon="open-outline"
-                >
-                  카카오맵으로 열기
-                </Button>
-              }
-            />
-          </View>
-        )}
-        style={styles.web}
-      />
-      {error ? (
-        <View style={styles.errorOverlay}>
-          <EmptyState
-            icon="warning-outline"
-            title="인앱 길안내를 불러올 수 없습니다"
-            description={error}
-            action={
-              <Button
-                onPress={() => void openKakaoRouteTo(name, lat, lng)}
-                leftIcon="open-outline"
-              >
-                카카오맵으로 열기
-              </Button>
-            }
-          />
-        </View>
-      ) : (
-        // 침묵 실패(kakao 가 200 으로 dead page 를 돌려주는 경우) 대비 — 사용자가 항상 외부로
-        // 탈출할 수 있도록 하단 작은 칩 CTA 를 상시 노출. 정상 동선이면 무시 가능.
-        <Pressable
-          onPress={() => void openKakaoRouteTo(name, lat, lng)}
-          accessibilityRole="button"
-          accessibilityLabel="카카오맵 앱으로 열기"
-          style={({ pressed }) => [styles.fallbackChip, pressed && { opacity: opacity.pressed }]}
-        >
-          <Ionicons name="open-outline" size={14} color={colors.text} />
-          <Text variant="caption" weight="bold">
-            카카오맵 앱으로 열기
-          </Text>
-        </Pressable>
-      )}
+      <View style={styles.web}>
+        <KakaoMapWebView
+          markers={markers}
+          center={{ lat, lng }}
+          myLocation={myLocation}
+        />
+      </View>
+      {/* 실제 턴바이턴은 카카오맵 앱으로 위임 — 하단 칩 CTA 상시 노출. */}
+      <Pressable
+        onPress={() => void openKakaoRouteTo(name, lat, lng)}
+        accessibilityRole="button"
+        accessibilityLabel="카카오맵 앱으로 길안내 열기"
+        style={({ pressed }) => [styles.fallbackChip, pressed && { opacity: opacity.pressed }]}
+      >
+        <Ionicons name="open-outline" size={14} color={colors.text} />
+        <Text variant="caption" weight="bold">
+          카카오맵으로 길안내
+        </Text>
+      </Pressable>
     </View>
     </SafeScreen>
   );
@@ -146,17 +117,6 @@ const styles = StyleSheet.create({
   backBtn: { padding: 2 },
   title: { flex: 1 },
   web: { flex: 1 },
-  errorOverlay: {
-    position: 'absolute',
-    top: 56,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: colors.background,
-    padding: spacing.xl,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   fallbackChip: {
     position: 'absolute',
     bottom: spacing.lg,
