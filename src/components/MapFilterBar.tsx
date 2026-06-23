@@ -1,10 +1,17 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/Text';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
+import { elevation } from '@/theme/elevation';
 import { withAlpha } from '@/theme/withAlpha';
 import { FIELD_STATUS_LABEL, type FieldStatus } from '@/types/entities';
 
@@ -12,7 +19,6 @@ export type DisplayMode = 'markers' | 'heatmap' | 'choropleth';
 export type AttachmentKind = 'text' | 'photo';
 export type VisibleAttachments = Record<AttachmentKind, boolean>;
 export type RangePreset = 'all' | '30d' | '7d' | '1d';
-type GroupKey = 'display' | 'visibility' | 'filter';
 
 interface Props {
   displayMode: DisplayMode;
@@ -54,6 +60,9 @@ const ATTACHMENT_CHIPS: { kind: AttachmentKind; label: string }[] = [
   { kind: 'photo', label: '사진' },
 ];
 
+// 벤치마크(네이버·카카오 등 지도 앱) 패턴 — 지도 설정을 상단을 가로지르는 흰 바 대신
+// 우측 상단 동그란 '레이어' 버튼 하나로 접어 둔다. 평소엔 지도가 위까지 꽉 차 보이고,
+// 버튼을 누르면 표시 방식·표시 여부·필터를 한 패널 안에서 수정한다.
 export function MapFilterBar({
   displayMode,
   onChangeDisplayMode,
@@ -70,10 +79,8 @@ export function MapFilterBar({
   onToggleBoundary,
 }: Props) {
   const insets = useSafeAreaInsets();
-  const [expanded, setExpanded] = useState<GroupKey | null>(null);
-
-  const toggleGroup = (key: GroupKey) =>
-    setExpanded((prev) => (prev === key ? null : key));
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const [open, setOpen] = useState(false);
 
   const displayActive = displayMode !== 'markers';
   const rangeActive = rangePreset !== 'all';
@@ -81,206 +88,162 @@ export function MapFilterBar({
     selectedStatuses.length + (rangeActive ? 1 : 0) + selectedTags.length;
 
   // 표시 여부: 기본 = 메모·사진 ON, 경계 OFF.
-  const attachmentOnCount =
-    (visibleAttachments.text ? 1 : 0) +
-    (visibleAttachments.photo ? 1 : 0);
-  const allAttachmentsOn = attachmentOnCount === 2;
+  const allAttachmentsOn = visibleAttachments.text && visibleAttachments.photo;
   const visibilityAtDefault = allAttachmentsOn && !showBoundary;
-  const visibilityOnCount = attachmentOnCount + (showBoundary ? 1 : 0);
+
+  // 버튼 위 점 배지 — 기본값에서 벗어난 설정이 하나라도 있으면 표시.
+  const anyActive = displayActive || !visibilityAtDefault || filterActiveCount > 0;
+
+  // 패널 폭/최대 높이 — 작은 화면에서도 좌우 여백을 남기고, 세로로 길면 스크롤.
+  const panelWidth = Math.min(320, screenWidth - spacing.lg * 2);
+  const panelMaxHeight = screenHeight * 0.6;
 
   return (
-    // 지도 배경 위 최상단 요소 — 시트를 내렸을 때 필터바가 상태바 밑으로 깔려 잘리던 회로 차단.
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.groupRow}>
-        <GroupChip
-          label="표시 방식"
-          summary={displayActive ? DISPLAY_LABEL[displayMode] : null}
-          active={displayActive}
-          expanded={expanded === 'display'}
-          onPress={() => toggleGroup('display')}
+    // 지도 위 전면 오버레이 — pointerEvents box-none 으로 버튼/패널 밖 영역은 지도로 통과.
+    <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+      {open ? (
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={() => setOpen(false)}
+          accessibilityLabel="지도 설정 닫기"
         />
-        <GroupChip
-          label="표시 여부"
-          summary={
-            !visibilityAtDefault ? `${visibilityOnCount}개 표시` : null
-          }
-          active={!visibilityAtDefault}
-          expanded={expanded === 'visibility'}
-          onPress={() => toggleGroup('visibility')}
-        />
-        <GroupChip
-          label="필터"
-          summary={filterActiveCount > 0 ? `${filterActiveCount}개 적용` : null}
-          active={filterActiveCount > 0}
-          expanded={expanded === 'filter'}
-          onPress={() => toggleGroup('filter')}
-        />
-      </View>
-
-      {expanded === 'display' ? (
-        <ExpandedRow>
-          {(['markers', 'heatmap', 'choropleth'] as DisplayMode[]).map((mode) => {
-            const active = displayMode === mode;
-            return (
-              <SubChip
-                key={mode}
-                label={DISPLAY_LABEL[mode]}
-                active={active}
-                onPress={() => onChangeDisplayMode(mode)}
-              />
-            );
-          })}
-        </ExpandedRow>
       ) : null}
 
-      {expanded === 'visibility' ? (
-        <ExpandedRow>
-          {ATTACHMENT_CHIPS.map((a) => {
-            const on = visibleAttachments[a.kind];
-            return (
-              <SubChip
-                key={a.kind}
-                label={a.label}
-                active={on}
-                onPress={() => onToggleAttachment(a.kind)}
-              />
-            );
-          })}
-          <SubChip
-            label="시/군/구 경계"
-            active={showBoundary}
-            onPress={onToggleBoundary}
+      <View
+        style={[styles.anchor, { top: insets.top + spacing.sm }]}
+        pointerEvents="box-none"
+      >
+        <Pressable
+          onPress={() => setOpen((v) => !v)}
+          style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
+          accessibilityRole="button"
+          accessibilityLabel={open ? '지도 설정 닫기' : '지도 설정 열기'}
+        >
+          <Ionicons
+            name={open ? 'close' : 'layers-outline'}
+            size={22}
+            color={open ? colors.primary : colors.text}
           />
-        </ExpandedRow>
-      ) : null}
+          {anyActive && !open ? <View style={styles.fabBadge} /> : null}
+        </Pressable>
 
-      {expanded === 'filter' ? (
-        <View>
-          <ExpandedRow>
-            <SubLabel>기간</SubLabel>
-            {(['all', '30d', '7d', '1d'] as RangePreset[]).map((p) => (
-              <SubChip
-                key={p}
-                label={RANGE_LABEL[p]}
-                active={rangePreset === p}
-                onPress={() => onChangeRangePreset(p)}
-              />
-            ))}
-          </ExpandedRow>
-          <ExpandedRow>
-            <SubLabel>상태</SubLabel>
-            {STATUS_CHIPS.map((s) => {
-              const active = selectedStatuses.includes(s.value);
-              const accent = colors.fieldStatus[s.value];
-              return (
-                <SubChip
-                  key={s.value}
-                  label={s.label}
-                  active={active}
-                  accent={accent}
-                  onPress={() => onToggleStatus(s.value)}
-                />
-              );
-            })}
-          </ExpandedRow>
-          <ExpandedRow>
-            <SubLabel>태그</SubLabel>
-            {availableTags.length === 0 ? (
-              <Text variant="caption" color="textMuted" style={styles.emptyHint}>
-                등록된 태그 없음
+        {open ? (
+          <View style={[styles.panel, { width: panelWidth }]}>
+            <View style={styles.panelHeader}>
+              <Text variant="bodySm" weight="bold">
+                지도 설정
               </Text>
-            ) : (
-              availableTags.map((tag) => (
+              <Pressable
+                onPress={() => setOpen(false)}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="닫기"
+              >
+                <Ionicons name="close" size={18} color={colors.textMuted} />
+              </Pressable>
+            </View>
+            <ScrollView
+              style={{ maxHeight: panelMaxHeight }}
+              contentContainerStyle={styles.panelBody}
+              showsVerticalScrollIndicator={false}
+            >
+              <Section label="표시 방식" first>
+                {(['markers', 'heatmap', 'choropleth'] as DisplayMode[]).map(
+                  (mode) => (
+                    <SubChip
+                      key={mode}
+                      label={DISPLAY_LABEL[mode]}
+                      active={displayMode === mode}
+                      onPress={() => onChangeDisplayMode(mode)}
+                    />
+                  ),
+                )}
+              </Section>
+
+              <Section label="표시 여부">
+                {ATTACHMENT_CHIPS.map((a) => (
+                  <SubChip
+                    key={a.kind}
+                    label={a.label}
+                    active={visibleAttachments[a.kind]}
+                    onPress={() => onToggleAttachment(a.kind)}
+                  />
+                ))}
                 <SubChip
-                  key={tag}
-                  label={tag}
-                  active={selectedTags.includes(tag)}
-                  onPress={() => onToggleTag(tag)}
+                  label="시/군/구 경계"
+                  active={showBoundary}
+                  onPress={onToggleBoundary}
                 />
-              ))
-            )}
-          </ExpandedRow>
-        </View>
-      ) : null}
+              </Section>
+
+              <Section label="기간">
+                {(['all', '30d', '7d', '1d'] as RangePreset[]).map((p) => (
+                  <SubChip
+                    key={p}
+                    label={RANGE_LABEL[p]}
+                    active={rangePreset === p}
+                    onPress={() => onChangeRangePreset(p)}
+                  />
+                ))}
+              </Section>
+
+              <Section label="상태">
+                {STATUS_CHIPS.map((s) => (
+                  <SubChip
+                    key={s.value}
+                    label={s.label}
+                    active={selectedStatuses.includes(s.value)}
+                    accent={colors.fieldStatus[s.value]}
+                    onPress={() => onToggleStatus(s.value)}
+                  />
+                ))}
+              </Section>
+
+              <Section label="태그">
+                {availableTags.length === 0 ? (
+                  <Text variant="caption" color="textMuted" style={styles.emptyHint}>
+                    등록된 태그 없음
+                  </Text>
+                ) : (
+                  availableTags.map((tag) => (
+                    <SubChip
+                      key={tag}
+                      label={tag}
+                      active={selectedTags.includes(tag)}
+                      onPress={() => onToggleTag(tag)}
+                    />
+                  ))
+                )}
+              </Section>
+            </ScrollView>
+          </View>
+        ) : null}
+      </View>
     </View>
   );
 }
 
-function GroupChip({
+function Section({
   label,
-  summary,
-  active,
-  expanded,
-  onPress,
+  first,
+  children,
 }: {
   label: string;
-  summary: string | null;
-  active: boolean;
-  expanded: boolean;
-  onPress: () => void;
+  first?: boolean;
+  children: React.ReactNode;
 }) {
   return (
-    <Pressable
-      onPress={onPress}
-      style={[
-        styles.groupChip,
-        active && styles.groupChipActive,
-        expanded && styles.groupChipExpanded,
-      ]}
-    >
+    <View style={[styles.section, !first && styles.sectionDivider]}>
       <Text
-        variant="bodySm"
-        weight={expanded ? 'bold' : 'semibold'}
-        color={active || expanded ? 'primary' : 'text'}
+        variant="caption"
+        weight="bold"
+        color="textMuted"
+        style={styles.sectionLabel}
       >
         {label}
       </Text>
-      {summary ? (
-        <View style={styles.summaryPill}>
-          <Text variant="caption" weight="bold" color="onPrimary">
-            {summary}
-          </Text>
-        </View>
-      ) : null}
-      <Ionicons
-        name={expanded ? 'chevron-up' : 'chevron-down'}
-        size={14}
-        color={
-          expanded
-            ? colors.primary
-            : active
-              ? colors.primary
-              : colors.textMuted
-        }
-      />
-    </Pressable>
-  );
-}
-
-function ExpandedRow({ children }: { children: React.ReactNode }) {
-  return (
-    <View style={styles.expandedWrap}>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.expandedRow}
-      >
-        {children}
-      </ScrollView>
+      <View style={styles.sectionChips}>{children}</View>
     </View>
-  );
-}
-
-function SubLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <Text
-      variant="caption"
-      weight="bold"
-      color="textMuted"
-      style={styles.subLabel}
-    >
-      {children}
-    </Text>
   );
 }
 
@@ -324,57 +287,74 @@ function SubChip({
 }
 
 const styles = StyleSheet.create({
-  container: {
+  anchor: {
+    position: 'absolute',
+    right: spacing.lg,
+    alignItems: 'flex-end',
+  },
+  fab: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...elevation.raised,
+  },
+  fabPressed: {
+    backgroundColor: colors.surfaceMuted,
+  },
+  fabBadge: {
+    position: 'absolute',
+    top: 9,
+    right: 9,
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: colors.primary,
+    borderWidth: 1.5,
+    borderColor: colors.surface,
+  },
+  panel: {
+    marginTop: spacing.sm,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+    ...elevation.raised,
+  },
+  panelHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  groupRow: {
-    flexDirection: 'row',
+  panelBody: {
+    paddingBottom: spacing.sm,
+  },
+  section: {
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    gap: spacing.sm,
-    flexWrap: 'wrap',
+    paddingVertical: spacing.md,
   },
-  groupChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 8,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.background,
-  },
-  groupChipActive: {
-    borderColor: colors.primary,
-    backgroundColor: withAlpha(colors.primary, 0.06),
-  },
-  groupChipExpanded: {
-    borderColor: colors.primary,
-    backgroundColor: withAlpha(colors.primary, 0.09),
-  },
-  summaryPill: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: radius.pill,
-  },
-  expandedWrap: {
-    backgroundColor: colors.background,
+  sectionDivider: {
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: colors.borderMuted,
   },
-  expandedRow: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
+  sectionLabel: {
+    marginBottom: spacing.sm,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  sectionChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.sm,
-    alignItems: 'center',
-  },
-  subLabel: {
-    marginRight: spacing.xs,
-    minWidth: 36,
   },
   subChip: {
     paddingHorizontal: spacing.md,

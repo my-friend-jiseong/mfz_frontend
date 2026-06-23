@@ -200,7 +200,23 @@ export function MapDashboard({
   const toggleBoundary = () => setShowBoundary((v) => !v);
 
   return (
+    // 지도가 화면 위까지 꽉 차고, 설정은 우측 상단 떠 있는 '레이어' 버튼 오버레이로.
+    // (이전엔 상단에 불투명 흰 필터 바가 지도를 눌러 답답해 보이던 회로 차단.)
     <View style={styles.container}>
+      <KakaoMapWebView
+        markers={markers}
+        displayMode={displayMode}
+        showBoundary={showBoundary}
+        myLocation={myLocation}
+        center={mapCenter}
+        onMarkerPress={(fieldId) =>
+          // 선택 모드(onSelectField 주어짐)에선 토글, 아니면 현장 상세로 이동.
+          onSelectField
+            ? onSelectField(fieldId)
+            : router.push(`/(tabs)/fields/${fieldId}` as never)
+        }
+      />
+      <MapLegend displayMode={displayMode} bottomInset={legendBottomInset} />
       <MapFilterBar
         displayMode={displayMode}
         onChangeDisplayMode={setDisplayMode}
@@ -216,27 +232,10 @@ export function MapDashboard({
         showBoundary={showBoundary}
         onToggleBoundary={toggleBoundary}
       />
-      <View style={styles.mapBox}>
-        <KakaoMapWebView
-          markers={markers}
-          displayMode={displayMode}
-          showBoundary={showBoundary}
-          myLocation={myLocation}
-          center={mapCenter}
-          onMarkerPress={(fieldId) =>
-            // 선택 모드(onSelectField 주어짐)에선 토글, 아니면 현장 상세로 이동.
-            onSelectField
-              ? onSelectField(fieldId)
-              : router.push(`/(tabs)/fields/${fieldId}` as never)
-          }
-        />
-        <MapLegend displayMode={displayMode} bottomInset={legendBottomInset} />
-      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  mapBox: { flex: 1 },
 });

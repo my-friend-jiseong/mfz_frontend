@@ -52,7 +52,9 @@ export function MapSheetLayout({
   // 마지막 snap = 100% — 탭 진입 시 (initialIndex=2 default) 시트가 화면을 꽉 채움.
   // 이전 92% 는 status bar 위쪽이 살짝 비어 보이던 회로. middle/bottom snap 은 그대로.
   // 최소 snap(peek) 분율 — 지도 범례를 이 위로 띄우는 데도 재사용(아래 legendBottomInset).
-  const MIN_SNAP_FRACTION = 0.18;
+  // 0.18 → 0.13: peek 가 너무 많이 튀어나와 지도가 좁아 보이던 것을 줄여 핸들+제목만 살짝 남김
+  // (헤더의 죽은 top inset 도 함께 트림 — 아래 sheetHeader paddingTop 참고).
+  const MIN_SNAP_FRACTION = 0.13;
   const snapPoints = useMemo(
     () => [`${MIN_SNAP_FRACTION * 100}%`, '55%', '100%'],
     [],
@@ -122,8 +124,20 @@ export function MapSheetLayout({
         <View
           style={{ height: (containerHeight ?? screenHeight) - SHEET_HANDLE_HEIGHT }}
         >
-          {/* sheet 가 100% snap 일 때 헤더가 status bar 뒤로 안 깔리도록 inset 만큼 추가 패딩 */}
-          <View style={[styles.sheetHeader, { paddingTop: insets.top + spacing.sm }]}>
+          {/* sheet 가 100% snap 일 때 헤더가 status bar 뒤로 안 깔리도록 보정.
+              핸들(SHEET_HANDLE_HEIGHT)이 이미 status bar 안쪽으로 들어가 있으므로 그만큼 빼
+              죽은 여백을 줄인다 — peek 일 때 헤더가 덜 튀어나오고, 100% 에선 여전히 상태바 보호. */}
+          <View
+            style={[
+              styles.sheetHeader,
+              {
+                paddingTop: Math.max(
+                  spacing.sm,
+                  insets.top - SHEET_HANDLE_HEIGHT + spacing.sm,
+                ),
+              },
+            ]}
+          >
             {onBack ? (
               <Pressable
                 onPress={onBack}
