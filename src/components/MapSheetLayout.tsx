@@ -19,6 +19,11 @@ export const sheetScrollableStyle = { flex: 1 } as const;
 // 시트 콘텐츠 영역 = 컨테이너 높이 - 핸들. 기본 핸들을 교체하면 이 값도 갱신할 것.
 const SHEET_HANDLE_HEIGHT = 24;
 
+// 최하단 peek = 핸들 바만 보이는 얇은 띠(거의 다 내려간 상태). 이전엔 13%/18% 가 늘 바닥을
+// 차지해 답답했음 — 핸들 높이+약간 여유로 축소해 지도/콘텐츠가 넓어 보이고, 그래도 띠를
+// 잡아 다시 끌어올릴 수 있다(완전히 닫지 않는 이유).
+const PEEK_HEIGHT = SHEET_HANDLE_HEIGHT + spacing.sm; // 32
+
 interface Props {
   title: string;
   onBack?: () => void;
@@ -50,15 +55,9 @@ export function MapSheetLayout({
   children,
 }: Props) {
   // 마지막 snap = 100% — 탭 진입 시 (initialIndex=2 default) 시트가 화면을 꽉 채움.
-  // 이전 92% 는 status bar 위쪽이 살짝 비어 보이던 회로. middle/bottom snap 은 그대로.
-  // 최소 snap(peek) 분율 — 지도 범례를 이 위로 띄우는 데도 재사용(아래 legendBottomInset).
-  // 0.18 → 0.13: peek 가 너무 많이 튀어나와 지도가 좁아 보이던 것을 줄여 핸들+제목만 살짝 남김
-  // (헤더의 죽은 top inset 도 함께 트림 — 아래 sheetHeader paddingTop 참고).
-  const MIN_SNAP_FRACTION = 0.13;
-  const snapPoints = useMemo(
-    () => [`${MIN_SNAP_FRACTION * 100}%`, '55%', '100%'],
-    [],
-  );
+  // 이전 92% 는 status bar 위쪽이 살짝 비어 보이던 회로. middle snap 은 55% 그대로.
+  // 최하단 snap = PEEK_HEIGHT(핸들 띠) px 고정 — 분율(%) 대신 px 라 화면 크기와 무관하게 일정.
+  const snapPoints = useMemo(() => [PEEK_HEIGHT, '55%', '100%'], []);
   const { height: screenHeight } = useWindowDimensions();
   const sheetRef = useRef<BottomSheet>(null);
 
@@ -101,7 +100,7 @@ export function MapSheetLayout({
     <View style={styles.root} onLayout={onRootLayout}>
       <MapDashboard
         scopeFieldIds={mapFieldIds}
-        legendBottomInset={screenHeight * MIN_SNAP_FRACTION}
+        legendBottomInset={PEEK_HEIGHT}
         selectedFieldIds={selectedFieldIds}
         onSelectField={onSelectField}
       />
