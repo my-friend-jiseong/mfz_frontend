@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
@@ -59,17 +67,27 @@ interface Props {
 
 const DEFAULT_CENTER = { lat: 35.17, lng: 129.07 }; // 부산 중심
 
-export function KakaoMapWebView({
-  markers,
-  center,
-  displayMode = 'markers',
-  showBoundary = false,
-  myLocation = null,
-  fitToMarkers = false,
-  interactive = true,
-  onMarkerPress,
-  onTilesLoaded,
-}: Props) {
+// 외부(예: '내 위치' 버튼)에서 지도를 명령형으로 복구시키기 위한 핸들.
+export interface KakaoMapHandle {
+  // target 미지정 시 myLocation > center > 기본(부산) 순으로 복구. 멀리 줌아웃돼 있으면 적당히 당김.
+  recenter: (target?: { lat: number; lng: number }) => void;
+}
+
+export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
+  function KakaoMapWebView(
+    {
+      markers,
+      center,
+      displayMode = 'markers',
+      showBoundary = false,
+      myLocation = null,
+      fitToMarkers = false,
+      interactive = true,
+      onMarkerPress,
+      onTilesLoaded,
+    }: Props,
+    ref,
+  ) {
   const webRef = useRef<WebView>(null);
   const [activeGroup, setActiveGroup] = useState<KakaoMapMarker[] | null>(null);
 
@@ -143,6 +161,21 @@ export function KakaoMapWebView({
   const inject = useCallback((js: string) => {
     webRef.current?.injectJavaScript(`${js};true;`);
   }, []);
+
+  // 명령형 복구 — '내 위치' 버튼이 사용자가 드래그한 지도를 다시 내 위치로 끌어온다.
+  // center prop 재대입은 같은 값이면 effect 가 안 도므로(드래그 후 무반응) imperative 로 처리.
+  useImperativeHandle(
+    ref,
+    () => ({
+      recenter: (target) => {
+        const t = target ?? myLocation ?? center ?? DEFAULT_CENTER;
+        inject(
+          `window.__mfzMap&&(function(m){var ll=new kakao.maps.LatLng(${t.lat},${t.lng});if(m.getLevel()>6)m.setLevel(5);m.panTo(ll);})(window.__mfzMap)`,
+        );
+      },
+    }),
+    [myLocation, center, inject],
+  );
 
   // 마커 — 원본 배열 주입(클러스터링은 webview 가 줌별로 수행). 변경마다 in-place 재렌더.
   useEffect(() => {
@@ -293,7 +326,8 @@ export function KakaoMapWebView({
       </Modal>
     </View>
   );
-}
+  },
+);
 
 // 주소를 라벨용 짧은 식별자로 — 마지막 2 토큰(도로명 + 번지) 우선, 길이 한도 18자.
 // Before: 마지막 1 토큰만 ('264' 같은 번지수만 라벨이 되던 회로)

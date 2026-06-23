@@ -1,10 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useFieldStore } from '@/stores/fieldStore';
 import { useAuthStore } from '@/stores/authStore';
-import { KakaoMapWebView, fieldsToMarkers } from '@/components/KakaoMapWebView';
+import {
+  KakaoMapWebView,
+  fieldsToMarkers,
+  type KakaoMapHandle,
+} from '@/components/KakaoMapWebView';
 import { MapLegend } from '@/components/MapLegend';
+import { elevation } from '@/theme/elevation';
+import { spacing } from '@/theme/spacing';
 import { requestUserLocation, type LatLng } from '@/utils/geolocation';
 import {
   MapFilterBar,
@@ -43,6 +50,8 @@ export function MapDashboard({
   const userId = useAuthStore((s) => s.user?.id);
   const allFields = useFieldStore((s) => s.fields);
   const directAttachmentsMap = useFieldStore((s) => s.directAttachments);
+  // 지도 명령형 핸들 — '내 위치' 버튼이 드래그된 지도를 내 위치로 복구하는 데 사용.
+  const mapHandleRef = useRef<KakaoMapHandle>(null);
 
   const [displayMode, setDisplayMode] = useState<DisplayMode>('markers');
   const [selectedStatuses, setSelectedStatuses] = useState<FieldStatus[]>([]);
@@ -204,6 +213,7 @@ export function MapDashboard({
     // (이전엔 상단에 불투명 흰 필터 바가 지도를 눌러 답답해 보이던 회로 차단.)
     <View style={styles.container}>
       <KakaoMapWebView
+        ref={mapHandleRef}
         markers={markers}
         displayMode={displayMode}
         showBoundary={showBoundary}
@@ -217,6 +227,19 @@ export function MapDashboard({
         }
       />
       <MapLegend displayMode={displayMode} bottomInset={legendBottomInset} />
+      {/* 내 위치로 복구 — 우측 하단 조준점 버튼. 시트 peek 위로 띄움. */}
+      <Pressable
+        onPress={() => mapHandleRef.current?.recenter()}
+        style={({ pressed }) => [
+          styles.locateBtn,
+          { bottom: (legendBottomInset ?? 0) + spacing.md },
+          pressed && styles.locateBtnPressed,
+        ]}
+        accessibilityRole="button"
+        accessibilityLabel="내 위치로 지도 이동"
+      >
+        <Ionicons name="locate" size={22} color={colors.text} />
+      </Pressable>
       <MapFilterBar
         displayMode={displayMode}
         onChangeDisplayMode={setDisplayMode}
@@ -238,4 +261,18 @@ export function MapDashboard({
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
+  locateBtn: {
+    position: 'absolute',
+    right: spacing.lg,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...elevation.raised,
+  },
+  locateBtnPressed: { backgroundColor: colors.surfaceMuted },
 });

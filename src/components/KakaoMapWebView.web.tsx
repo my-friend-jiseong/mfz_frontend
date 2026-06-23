@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { Field, FieldStatus } from '@/types/entities';
 import { FIELD_STATUS_LABEL } from '@/types/entities';
@@ -158,6 +165,7 @@ type MapProjection = {
 };
 type KakaoMap = {
   setCenter: (latlng: unknown) => void;
+  panTo: (latlng: unknown) => void;
   setLevel: (level: number) => void;
   getLevel: () => number;
   setBounds: (bounds: LatLngBounds, pt?: number, pr?: number, pb?: number, pl?: number) => void;
@@ -231,16 +239,25 @@ function loadKakaoSdk(appkey: string): Promise<void> {
   });
 }
 
-export function KakaoMapWebView({
-  markers,
-  center,
-  displayMode = 'markers',
-  showBoundary = false,
-  myLocation = null,
-  fitToMarkers = false,
-  interactive = true,
-  onMarkerPress,
-}: Props) {
+// 외부('내 위치' 버튼)에서 지도를 명령형으로 복구시키기 위한 핸들 — native 변형과 동일 시그니처.
+export interface KakaoMapHandle {
+  recenter: (target?: { lat: number; lng: number }) => void;
+}
+
+export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
+  function KakaoMapWebView(
+    {
+      markers,
+      center,
+      displayMode = 'markers',
+      showBoundary = false,
+      myLocation = null,
+      fitToMarkers = false,
+      interactive = true,
+      onMarkerPress,
+    }: Props,
+    ref,
+  ) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<KakaoMap | null>(null);
   const overlaysRef = useRef<Overlay[]>([]);
@@ -254,6 +271,22 @@ export function KakaoMapWebView({
   const [error, setError] = useState<string | null>(null);
   const [activeGroup, setActiveGroup] = useState<KakaoMapMarker[] | null>(null);
   const kakaoJsKey = process.env.EXPO_PUBLIC_KAKAO_JS_KEY ?? '';
+
+  // 명령형 복구 — '내 위치' 버튼이 드래그된 지도를 다시 내 위치로 끌어온다.
+  useImperativeHandle(
+    ref,
+    () => ({
+      recenter: (target) => {
+        const m = mapRef.current;
+        const k = getKakao();
+        if (!m || !k) return;
+        const t = target ?? myLocation ?? center ?? DEFAULT_CENTER;
+        if (m.getLevel() > 6) m.setLevel(5);
+        m.panTo(new k.maps.LatLng(t.lat, t.lng));
+      },
+    }),
+    [myLocation, center],
+  );
 
   // 동일 좌표 마커는 그룹으로 묶어 첫 마커만 표시 + "+N" 뱃지. 좌표 무손실.
   const markerGroups = useMemo(() => groupSameLocationMarkers(markers), [markers]);
@@ -694,7 +727,8 @@ export function KakaoMapWebView({
       </Modal>
     </View>
   );
-}
+  },
+);
 
 export function fieldsToMarkers(fields: Field[]): KakaoMapMarker[] {
   return fields.map((f) => ({
