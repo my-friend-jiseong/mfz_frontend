@@ -18,7 +18,13 @@ export async function appendUploadFile(
   file: UploadFile,
 ): Promise<void> {
   if (Platform.OS === 'web') {
-    const blob = await fetch(file.uri).then((r) => r.blob());
+    const raw = await fetch(file.uri).then((r) => r.blob());
+    // 파트 Content-Type 은 blob.type 에서 결정됨 — picker 가 준 blob 의 type 이
+    // 비었거나(→ application/octet-stream) 허용 밖이면 서버가 "JPEG/PNG/WebP/HEIC만
+    // 허용됩니다" 로 거부. 정규화한 file.type 으로 재포장해 강제. (native 는 RN
+    // serializer 가 file.type 을 그대로 쓰므로 불필요.)
+    const blob =
+      raw.type === file.type ? raw : new Blob([raw], { type: file.type });
     fd.append(field, blob, file.name);
   } else {
     fd.append(field, file as unknown as Blob);
