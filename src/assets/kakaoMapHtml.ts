@@ -40,6 +40,8 @@ interface MapHtmlOptions {
     groupIds?: string[];
   }[];
   center: { lat: number; lng: number };
+  // 초기 줌 레벨(카카오 1~14, 작을수록 확대). 미지정 시 기본 8. 마지막 뷰 복원에 사용.
+  level?: number;
   // true 면 center/level 대신 모든 마커가 한 화면에 들어오도록 setBounds 로 자동 프레이밍.
   // 위치도(보고서 작성 미리보기 등)처럼 "현장 전체를 담는" 정적 뷰에 사용.
   fitToMarkers?: boolean;
@@ -51,6 +53,7 @@ export function buildKakaoMapHtml({
   kakaoJsKey,
   markers,
   center,
+  level = 8,
   fitToMarkers = false,
   interactive = true,
 }: MapHtmlOptions): string {
@@ -114,6 +117,7 @@ MARKERS.forEach(function(m){
 <script>
 (function(){
   var CENTER = { lat: ${center.lat}, lng: ${center.lng} };
+  var LEVEL = ${level};
   var FIT_TO_MARKERS = ${fitToMarkers ? 'true' : 'false'};
   var INTERACTIVE = ${interactive ? 'true' : 'false'};
   ${postMsgFn}
@@ -122,7 +126,7 @@ MARKERS.forEach(function(m){
     var container = document.getElementById('map');
     var map = new kakao.maps.Map(container, {
       center: new kakao.maps.LatLng(CENTER.lat, CENTER.lng),
-      level: 8,
+      level: LEVEL,
     });
     // RN 측 injectJavaScript 에서 in-place 갱신을 위해 전역에 노출.
     window.__mfzMap = map;
@@ -192,6 +196,15 @@ MARKERS.forEach(function(m){
     kakao.maps.event.addListener(map, 'zoom_changed', function(){ heatZooming = false; heatSchedule(); });
     // idle 에서도 해제 — zoom_changed 없이 끝나는 제스처(취소 등)로 플래그가 박제되는 것 방지.
     kakao.maps.event.addListener(map, 'idle', function(){ heatZooming = false; heatSchedule(); });
+    // 사용자가 직접 끌거나 줌한 뒤에만 현재 뷰(center+level)를 RN 으로 보고 — 지도 생성 시
+    // 자동 발화하는 idle 로 보고하면, 안 보이는 탭의 지도가 초기 위치로 값을 덮어쓴다.
+    // RN 은 이를 기억해 화면 재마운트(탭 전환·뒤로가기) 시 마지막으로 보던 위치로 복원한다.
+    function reportView(){
+      var c = map.getCenter();
+      postMsg({ type: 'viewchanged', lat: c.getLat(), lng: c.getLng(), level: map.getLevel() });
+    }
+    kakao.maps.event.addListener(map, 'dragend', reportView);
+    kakao.maps.event.addListener(map, 'zoom_changed', reportView);
     kakao.maps.event.addListener(map, 'bounds_changed', heatSchedule);
     // 회전/리사이즈 시 webview relayout — setData 는 캔버스 치수를 안 바꾸므로 configure 로 리사이즈 후 재계산.
     window.addEventListener('resize', function(){

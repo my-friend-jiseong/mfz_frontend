@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -27,6 +27,11 @@ import { colors } from '@/theme/colors';
 // 매번 무효화되므로 identity 고정 모듈 상수로.
 const NO_FIELDS: never[] = [];
 
+// 이번 세션에서 마지막으로 보던 지도 뷰(center+level). 모듈 수명이라 화면 재마운트(탭 전환·
+// 뒤로가기)에도 살아남아, 재진입 시 '내 위치'로 끌려가지 않고 마지막 위치로 복원한다.
+// 스코프 화면(외근 상세)은 자기 프레이밍이 있으므로 이 값을 읽지도 쓰지도 않는다.
+let lastMapView: { lat: number; lng: number; level: number } | null = null;
+
 interface MapDashboardProps {
   // 화면별 현장 화이트리스트. undefined = 내 현장 전체.
   // 예: 외근 화면에선 그 외근에 속한 destinations 의 fieldId 만 통과시켜
@@ -52,6 +57,19 @@ export function MapDashboard({
   const directAttachmentsMap = useFieldStore((s) => s.directAttachments);
   // 지도 명령형 핸들 — '내 위치' 버튼이 드래그된 지도를 내 위치로 복구하는 데 사용.
   const mapHandleRef = useRef<KakaoMapHandle>(null);
+  // 전역 지도(특정 현장 프레이밍이 없는 화면) = 복원 대상.
+  // undefined(현장·보고서) 와 [](외근 목록: 빈 마커지만 같은 전역 캔버스) 둘 다 포함.
+  // 실제 스코프([ids], 외근 상세)는 자기 프레이밍을 유지해야 하므로 제외.
+  const isGlobalMap = !scopeFieldIds || scopeFieldIds.length === 0;
+  // 마운트 시점의 마지막 뷰 — 전역 지도만 복원.
+  const lastViewAtMount = useRef(isGlobalMap ? lastMapView : null).current;
+  // 지도 뷰가 정착할 때마다 기억(전역 지도만) — 다음 재마운트에서 lastViewAtMount 로 복원됨.
+  const handleViewChange = useCallback(
+    (v: { lat: number; lng: number; level: number }) => {
+      if (isGlobalMap) lastMapView = v;
+    },
+    [isGlobalMap],
+  );
 
   const [displayMode, setDisplayMode] = useState<DisplayMode>('markers');
   const [selectedStatuses, setSelectedStatuses] = useState<FieldStatus[]>([]);
@@ -170,8 +188,11 @@ export function MapDashboard({
       }
       return center;
     }
+    // 비스코프(목록 탭): 이번 세션에서 마지막으로 보던 위치가 있으면 그걸로 초기 프레이밍.
+    // 없을 때만 내 위치로 1회 프레이밍 — 재마운트마다 내 위치로 끌려오던 회로 차단.
+    if (lastViewAtMount) return lastViewAtMount;
     return myLocation ?? undefined;
-  }, [scopeFieldIds, scopedFields, myLocation]);
+  }, [scopeFieldIds, scopedFields, myLocation, lastViewAtMount]);
 
   // 선택된 현장 집합 — 선택 모드에서만 채워짐(아니면 빈 Set → 마커에 selected 미부여).
   const selectedSet = useMemo(
@@ -219,6 +240,8 @@ export function MapDashboard({
         showBoundary={showBoundary}
         myLocation={myLocation}
         center={mapCenter}
+        initialLevel={lastViewAtMount?.level}
+        onViewChange={handleViewChange}
         onMarkerPress={(fieldId) =>
           // 선택 모드(onSelectField 주어짐)에선 토글, 아니면 현장 상세로 이동.
           onSelectField

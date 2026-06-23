@@ -52,10 +52,14 @@ export interface KakaoMapMarker {
 interface Props {
   markers: KakaoMapMarker[];
   center?: { lat: number; lng: number };
+  // 초기 줌 레벨 — 마지막 뷰 복원용(미지정 시 8). center 와 함께 마운트 시 1회만 사용.
+  initialLevel?: number;
   displayMode?: MapDisplayMode;
   showBoundary?: boolean;
   // 사용자 현재 위치 — 있으면 파란 점 + pulse 링으로 노출 (클릭 비활성).
   myLocation?: { lat: number; lng: number } | null;
+  // 지도 뷰(center+level)가 정착할 때마다 보고 — 상위가 기억해 재마운트 시 복원에 사용.
+  onViewChange?: (view: { lat: number; lng: number; level: number }) => void;
   // true 면 모든 마커가 한 화면에 들어오도록 자동 프레이밍 (center 무시). 위치도 미리보기용.
   fitToMarkers?: boolean;
   // false 면 드래그/줌 비활성 — BottomSheet 안 등 pan 충돌 회피용 정적 위치도.
@@ -78,6 +82,7 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
     {
       markers,
       center,
+      initialLevel,
       displayMode = 'markers',
       showBoundary = false,
       myLocation = null,
@@ -85,6 +90,7 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
       interactive = true,
       onMarkerPress,
       onTilesLoaded,
+      onViewChange,
     }: Props,
     ref,
   ) {
@@ -138,6 +144,7 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
   // pan/zoom 보존 + 경계 지오메트리(~3MB) 재직렬화·전체 리로드 회피.
   // markers/center 는 placeholder·초기 프레이밍용 mount 시점 값만 HTML 에 박는다(deps 제외).
   const initialCenterRef = useRef(center ?? myLocation ?? DEFAULT_CENTER);
+  const initialLevelRef = useRef(initialLevel);
   // webview 가 줌별 픽셀 클러스터링을 직접 하므로 원본(미그룹) 마커를 넘긴다.
   const initialMarkersRef = useRef(markers);
   const html = useMemo(
@@ -146,6 +153,7 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
         kakaoJsKey,
         markers: initialMarkersRef.current,
         center: initialCenterRef.current,
+        level: initialLevelRef.current,
         fitToMarkers,
         interactive,
       }),
@@ -260,6 +268,12 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
               setReady(true);
             } else if (msg.type === 'tilesloaded') {
               onTilesLoaded?.();
+            } else if (
+              msg.type === 'viewchanged' &&
+              typeof msg.lat === 'number' &&
+              typeof msg.lng === 'number'
+            ) {
+              onViewChange?.({ lat: msg.lat, lng: msg.lng, level: msg.level });
             } else if (msg.type === 'markerPress' && typeof msg.fieldId === 'string') {
               onMarkerPress?.(msg.fieldId);
             } else if (msg.type === 'markerGroupPress' && Array.isArray(msg.groupIds)) {

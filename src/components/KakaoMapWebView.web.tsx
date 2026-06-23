@@ -126,6 +126,8 @@ function clusterByPixel(
 interface Props {
   markers: KakaoMapMarker[];
   center?: { lat: number; lng: number };
+  // 초기 줌 레벨 — 마지막 뷰 복원용(미지정 시 8).
+  initialLevel?: number;
   displayMode?: MapDisplayMode;
   showBoundary?: boolean;
   myLocation?: { lat: number; lng: number } | null;
@@ -134,6 +136,8 @@ interface Props {
   // false 면 드래그/줌 비활성 — BottomSheet 안 등 pan 충돌 회피용 정적 위치도.
   interactive?: boolean;
   onMarkerPress?: (fieldId: string) => void;
+  // 지도 뷰(center+level)가 정착할 때마다 보고 — 상위가 기억해 재마운트 시 복원에 사용.
+  onViewChange?: (view: { lat: number; lng: number; level: number }) => void;
 }
 
 const DEFAULT_CENTER = { lat: 35.17, lng: 129.07 };
@@ -168,6 +172,7 @@ type KakaoMap = {
   panTo: (latlng: unknown) => void;
   setLevel: (level: number) => void;
   getLevel: () => number;
+  getCenter: () => { getLat: () => number; getLng: () => number };
   setBounds: (bounds: LatLngBounds, pt?: number, pr?: number, pb?: number, pl?: number) => void;
   setDraggable: (v: boolean) => void;
   setZoomable: (v: boolean) => void;
@@ -249,12 +254,14 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
     {
       markers,
       center,
+      initialLevel,
       displayMode = 'markers',
       showBoundary = false,
       myLocation = null,
       fitToMarkers = false,
       interactive = true,
       onMarkerPress,
+      onViewChange,
     }: Props,
     ref,
   ) {
@@ -314,10 +321,21 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
           return;
         }
         const c = center ?? myLocation ?? DEFAULT_CENTER;
-        mapRef.current = new k.maps.Map(containerRef.current, {
+        const map = new k.maps.Map(containerRef.current, {
           center: new k.maps.LatLng(c.lat, c.lng),
-          level: 8,
+          level: initialLevel ?? 8,
         });
+        mapRef.current = map;
+        // 사용자가 직접 끌거나 줌한 뒤에만 현재 뷰 보고 — 지도 생성 시 자동 발화하는 idle 로
+        // 보고하면 안 보이는 탭의 지도가 초기 위치로 값을 덮어쓴다. 상위가 기억해 재마운트 시 복원.
+        if (onViewChange) {
+          const report = () => {
+            const ctr = map.getCenter();
+            onViewChange({ lat: ctr.getLat(), lng: ctr.getLng(), level: map.getLevel() });
+          };
+          k.maps.event.addListener(map, 'dragend', report);
+          k.maps.event.addListener(map, 'zoom_changed', report);
+        }
         setReady(true);
       })
       .catch((e: Error) => {
