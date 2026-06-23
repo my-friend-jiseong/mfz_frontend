@@ -25,15 +25,55 @@ export async function appendUploadFile(
   }
 }
 
-function inferMime(uri: string, fallback: string): string {
-  const m = uri.match(/\.([a-zA-Z0-9]+)(?:\?|$)/);
-  if (!m) return fallback;
-  const ext = m[1].toLowerCase();
-  if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg';
-  if (ext === 'png') return 'image/png';
-  if (ext === 'webp') return 'image/webp';
-  if (ext === 'heic') return 'image/heic';
-  return fallback;
+// 서버 multipart 검증(multer)이 허용하는 이미지 형식. content-type/확장자 둘 다
+// 이 집합 밖이면 "JPEG/PNG/WebP/HEIC만 허용됩니다" 로 거부되므로 단일 출처로 정규화.
+const MIME_BY_EXT: Record<string, string> = {
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+  heic: 'image/heic',
+  heif: 'image/heic', // iOS HEIF 컨테이너 → 서버는 heic 로 인식
+};
+const EXT_BY_MIME: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/heic': 'heic',
+};
+const ALLOWED_MIME = new Set(Object.keys(EXT_BY_MIME));
+
+function extOf(s: string): string {
+  const m = s.match(/\.([a-zA-Z0-9]+)(?:\?|$)/);
+  return m ? m[1].toLowerCase() : '';
+}
+
+// 디바이스가 주는 mimeType 을 서버 허용 형식으로 정규화.
+// 빈 문자열·image/heif·image/jpg 등 변형과, 확장자 없는 cache uri 를 모두 흡수.
+// 허용 밖이면 파일명/URI 확장자로 추론, 그래도 모르면 jpeg.
+function normalizeImageMime(
+  rawMime: string | null | undefined,
+  ...sources: (string | null | undefined)[]
+): string {
+  const m = (rawMime ?? '').toLowerCase().trim();
+  if (ALLOWED_MIME.has(m)) return m;
+  if (m === 'image/jpg') return 'image/jpeg';
+  if (m === 'image/heif' || m === 'image/heic-sequence') return 'image/heic';
+  for (const s of sources) {
+    const byExt = MIME_BY_EXT[extOf(s ?? '')];
+    if (byExt) return byExt;
+  }
+  return 'image/jpeg';
+}
+
+// 파일명에 mime 과 일치하는 확장자 보장 — 서버가 확장자로 검증하는 경우 대비
+// (Expo Go picker uri 는 확장자 없는 경우가 있음).
+function withMatchingExt(name: string, mime: string): string {
+  const want = EXT_BY_MIME[mime] ?? 'jpg';
+  const cur = extOf(name);
+  if (cur && MIME_BY_EXT[cur] === mime) return name;
+  const base = (name || 'photo').replace(/\.[a-zA-Z0-9]+$/, '') || 'photo';
+  return `${base}.${want}`;
 }
 
 function basenameFromUri(uri: string, defaultName: string): string {
@@ -84,8 +124,11 @@ export async function pickPhoto(source: 'camera' | 'library'): Promise<UploadFil
   if (result.canceled || !result.assets[0]) return null;
 
   const a = result.assets[0];
-  const name = a.fileName ?? basenameFromUri(a.uri, `photo-${Date.now()}.jpg`);
-  const type = a.mimeType ?? inferMime(a.uri, 'image/jpeg');
+  // type 은 허용 형식으로 정규화, name 은 그 type 과 맞는 확장자를 보장 →
+  // 서버가 content-type 으로 검증하든 확장자로 검증하든 통과.
+  const type = normalizeImageMime(a.mimeType, a.fileName, a.uri);
+  const rawName = a.fileName ?? basenameFromUri(a.uri, `photo-${Date.now()}.jpg`);
+  const name = withMatchingExt(rawName, type);
   return { uri: a.uri, name, type };
 }
 
@@ -102,8 +145,11 @@ export async function pickPhoto(source: 'camera' | 'library'): Promise<UploadFil
 export async function remotePhotoToUploadFile(
   absoluteUrl: string,
 ): Promise<UploadFile | null> {
-  const type = inferMime(absoluteUrl, 'image/jpeg');
-  const name = basenameFromUri(absoluteUrl, `field-photo-${Date.now()}.jpg`);
+  const type = normalizeImageMime(undefined, absoluteUrl);
+  const name = withMatchingExt(
+    basenameFromUri(absoluteUrl, `field-photo-${Date.now()}.jpg`),
+    type,
+  );
   if (Platform.OS === 'web') {
     return { uri: absoluteUrl, name, type };
   }
