@@ -71,10 +71,12 @@ interface Props {
 
 const DEFAULT_CENTER = { lat: 35.17, lng: 129.07 }; // 부산 중심
 
-// 외부(예: '내 위치' 버튼)에서 지도를 명령형으로 복구시키기 위한 핸들.
+// 외부(예: '내 위치' 버튼·탭 포커스 동기화)에서 지도를 명령형으로 제어하기 위한 핸들.
 export interface KakaoMapHandle {
   // target 미지정 시 myLocation > center > 기본(부산) 순으로 복구. 멀리 줌아웃돼 있으면 적당히 당김.
   recenter: (target?: { lat: number; lng: number }) => void;
+  // center+level 을 정확히(애니메이션 없이) 즉시 설정 — 탭 포커스 시 마지막 공유 뷰로 동기화용.
+  setView: (view: { lat: number; lng: number; level: number }) => void;
 }
 
 export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
@@ -179,6 +181,11 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
         const t = target ?? myLocation ?? center ?? DEFAULT_CENTER;
         inject(
           `window.__mfzMap&&(function(m){var ll=new kakao.maps.LatLng(${t.lat},${t.lng});if(m.getLevel()>6)m.setLevel(5);m.panTo(ll);})(window.__mfzMap)`,
+        );
+      },
+      setView: (view) => {
+        inject(
+          `window.__mfzMap&&(window.__mfzMap.setLevel(${view.level}),window.__mfzMap.setCenter(new kakao.maps.LatLng(${view.lat},${view.lng})))`,
         );
       },
     }),

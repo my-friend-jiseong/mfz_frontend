@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useFieldStore } from '@/stores/fieldStore';
 import { useAuthStore } from '@/stores/authStore';
 import {
@@ -69,6 +69,16 @@ export function MapDashboard({
       if (isGlobalMap) lastMapView = v;
     },
     [isGlobalMap],
+  );
+
+  // 탭 포커스마다 최신 공유 뷰로 동기화 — 마운트 시점 캡처만으론, 떠 있는 다른 탭이 한쪽의
+  // 팬을 못 따라와 전환 시 중심이 달라 보이던 회로 차단. 전역 지도끼리는 항상 같은 위치.
+  useFocusEffect(
+    useCallback(() => {
+      if (isGlobalMap && lastMapView) {
+        mapHandleRef.current?.setView(lastMapView);
+      }
+    }, [isGlobalMap]),
   );
 
   const [displayMode, setDisplayMode] = useState<DisplayMode>('markers');

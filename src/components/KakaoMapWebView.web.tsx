@@ -244,9 +244,10 @@ function loadKakaoSdk(appkey: string): Promise<void> {
   });
 }
 
-// 외부('내 위치' 버튼)에서 지도를 명령형으로 복구시키기 위한 핸들 — native 변형과 동일 시그니처.
+// 외부('내 위치' 버튼·탭 포커스 동기화)에서 지도를 명령형으로 제어하기 위한 핸들 — native 변형과 동일.
 export interface KakaoMapHandle {
   recenter: (target?: { lat: number; lng: number }) => void;
+  setView: (view: { lat: number; lng: number; level: number }) => void;
 }
 
 export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
@@ -290,6 +291,13 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
         const t = target ?? myLocation ?? center ?? DEFAULT_CENTER;
         if (m.getLevel() > 6) m.setLevel(5);
         m.panTo(new k.maps.LatLng(t.lat, t.lng));
+      },
+      setView: (view) => {
+        const m = mapRef.current;
+        const k = getKakao();
+        if (!m || !k) return;
+        m.setLevel(view.level);
+        m.setCenter(new k.maps.LatLng(view.lat, view.lng));
       },
     }),
     [myLocation, center],
