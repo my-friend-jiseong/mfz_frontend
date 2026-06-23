@@ -355,10 +355,10 @@ export default function ComposeReport() {
             </Text>
             <ScrollView style={styles.modalList}>
               {myTrips.map((t) => {
-                const visitCount = allVisits.reduce(
-                  (n, v) => (v.tripId === t.id ? n + 1 : n),
-                  0,
-                );
+                // 목록의 visitCount 는 list/detail API 가 내려준 값을 그대로 사용.
+                // allVisits 는 선택된 외근의 상세 로드 후에만 채워지므로(sparse)
+                // 여기서 reduce 하면 미선택 외근이 전부 0건으로 집계됨.
+                const visitCount = t.visitCount ?? 0;
                 const active = t.id === tripId;
                 return (
                   <Pressable
