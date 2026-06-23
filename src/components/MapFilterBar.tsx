@@ -1,12 +1,12 @@
-import { useState } from 'react';
-import {
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { useCallback, useRef } from 'react';
+import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  BottomSheetModal,
+  BottomSheetScrollView,
+  BottomSheetBackdrop,
+  type BottomSheetBackdropProps,
+} from '@gorhom/bottom-sheet';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/Text';
 import { colors } from '@/theme/colors';
@@ -61,8 +61,11 @@ const ATTACHMENT_CHIPS: { kind: AttachmentKind; label: string }[] = [
 ];
 
 // 벤치마크(네이버·카카오 등 지도 앱) 패턴 — 지도 설정을 상단을 가로지르는 흰 바 대신
-// 우측 상단 동그란 '레이어' 버튼 하나로 접어 둔다. 평소엔 지도가 위까지 꽉 차 보이고,
-// 버튼을 누르면 표시 방식·표시 여부·필터를 한 패널 안에서 수정한다.
+// 우측 상단 동그란 '레이어' 버튼 하나로 접어 둔다. 버튼을 누르면 아래에서 올라오는
+// 바텀시트(gorhom)로 표시 방식·표시 여부·필터를 한 곳에서 수정한다.
+//   - 아래로 끌어내리면 닫힘(enablePanDownToClose) — 현장 목록 시트와 동일한 제스처.
+//   - backdrop 은 시트가 올라오는 만큼 서서히 어두워짐(BottomSheetBackdrop, 페이드).
+//   - 내용이 길면 시트 안에서 스크롤(BottomSheetScrollView), 짧으면 콘텐츠 높이로 자동.
 export function MapFilterBar({
   displayMode,
   onChangeDisplayMode,
@@ -79,8 +82,8 @@ export function MapFilterBar({
   onToggleBoundary,
 }: Props) {
   const insets = useSafeAreaInsets();
-  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
-  const [open, setOpen] = useState(false);
+  const { height: screenHeight } = useWindowDimensions();
+  const sheetRef = useRef<BottomSheetModal>(null);
 
   const displayActive = displayMode !== 'markers';
   const rangeActive = rangePreset !== 'all';
@@ -94,131 +97,124 @@ export function MapFilterBar({
   // 버튼 위 점 배지 — 기본값에서 벗어난 설정이 하나라도 있으면 표시.
   const anyActive = displayActive || !visibilityAtDefault || filterActiveCount > 0;
 
-  // 패널 폭/최대 높이 — 작은 화면에서도 좌우 여백을 남기고, 세로로 길면 스크롤.
-  const panelWidth = Math.min(320, screenWidth - spacing.lg * 2);
-  const panelMaxHeight = screenHeight * 0.6;
+  const renderBackdrop = useCallback(
+    (props: BottomSheetBackdropProps) => (
+      <BottomSheetBackdrop
+        {...props}
+        appearsOnIndex={0}
+        disappearsOnIndex={-1}
+        opacity={0.45}
+        pressBehavior="close"
+      />
+    ),
+    [],
+  );
 
   return (
-    // 지도 위 전면 오버레이 — pointerEvents box-none 으로 버튼/패널 밖 영역은 지도로 통과.
+    // 지도 위 전면 오버레이 — pointerEvents box-none 으로 버튼 밖 영역은 지도로 통과.
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-      {open ? (
-        <Pressable
-          style={StyleSheet.absoluteFill}
-          onPress={() => setOpen(false)}
-          accessibilityLabel="지도 설정 닫기"
-        />
-      ) : null}
-
       <View
         style={[styles.anchor, { top: insets.top + spacing.sm }]}
         pointerEvents="box-none"
       >
         <Pressable
-          onPress={() => setOpen((v) => !v)}
+          onPress={() => sheetRef.current?.present()}
           style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
           accessibilityRole="button"
-          accessibilityLabel={open ? '지도 설정 닫기' : '지도 설정 열기'}
+          accessibilityLabel="지도 설정 열기"
         >
-          <Ionicons
-            name={open ? 'close' : 'layers-outline'}
-            size={22}
-            color={open ? colors.primary : colors.text}
-          />
-          {anyActive && !open ? <View style={styles.fabBadge} /> : null}
+          <Ionicons name="layers-outline" size={22} color={colors.text} />
+          {anyActive ? <View style={styles.fabBadge} /> : null}
         </Pressable>
-
-        {open ? (
-          <View style={[styles.panel, { width: panelWidth }]}>
-            <View style={styles.panelHeader}>
-              <Text variant="bodySm" weight="bold">
-                지도 설정
-              </Text>
-              <Pressable
-                onPress={() => setOpen(false)}
-                hitSlop={8}
-                accessibilityRole="button"
-                accessibilityLabel="닫기"
-              >
-                <Ionicons name="close" size={18} color={colors.textMuted} />
-              </Pressable>
-            </View>
-            <ScrollView
-              style={{ maxHeight: panelMaxHeight }}
-              contentContainerStyle={styles.panelBody}
-              showsVerticalScrollIndicator={false}
-            >
-              <Section label="표시 방식" first>
-                {(['markers', 'heatmap', 'choropleth'] as DisplayMode[]).map(
-                  (mode) => (
-                    <SubChip
-                      key={mode}
-                      label={DISPLAY_LABEL[mode]}
-                      active={displayMode === mode}
-                      onPress={() => onChangeDisplayMode(mode)}
-                    />
-                  ),
-                )}
-              </Section>
-
-              <Section label="표시 여부">
-                {ATTACHMENT_CHIPS.map((a) => (
-                  <SubChip
-                    key={a.kind}
-                    label={a.label}
-                    active={visibleAttachments[a.kind]}
-                    onPress={() => onToggleAttachment(a.kind)}
-                  />
-                ))}
-                <SubChip
-                  label="시/군/구 경계"
-                  active={showBoundary}
-                  onPress={onToggleBoundary}
-                />
-              </Section>
-
-              <Section label="기간">
-                {(['all', '30d', '7d', '1d'] as RangePreset[]).map((p) => (
-                  <SubChip
-                    key={p}
-                    label={RANGE_LABEL[p]}
-                    active={rangePreset === p}
-                    onPress={() => onChangeRangePreset(p)}
-                  />
-                ))}
-              </Section>
-
-              <Section label="상태">
-                {STATUS_CHIPS.map((s) => (
-                  <SubChip
-                    key={s.value}
-                    label={s.label}
-                    active={selectedStatuses.includes(s.value)}
-                    accent={colors.fieldStatus[s.value]}
-                    onPress={() => onToggleStatus(s.value)}
-                  />
-                ))}
-              </Section>
-
-              <Section label="태그">
-                {availableTags.length === 0 ? (
-                  <Text variant="caption" color="textMuted" style={styles.emptyHint}>
-                    등록된 태그 없음
-                  </Text>
-                ) : (
-                  availableTags.map((tag) => (
-                    <SubChip
-                      key={tag}
-                      label={tag}
-                      active={selectedTags.includes(tag)}
-                      onPress={() => onToggleTag(tag)}
-                    />
-                  ))
-                )}
-              </Section>
-            </ScrollView>
-          </View>
-        ) : null}
       </View>
+
+      <BottomSheetModal
+        ref={sheetRef}
+        enableDynamicSizing
+        maxDynamicContentSize={screenHeight * 0.8}
+        enablePanDownToClose
+        backdropComponent={renderBackdrop}
+        backgroundStyle={styles.sheetBg}
+        handleIndicatorStyle={styles.grabber}
+      >
+        <BottomSheetScrollView
+          contentContainerStyle={[
+            styles.sheetBody,
+            { paddingBottom: insets.bottom + spacing.lg },
+          ]}
+        >
+          <Text variant="h3" style={styles.sheetTitle}>
+            지도 설정
+          </Text>
+
+          <Section label="표시 방식" first>
+            {(['markers', 'heatmap', 'choropleth'] as DisplayMode[]).map((mode) => (
+              <SubChip
+                key={mode}
+                label={DISPLAY_LABEL[mode]}
+                active={displayMode === mode}
+                onPress={() => onChangeDisplayMode(mode)}
+              />
+            ))}
+          </Section>
+
+          <Section label="표시 여부">
+            {ATTACHMENT_CHIPS.map((a) => (
+              <SubChip
+                key={a.kind}
+                label={a.label}
+                active={visibleAttachments[a.kind]}
+                onPress={() => onToggleAttachment(a.kind)}
+              />
+            ))}
+            <SubChip
+              label="시/군/구 경계"
+              active={showBoundary}
+              onPress={onToggleBoundary}
+            />
+          </Section>
+
+          <Section label="기간">
+            {(['all', '30d', '7d', '1d'] as RangePreset[]).map((p) => (
+              <SubChip
+                key={p}
+                label={RANGE_LABEL[p]}
+                active={rangePreset === p}
+                onPress={() => onChangeRangePreset(p)}
+              />
+            ))}
+          </Section>
+
+          <Section label="상태">
+            {STATUS_CHIPS.map((s) => (
+              <SubChip
+                key={s.value}
+                label={s.label}
+                active={selectedStatuses.includes(s.value)}
+                accent={colors.fieldStatus[s.value]}
+                onPress={() => onToggleStatus(s.value)}
+              />
+            ))}
+          </Section>
+
+          <Section label="태그">
+            {availableTags.length === 0 ? (
+              <Text variant="caption" color="textMuted" style={styles.emptyHint}>
+                등록된 태그 없음
+              </Text>
+            ) : (
+              availableTags.map((tag) => (
+                <SubChip
+                  key={tag}
+                  label={tag}
+                  active={selectedTags.includes(tag)}
+                  onPress={() => onToggleTag(tag)}
+                />
+              ))
+            )}
+          </Section>
+        </BottomSheetScrollView>
+      </BottomSheetModal>
     </View>
   );
 }
@@ -317,26 +313,22 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: colors.surface,
   },
-  panel: {
-    marginTop: spacing.sm,
+  sheetBg: {
     backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: 'hidden',
-    ...elevation.raised,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
   },
-  panelHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  grabber: {
+    backgroundColor: colors.border,
+    width: 40,
+    height: 4,
+  },
+  sheetTitle: {
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  panelBody: {
     paddingBottom: spacing.sm,
+  },
+  sheetBody: {
+    paddingTop: spacing.xs,
   },
   section: {
     paddingHorizontal: spacing.lg,

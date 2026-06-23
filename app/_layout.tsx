@@ -14,6 +14,7 @@ import { useTripStore } from '@/stores/tripStore';
 // 하위 트리에 inset.top=0 을 provider 로 내려보내 비-map 화면이 banner 아래에 또 padding 을
 // 추가하는 더블 패딩 회로 차단.
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
 import { TripStatusBanner } from '@/components/TripStatusBanner';
@@ -73,7 +74,10 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={styles.root}>
       <SafeAreaProvider>
-        <RootContent />
+        {/* BottomSheetModal(지도 설정 시트 등) 을 트리 최상단 포털로 띄우기 위한 provider. */}
+        <BottomSheetModalProvider>
+          <RootContent />
+        </BottomSheetModalProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
