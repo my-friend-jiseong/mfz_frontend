@@ -10,7 +10,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import type { Field, FieldStatus } from '@/types/entities';
 import { FIELD_STATUS_LABEL } from '@/types/entities';
 import h337 from 'heatmap.js';
-import type { MapDisplayMode } from '@/assets/kakaoMapHtml';
+import type { MapDisplayMode, BaseMapType } from '@/assets/kakaoMapHtml';
 import { HEAT_GRADIENT, HEAT_CONFIG, HEAT_MAX, heatRadiusForLevel } from '@/theme/heatScale';
 import { loadSigunguGeoJson, aggregateByRegion } from '@/assets/boundaries/sigungu';
 import { fillOpacityForCount, CHOROPLETH_COLOR } from '@/theme/choroplethScale';
@@ -130,6 +130,10 @@ interface Props {
   initialLevel?: number;
   displayMode?: MapDisplayMode;
   showBoundary?: boolean;
+  // 베이스 지도 종류 — 일반/위성/하이브리드(미지정 시 일반). 데이터 오버레이(displayMode)와 직교.
+  baseMapType?: BaseMapType;
+  // 지형도 오버레이 토글 — 베이스 위에 등고선·음영기복을 겹침.
+  showTerrain?: boolean;
   myLocation?: { lat: number; lng: number } | null;
   // true 면 모든 마커가 한 화면에 들어오도록 자동 프레이밍 (center 무시). 위치도 미리보기용.
   fitToMarkers?: boolean;
@@ -177,12 +181,23 @@ type KakaoMap = {
   setDraggable: (v: boolean) => void;
   setZoomable: (v: boolean) => void;
   getProjection: () => MapProjection;
+  setMapTypeId: (mapTypeId: unknown) => void;
+  addOverlayMapTypeId: (mapTypeId: unknown) => void;
+  removeOverlayMapTypeId: (mapTypeId: unknown) => void;
+};
+// 베이스(ROADMAP/SKYVIEW/HYBRID)와 오버레이(TERRAIN 등)는 같은 enum 에 속한다.
+type MapTypeIdEnum = {
+  ROADMAP: unknown;
+  SKYVIEW: unknown;
+  HYBRID: unknown;
+  TERRAIN: unknown;
 };
 type KakaoGlobal = {
   maps: {
     load: (cb: () => void) => void;
     LatLng: new (lat: number, lng: number) => unknown;
     LatLngBounds: new () => LatLngBounds;
+    MapTypeId: MapTypeIdEnum;
     Map: new (container: HTMLElement, options: { center: unknown; level: number }) => KakaoMap;
     Marker: new (options: { position: unknown; map: unknown; title?: string }) => Overlay;
     CustomOverlay: CustomOverlayCtor;
@@ -258,6 +273,8 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
       initialLevel,
       displayMode = 'markers',
       showBoundary = false,
+      baseMapType = 'roadmap',
+      showTerrain = false,
       myLocation = null,
       fitToMarkers = false,
       interactive = true,
@@ -387,6 +404,30 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
     mapRef.current.setDraggable(interactive);
     mapRef.current.setZoomable(interactive);
   }, [ready, interactive]);
+
+  // 베이스 지도 종류(일반/위성/하이브리드) — setMapTypeId 로 베이스 타일만 교체.
+  // 마커·히트맵 캔버스·경계 폴리곤은 위에 그대로 유지된다.
+  useEffect(() => {
+    if (!ready || !mapRef.current) return;
+    const k = getKakao();
+    if (!k) return;
+    const t =
+      baseMapType === 'skyview'
+        ? k.maps.MapTypeId.SKYVIEW
+        : baseMapType === 'hybrid'
+          ? k.maps.MapTypeId.HYBRID
+          : k.maps.MapTypeId.ROADMAP;
+    mapRef.current.setMapTypeId(t);
+  }, [ready, baseMapType]);
+
+  // 지형도(TERRAIN) 오버레이 토글 — 베이스와 독립 스택으로 겹침.
+  useEffect(() => {
+    if (!ready || !mapRef.current) return;
+    const k = getKakao();
+    if (!k) return;
+    if (showTerrain) mapRef.current.addOverlayMapTypeId(k.maps.MapTypeId.TERRAIN);
+    else mapRef.current.removeOverlayMapTypeId(k.maps.MapTypeId.TERRAIN);
+  }, [ready, showTerrain]);
 
   // myLocation 오버레이 — ready 후 한 번 / myLocation 변경 시 재배치.
   useEffect(() => {

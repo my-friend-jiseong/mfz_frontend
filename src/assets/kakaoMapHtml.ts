@@ -25,6 +25,10 @@ import { HEATMAP_JS_SOURCE } from '@/assets/heatmapLib';
 
 export type MapDisplayMode = 'markers' | 'heatmap' | 'choropleth';
 
+// 베이스 지도 종류 — kakao.maps.MapTypeId 의 ROADMAP/SKYVIEW/HYBRID 에 1:1 대응.
+// (markers/heatmap/choropleth 는 '우리 데이터 오버레이'이고, 이건 '카카오 베이스 타일'이라 별개 축.)
+export type BaseMapType = 'roadmap' | 'skyview' | 'hybrid';
+
 interface MapHtmlOptions {
   kakaoJsKey: string;
   // placeholder(키 없음) 폴백에서 칩으로 표시할 마운트 시점 마커. 실지도 마커는 __mfzSetMarkers 로 주입.
@@ -139,6 +143,8 @@ MARKERS.forEach(function(m){
     var MODE = 'markers';
     var SHOW_BOUNDARY = false;
     var REGION_FILL = null;
+    var BASE_MAP_TYPE = 'roadmap';
+    var TERRAIN_ON = false;
 
     // === KDE 히트맵 (heatmap.js / h337) ===
     // 카카오엔 히트맵 레이어가 없어 투명 캔버스에 직접 그린다. 점은 위경도로 보관하고
@@ -437,6 +443,24 @@ MARKERS.forEach(function(m){
       applyBoundaryStyle();
     };
     window.__mfzSetMyLocation = applyMyLocation;
+
+    // === 베이스 지도 종류 / 지형 오버레이 ===
+    // setMapTypeId 는 베이스 타일만 교체 — 마커·히트맵 캔버스·경계 폴리곤은 위에 그대로 유지된다.
+    function baseMapTypeId(t){
+      if (t === 'skyview') return kakao.maps.MapTypeId.SKYVIEW;
+      if (t === 'hybrid') return kakao.maps.MapTypeId.HYBRID;
+      return kakao.maps.MapTypeId.ROADMAP;
+    }
+    window.__mfzSetBaseMapType = function(t){
+      BASE_MAP_TYPE = t || 'roadmap';
+      map.setMapTypeId(baseMapTypeId(BASE_MAP_TYPE));
+    };
+    // 지형도(TERRAIN) — 베이스 위에 등고선·음영기복을 겹치는 오버레이(베이스와 독립 스택).
+    window.__mfzSetTerrain = function(on){
+      TERRAIN_ON = !!on;
+      if (TERRAIN_ON) map.addOverlayMapTypeId(kakao.maps.MapTypeId.TERRAIN);
+      else map.removeOverlayMapTypeId(kakao.maps.MapTypeId.TERRAIN);
+    };
 
     // 타일 페인트 완료 신호 — 보고서 위치도 네이티브 캡처(view-shot)가 빈 지도를 찍지
     // 않도록 호출 측이 이 신호 후 캡처. 초기·pan/zoom 마다 발화하므로 캡처 측이 디바운스.

@@ -10,7 +10,11 @@ import {
 import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
-import { buildKakaoMapHtml, type MapDisplayMode } from '@/assets/kakaoMapHtml';
+import {
+  buildKakaoMapHtml,
+  type MapDisplayMode,
+  type BaseMapType,
+} from '@/assets/kakaoMapHtml';
 import {
   loadSigunguGeoJson,
   aggregateByRegion,
@@ -56,6 +60,10 @@ interface Props {
   initialLevel?: number;
   displayMode?: MapDisplayMode;
   showBoundary?: boolean;
+  // 베이스 지도 종류 — 일반/위성/하이브리드(미지정 시 일반). 데이터 오버레이(displayMode)와 직교.
+  baseMapType?: BaseMapType;
+  // 지형도(등고선·음영기복) 오버레이 토글 — 베이스 위에 겹침.
+  showTerrain?: boolean;
   // 사용자 현재 위치 — 있으면 파란 점 + pulse 링으로 노출 (클릭 비활성).
   myLocation?: { lat: number; lng: number } | null;
   // 지도 뷰(center+level)가 정착할 때마다 보고 — 상위가 기억해 재마운트 시 복원에 사용.
@@ -87,6 +95,8 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
       initialLevel,
       displayMode = 'markers',
       showBoundary = false,
+      baseMapType = 'roadmap',
+      showTerrain = false,
       myLocation = null,
       fitToMarkers = false,
       interactive = true,
@@ -225,6 +235,22 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
       `window.__mfzSetShowBoundary&&window.__mfzSetShowBoundary(${showBoundary ? 'true' : 'false'})`,
     );
   }, [ready, showBoundary, inject]);
+
+  // 베이스 지도 종류(일반/위성/하이브리드) 전환.
+  useEffect(() => {
+    if (!ready) return;
+    inject(
+      `window.__mfzSetBaseMapType&&window.__mfzSetBaseMapType(${JSON.stringify(baseMapType)})`,
+    );
+  }, [ready, baseMapType, inject]);
+
+  // 지형도 오버레이 토글.
+  useEffect(() => {
+    if (!ready) return;
+    inject(
+      `window.__mfzSetTerrain&&window.__mfzSetTerrain(${showTerrain ? 'true' : 'false'})`,
+    );
+  }, [ready, showTerrain, inject]);
 
   // 경계 지오메트리(~3MB) — needsBoundary 토글 시에만 1회 주입(stable ref). 마커 변경엔 안 보냄.
   useEffect(() => {

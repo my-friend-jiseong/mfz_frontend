@@ -16,6 +16,7 @@ import { withAlpha } from '@/theme/withAlpha';
 import { FIELD_STATUS_LABEL, type FieldStatus } from '@/types/entities';
 
 export type DisplayMode = 'markers' | 'heatmap' | 'choropleth';
+export type BaseMapType = 'roadmap' | 'skyview' | 'hybrid';
 export type AttachmentKind = 'text' | 'photo';
 export type VisibleAttachments = Record<AttachmentKind, boolean>;
 export type RangePreset = 'all' | '30d' | '7d' | '1d';
@@ -23,6 +24,10 @@ export type RangePreset = 'all' | '30d' | '7d' | '1d';
 interface Props {
   displayMode: DisplayMode;
   onChangeDisplayMode: (mode: DisplayMode) => void;
+  baseMapType: BaseMapType;
+  onChangeBaseMapType: (type: BaseMapType) => void;
+  showTerrain: boolean;
+  onToggleTerrain: () => void;
   selectedStatuses: FieldStatus[];
   onToggleStatus: (status: FieldStatus) => void;
   rangePreset: RangePreset;
@@ -40,6 +45,12 @@ const DISPLAY_LABEL: Record<DisplayMode, string> = {
   markers: '마커',
   heatmap: '히트맵',
   choropleth: '단계구분도',
+};
+
+const BASE_MAP_LABEL: Record<BaseMapType, string> = {
+  roadmap: '일반',
+  skyview: '위성',
+  hybrid: '하이브리드',
 };
 
 const RANGE_LABEL: Record<RangePreset, string> = {
@@ -69,6 +80,10 @@ const ATTACHMENT_CHIPS: { kind: AttachmentKind; label: string }[] = [
 export function MapFilterBar({
   displayMode,
   onChangeDisplayMode,
+  baseMapType,
+  onChangeBaseMapType,
+  showTerrain,
+  onToggleTerrain,
   selectedStatuses,
   onToggleStatus,
   rangePreset,
@@ -86,6 +101,8 @@ export function MapFilterBar({
   const sheetRef = useRef<BottomSheetModal>(null);
 
   const displayActive = displayMode !== 'markers';
+  // 베이스 지도가 일반이 아니거나 지형 오버레이가 켜져 있으면 기본 이탈로 본다.
+  const baseMapActive = baseMapType !== 'roadmap' || showTerrain;
   const rangeActive = rangePreset !== 'all';
   const filterActiveCount =
     selectedStatuses.length + (rangeActive ? 1 : 0) + selectedTags.length;
@@ -95,7 +112,8 @@ export function MapFilterBar({
   const visibilityAtDefault = allAttachmentsOn && !showBoundary;
 
   // 버튼 위 점 배지 — 기본값에서 벗어난 설정이 하나라도 있으면 표시.
-  const anyActive = displayActive || !visibilityAtDefault || filterActiveCount > 0;
+  const anyActive =
+    displayActive || baseMapActive || !visibilityAtDefault || filterActiveCount > 0;
 
   const renderBackdrop = useCallback(
     (props: BottomSheetBackdropProps) => (
@@ -147,7 +165,19 @@ export function MapFilterBar({
             지도 설정
           </Text>
 
-          <Section label="표시 방식" first>
+          <Section label="지도 종류" first>
+            {(['roadmap', 'skyview', 'hybrid'] as BaseMapType[]).map((type) => (
+              <SubChip
+                key={type}
+                label={BASE_MAP_LABEL[type]}
+                active={baseMapType === type}
+                onPress={() => onChangeBaseMapType(type)}
+              />
+            ))}
+            <SubChip label="지형" active={showTerrain} onPress={onToggleTerrain} />
+          </Section>
+
+          <Section label="표시 방식">
             {(['markers', 'heatmap', 'choropleth'] as DisplayMode[]).map((mode) => (
               <SubChip
                 key={mode}

@@ -16,6 +16,7 @@ import { requestUserLocation, type LatLng } from '@/utils/geolocation';
 import {
   MapFilterBar,
   type DisplayMode,
+  type BaseMapType,
   type AttachmentKind,
   type VisibleAttachments,
   type RangePreset,
@@ -82,6 +83,8 @@ export function MapDashboard({
   );
 
   const [displayMode, setDisplayMode] = useState<DisplayMode>('markers');
+  const [baseMapType, setBaseMapType] = useState<BaseMapType>('roadmap');
+  const [showTerrain, setShowTerrain] = useState(false);
   const [selectedStatuses, setSelectedStatuses] = useState<FieldStatus[]>([]);
   const [rangePreset, setRangePreset] = useState<RangePreset>('all');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -239,6 +242,8 @@ export function MapDashboard({
 
   const toggleBoundary = () => setShowBoundary((v) => !v);
 
+  const toggleTerrain = () => setShowTerrain((v) => !v);
+
   return (
     // 지도가 화면 위까지 꽉 차고, 설정은 우측 상단 떠 있는 '레이어' 버튼 오버레이로.
     // (이전엔 상단에 불투명 흰 필터 바가 지도를 눌러 답답해 보이던 회로 차단.)
@@ -248,6 +253,8 @@ export function MapDashboard({
         markers={markers}
         displayMode={displayMode}
         showBoundary={showBoundary}
+        baseMapType={baseMapType}
+        showTerrain={showTerrain}
         myLocation={myLocation}
         center={mapCenter}
         initialLevel={lastViewAtMount?.level}
@@ -276,6 +283,10 @@ export function MapDashboard({
       <MapFilterBar
         displayMode={displayMode}
         onChangeDisplayMode={setDisplayMode}
+        baseMapType={baseMapType}
+        onChangeBaseMapType={setBaseMapType}
+        showTerrain={showTerrain}
+        onToggleTerrain={toggleTerrain}
         selectedStatuses={selectedStatuses}
         onToggleStatus={toggleStatus}
         rangePreset={rangePreset}
