@@ -21,12 +21,16 @@ import { spacing, radius } from '@/theme/spacing';
 import { elevation } from '@/theme/elevation';
 import { withAlpha } from '@/theme/withAlpha';
 import { FIELD_STATUS_LABEL, type FieldStatus } from '@/types/entities';
+import type {
+  DisplayMode,
+  BaseMapType,
+  AttachmentKind,
+  VisibleAttachments,
+  RangePreset,
+} from '@/stores/mapSettingsStore';
 
-export type DisplayMode = 'markers' | 'heatmap' | 'choropleth';
-export type BaseMapType = 'roadmap' | 'skyview' | 'hybrid';
-export type AttachmentKind = 'text' | 'photo';
-export type VisibleAttachments = Record<AttachmentKind, boolean>;
-export type RangePreset = 'all' | '30d' | '7d' | '1d';
+// 표시 설정 타입의 진실 출처는 mapSettingsStore — 기존 import 경로 호환 위해 여기서 재노출.
+export type { DisplayMode, BaseMapType, AttachmentKind, VisibleAttachments, RangePreset };
 
 interface Props {
   displayMode: DisplayMode;

@@ -13,20 +13,16 @@ import { MapLegend } from '@/components/MapLegend';
 import { elevation } from '@/theme/elevation';
 import { spacing } from '@/theme/spacing';
 import { requestUserLocation, type LatLng } from '@/utils/geolocation';
-import {
-  MapFilterBar,
-  type DisplayMode,
-  type BaseMapType,
-  type AttachmentKind,
-  type VisibleAttachments,
-  type RangePreset,
-} from '@/components/MapFilterBar';
-import type { FieldStatus } from '@/types/entities';
+import { MapFilterBar } from '@/components/MapFilterBar';
+import { useMapSettingsStore } from '@/stores/mapSettingsStore';
 import { colors } from '@/theme/colors';
 
 // 비로그인 시 myFields — 렌더마다 새 [] 를 만들면 하위 useMemo(scopedFields 등)가
 // 매번 무효화되므로 identity 고정 모듈 상수로.
 const NO_FIELDS: never[] = [];
+
+// 공유 미적용(스코프·선택) 화면의 첨부 표시 기본값 — identity 고정(useMemo 무효화 방지).
+const DEFAULT_VISIBLE = { text: true, photo: true } as const;
 
 // 이번 세션에서 마지막으로 보던 지도 뷰(center+level). 모듈 수명이라 화면 재마운트(탭 전환·
 // 뒤로가기)에도 살아남아, 재진입 시 '내 위치'로 끌려가지 않고 마지막 위치로 복원한다.
@@ -82,16 +78,30 @@ export function MapDashboard({
     }, [isGlobalMap]),
   );
 
-  const [displayMode, setDisplayMode] = useState<DisplayMode>('markers');
-  const [baseMapType, setBaseMapType] = useState<BaseMapType>('roadmap');
-  const [selectedStatuses, setSelectedStatuses] = useState<FieldStatus[]>([]);
-  const [rangePreset, setRangePreset] = useState<RangePreset>('all');
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const [visibleAttachments, setVisibleAttachments] = useState<VisibleAttachments>({
-    text: true,
-    photo: true,
-  });
-  const [showBoundary, setShowBoundary] = useState(false);
+  // 표시 설정은 전역 store 공유 — 한 탭에서 바꾸면 다른 탭의 배경 지도도 같이 바뀐다.
+  const sharedDisplayMode = useMapSettingsStore((s) => s.displayMode);
+  const setDisplayMode = useMapSettingsStore((s) => s.setDisplayMode);
+  const sharedBaseMapType = useMapSettingsStore((s) => s.baseMapType);
+  const setBaseMapType = useMapSettingsStore((s) => s.setBaseMapType);
+  const selectedStatuses = useMapSettingsStore((s) => s.selectedStatuses);
+  const toggleStatus = useMapSettingsStore((s) => s.toggleStatus);
+  const rangePreset = useMapSettingsStore((s) => s.rangePreset);
+  const setRangePreset = useMapSettingsStore((s) => s.setRangePreset);
+  const selectedTags = useMapSettingsStore((s) => s.selectedTags);
+  const toggleTag = useMapSettingsStore((s) => s.toggleTag);
+  const sharedVisibleAttachments = useMapSettingsStore((s) => s.visibleAttachments);
+  const toggleAttachment = useMapSettingsStore((s) => s.toggleAttachment);
+  const sharedShowBoundary = useMapSettingsStore((s) => s.showBoundary);
+  const toggleBoundary = useMapSettingsStore((s) => s.toggleBoundary);
+
+  // 공유 설정은 외근·현장 메인 탭(전역·비선택 지도)에만 적용한다. 스코프 상세·보고서 위치도는
+  // 필터로 목적지가 가려지면 안 되고, 외근 시작 선택 화면은 히트맵이 되면 마커를 못 누른다 —
+  // 이 화면들은 기존 안전 기본(마커·일반지도·필터 없음)을 유지해 회귀를 막는다.
+  const sharesSettings = isGlobalMap && !onSelectField;
+  const displayMode = sharesSettings ? sharedDisplayMode : 'markers';
+  const baseMapType = sharesSettings ? sharedBaseMapType : 'roadmap';
+  const showBoundary = sharesSettings ? sharedShowBoundary : false;
+  const visibleAttachments = sharesSettings ? sharedVisibleAttachments : DEFAULT_VISIBLE;
   // 사용자 현재 위치 — mount 1회 fetch. 권한 거부/오류 시 null 유지 (지도는 부산 중심 fallback).
   // ref guard 로 같은 세션 내 dashboard 재 mount 마다 또 권한 prompt 가 뜨는 회로 차단.
   const [myLocation, setMyLocation] = useState<LatLng | null>(null);
@@ -134,6 +144,8 @@ export function MapDashboard({
 
   const visibleFields = useMemo(() => {
     let list = scopedFields;
+    // 스코프·선택 화면은 공유 필터를 적용하지 않는다 — 목적지/선택 후보가 가려지지 않게.
+    if (!sharesSettings) return list;
     if (selectedStatuses.length > 0) {
       list = list.filter((f) => selectedStatuses.includes(f.status));
     }
@@ -153,7 +165,7 @@ export function MapDashboard({
       );
     }
     return list;
-  }, [scopedFields, selectedStatuses, rangePreset, selectedTags]);
+  }, [scopedFields, sharesSettings, selectedStatuses, rangePreset, selectedTags]);
 
   // ERD v2: 메모·사진은 현장(field) 전용 — directAttachments 에서만 집계 (음성 폐기).
   const attachmentPresenceByField = useMemo(() => {
@@ -226,21 +238,6 @@ export function MapDashboard({
     });
   }, [visibleFields, attachmentPresenceByField, visibleAttachments, selectedSet]);
 
-  const toggleStatus = (s: FieldStatus) =>
-    setSelectedStatuses((prev) =>
-      prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s],
-    );
-
-  const toggleTag = (tag: string) =>
-    setSelectedTags((prev) =>
-      prev.includes(tag) ? prev.filter((x) => x !== tag) : [...prev, tag],
-    );
-
-  const toggleAttachment = (kind: AttachmentKind) =>
-    setVisibleAttachments((prev) => ({ ...prev, [kind]: !prev[kind] }));
-
-  const toggleBoundary = () => setShowBoundary((v) => !v);
-
   return (
     // 지도가 화면 위까지 꽉 차고, 설정은 우측 상단 떠 있는 '레이어' 버튼 오버레이로.
     // (이전엔 상단에 불투명 흰 필터 바가 지도를 눌러 답답해 보이던 회로 차단.)
@@ -276,23 +273,27 @@ export function MapDashboard({
       >
         <Ionicons name="locate" size={22} color={colors.text} />
       </Pressable>
-      <MapFilterBar
-        displayMode={displayMode}
-        onChangeDisplayMode={setDisplayMode}
-        baseMapType={baseMapType}
-        onChangeBaseMapType={setBaseMapType}
-        selectedStatuses={selectedStatuses}
-        onToggleStatus={toggleStatus}
-        rangePreset={rangePreset}
-        onChangeRangePreset={setRangePreset}
-        availableTags={availableTags}
-        selectedTags={selectedTags}
-        onToggleTag={toggleTag}
-        visibleAttachments={visibleAttachments}
-        onToggleAttachment={toggleAttachment}
-        showBoundary={showBoundary}
-        onToggleBoundary={toggleBoundary}
-      />
+      {/* 레이어 설정 패널은 공유 설정을 쓰는 메인 탭(외근·현장)에만 — 스코프·선택 화면은
+          작업 집중 위해 숨긴다(여기서 토글하면 전역 store 가 바뀌어 혼란하므로). */}
+      {sharesSettings ? (
+        <MapFilterBar
+          displayMode={displayMode}
+          onChangeDisplayMode={setDisplayMode}
+          baseMapType={baseMapType}
+          onChangeBaseMapType={setBaseMapType}
+          selectedStatuses={selectedStatuses}
+          onToggleStatus={toggleStatus}
+          rangePreset={rangePreset}
+          onChangeRangePreset={setRangePreset}
+          availableTags={availableTags}
+          selectedTags={selectedTags}
+          onToggleTag={toggleTag}
+          visibleAttachments={visibleAttachments}
+          onToggleAttachment={toggleAttachment}
+          showBoundary={showBoundary}
+          onToggleBoundary={toggleBoundary}
+        />
+      ) : null}
     </View>
   );
 }

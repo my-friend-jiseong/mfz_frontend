@@ -78,10 +78,10 @@ export default function TripsList() {
   };
 
   return (
-    // 외근 탭 루트엔 "선택된 외근" 개념이 없음 — 지도에 내 현장 전체를 까는 대신 빈 마커.
-    // 전체 현장 탐색은 '현장' 탭에서, 그 외근의 현장은 카드 탭 → 외근 상세에서 노출.
+    // 외근 탭 배경 지도도 '현장' 탭과 동일하게 내 현장 전체를 깐다(mapFieldIds 미지정 = 전체).
+    // 표시 설정(히트맵 등)은 mapSettingsStore 로 공유되어 탭 간 같은 배경 지도를 유지.
     // StickyBottomBar 는 '현장' 탭과 동일하게 MapSheetLayout(시트 콘텐츠) 안에 둔다.
-    <MapSheetLayout title="외근 내역" mapFieldIds={[]}>
+    <MapSheetLayout title="외근 내역">
       <BottomSheetFlatList
         data={trips}
         keyExtractor={(t) => String(t.id)}
