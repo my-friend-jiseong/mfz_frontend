@@ -14,6 +14,7 @@ import { elevation } from '@/theme/elevation';
 import { spacing } from '@/theme/spacing';
 import { requestUserLocation, type LatLng } from '@/utils/geolocation';
 import { MapFilterBar } from '@/components/MapFilterBar';
+import { MapSearchBar } from '@/components/MapSearchBar';
 import { useMapSettingsStore } from '@/stores/mapSettingsStore';
 import { colors } from '@/theme/colors';
 
@@ -260,6 +261,16 @@ export function MapDashboard({
         }
       />
       <MapLegend displayMode={displayMode} bottomInset={legendBottomInset} />
+      {/* 지도 상단 검색창 — 현장을 이름(주소)으로 찾아 지도를 그 위치로 이동.
+          레이어 패널과 동일하게 메인 탭(외근·현장)에만 노출. */}
+      {sharesSettings ? (
+        <MapSearchBar
+          fields={scopedFields}
+          onSelectField={(f) =>
+            mapHandleRef.current?.recenter({ lat: f.latitude, lng: f.longitude })
+          }
+        />
+      ) : null}
       {/* 내 위치로 복구 — 우측 하단 조준점 버튼. 시트 peek 위로 띄움. */}
       <Pressable
         onPress={() => mapHandleRef.current?.recenter()}
