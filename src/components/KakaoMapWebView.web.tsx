@@ -29,6 +29,8 @@ export interface KakaoMapMarker {
   badge?: string;
   // 현장 선택 모드 — true 면 brand 링+✓ 오버레이(상태색·형상 유지). 네이티브와 동일.
   selected?: boolean;
+  // 검색 결과 하이라이트 — true 면 brand 링+핑 펄스(selected 와 독립).
+  highlighted?: boolean;
 }
 
 // KWCAG 1.4.1 — 색 + 형상 + 라벨 3중 인코딩.
@@ -74,7 +76,12 @@ function buildMarkerHtml(m: KakaoMapMarker, count = 1, showLabel = true): string
   const selCheck = selected
     ? `<div style="position:absolute;bottom:-5px;right:-5px;width:16px;height:16px;border-radius:50%;background:#2563eb;border:2px solid #fff;display:flex;align-items:center;justify-content:center;box-sizing:border-box;"><svg width="9" height="9" viewBox="0 0 24 24"><polyline points="4,12 10,18 20,6" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>`
     : '';
-  return `<div style="position:relative;width:26px;height:26px;cursor:pointer;">${selRing}${svg}${countBadge}${selCheck}${labelHtml}</div>`;
+  // 검색 하이라이트(단일 마커) — selected 와 독립. 키프레임은 ensureHighlightStyle 로 주입.
+  const highlighted = m.highlighted && count === 1;
+  const hlRing = highlighted
+    ? `<div class="mfz-hl-static"></div><div class="mfz-hl-ping"></div>`
+    : '';
+  return `<div style="position:relative;width:26px;height:26px;cursor:pointer;">${hlRing}${selRing}${svg}${countBadge}${selCheck}${labelHtml}</div>`;
 }
 
 type PixelCluster = { head: KakaoMapMarker; count: number; ids: string[] };
@@ -153,6 +160,20 @@ function ensureMyLocPulseStyle() {
   style.id = MY_LOC_PULSE_KEYFRAMES_ID;
   style.textContent =
     '@keyframes mfzPulse { 0% { transform: scale(0.6); opacity: 0.7; } 100% { transform: scale(2.4); opacity: 0; } }';
+  document.head.appendChild(style);
+}
+
+const HL_STYLE_ID = '__mfz_hl_style__';
+// 검색 하이라이트 링/핑 키프레임·클래스 주입(buildMarkerHtml 의 class 가 참조). 네이티브 <style> 와 동일.
+function ensureHighlightStyle() {
+  if (typeof document === 'undefined') return;
+  if (document.getElementById(HL_STYLE_ID)) return;
+  const style = document.createElement('style');
+  style.id = HL_STYLE_ID;
+  style.textContent =
+    '@keyframes mfzHlPing { 0% { transform: translate(-50%,-50%) scale(0.7); opacity:0.85; } 100% { transform: translate(-50%,-50%) scale(2.4); opacity:0; } }' +
+    '.mfz-hl-static { position:absolute; top:50%; left:50%; width:38px; height:38px; transform:translate(-50%,-50%); border-radius:50%; border:3px solid #2563eb; box-shadow:0 0 0 3px rgba(37,99,235,0.22); box-sizing:border-box; }' +
+    '.mfz-hl-ping { position:absolute; top:50%; left:50%; width:30px; height:30px; transform:translate(-50%,-50%); border-radius:50%; border:3px solid #2563eb; box-sizing:border-box; animation: mfzHlPing 1.5s ease-out infinite; }';
   document.head.appendChild(style);
 }
 
@@ -517,6 +538,7 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
     const k = getKakao();
     if (!k) return;
     const map = mapRef.current;
+    ensureHighlightStyle(); // buildMarkerHtml 의 .mfz-hl-* 클래스가 참조하는 키프레임 주입(1회)
 
     // KWCAG 1.4.1 색+형상+라벨. 픽셀 거리로 묶고 카운트 뱃지로 다중임을 표시 — head 좌표 무손실.
     // choropleth 는 구역 색만 표시하므로 마커를 그리지 않는다. 라벨은 줌인(레벨 ≤ 임계) 단일 마커만.

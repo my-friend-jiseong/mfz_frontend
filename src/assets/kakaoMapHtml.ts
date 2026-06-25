@@ -42,6 +42,8 @@ interface MapHtmlOptions {
     badge?: string;
     count?: number;
     groupIds?: string[];
+    selected?: boolean;
+    highlighted?: boolean;
   }[];
   center: { lat: number; lng: number };
   // 초기 줌 레벨(카카오 1~14, 작을수록 확대). 미지정 시 기본 8. 마지막 뷰 복원에 사용.
@@ -113,6 +115,10 @@ MARKERS.forEach(function(m){
   @keyframes mfzPulse { 0% { transform: scale(0.6); opacity: 0.7; } 100% { transform: scale(2.4); opacity: 0; } }
   .mfz-me-ring { position:absolute; top:50%; left:50%; width:22px; height:22px; margin:-11px 0 0 -11px; border-radius:50%; background:#2563eb; opacity:0.35; animation: mfzPulse 1.6s ease-out infinite; }
   .mfz-me-dot { position:absolute; top:50%; left:50%; width:14px; height:14px; margin:-7px 0 0 -7px; border-radius:50%; background:#2563eb; border:3px solid #fff; box-shadow:0 1px 3px rgba(0,0,0,0.35); }
+  /* 검색 결과 하이라이트 — 마커 뒤 정적 브랜드 링 + 확장 핑 펄스(검색해 찾은 현장 강조). */
+  @keyframes mfzHlPing { 0% { transform: translate(-50%,-50%) scale(0.7); opacity:0.85; } 100% { transform: translate(-50%,-50%) scale(2.4); opacity:0; } }
+  .mfz-hl-static { position:absolute; top:50%; left:50%; width:38px; height:38px; transform:translate(-50%,-50%); border-radius:50%; border:3px solid #2563eb; box-shadow:0 0 0 3px rgba(37,99,235,0.22); box-sizing:border-box; }
+  .mfz-hl-ping { position:absolute; top:50%; left:50%; width:30px; height:30px; transform:translate(-50%,-50%); border-radius:50%; border:3px solid #2563eb; box-sizing:border-box; animation: mfzHlPing 1.5s ease-out infinite; }
 </style>
 <script>${HEATMAP_JS_SOURCE}</script>
 <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=${kakaoJsKey}&autoload=false"></script>
@@ -233,6 +239,11 @@ MARKERS.forEach(function(m){
       // 선택 표시(현장 선택 모드) — 상태색·형상은 유지하고 brand 링 + ✓ 만 덧댄다(KWCAG: 색 단독 X).
       // 클러스터(count>1)는 카운트 뱃지와 충돌·의미 모호 → 단일 마커에만. (그룹은 모달이 개별 표시)
       var selected = m.selected && count === 1;
+      // 검색 하이라이트(단일 마커) — selected(외근 선택 ✓)와 독립. 정적 링 + 핑 펄스.
+      var highlighted = m.highlighted && count === 1;
+      var hlRing = highlighted
+        ? '<div class="mfz-hl-static"></div><div class="mfz-hl-ping"></div>'
+        : '';
       var selRing = selected
         ? '<div style="position:absolute;top:50%;left:50%;width:34px;height:34px;transform:translate(-50%,-50%);border:3px solid #2563eb;border-radius:50%;box-sizing:border-box;box-shadow:0 0 0 2px #fff;"></div>'
         : '';
@@ -253,7 +264,7 @@ MARKERS.forEach(function(m){
       var labelHtml = showLabel
         ? '<div style="position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:4px;background:#fff;padding:2px 6px;border-radius:8px;font-size:11px;font-weight:600;color:#0f172a;border:1px solid ' + color + ';white-space:nowrap;box-shadow:0 1px 2px rgba(0,0,0,0.15);">' + (badge ? '<span style="color:' + color + ';">' + badge + '</span> · ' : '') + (m.label||'') + '</div>'
         : '';
-      return '<div style="position:relative;width:26px;height:26px;cursor:pointer;">' + selRing + svg + countBadge + selCheck + labelHtml + '</div>';
+      return '<div style="position:relative;width:26px;height:26px;cursor:pointer;">' + hlRing + selRing + svg + countBadge + selCheck + labelHtml + '</div>';
     }
 
     // 화면 픽셀 거리 기반 클러스터링. 두 좌표의 화면상 거리는 pan 에 불변(평행이동)이고

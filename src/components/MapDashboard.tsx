@@ -106,6 +106,8 @@ export function MapDashboard({
   // 사용자 현재 위치 — mount 1회 fetch. 권한 거부/오류 시 null 유지 (지도는 부산 중심 fallback).
   // ref guard 로 같은 세션 내 dashboard 재 mount 마다 또 권한 prompt 가 뜨는 회로 차단.
   const [myLocation, setMyLocation] = useState<LatLng | null>(null);
+  // 검색에서 고른 현장 — 그 마커에 하이라이트(브랜드 링+핑). 다음 검색 선택까지 유지.
+  const [highlightedFieldId, setHighlightedFieldId] = useState<string | null>(null);
   const locationFetchedRef = useRef(false);
   useEffect(() => {
     if (locationFetchedRef.current) return;
@@ -229,15 +231,24 @@ export function MapDashboard({
     const base = fieldsToMarkers(visibleFields);
     return base.map((m) => {
       const selected = selectedSet.has(m.id);
+      const highlighted = m.id === highlightedFieldId;
       const presence = attachmentPresenceByField.get(m.id);
-      if (!presence) return selected ? { ...m, selected } : m;
-      const tags: string[] = [];
-      if (visibleAttachments.text && presence.text) tags.push('메모');
-      if (visibleAttachments.photo && presence.photo) tags.push('사진');
-      const label = tags.length > 0 ? `${m.label} · ${tags.join('·')}` : m.label;
-      return { ...m, label, selected };
+      let label = m.label;
+      if (presence) {
+        const tags: string[] = [];
+        if (visibleAttachments.text && presence.text) tags.push('메모');
+        if (visibleAttachments.photo && presence.photo) tags.push('사진');
+        if (tags.length > 0) label = `${m.label} · ${tags.join('·')}`;
+      }
+      return { ...m, label, selected, highlighted };
     });
-  }, [visibleFields, attachmentPresenceByField, visibleAttachments, selectedSet]);
+  }, [
+    visibleFields,
+    attachmentPresenceByField,
+    visibleAttachments,
+    selectedSet,
+    highlightedFieldId,
+  ]);
 
   return (
     // 지도가 화면 위까지 꽉 차고, 설정은 우측 상단 떠 있는 '레이어' 버튼 오버레이로.
@@ -266,9 +277,10 @@ export function MapDashboard({
       {sharesSettings ? (
         <MapSearchBar
           fields={scopedFields}
-          onSelectField={(f) =>
-            mapHandleRef.current?.recenter({ lat: f.latitude, lng: f.longitude })
-          }
+          onSelectField={(f) => {
+            setHighlightedFieldId(f.id);
+            mapHandleRef.current?.recenter({ lat: f.latitude, lng: f.longitude });
+          }}
         />
       ) : null}
       {/* 내 위치로 복구 — 우측 하단 조준점 버튼. 시트 peek 위로 띄움. */}

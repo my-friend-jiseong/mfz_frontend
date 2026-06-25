@@ -51,6 +51,8 @@ export interface KakaoMapMarker {
   badge?: string;
   // 현장 선택 모드 — true 면 마커에 brand 링+✓ 오버레이(상태색은 유지). (외근 시작 현장 선택)
   selected?: boolean;
+  // 검색 결과 하이라이트 — true 면 마커에 brand 링+핑 펄스(selected 와 독립).
+  highlighted?: boolean;
 }
 
 interface Props {
