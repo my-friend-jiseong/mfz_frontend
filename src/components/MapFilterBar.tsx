@@ -1,5 +1,12 @@
 import { useCallback, useRef } from 'react';
-import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import {
+  Image,
+  Pressable,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+  type ImageSourcePropType,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   BottomSheetModal,
@@ -51,6 +58,13 @@ const BASE_MAP_LABEL: Record<BaseMapType, string> = {
   roadmap: '일반',
   skyview: '위성',
   hybrid: '하이브리드',
+};
+
+// 종류별 예시 썸네일(부산 서면 일대 실제 카카오 지도 캡처) — 사용자가 한눈에 구분하도록 칩 대신 카드로 노출.
+const BASE_MAP_THUMB: Record<BaseMapType, ImageSourcePropType> = {
+  roadmap: require('@/assets/mapThumbnails/roadmap.png'),
+  skyview: require('@/assets/mapThumbnails/skyview.png'),
+  hybrid: require('@/assets/mapThumbnails/hybrid.png'),
 };
 
 const RANGE_LABEL: Record<RangePreset, string> = {
@@ -166,15 +180,20 @@ export function MapFilterBar({
           </Text>
 
           <Section label="지도 종류" first>
-            {(['roadmap', 'skyview', 'hybrid'] as BaseMapType[]).map((type) => (
-              <SubChip
-                key={type}
-                label={BASE_MAP_LABEL[type]}
-                active={baseMapType === type}
-                onPress={() => onChangeBaseMapType(type)}
-              />
-            ))}
-            <SubChip label="지형" active={showTerrain} onPress={onToggleTerrain} />
+            <View style={styles.thumbRow}>
+              {(['roadmap', 'skyview', 'hybrid'] as BaseMapType[]).map((type) => (
+                <MapTypeCard
+                  key={type}
+                  label={BASE_MAP_LABEL[type]}
+                  thumb={BASE_MAP_THUMB[type]}
+                  active={baseMapType === type}
+                  onPress={() => onChangeBaseMapType(type)}
+                />
+              ))}
+            </View>
+            <View style={styles.terrainRow}>
+              <SubChip label="지형" active={showTerrain} onPress={onToggleTerrain} />
+            </View>
           </Section>
 
           <Section label="표시 방식">
@@ -270,6 +289,43 @@ function Section({
       </Text>
       <View style={styles.sectionChips}>{children}</View>
     </View>
+  );
+}
+
+// 지도 종류 카드 — 예시 썸네일 + 라벨. 선택 시 brand 테두리 + 우상단 ✓.
+function MapTypeCard({
+  label,
+  thumb,
+  active,
+  onPress,
+}: {
+  label: string;
+  thumb: ImageSourcePropType;
+  active?: boolean;
+  onPress?: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={[styles.typeCard, active && styles.typeCardActive]}
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+      accessibilityLabel={`지도 종류 ${label}`}
+    >
+      <Image source={thumb} style={styles.typeThumb} resizeMode="cover" />
+      {active ? (
+        <View style={styles.typeCheck}>
+          <Ionicons name="checkmark" size={11} color={colors.onPrimary} />
+        </View>
+      ) : null}
+      <Text
+        variant="caption"
+        weight={active ? 'bold' : 'regular'}
+        style={[styles.typeLabel, active && { color: colors.primary }]}
+      >
+        {label}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -377,6 +433,52 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm,
+  },
+  // Section 이 children 을 row+wrap 으로 감싸므로, 두 줄을 width:100% 로 강제해 세로로 쌓는다.
+  thumbRow: {
+    width: '100%',
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  terrainRow: {
+    width: '100%',
+    flexDirection: 'row',
+    marginTop: spacing.sm,
+  },
+  typeCard: {
+    flex: 1,
+    borderRadius: radius.md,
+    borderWidth: 2,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    overflow: 'hidden',
+    paddingBottom: 5,
+  },
+  typeCardActive: {
+    borderColor: colors.primary,
+  },
+  typeThumb: {
+    width: '100%',
+    height: 56,
+    backgroundColor: colors.surfaceMuted,
+  },
+  typeCheck: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: colors.surface,
+  },
+  typeLabel: {
+    textAlign: 'center',
+    marginTop: 5,
+    color: colors.textMuted,
   },
   subChip: {
     paddingHorizontal: spacing.md,
