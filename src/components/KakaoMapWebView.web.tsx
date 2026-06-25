@@ -132,8 +132,6 @@ interface Props {
   showBoundary?: boolean;
   // 베이스 지도 종류 — 일반/위성/하이브리드(미지정 시 일반). 데이터 오버레이(displayMode)와 직교.
   baseMapType?: BaseMapType;
-  // 지형도 오버레이 토글 — 베이스 위에 등고선·음영기복을 겹침.
-  showTerrain?: boolean;
   myLocation?: { lat: number; lng: number } | null;
   // true 면 모든 마커가 한 화면에 들어오도록 자동 프레이밍 (center 무시). 위치도 미리보기용.
   fitToMarkers?: boolean;
@@ -182,15 +180,11 @@ type KakaoMap = {
   setZoomable: (v: boolean) => void;
   getProjection: () => MapProjection;
   setMapTypeId: (mapTypeId: unknown) => void;
-  addOverlayMapTypeId: (mapTypeId: unknown) => void;
-  removeOverlayMapTypeId: (mapTypeId: unknown) => void;
 };
-// 베이스(ROADMAP/SKYVIEW/HYBRID)와 오버레이(TERRAIN 등)는 같은 enum 에 속한다.
 type MapTypeIdEnum = {
   ROADMAP: unknown;
   SKYVIEW: unknown;
   HYBRID: unknown;
-  TERRAIN: unknown;
 };
 type KakaoGlobal = {
   maps: {
@@ -274,7 +268,6 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
       displayMode = 'markers',
       showBoundary = false,
       baseMapType = 'roadmap',
-      showTerrain = false,
       myLocation = null,
       fitToMarkers = false,
       interactive = true,
@@ -419,15 +412,6 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
           : k.maps.MapTypeId.ROADMAP;
     mapRef.current.setMapTypeId(t);
   }, [ready, baseMapType]);
-
-  // 지형도(TERRAIN) 오버레이 토글 — 베이스와 독립 스택으로 겹침.
-  useEffect(() => {
-    if (!ready || !mapRef.current) return;
-    const k = getKakao();
-    if (!k) return;
-    if (showTerrain) mapRef.current.addOverlayMapTypeId(k.maps.MapTypeId.TERRAIN);
-    else mapRef.current.removeOverlayMapTypeId(k.maps.MapTypeId.TERRAIN);
-  }, [ready, showTerrain]);
 
   // myLocation 오버레이 — ready 후 한 번 / myLocation 변경 시 재배치.
   useEffect(() => {

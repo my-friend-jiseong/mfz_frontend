@@ -33,8 +33,6 @@ interface Props {
   onChangeDisplayMode: (mode: DisplayMode) => void;
   baseMapType: BaseMapType;
   onChangeBaseMapType: (type: BaseMapType) => void;
-  showTerrain: boolean;
-  onToggleTerrain: () => void;
   selectedStatuses: FieldStatus[];
   onToggleStatus: (status: FieldStatus) => void;
   rangePreset: RangePreset;
@@ -60,11 +58,18 @@ const BASE_MAP_LABEL: Record<BaseMapType, string> = {
   hybrid: '하이브리드',
 };
 
-// 종류별 예시 썸네일(부산 서면 일대 실제 카카오 지도 캡처) — 사용자가 한눈에 구분하도록 칩 대신 카드로 노출.
+// 예시 썸네일(실제 카카오 지도 캡처/렌더) — 사용자가 한눈에 구분하도록 칩 대신 카드로 노출.
+// 배경 지도: 부산 서면 일대 타일. 데이터 표시: 같은 서면 위 마커·히트맵, 부산권 단계구분도.
 const BASE_MAP_THUMB: Record<BaseMapType, ImageSourcePropType> = {
   roadmap: require('@/assets/mapThumbnails/roadmap.png'),
   skyview: require('@/assets/mapThumbnails/skyview.png'),
   hybrid: require('@/assets/mapThumbnails/hybrid.png'),
+};
+
+const DISPLAY_THUMB: Record<DisplayMode, ImageSourcePropType> = {
+  markers: require('@/assets/mapThumbnails/markers.png'),
+  heatmap: require('@/assets/mapThumbnails/heatmap.png'),
+  choropleth: require('@/assets/mapThumbnails/choropleth.png'),
 };
 
 const RANGE_LABEL: Record<RangePreset, string> = {
@@ -96,8 +101,6 @@ export function MapFilterBar({
   onChangeDisplayMode,
   baseMapType,
   onChangeBaseMapType,
-  showTerrain,
-  onToggleTerrain,
   selectedStatuses,
   onToggleStatus,
   rangePreset,
@@ -116,7 +119,7 @@ export function MapFilterBar({
 
   const displayActive = displayMode !== 'markers';
   // 베이스 지도가 일반이 아니거나 지형 오버레이가 켜져 있으면 기본 이탈로 본다.
-  const baseMapActive = baseMapType !== 'roadmap' || showTerrain;
+  const baseMapActive = baseMapType !== 'roadmap';
   const rangeActive = rangePreset !== 'all';
   const filterActiveCount =
     selectedStatuses.length + (rangeActive ? 1 : 0) + selectedTags.length;
@@ -179,10 +182,10 @@ export function MapFilterBar({
             지도 설정
           </Text>
 
-          <Section label="지도 종류" first>
+          <Section label="배경 지도" first>
             <View style={styles.thumbRow}>
               {(['roadmap', 'skyview', 'hybrid'] as BaseMapType[]).map((type) => (
-                <MapTypeCard
+                <ThumbCard
                   key={type}
                   label={BASE_MAP_LABEL[type]}
                   thumb={BASE_MAP_THUMB[type]}
@@ -191,20 +194,20 @@ export function MapFilterBar({
                 />
               ))}
             </View>
-            <View style={styles.terrainRow}>
-              <SubChip label="지형" active={showTerrain} onPress={onToggleTerrain} />
-            </View>
           </Section>
 
-          <Section label="표시 방식">
-            {(['markers', 'heatmap', 'choropleth'] as DisplayMode[]).map((mode) => (
-              <SubChip
-                key={mode}
-                label={DISPLAY_LABEL[mode]}
-                active={displayMode === mode}
-                onPress={() => onChangeDisplayMode(mode)}
-              />
-            ))}
+          <Section label="데이터 표시 방식">
+            <View style={styles.thumbRow}>
+              {(['markers', 'heatmap', 'choropleth'] as DisplayMode[]).map((mode) => (
+                <ThumbCard
+                  key={mode}
+                  label={DISPLAY_LABEL[mode]}
+                  thumb={DISPLAY_THUMB[mode]}
+                  active={displayMode === mode}
+                  onPress={() => onChangeDisplayMode(mode)}
+                />
+              ))}
+            </View>
           </Section>
 
           <Section label="표시 여부">
@@ -292,8 +295,9 @@ function Section({
   );
 }
 
-// 지도 종류 카드 — 예시 썸네일 + 라벨. 선택 시 brand 테두리 + 우상단 ✓.
-function MapTypeCard({
+// 썸네일 카드 — 예시 이미지 + 라벨. 선택 시 brand 테두리 + 우상단 ✓.
+// 배경 지도(일반/위성/하이브리드)와 데이터 표시 방식(마커/히트맵/단계구분도) 양쪽에서 공용.
+function ThumbCard({
   label,
   thumb,
   active,
@@ -310,7 +314,7 @@ function MapTypeCard({
       style={[styles.typeCard, active && styles.typeCardActive]}
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
-      accessibilityLabel={`지도 종류 ${label}`}
+      accessibilityLabel={label}
     >
       <Image source={thumb} style={styles.typeThumb} resizeMode="cover" />
       {active ? (
@@ -434,16 +438,11 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: spacing.sm,
   },
-  // Section 이 children 을 row+wrap 으로 감싸므로, 두 줄을 width:100% 로 강제해 세로로 쌓는다.
+  // Section 이 children 을 row 로 감싸므로 width:100% 로 섹션 폭을 채워야 카드 3개(flex:1)가 균등 분배된다.
   thumbRow: {
     width: '100%',
     flexDirection: 'row',
     gap: spacing.sm,
-  },
-  terrainRow: {
-    width: '100%',
-    flexDirection: 'row',
-    marginTop: spacing.sm,
   },
   typeCard: {
     flex: 1,
