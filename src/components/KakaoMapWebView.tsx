@@ -66,6 +66,8 @@ interface Props {
   baseMapType?: BaseMapType;
   // 사용자 현재 위치 — 있으면 파란 점 + pulse 링으로 노출 (클릭 비활성).
   myLocation?: { lat: number; lng: number } | null;
+  // 검색한 '새 위치' 비컨 — 좌표에 핀을 떨어뜨려 등록 전 위치를 보여준다(null 이면 제거).
+  beacon?: { lat: number; lng: number } | null;
   // 지도 뷰(center+level)가 정착할 때마다 보고 — 상위가 기억해 재마운트 시 복원에 사용.
   onViewChange?: (view: { lat: number; lng: number; level: number }) => void;
   // true 면 모든 마커가 한 화면에 들어오도록 자동 프레이밍 (center 무시). 위치도 미리보기용.
@@ -97,6 +99,7 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
       showBoundary = false,
       baseMapType = 'roadmap',
       myLocation = null,
+      beacon = null,
       fitToMarkers = false,
       interactive = true,
       onMarkerPress,
@@ -267,6 +270,13 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
       : 'null';
     inject(`window.__mfzSetMyLocation&&window.__mfzSetMyLocation(${payload})`);
   }, [ready, myLocation?.lat, myLocation?.lng, inject]);
+
+  // 검색한 '새 위치' 비컨 오버레이.
+  useEffect(() => {
+    if (!ready) return;
+    const payload = beacon ? `{lat:${beacon.lat},lng:${beacon.lng}}` : 'null';
+    inject(`window.__mfzSetBeacon&&window.__mfzSetBeacon(${payload})`);
+  }, [ready, beacon?.lat, beacon?.lng, inject]);
 
   // center 변경 → in-place setCenter (pan/zoom 보존). fitToMarkers 모드는 fitBounds 가 잡으므로 생략.
   useEffect(() => {

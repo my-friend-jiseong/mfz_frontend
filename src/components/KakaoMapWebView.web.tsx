@@ -140,6 +140,8 @@ interface Props {
   // 베이스 지도 종류 — 일반/위성/하이브리드(미지정 시 일반). 데이터 오버레이(displayMode)와 직교.
   baseMapType?: BaseMapType;
   myLocation?: { lat: number; lng: number } | null;
+  // 검색한 '새 위치' 비컨 — 좌표에 핀을 떨어뜨려 등록 전 위치를 보여준다(null 이면 제거).
+  beacon?: { lat: number; lng: number } | null;
   // true 면 모든 마커가 한 화면에 들어오도록 자동 프레이밍 (center 무시). 위치도 미리보기용.
   fitToMarkers?: boolean;
   // false 면 드래그/줌 비활성 — BottomSheet 안 등 pan 충돌 회피용 정적 위치도.
@@ -176,6 +178,22 @@ function ensureHighlightStyle() {
     '.mfz-hl-ping { position:absolute; top:50%; left:50%; width:30px; height:30px; transform:translate(-50%,-50%); border-radius:50%; border:3px solid #2563eb; box-sizing:border-box; animation: mfzHlPing 1.5s ease-out infinite; }';
   document.head.appendChild(style);
 }
+
+const BEACON_STYLE_ID = '__mfz_beacon_style__';
+// 검색한 '새 위치' 비컨 핀 + 펄스 키프레임 주입(네이티브 HTML 의 .mfz-beacon 과 동일).
+function ensureBeaconStyle() {
+  if (typeof document === 'undefined') return;
+  if (document.getElementById(BEACON_STYLE_ID)) return;
+  const style = document.createElement('style');
+  style.id = BEACON_STYLE_ID;
+  style.textContent =
+    '@keyframes mfzBeaconPulse { 0% { transform: translateX(-50%) scale(0.6); opacity:0.65; } 100% { transform: translateX(-50%) scale(2.6); opacity:0; } }' +
+    '.mfz-beacon { position:relative; width:30px; height:42px; pointer-events:none; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.3)); }' +
+    '.mfz-beacon-pulse { position:absolute; left:50%; bottom:2px; width:14px; height:14px; border-radius:50%; background:rgba(37,99,235,0.4); transform:translateX(-50%); animation: mfzBeaconPulse 1.5s ease-out infinite; }';
+  document.head.appendChild(style);
+}
+const BEACON_HTML =
+  '<div class="mfz-beacon"><div class="mfz-beacon-pulse"></div><svg width="30" height="42" viewBox="0 0 30 42"><path d="M15 1 C7.3 1 1 7.3 1 15 C1 25.5 15 41 15 41 C15 41 29 25.5 29 15 C29 7.3 22.7 1 15 1 Z" fill="#2563eb" stroke="#fff" stroke-width="2"/><circle cx="15" cy="15" r="5" fill="#fff"/></svg></div>';
 
 type Overlay = { setMap: (m: unknown | null) => void };
 type CustomOverlayCtor = new (opts: {
@@ -290,6 +308,7 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
       showBoundary = false,
       baseMapType = 'roadmap',
       myLocation = null,
+      beacon = null,
       fitToMarkers = false,
       interactive = true,
       onMarkerPress,
@@ -301,6 +320,7 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
   const mapRef = useRef<KakaoMap | null>(null);
   const overlaysRef = useRef<Overlay[]>([]);
   const myLocOverlayRef = useRef<Overlay | null>(null);
+  const beaconOverlayRef = useRef<Overlay | null>(null);
   const boundaryOverlaysRef = useRef<Overlay[]>([]);
   // KDE 히트맵 — 캔버스 div + h337 인스턴스. redraw 클로저가 최신 모드/점을 읽도록 ref 미러.
   const heatRef = useRef<HTMLDivElement | null>(null);
@@ -467,6 +487,27 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
     });
     myLocOverlayRef.current = overlay;
   }, [ready, myLocation]);
+
+  // 검색한 '새 위치' 비컨 오버레이 — ready 후 / beacon 변경 시 재배치.
+  useEffect(() => {
+    if (!ready || !mapRef.current) return;
+    const k = getKakao();
+    if (!k) return;
+    beaconOverlayRef.current?.setMap(null);
+    beaconOverlayRef.current = null;
+    if (!beacon) return;
+    ensureBeaconStyle();
+    const content = document.createElement('div');
+    content.innerHTML = BEACON_HTML;
+    beaconOverlayRef.current = new k.maps.CustomOverlay({
+      position: new k.maps.LatLng(beacon.lat, beacon.lng),
+      content,
+      map: mapRef.current,
+      xAnchor: 0.5,
+      yAnchor: 1,
+      zIndex: 6,
+    });
+  }, [ready, beacon?.lat, beacon?.lng]);
 
   // 단계구분도 카운트 집계 — 폴리곤 effect 와 분리해, 경계만 토글(markers 불변)할 땐 재집계 생략.
   // 렌더 단계라 throw 가 화면을 깨므로 try 로 감싸 실패 시 null(채색 생략)로 폴백.

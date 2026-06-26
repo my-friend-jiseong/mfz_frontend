@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { Text } from '@/components/ui/Text';
+import type { AddressSearchItem } from '@/api';
 import { useFieldStore } from '@/stores/fieldStore';
 import { useAuthStore } from '@/stores/authStore';
 import {
@@ -11,7 +14,7 @@ import {
 } from '@/components/KakaoMapWebView';
 import { MapLegend } from '@/components/MapLegend';
 import { elevation } from '@/theme/elevation';
-import { spacing } from '@/theme/spacing';
+import { spacing, radius } from '@/theme/spacing';
 import { requestUserLocation, type LatLng } from '@/utils/geolocation';
 import { MapFilterBar } from '@/components/MapFilterBar';
 import { MapSearchBar } from '@/components/MapSearchBar';
@@ -50,6 +53,7 @@ export function MapDashboard({
   onSelectField,
 }: MapDashboardProps = {}) {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const userId = useAuthStore((s) => s.user?.id);
   const allFields = useFieldStore((s) => s.fields);
   const directAttachmentsMap = useFieldStore((s) => s.directAttachments);
@@ -108,6 +112,8 @@ export function MapDashboard({
   const [myLocation, setMyLocation] = useState<LatLng | null>(null);
   // 검색에서 고른 현장 — 그 마커에 하이라이트(브랜드 링+핑). 다음 검색 선택까지 유지.
   const [highlightedFieldId, setHighlightedFieldId] = useState<string | null>(null);
+  // 검색에서 고른 '새 위치'(카카오 장소) — 지도에 비컨을 찍고 등록 여부를 묻는 카드를 띄운다.
+  const [pendingPlace, setPendingPlace] = useState<AddressSearchItem | null>(null);
   const locationFetchedRef = useRef(false);
   useEffect(() => {
     if (locationFetchedRef.current) return;
@@ -261,6 +267,7 @@ export function MapDashboard({
         showBoundary={showBoundary}
         baseMapType={baseMapType}
         myLocation={myLocation}
+        beacon={pendingPlace ? { lat: pendingPlace.lat, lng: pendingPlace.lng } : null}
         center={mapCenter}
         initialLevel={lastViewAtMount?.level}
         onViewChange={handleViewChange}
@@ -278,17 +285,76 @@ export function MapDashboard({
         <MapSearchBar
           fields={scopedFields}
           onSelectField={(f) => {
+            // 내 현장 선택 — 비컨/등록 카드는 닫고 그 현장으로 이동·하이라이트.
+            setPendingPlace(null);
             setHighlightedFieldId(f.id);
             mapHandleRef.current?.recenter({ lat: f.latitude, lng: f.longitude });
           }}
           onSelectPlace={(item) => {
-            // 카카오 장소 결과 = 새 위치 → 그 좌표로 현장 등록 화면 진입(주소는 등록 화면이 역지오코딩).
-            router.push({
-              pathname: '/(tabs)/fields/new',
-              params: { lat: String(item.lat), lng: String(item.lng) },
-            } as never);
+            // 카카오 장소 = 새 위치 → 바로 등록하지 않고 그 좌표로 지도 이동 + 비컨.
+            // 어디인지 확인한 뒤 카드의 '여기에 현장 등록' 으로 진행 여부를 사용자가 결정.
+            setHighlightedFieldId(null);
+            setPendingPlace(item);
+            mapHandleRef.current?.recenter({ lat: item.lat, lng: item.lng });
           }}
         />
+      ) : null}
+      {/* '새 위치' 비컨 확인 카드 — 검색창 아래에 떠서, 비컨 위치를 확인하고 등록 여부를 결정. */}
+      {sharesSettings && pendingPlace ? (
+        <View
+          style={[styles.placeCard, { top: insets.top + spacing.sm + 44 + spacing.sm }]}
+        >
+          <View style={styles.placeCardRow}>
+            <Ionicons name="location" size={18} color={colors.primary} />
+            <View style={styles.placeCardText}>
+              <Text variant="bodySm" weight="semibold" numberOfLines={1}>
+                {pendingPlace.buildingName ||
+                  pendingPlace.roadAddress ||
+                  pendingPlace.jibunAddress}
+              </Text>
+              {pendingPlace.buildingName && pendingPlace.roadAddress ? (
+                <Text variant="caption" color="textMuted" numberOfLines={1}>
+                  {pendingPlace.roadAddress}
+                </Text>
+              ) : pendingPlace.jibunAddress &&
+                pendingPlace.jibunAddress !== pendingPlace.roadAddress ? (
+                <Text variant="caption" color="textMuted" numberOfLines={1}>
+                  {pendingPlace.jibunAddress}
+                </Text>
+              ) : null}
+            </View>
+            <Pressable
+              onPress={() => setPendingPlace(null)}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="위치 선택 닫기"
+            >
+              <Ionicons name="close-circle" size={20} color={colors.textMuted} />
+            </Pressable>
+          </View>
+          <Pressable
+            onPress={() => {
+              const p = pendingPlace;
+              setPendingPlace(null);
+              // 등록 화면이 좌표로 진입 후 역지오코딩으로 주소를 채운다(기존 fields/new 흐름 재사용).
+              router.push({
+                pathname: '/(tabs)/fields/new',
+                params: { lat: String(p.lat), lng: String(p.lng) },
+              } as never);
+            }}
+            style={({ pressed }) => [
+              styles.placeRegisterBtn,
+              pressed && styles.placeRegisterBtnPressed,
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="이 위치에 현장 등록"
+          >
+            <Ionicons name="add" size={18} color={colors.onPrimary} />
+            <Text variant="bodySm" weight="bold" color="onPrimary">
+              여기에 현장 등록
+            </Text>
+          </Pressable>
+        </View>
       ) : null}
       {/* 내 위치로 복구 — 우측 하단 조준점 버튼. 시트 peek 위로 띄움. */}
       <Pressable
@@ -330,6 +396,34 @@ export function MapDashboard({
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
+  placeCard: {
+    position: 'absolute',
+    left: spacing.lg,
+    right: spacing.lg,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+    gap: spacing.sm,
+    ...elevation.raised,
+  },
+  placeCardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  placeCardText: { flex: 1 },
+  placeRegisterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    height: 40,
+    borderRadius: radius.md,
+    backgroundColor: colors.primary,
+  },
+  placeRegisterBtnPressed: { opacity: 0.85 },
   locateBtn: {
     position: 'absolute',
     right: spacing.lg,

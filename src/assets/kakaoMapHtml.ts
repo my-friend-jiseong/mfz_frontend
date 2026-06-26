@@ -119,6 +119,10 @@ MARKERS.forEach(function(m){
   @keyframes mfzHlPing { 0% { transform: translate(-50%,-50%) scale(0.7); opacity:0.85; } 100% { transform: translate(-50%,-50%) scale(2.4); opacity:0; } }
   .mfz-hl-static { position:absolute; top:50%; left:50%; width:38px; height:38px; transform:translate(-50%,-50%); border-radius:50%; border:3px solid #2563eb; box-shadow:0 0 0 3px rgba(37,99,235,0.22); box-sizing:border-box; }
   .mfz-hl-ping { position:absolute; top:50%; left:50%; width:30px; height:30px; transform:translate(-50%,-50%); border-radius:50%; border:3px solid #2563eb; box-sizing:border-box; animation: mfzHlPing 1.5s ease-out infinite; }
+  /* 검색한 '새 위치' 비컨 — 좌표에 떨어뜨리는 핀(끝점이 좌표). 등록 전 위치 확인용. */
+  @keyframes mfzBeaconPulse { 0% { transform: translateX(-50%) scale(0.6); opacity:0.65; } 100% { transform: translateX(-50%) scale(2.6); opacity:0; } }
+  .mfz-beacon { position:relative; width:30px; height:42px; pointer-events:none; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.3)); }
+  .mfz-beacon-pulse { position:absolute; left:50%; bottom:2px; width:14px; height:14px; border-radius:50%; background:rgba(37,99,235,0.4); transform:translateX(-50%); animation: mfzBeaconPulse 1.5s ease-out infinite; }
 </style>
 <script>${HEATMAP_JS_SOURCE}</script>
 <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=${kakaoJsKey}&autoload=false"></script>
@@ -453,6 +457,25 @@ MARKERS.forEach(function(m){
       applyBoundaryStyle();
     };
     window.__mfzSetMyLocation = applyMyLocation;
+
+    // === 검색한 '새 위치' 비컨 ===
+    // 주소·장소 검색 결과를 고르면 그 좌표에 핀을 떨어뜨려 어디인지 보여준다(등록은 사용자 선택).
+    var beaconOverlay = null;
+    function applyBeacon(b){
+      if (beaconOverlay) { beaconOverlay.setMap(null); beaconOverlay = null; }
+      if (!b) return;
+      var content = document.createElement('div');
+      content.innerHTML = '<div class="mfz-beacon"><div class="mfz-beacon-pulse"></div><svg width="30" height="42" viewBox="0 0 30 42"><path d="M15 1 C7.3 1 1 7.3 1 15 C1 25.5 15 41 15 41 C15 41 29 25.5 29 15 C29 7.3 22.7 1 15 1 Z" fill="#2563eb" stroke="#fff" stroke-width="2"/><circle cx="15" cy="15" r="5" fill="#fff"/></svg></div>';
+      beaconOverlay = new kakao.maps.CustomOverlay({
+        position: new kakao.maps.LatLng(b.lat, b.lng),
+        content: content,
+        map: map,
+        xAnchor: 0.5,
+        yAnchor: 1,
+        zIndex: 6,
+      });
+    }
+    window.__mfzSetBeacon = function(b){ applyBeacon(b); };
 
     // === 베이스 지도 종류 ===
     // setMapTypeId 는 베이스 타일만 교체 — 마커·히트맵 캔버스·경계 폴리곤은 위에 그대로 유지된다.
