@@ -281,6 +281,13 @@ export function MapDashboard({
             setHighlightedFieldId(f.id);
             mapHandleRef.current?.recenter({ lat: f.latitude, lng: f.longitude });
           }}
+          onSelectPlace={(item) => {
+            // 카카오 장소 결과 = 새 위치 → 그 좌표로 현장 등록 화면 진입(주소는 등록 화면이 역지오코딩).
+            router.push({
+              pathname: '/(tabs)/fields/new',
+              params: { lat: String(item.lat), lng: String(item.lng) },
+            } as never);
+          }}
         />
       ) : null}
       {/* 내 위치로 복구 — 우측 하단 조준점 버튼. 시트 peek 위로 띄움. */}
