@@ -107,7 +107,7 @@ export function MapSearchBar({ fields, onSelectField }: Props) {
                     />
                     <View style={styles.itemText}>
                       <Text variant="bodySm" numberOfLines={1}>
-                        {f.address}
+                        {f.name || f.address}
                       </Text>
                       {secondary ? (
                         <Text variant="caption" color="textMuted" numberOfLines={1}>

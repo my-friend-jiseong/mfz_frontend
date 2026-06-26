@@ -56,6 +56,9 @@ export interface Field {
   // 백엔드 응답에 함께 오는 프로젝트 이름 — UI 표시용(편의).
   projectName?: string | null;
   status: FieldStatus;
+  // 현장 표시명 — 등록 시 "도로명 (건물명)" 형태(예: "… (동아대학교)"). 백엔드 응답의 name.
+  // address 엔 건물명이 없어, 장소·건물 이름 검색이 가능하도록 별도 보관(검색 haystack 포함).
+  name?: string;
   // 주소·좌표는 locations 테이블 출처 (fields.location_id 1:1). UI 표시용으로 평탄 보관.
   address: string;
   addressDetail: string;

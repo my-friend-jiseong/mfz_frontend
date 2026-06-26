@@ -37,7 +37,8 @@ export interface FieldFilterParams {
 }
 
 // 필터 적용 — status → project → category(OR) → search 순. 모든 facet 동일 의미(union).
-// search 매칭: address + addressDetail + projectName + categories.
+// search 매칭: name(건물·장소명) + address + addressDetail + projectName + categories.
+// name 포함 이유: address 엔 건물명이 없어 "동아대학교" 같은 POI 검색이 0건이던 문제 해결.
 export function applyFieldFilters(
   fields: readonly Field[],
   { search, statuses, projectIds, categories }: FieldFilterParams,
@@ -60,6 +61,7 @@ export function applyFieldFilters(
   if (q) {
     list = list.filter((f) => {
       const haystack = [
+        f.name ?? '',
         f.address,
         f.addressDetail ?? '',
         f.projectName ?? '',
