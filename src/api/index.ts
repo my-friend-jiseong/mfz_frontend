@@ -56,6 +56,15 @@ export type {
   ListProjectsParams,
 } from './endpoints/projects';
 
+export { categories } from './endpoints/categories';
+export type {
+  CategoryItem,
+  CategoryListResponse,
+  CreateCategoryBody,
+  UpdateCategoryBody,
+  ListCategoriesParams,
+} from './endpoints/categories';
+
 export { reports } from './endpoints/reports';
 export type {
   ReportListItem,

@@ -13,6 +13,7 @@ import { useVisitStore } from './visitStore';
 import { useTripStore } from './tripStore';
 import { useReportStore } from './reportStore';
 import { useProjectStore } from './projectStore';
+import { useCategoryStore } from './categoryStore';
 
 type Result<T = void> =
   | { ok: true; value?: T }
@@ -235,6 +236,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     useTripStore.getState().clearAll();
     useReportStore.getState().clearAll();
     useProjectStore.getState().clearAll();
+    await useCategoryStore.getState().clearAll();
     set({
       user: null,
       accessToken: null,

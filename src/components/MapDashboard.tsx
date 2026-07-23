@@ -19,6 +19,8 @@ import { requestUserLocation, type LatLng } from '@/utils/geolocation';
 import { MapFilterBar } from '@/components/MapFilterBar';
 import { MapSearchBar } from '@/components/MapSearchBar';
 import { useMapSettingsStore } from '@/stores/mapSettingsStore';
+import { useCategoryStore } from '@/stores/categoryStore';
+import { mergeCategoryNames } from '@/utils/fieldFacets';
 import { colors } from '@/theme/colors';
 
 // 비로그인 시 myFields — 렌더마다 새 [] 를 만들면 하위 useMemo(scopedFields 등)가
@@ -144,12 +146,13 @@ export function MapDashboard({
     return out;
   }, [myFields, allFields, scopeFieldIds]);
 
-  // 가용 분류 — 스코프된 현장에 등록된 분류(field_categories) 합집합 (정렬)
+  // 가용 분류 = 카테고리 마스터 집합 ∪ 스코프된 현장에 붙은 분류(레거시 값 보존).
+  const masterCategories = useCategoryStore((s) => s.categories);
   const availableTags = useMemo(() => {
-    const set = new Set<string>();
-    scopedFields.forEach((f) => f.categories?.forEach((t) => set.add(t)));
-    return Array.from(set).sort();
-  }, [scopedFields]);
+    const fromFields: string[] = [];
+    scopedFields.forEach((f) => f.categories?.forEach((t) => fromFields.push(t)));
+    return mergeCategoryNames(masterCategories.map((c) => c.name), fromFields);
+  }, [scopedFields, masterCategories]);
 
   const visibleFields = useMemo(() => {
     let list = scopedFields;

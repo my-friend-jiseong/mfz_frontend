@@ -15,6 +15,17 @@ export interface FieldFacets {
   categories: string[];
 }
 
+// 카테고리 필터·표시 후보 = 마스터 집합(categoryStore) ∪ 기존 현장 값(레거시 보존).
+// 마스터에 아직 없지만 과거 현장에 남은 이름도 계속 필터/표시되도록 union 후 정렬.
+export function mergeCategoryNames(
+  master: readonly string[],
+  fromFields: readonly string[],
+): string[] {
+  return Array.from(new Set([...master, ...fromFields])).sort((a, b) =>
+    a.localeCompare(b),
+  );
+}
+
 // projectName 이 비어 있을 때 chip 라벨 — raw projectId('proj-1748...') 노출 회피.
 const UNNAMED_PROJECT_LABEL = '이름 없는 프로젝트';
 

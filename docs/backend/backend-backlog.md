@@ -611,8 +611,39 @@ Play Console 등록용 라이브 HTTPS URL 차단 해소. 프론트는 `profile.
 
 ---
 
+## 25. 🟠 사용자 커스텀 카테고리(분류) 마스터 리소스 — `categories` CRUD
+
+카테고리를 자유 문자열 → **사용자가 관리하는 커스텀 Enum**으로 승격. 현재 `field_categories`
+는 복합 PK `(field_id, category)` 문자열 태그라 마스터 목록/소유자/CRUD 가 없어, "한 번도
+안 쓰인 카테고리"가 존재할 수 없고 오타·표기 흔들림이 그대로 쌓인다.
+
+- **요청 계약(projects 패턴 + 관리용 PATCH/DELETE)**:
+  - `GET /api/categories` (본인 것, 페이지네이션) → `{ items: [{ categoryId, name, createdAt }], pagination }`
+  - `POST /api/categories { name }` → 생성(이름 유니크, 사용자 스코프). 중복이름 `409 category_name_taken`.
+  - `PATCH /api/categories/:categoryId { name }` → 이름변경.
+  - `DELETE /api/categories/:categoryId` → 삭제.
+  - 신규 에러코드 후보: `category_name_required`, `category_name_taken`, `category_not_found`.
+- **현장 저장 모델**: 당장은 `Field.categories: string[]`(이름) **계약 무변경** — 마스터는 "허용된
+  이름 목록". 후속 옵션(별도 결정 필요): 현장이 name 대신 `category_id` FK 참조 / 이름변경 시
+  기존 현장 값 캐스케이드 갱신 / 카테고리 색상·아이콘 속성.
+- **프론트 현황(선행)**: contract 를 `src/api/endpoints/categories.ts` 로 정의하고 `categoryStore`
+  (AsyncStorage 임시 영속 + 서버 fire-and-forget)로 관리 화면·다중선택 피커를 **지금 동작**시킴.
+  백엔드 배포 후 store 소스만 서버 단일로 스왑(코드에 `TODO(backend)` 표식). 현재는 기기 내 로컬
+  영속이라 기기 간 동기화 없음.
+
+### 발견 시점
+2026-07-24 (카테고리 커스텀 Enum 전환 요구 — 프론트 선행 배선 + 백엔드 마스터 리소스 요청).
+
+### 관련 코드
+- 프론트 [`src/api/endpoints/categories.ts`](../../src/api/endpoints/categories.ts) (contract)
+- 프론트 [`src/stores/categoryStore.ts`](../../src/stores/categoryStore.ts) (임시 로컬 영속 + 서버 스왑 TODO)
+- 프론트 [`src/components/fields/CategoryMultiPicker.tsx`](../../src/components/fields/CategoryMultiPicker.tsx), [`app/(tabs)/fields/categories.tsx`](../../app/(tabs)/fields/categories.tsx)
+
+---
+
 ## 변경 이력
 
+- **2026-07-24**: §25 추가 — 카테고리 커스텀 Enum 전환(🟠). 프론트가 `/api/categories` contract 선행 정의 + `categoryStore`(임시 로컬 영속)로 관리 화면·다중선택 피커 구현. 백엔드 마스터 리소스(CRUD) 요청, 배포 후 서버 단일 소스로 스왑.
 - **2026-06-19**: §24 운영 probe 검증 ✅ — 테스트계정으로 ilgayo.co.kr 라이브 6/6 PASS(200·pending / GET 포함 / 재POST 멱등 / 400·404·409 에러코드 일치). 403(타인 현장)만 2계정 필요로 미커버.
 - **2026-06-19**: §20 ✅ 종결(🟡→✅) — 캡처→업로드→export 배선(`2c48874`) + release EAS 빌드 성공(`apk-v0.1.0-15`) + **실기기 검증 통과**(안드 WebView view-shot 빈칸 케이스 미발생, 카카오 위치도 정상 캡처·Word 임베드). fallback 불요.
 - **2026-06-19**: §24 ✅ 종결(🟡→✅) — 백엔드 `POST /trips/:id/destinations` 배포(`ae4d2b9`, 멱등·active-only) + 프론트 연동(커밋 `5e5844b`): `tripsApi.addDestination` + `destinationStore.add` 낙관적 temp→fire-and-forget POST→서버 id 교체. 잔여는 운영 probe 검증뿐.

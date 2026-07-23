@@ -141,6 +141,14 @@ export interface Project {
   updatedAt?: string;
 }
 
+// 사용자 커스텀 카테고리(분류) 마스터 — 현장이 이름으로 참조(Field.categories: string[]).
+// 사용자가 직접 추가·이름변경·삭제하는 통제 어휘. MVP 는 이름만(색상/아이콘은 백로그).
+export interface Category {
+  id: string;
+  name: string;
+  createdAt: string;
+}
+
 // ERD v2 신규 — 현장 주소·좌표 1:1 (fields.location_id UNIQUE).
 export interface Location {
   id: string;

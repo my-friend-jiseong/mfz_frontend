@@ -35,6 +35,7 @@ import { FieldPinMap, type FieldPinMapHandle } from '@/components/fields/FieldPi
 import { useKakaoPlaceSearch } from '@/components/fields/useKakaoPlaceSearch';
 import { EmptyState } from '@/components/EmptyState';
 import { ProjectPicker } from '@/components/ProjectPicker';
+import { CategoryMultiPicker } from '@/components/fields/CategoryMultiPicker';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -46,6 +47,9 @@ import { FilterChip } from '@/components/ui/FilterChip';
 import { SafeScreen } from '@/components/SafeScreen';
 
 const DETAIL_MAX = 100;
+
+// 카테고리 배열 동일성 키 — 순서 무관 비교(변경 감지·PATCH 판정용).
+const catKey = (a: readonly string[]) => JSON.stringify([...a].sort()); //');
 
 interface FieldErrors {
   detailAddress?: string;
@@ -81,7 +85,7 @@ export default function EditField() {
     () => ({
       addressDetail: field?.addressDetail ?? '',
       status: field?.status ?? ('pending' as FieldStatus),
-      categories: (field?.categories ?? []).join(', '),
+      categories: field?.categories ?? [],
       projectId: field?.projectId ?? null,
     }),
     [field?.addressDetail, field?.status, field?.categories, field?.projectId],
@@ -90,7 +94,7 @@ export default function EditField() {
 
   const [addressDetail, setAddressDetail] = useState(initial.addressDetail);
   const [status, setStatus] = useState<FieldStatus>(initial.status);
-  const [categoriesStr, setCategoriesStr] = useState(initial.categories);
+  const [categories, setCategories] = useState<string[]>(initial.categories);
   const [projectId, setProjectId] = useState<string | null>(initial.projectId);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [globalError, setGlobalError] = useState<string | null>(null);
@@ -243,11 +247,12 @@ export default function EditField() {
   }
 
   const detailTrim = addressDetail.trim();
-  const categoriesTrim = categoriesStr.trim();
+  const categoriesChanged =
+    catKey(categories) !== catKey(initialRef.current.categories);
   const hasChanges =
     detailTrim !== initialRef.current.addressDetail.trim() ||
     status !== initialRef.current.status ||
-    categoriesTrim !== initialRef.current.categories.trim() ||
+    categoriesChanged ||
     projectId !== initialRef.current.projectId ||
     newAddress !== null;
 
@@ -273,18 +278,13 @@ export default function EditField() {
     // 변경된 항목만 호출 — 빈 PATCH 방지.
     const detailChanged = detailTrim !== initialRef.current.addressDetail.trim();
     const statusChanged = status !== initialRef.current.status;
-    const categoriesChanged = categoriesTrim !== initialRef.current.categories.trim();
     const projectIdChanged = projectId !== initialRef.current.projectId;
     const addressChanged = newAddress !== null;
 
     if (detailChanged || categoriesChanged || projectIdChanged || addressChanged) {
       const body: UpdateFieldBody = {};
       if (detailChanged) body.detailAddress = detailTrim;
-      if (categoriesChanged) {
-        body.categories = categoriesTrim
-          ? categoriesTrim.split(',').map((c) => c.trim()).filter(Boolean)
-          : [];
-      }
+      if (categoriesChanged) body.categories = categories;
       if (projectIdChanged) body.projectId = projectId;
       if (addressChanged && newAddress) {
         // 도로명 미부여 지점의 역지오코딩은 지번만 올 수 있음 — new.tsx 와 동일 fallback.
@@ -583,17 +583,11 @@ export default function EditField() {
           disabled={submitting}
         />
 
-        <Input
-          label="분류 (쉼표로 구분)"
-          value={categoriesStr}
-          onChangeText={(v) => {
-            setCategoriesStr(v);
-            if (fieldErrors.categories) clearFieldErr('categories');
-          }}
-          editable={!submitting}
-          placeholder="예: 가로수, 보수, 긴급"
-          error={fieldErrors.categories}
-          containerStyle={styles.fieldGap}
+        <Text variant="bodySm" weight="semibold" color="textMuted" style={styles.label}>분류 (선택)</Text>
+        <CategoryMultiPicker
+          value={categories}
+          onChange={setCategories}
+          disabled={submitting}
         />
 
         <View style={styles.labelRow}>

@@ -1,0 +1,245 @@
+import { useEffect, useState } from 'react';
+import {
+  Alert,
+  FlatList,
+  Pressable,
+  StyleSheet,
+  TextInput,
+  View,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useCategoryStore } from '@/stores/categoryStore';
+import { useFieldStore } from '@/stores/fieldStore';
+import { collectFieldFacets } from '@/utils/fieldFacets';
+import { EmptyState } from '@/components/EmptyState';
+import { Text } from '@/components/ui/Text';
+import type { Category } from '@/types/entities';
+import { colors } from '@/theme/colors';
+import { spacing, radius, fontSize } from '@/theme/spacing';
+
+// 카테고리(분류) 관리 — 추가·이름변경·삭제. categoryStore(임시 로컬 영속, 백엔드 배포 후 서버).
+export default function CategoriesManage() {
+  const categories = useCategoryStore((s) => s.categories);
+  const busy = useCategoryStore((s) => s.busy);
+  const refresh = useCategoryStore((s) => s.refresh);
+  const seed = useCategoryStore((s) => s.seed);
+  const create = useCategoryStore((s) => s.create);
+  const rename = useCategoryStore((s) => s.rename);
+  const remove = useCategoryStore((s) => s.remove);
+  const allFields = useFieldStore((s) => s.fields);
+
+  const [newName, setNewName] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+
+  useEffect(() => {
+    void refresh();
+    seed(collectFieldFacets(allFields).categories);
+  }, [refresh, seed, allFields]);
+
+  const handleAdd = async () => {
+    const name = newName.trim();
+    if (!name) return;
+    const r = await create(name);
+    if (r.ok) setNewName('');
+    else Alert.alert('추가 실패', r.error);
+  };
+
+  const startEdit = (c: Category) => {
+    setEditingId(c.id);
+    setEditName(c.name);
+  };
+
+  const saveEdit = async () => {
+    if (!editingId) return;
+    const r = await rename(editingId, editName);
+    if (r.ok) {
+      setEditingId(null);
+      setEditName('');
+    } else {
+      Alert.alert('이름 변경 실패', r.error ?? '');
+    }
+  };
+
+  const confirmDelete = (c: Category) => {
+    Alert.alert(
+      '카테고리 삭제',
+      `"${c.name}" 을(를) 삭제할까요?\n이미 이 분류가 붙은 현장의 값은 그대로 남습니다.`,
+      [
+        { text: '취소', style: 'cancel' },
+        { text: '삭제', style: 'destructive', onPress: () => void remove(c.id) },
+      ],
+    );
+  };
+
+  const renderItem = ({ item }: { item: Category }) => {
+    const editing = editingId === item.id;
+    return (
+      <View style={styles.row}>
+        {editing ? (
+          <>
+            <TextInput
+              value={editName}
+              onChangeText={setEditName}
+              style={styles.editInput}
+              maxLength={40}
+              autoFocus
+              onSubmitEditing={() => void saveEdit()}
+              returnKeyType="done"
+            />
+            <Pressable
+              onPress={() => void saveEdit()}
+              accessibilityRole="button"
+              accessibilityLabel="이름 저장"
+              style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
+            >
+              <Ionicons name="checkmark" size={20} color={colors.primary} />
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                setEditingId(null);
+                setEditName('');
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="편집 취소"
+              style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
+            >
+              <Ionicons name="close" size={20} color={colors.textMuted} />
+            </Pressable>
+          </>
+        ) : (
+          <>
+            <Ionicons name="pricetag-outline" size={16} color={colors.textMuted} />
+            <Text variant="body" style={styles.name} numberOfLines={1}>
+              {item.name}
+            </Text>
+            <Pressable
+              onPress={() => startEdit(item)}
+              accessibilityRole="button"
+              accessibilityLabel={`${item.name} 이름 변경`}
+              hitSlop={6}
+              style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
+            >
+              <Ionicons name="pencil" size={18} color={colors.textMuted} />
+            </Pressable>
+            <Pressable
+              onPress={() => confirmDelete(item)}
+              accessibilityRole="button"
+              accessibilityLabel={`${item.name} 삭제`}
+              hitSlop={6}
+              style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
+            >
+              <Ionicons name="trash-outline" size={18} color={colors.danger} />
+            </Pressable>
+          </>
+        )}
+      </View>
+    );
+  };
+
+  return (
+    <View style={styles.root}>
+      <View style={styles.addBox}>
+        <TextInput
+          value={newName}
+          onChangeText={setNewName}
+          style={styles.addInput}
+          placeholder="새 카테고리 이름 (예: 가로수)"
+          placeholderTextColor={colors.textMuted}
+          maxLength={40}
+          onSubmitEditing={() => void handleAdd()}
+          returnKeyType="done"
+        />
+        <Pressable
+          onPress={() => void handleAdd()}
+          disabled={busy || !newName.trim()}
+          accessibilityRole="button"
+          accessibilityLabel="카테고리 추가"
+          accessibilityState={{ disabled: busy || !newName.trim() }}
+          style={({ pressed }) => [
+            styles.addBtn,
+            (busy || !newName.trim()) && styles.disabled,
+            pressed && styles.pressed,
+          ]}
+        >
+          <Ionicons name="add" size={18} color={colors.onPrimary} />
+          <Text variant="bodySm" weight="bold" color="onPrimary">
+            추가
+          </Text>
+        </Pressable>
+      </View>
+
+      <FlatList
+        data={categories}
+        keyExtractor={(c) => c.id}
+        renderItem={renderItem}
+        contentContainerStyle={styles.list}
+        ListEmptyComponent={
+          <EmptyState
+            icon="pricetags-outline"
+            title="카테고리가 없습니다"
+            description="위에서 첫 카테고리를 추가하세요"
+          />
+        }
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.background },
+  addBox: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    padding: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  addInput: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    fontSize: fontSize.base,
+    color: colors.text,
+  },
+  addBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.md,
+    backgroundColor: colors.primary,
+    justifyContent: 'center',
+  },
+  disabled: { opacity: 0.5 },
+  pressed: { opacity: 0.7 },
+  list: { padding: spacing.lg, gap: spacing.sm },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  name: { flex: 1 },
+  editInput: {
+    flex: 1,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    fontSize: fontSize.base,
+    color: colors.text,
+  },
+  iconBtn: { padding: 4 },
+});

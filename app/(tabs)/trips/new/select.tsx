@@ -23,7 +23,8 @@ import {
   type Field,
   type FieldStatus,
 } from '@/types/entities';
-import { collectFieldFacets, applyFieldFilters } from '@/utils/fieldFacets';
+import { collectFieldFacets, applyFieldFilters, mergeCategoryNames } from '@/utils/fieldFacets';
+import { useCategoryStore } from '@/stores/categoryStore';
 
 export default function NewTripSelect() {
   const router = useRouter();
@@ -42,9 +43,14 @@ export default function NewTripSelect() {
   const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
-  const { projects: availableProjects, categories: availableCategories } = useMemo(
+  const { projects: availableProjects, categories: facetCategories } = useMemo(
     () => collectFieldFacets(myFields),
     [myFields],
+  );
+  const masterCategories = useCategoryStore((s) => s.categories);
+  const availableCategories = useMemo(
+    () => mergeCategoryNames(masterCategories.map((c) => c.name), facetCategories),
+    [masterCategories, facetCategories],
   );
 
   const fields = useMemo(

@@ -13,7 +13,8 @@ import { Button } from '@/components/ui/Button';
 import { StickyBottomBar } from '@/components/ui/StickyBottomBar';
 import { useHideOnScroll } from '@/components/ui/useHideOnScroll';
 import { type FieldStatus } from '@/types/entities';
-import { collectFieldFacets, applyFieldFilters } from '@/utils/fieldFacets';
+import { collectFieldFacets, applyFieldFilters, mergeCategoryNames } from '@/utils/fieldFacets';
+import { useCategoryStore } from '@/stores/categoryStore';
 import { FieldFilterBar } from '@/components/fields/FieldFilterBar';
 import { useQuickPhoto } from '@/components/fields/useQuickPhoto';
 import { QuickPhotoSheet } from '@/components/fields/QuickPhotoSheet';
@@ -54,15 +55,26 @@ export default function FieldsList() {
     return () => clearTimeout(handle);
   }, [refresh, status, fromDate, toDate]);
 
+  // 카테고리 마스터 로드 — 필터 후보에 아직 현장에 안 붙은 카테고리도 노출.
+  useEffect(() => {
+    void useCategoryStore.getState().hydrate();
+  }, []);
+
   // 본인 fields 만 — 이후 모든 파생값의 기준
   const myFields = useMemo(
     () => (userId ? allFields.filter((f) => f.userId === userId) : []),
     [allFields, userId],
   );
 
-  const { projects: availableProjects, categories: availableCategories } = useMemo(
+  const { projects: availableProjects, categories: facetCategories } = useMemo(
     () => collectFieldFacets(myFields),
     [myFields],
+  );
+  // 카테고리 필터 후보 = 마스터 집합 ∪ 기존 현장 값(레거시 보존).
+  const masterCategories = useCategoryStore((s) => s.categories);
+  const availableCategories = useMemo(
+    () => mergeCategoryNames(masterCategories.map((c) => c.name), facetCategories),
+    [masterCategories, facetCategories],
   );
 
   const fields = useMemo(

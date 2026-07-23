@@ -28,6 +28,7 @@ import {
 } from '@/utils/addressSearch';
 import { requestUserLocation } from '@/utils/geolocation';
 import { ProjectPicker } from '@/components/ProjectPicker';
+import { CategoryMultiPicker } from '@/components/fields/CategoryMultiPicker';
 import { ManualCoordinateForm } from '@/components/fields/ManualCoordinateForm';
 import { FieldPinMap, type FieldPinMapHandle } from '@/components/fields/FieldPinMap';
 import { getQuickPhoto } from '@/components/fields/quickPhotoHandoff';
@@ -124,7 +125,7 @@ export default function NewField() {
   const [resolveOnMount, setResolveOnMount] = useState(false);
   const mapRef = useRef<FieldPinMapHandle>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
-  const [categoriesStr, setCategoriesStr] = useState('');
+  const [categories, setCategories] = useState<string[]>([]);
   const [detail, setDetail] = useState('');
   const [status, setStatus] = useState<FieldStatus>('pending');
   const [submitting, setSubmitting] = useState(false);
@@ -292,10 +293,6 @@ export default function NewField() {
       );
       return;
     }
-    const categories = categoriesStr
-      .split(',')
-      .map((c) => c.trim())
-      .filter(Boolean);
     const baseBody = {
       name: selected.display,
       status,
@@ -571,12 +568,13 @@ export default function NewField() {
         </Text>
         <ProjectPicker value={projectId} onChange={setProjectId} />
 
-        <Input
-          label="분류 (선택, 쉼표로 구분)"
-          value={categoriesStr}
-          onChangeText={setCategoriesStr}
-          placeholder="예: 가로수, 보수, 긴급"
-          containerStyle={styles.fieldGap}
+        <Text variant="bodySm" weight="semibold" color="textMuted" style={styles.label}>
+          분류 (선택)
+        </Text>
+        <CategoryMultiPicker
+          value={categories}
+          onChange={setCategories}
+          disabled={submitting}
         />
 
         <Input
