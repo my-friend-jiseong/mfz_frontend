@@ -54,12 +54,18 @@ export function MapSheetLayout({
   onSelectField,
   children,
 }: Props) {
-  // 마지막 snap = 100% — 탭 진입 시 (initialIndex=2 default) 시트가 화면을 꽉 채움.
-  // 이전 92% 는 status bar 위쪽이 살짝 비어 보이던 회로. middle snap 은 55% 그대로.
-  // 최하단 snap = PEEK_HEIGHT(핸들 띠) px 고정 — 분율(%) 대신 px 라 화면 크기와 무관하게 일정.
-  const snapPoints = useMemo(() => [PEEK_HEIGHT, '55%', '100%'], []);
   const { height: screenHeight } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const sheetRef = useRef<BottomSheet>(null);
+
+  // 최대 snap = 화면 높이 − 상단 safe area(노치/상태바) px. 끝까지 올려도 상단에 지도(카메라)
+  // 영역을 status bar 만큼 남겨 지도를 완전히 덮지 않는다(사용자 요청). 이전 '100%' 는 컨테이너를
+  // 꽉 채워 지도가 안 보였음. 분율(%) 대신 px — safe area 는 화면 크기와 무관한 고정 px 라서.
+  // middle snap 55%·최하단 PEEK_HEIGHT(핸들 띠) 는 그대로.
+  const snapPoints = useMemo(
+    () => [PEEK_HEIGHT, '55%', screenHeight - insets.top],
+    [screenHeight, insets.top],
+  );
 
   // ── 기기 "목록 끝까지 스크롤 안 됨" 버그의 진짜 원인 수정 (2026-06-05, 4번째 조치) ──
   // gorhom v5 는 시트 콘텐츠 래퍼 높이를 useAnimatedStyle 로 주입하는데
@@ -80,10 +86,6 @@ export function MapSheetLayout({
     [],
   );
   // ──────────────────────────────────────────────────────────────────────────
-  // gorhom 의 '100%' 는 컨테이너 기준이라 상단 safe area (status bar/노치) 위로는 안 올라감.
-  // 루트 SafeAreaView 제거 (app/_layout.tsx) 후 부모 컨테이너가 edge-to-edge 라 sheet 가
-  // 자연스럽게 status bar 영역까지 닿음. inset 은 sheet 헤더의 paddingTop 보정에만 사용.
-  const insets = useSafeAreaInsets();
 
   useFocusEffect(
     useCallback(() => {
@@ -119,24 +121,16 @@ export function MapSheetLayout({
         handleIndicatorStyle={styles.handle}
       >
         {/* 명시적 height — gorhom 콘텐츠 래퍼 높이 미적용(Fabric+reanimated 4) 우회.
-            측정 전 한 프레임은 화면 높이로 근사 후 실측값으로 보정. */}
+            시트 최대 높이(screenHeight − insets.top)에서 핸들을 뺀 값 = 최대 snap 시 콘텐츠 영역.
+            insets.top 을 빼지 않으면 리스트가 시트 하단 밖으로 넘쳐 마지막 항목이 안 잡힘. */}
         <View
-          style={{ height: (containerHeight ?? screenHeight) - SHEET_HANDLE_HEIGHT }}
+          style={{
+            height: (containerHeight ?? screenHeight) - insets.top - SHEET_HANDLE_HEIGHT,
+          }}
         >
-          {/* sheet 가 100% snap 일 때 헤더가 status bar 뒤로 안 깔리도록 보정.
-              핸들(SHEET_HANDLE_HEIGHT)이 이미 status bar 안쪽으로 들어가 있으므로 그만큼 빼
-              죽은 여백을 줄인다 — peek 일 때 헤더가 덜 튀어나오고, 100% 에선 여전히 상태바 보호. */}
-          <View
-            style={[
-              styles.sheetHeader,
-              {
-                paddingTop: Math.max(
-                  spacing.sm,
-                  insets.top - SHEET_HANDLE_HEIGHT + spacing.sm,
-                ),
-              },
-            ]}
-          >
+          {/* 시트 상단이 이제 status bar 아래(insets.top)에서 시작 → 헤더에 status bar 보정
+              불필요, 일반 여백만. */}
+          <View style={styles.sheetHeader}>
             {onBack ? (
               <Pressable
                 onPress={onBack}
@@ -173,7 +167,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
-    // paddingTop 은 inline 으로 inset 반영 — 100% snap 시 status bar 보호.
+    paddingTop: spacing.sm,
     paddingBottom: spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
