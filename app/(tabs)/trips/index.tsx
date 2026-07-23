@@ -1,6 +1,7 @@
-import { useMemo } from 'react';
-import { StyleSheet } from 'react-native';
+import { useMemo, useState } from 'react';
+import { StyleSheet, View } from 'react-native';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
+import { Ionicons } from '@expo/vector-icons';
 import { Redirect, useRouter } from 'expo-router';
 import { useTripStore } from '@/stores/tripStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -10,11 +11,17 @@ import { MapSheetLayout, sheetScrollableStyle } from '@/components/MapSheetLayou
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
+import { Input } from '@/components/ui/Input';
 import { StickyBottomBar } from '@/components/ui/StickyBottomBar';
 import { useHideOnScroll } from '@/components/ui/useHideOnScroll';
+import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 import { fmtDate, fmtDuration, fmtTime } from '@/utils/datetime';
 import type { Trip } from '@/types/entities';
+
+// 외근 제목 = title 우선, 없으면 시작일 날짜(카드에 보이는 제목과 동일).
+// 목록 검색이 이 값과 카드 제목을 함께 쓰도록 통일 — '보이는 제목 = 검색 대상'.
+const tripTitle = (t: Trip) => (t.title?.trim() ? t.title.trim() : fmtDate(t.startedAt));
 
 export default function TripsList() {
   const router = useRouter();
@@ -23,15 +30,16 @@ export default function TripsList() {
   const activeTripId = useTripStore((s) => s.activeTripId);
   const allVisits = useVisitStore((s) => s.visits);
 
-  const trips = useMemo(
-    () =>
-      userId
-        ? allTrips
-            .filter((t) => t.workerId === userId)
-            .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
-        : [],
-    [allTrips, userId],
-  );
+  const [search, setSearch] = useState('');
+
+  const trips = useMemo(() => {
+    if (!userId) return [];
+    const q = search.trim().toLowerCase();
+    return allTrips
+      .filter((t) => t.workerId === userId)
+      .filter((t) => !q || tripTitle(t).toLowerCase().includes(q))
+      .sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+  }, [allTrips, userId, search]);
 
   // tripId → visit 카운트 Map — renderItem 의 per-row .filter (O(N×M)) 제거.
   // allVisits 가 바뀔 때만 재계산. 단 visitStore 는 각 외근 loadDetail 시에만 채워지므로,
@@ -66,7 +74,7 @@ export default function TripsList() {
         style={styles.cardSpacing}
       >
         <Text variant="body" weight="bold">
-          {item.title || dateText}
+          {tripTitle(item)}
         </Text>
         <Text variant="bodySm" color="textMuted" style={styles.meta}>
           {/* 시작 시각 노출 — 한 날에 외근 2번 이상이면 제목 없이는 구분 불가 회로 차단. */}
@@ -82,6 +90,16 @@ export default function TripsList() {
     // 표시 설정(히트맵 등)은 mapSettingsStore 로 공유되어 탭 간 같은 배경 지도를 유지.
     // StickyBottomBar 는 '현장' 탭과 동일하게 MapSheetLayout(시트 콘텐츠) 안에 둔다.
     <MapSheetLayout title="외근 내역">
+      <View style={styles.toolbar}>
+        <Input
+          value={search}
+          onChangeText={setSearch}
+          placeholder="제목 검색"
+          autoCapitalize="none"
+          clearButtonMode="while-editing"
+          leftSlot={<Ionicons name="search" size={18} color={colors.textMuted} />}
+        />
+      </View>
       <BottomSheetFlatList
         data={trips}
         keyExtractor={(t) => String(t.id)}
@@ -92,9 +110,11 @@ export default function TripsList() {
         {...({ onScroll } as object)}
         ListEmptyComponent={
           <EmptyState
-            icon="briefcase-outline"
-            title="외근 기록이 없습니다"
-            description="아래 버튼을 눌러 첫 외근을 시작하세요"
+            icon={search ? 'search-outline' : 'briefcase-outline'}
+            title={search ? '검색 결과가 없습니다' : '외근 기록이 없습니다'}
+            description={
+              search ? '제목을 다시 입력해보세요' : '아래 버튼을 눌러 첫 외근을 시작하세요'
+            }
           />
         }
       />
@@ -113,6 +133,12 @@ export default function TripsList() {
 }
 
 const styles = StyleSheet.create({
+  toolbar: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.sm,
+    backgroundColor: colors.background,
+  },
   list: { padding: spacing.lg, paddingBottom: 120 },
   cardSpacing: { marginBottom: spacing.sm },
   meta: { marginTop: spacing.xs },

@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/Text';
 import { FIELD_STATUS_LABEL, type Field } from '@/types/entities';
+import { fieldTitle } from '@/utils/fieldFacets';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { withAlpha } from '@/theme/withAlpha';
@@ -21,6 +22,11 @@ export function FieldCard({ field, onPress }: Props) {
   const statusColor = colors.fieldStatus[field.status];
   const hasMeta =
     !!field.projectName || (field.categories && field.categories.length > 0);
+  // 제목 = name||address. name 이 제목으로 올라가면 address 는 부제로 내려 정보 유지.
+  const title = fieldTitle(field);
+  const subtitle = field.name?.trim()
+    ? [field.address, field.addressDetail].filter(Boolean).join(' ')
+    : field.addressDetail;
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
       <View style={styles.header}>
@@ -34,11 +40,11 @@ export function FieldCard({ field, onPress }: Props) {
         </View>
       </View>
       <Text variant="body" weight="semibold">
-        {field.address}
+        {title}
       </Text>
-      {field.addressDetail ? (
+      {subtitle ? (
         <Text variant="bodySm" color="textMuted" style={styles.detail}>
-          {field.addressDetail}
+          {subtitle}
         </Text>
       ) : null}
       {hasMeta ? (

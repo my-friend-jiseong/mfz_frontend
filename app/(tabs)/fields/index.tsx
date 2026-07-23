@@ -108,7 +108,7 @@ export default function FieldsList() {
         <Input
           value={search}
           onChangeText={setSearch}
-          placeholder="주소·프로젝트·분류 검색"
+          placeholder="제목 검색"
           autoCapitalize="none"
           clearButtonMode="while-editing"
           leftSlot={<Ionicons name="search" size={18} color={colors.textMuted} />}
