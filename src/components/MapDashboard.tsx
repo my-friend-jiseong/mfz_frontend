@@ -148,6 +148,10 @@ export function MapDashboard({
 
   // 가용 분류 = 카테고리 마스터 집합 ∪ 스코프된 현장에 붙은 분류(레거시 값 보존).
   const masterCategories = useCategoryStore((s) => s.categories);
+  // 지도/외근 화면을 먼저 진입해도 마스터 전용 분류가 필터에 뜨도록 하이드레이트(멱등).
+  useEffect(() => {
+    void useCategoryStore.getState().hydrate();
+  }, []);
   const availableTags = useMemo(() => {
     const fromFields: string[] = [];
     scopedFields.forEach((f) => f.categories?.forEach((t) => fromFields.push(t)));

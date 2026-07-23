@@ -90,6 +90,9 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
         .map(serverToCategory)
         .filter((c): c is Category => c !== null);
       // 서버가 응답하면 서버를 진실원으로 채택.
+      // TODO(backend): 서버 전면 교체는 오프라인에서 만든 로컬 미동기 항목(cat- id)을
+      // 소실시킨다. 백엔드 스왑 시 create/rename/remove 를 서버 반영으로 바꾸고, 여기선
+      // 로컬 cat- 항목을 먼저 서버로 flush 하거나 병합(merge)한 뒤 교체할 것.
       const sorted = sortByName(items);
       set({ categories: sorted });
       void persist(sorted);
@@ -166,7 +169,14 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
   },
 
   seed: (names) => {
-    const have = new Set(get().categories.map((c) => norm(c.name)));
+    // 최초 부트스트랩 1회만 — 마스터가 비었을 때만 기존 현장 카테고리로 채운다.
+    // 이유: 마스터가 이미 있으면 재시드하지 않아야 (a) 관리 화면에서 삭제한 카테고리가
+    // 아직 그 값을 가진 현장 때문에 되살아나지 않고, (b) 반복 오염이 없다.
+    // 마스터에 없는 레거시 현장 값은 필터에서 mergeCategoryNames union 으로 계속 노출됨.
+    // ※ 호출부는 반드시 refresh()(=hydrate) 완료 후 호출할 것 — 아니면 하이드레이트 전
+    //   빈 상태로 판단해 잘못 재시드된다.
+    if (get().categories.length > 0) return;
+    const have = new Set<string>();
     const additions: Category[] = [];
     for (const raw of names) {
       const name = raw.trim();
@@ -179,7 +189,7 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
       });
     }
     if (additions.length === 0) return;
-    const next = sortByName([...get().categories, ...additions]);
+    const next = sortByName(additions);
     set({ categories: next });
     void persist(next);
   },

@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useCategoryStore } from '@/stores/categoryStore';
 import { useFieldStore } from '@/stores/fieldStore';
+import { useAuthStore } from '@/stores/authStore';
 import { collectFieldFacets } from '@/utils/fieldFacets';
 import { Text } from '@/components/ui/Text';
 import { colors } from '@/theme/colors';
@@ -35,17 +36,27 @@ export function CategoryMultiPicker({ value, onChange, disabled }: Props) {
   const create = useCategoryStore((s) => s.create);
   const seed = useCategoryStore((s) => s.seed);
   const allFields = useFieldStore((s) => s.fields);
+  const userId = useAuthStore((s) => s.user?.id);
 
   const [open, setOpen] = useState(false);
   const [newName, setNewName] = useState('');
   const [creating, setCreating] = useState(false);
 
-  // 열릴 때 1회 로드 + 기존 현장 카테고리로 시드(무손실 마이그레이션).
+  // 열릴 때 1회 로드 후, 마스터가 비어 있으면 **본인** 현장 카테고리로 시드(무손실 마이그레이션).
+  // refresh(=hydrate) 완료 뒤에 seed 해야 하이드레이트 전 빈 상태 오판·재시드를 막는다.
   useEffect(() => {
     if (!open) return;
-    void refresh();
-    seed(collectFieldFacets(allFields).categories);
-  }, [open, refresh, seed, allFields]);
+    let cancelled = false;
+    void (async () => {
+      await refresh();
+      if (cancelled) return;
+      const mine = userId ? allFields.filter((f) => f.userId === userId) : [];
+      seed(collectFieldFacets(mine).categories);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, refresh, seed, allFields, userId]);
 
   // 옵션 = 마스터 이름 ∪ 현재 값(레거시 값도 유지·해제 가능).
   const optionNames = useMemo(() => {

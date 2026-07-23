@@ -10,6 +10,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useCategoryStore } from '@/stores/categoryStore';
 import { useFieldStore } from '@/stores/fieldStore';
+import { useAuthStore } from '@/stores/authStore';
 import { collectFieldFacets } from '@/utils/fieldFacets';
 import { EmptyState } from '@/components/EmptyState';
 import { Text } from '@/components/ui/Text';
@@ -27,15 +28,25 @@ export default function CategoriesManage() {
   const rename = useCategoryStore((s) => s.rename);
   const remove = useCategoryStore((s) => s.remove);
   const allFields = useFieldStore((s) => s.fields);
+  const userId = useAuthStore((s) => s.user?.id);
 
   const [newName, setNewName] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
 
+  // refresh(=hydrate) 완료 후 마스터가 비어 있을 때만 **본인** 현장 카테고리로 시드.
   useEffect(() => {
-    void refresh();
-    seed(collectFieldFacets(allFields).categories);
-  }, [refresh, seed, allFields]);
+    let cancelled = false;
+    void (async () => {
+      await refresh();
+      if (cancelled) return;
+      const mine = userId ? allFields.filter((f) => f.userId === userId) : [];
+      seed(collectFieldFacets(mine).categories);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [refresh, seed, allFields, userId]);
 
   const handleAdd = async () => {
     const name = newName.trim();
