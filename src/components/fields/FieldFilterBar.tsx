@@ -11,7 +11,8 @@ import {
   type FieldStatus,
 } from '@/types/entities';
 import { colors } from '@/theme/colors';
-import { spacing, radius } from '@/theme/spacing';
+import { spacing, radius, fontSize } from '@/theme/spacing';
+import { fontFamily } from '@/theme/typography';
 import { withAlpha } from '@/theme/withAlpha';
 
 // 현장 목록 필터 — 4개 그룹(조치상태·프로젝트·카테고리·방문일)을 접이식으로 묶음.
@@ -88,16 +89,24 @@ export function FieldFilterBar({
     { key: 'date', base: '방문일', value: dateSummary(fromDate, toDate) },
   ];
 
-  const handleDate = (event: DateTimePickerEvent, selected?: Date) => {
-    setPicking(null);
-    if (event.type === 'dismissed' || !selected) return;
-    const iso = toISO(selected);
-    if (picking === 'from') {
-      // 시작일이 종료일보다 늦으면 종료일을 시작일로 당김
+  // 시작일이 종료일보다 늦으면 반대쪽을 당겨 from<=to 유지.
+  // 네이티브 피커(onChange)와 웹 <input type=date> 가 공유.
+  const applyPick = (which: 'from' | 'to', iso: string | null) => {
+    if (iso === null) {
+      onDateRange(which === 'from' ? null : fromDate, which === 'to' ? null : toDate);
+      return;
+    }
+    if (which === 'from') {
       onDateRange(iso, toDate && toDate < iso ? iso : toDate);
     } else {
       onDateRange(fromDate && fromDate > iso ? iso : fromDate, iso);
     }
+  };
+
+  const handleDate = (event: DateTimePickerEvent, selected?: Date) => {
+    setPicking(null);
+    if (event.type === 'dismissed' || !selected || !picking) return;
+    applyPick(picking, toISO(selected));
   };
 
   return (
@@ -214,16 +223,23 @@ export function FieldFilterBar({
           <DateRow
             label="시작일"
             value={fromDate}
-            onPress={() => setPicking('from')}
+            onOpen={() => setPicking('from')}
+            onWebSelect={(iso) => applyPick('from', iso)}
           />
-          <DateRow label="종료일" value={toDate} onPress={() => setPicking('to')} />
+          <DateRow
+            label="종료일"
+            value={toDate}
+            onOpen={() => setPicking('to')}
+            onWebSelect={(iso) => applyPick('to', iso)}
+          />
           {fromDate || toDate ? (
             <OptionRow label="전체 (기간 해제)" selected={false} onPress={() => onDateRange(null, null)} />
           ) : null}
         </Panel>
       ) : null}
 
-      {picking ? (
+      {/* 네이티브 전용 — 웹은 DateRow 내부의 <input type=date> 로 대체 */}
+      {Platform.OS !== 'web' && picking ? (
         <DateTimePicker
           value={parseISO(
             (picking === 'from' ? fromDate : toDate) ?? toISO(new Date()),
@@ -279,15 +295,43 @@ function OptionRow({
 function DateRow({
   label,
   value,
-  onPress,
+  onOpen,
+  onWebSelect,
 }: {
   label: string;
   value: string | null;
-  onPress: () => void;
+  onOpen: () => void; // 네이티브: OS 날짜 피커 열기
+  onWebSelect: (iso: string | null) => void; // 웹: <input type=date> 값 반영
 }) {
+  // 웹은 브라우저 기본 날짜 input 을 그대로 노출 — 네이티브 모듈을 렌더하지 않음.
+  if (Platform.OS === 'web') {
+    return (
+      <View style={styles.optRow}>
+        <Text variant="body" color="textMuted" style={styles.dateLabel}>
+          {label}
+        </Text>
+        {/* react-native-web 트리 안의 순수 DOM input. RN 스타일이 아니라 CSS 객체. */}
+        <input
+          type="date"
+          value={value ?? ''}
+          onChange={(e) => onWebSelect(e.target.value || null)}
+          style={{
+            flex: 1,
+            border: 'none',
+            outline: 'none',
+            background: 'transparent',
+            fontFamily: fontFamily.regular,
+            fontSize: fontSize.base,
+            color: value ? colors.text : colors.textMuted,
+            cursor: 'pointer',
+          }}
+        />
+      </View>
+    );
+  }
   return (
     <Pressable
-      onPress={onPress}
+      onPress={onOpen}
       accessibilityRole="button"
       style={({ pressed }) => [styles.optRow, pressed && { opacity: 0.6 }]}
     >
