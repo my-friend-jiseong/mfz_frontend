@@ -66,7 +66,8 @@
           "locationWhenInUsePermission": "현장 위치 등록, 가까운 현장 자동 매칭(빠른 촬영), 지도의 내 위치 표시를 위해 위치 정보를 사용합니다."
         }
       ],
-      "@sentry/react-native"
+      "@sentry/react-native",
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true

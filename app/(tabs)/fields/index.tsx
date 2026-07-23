@@ -10,47 +10,15 @@ import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout, sheetScrollableStyle } from '@/components/MapSheetLayout';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { Text } from '@/components/ui/Text';
-import { FilterChip } from '@/components/ui/FilterChip';
 import { StickyBottomBar } from '@/components/ui/StickyBottomBar';
 import { useHideOnScroll } from '@/components/ui/useHideOnScroll';
-import {
-  FIELD_STATUS_VALUES,
-  FIELD_STATUS_LABEL,
-  type FieldStatus,
-} from '@/types/entities';
+import { type FieldStatus } from '@/types/entities';
 import { collectFieldFacets, applyFieldFilters } from '@/utils/fieldFacets';
+import { FieldFilterBar } from '@/components/fields/FieldFilterBar';
 import { useQuickPhoto } from '@/components/fields/useQuickPhoto';
 import { QuickPhotoSheet } from '@/components/fields/QuickPhotoSheet';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
-
-// 노션 "데이터 필터" — 기간 프리셋 (시작일·종료일 직접 입력은 후속).
-// 'default_30d' 는 백엔드 기본값(visit 기준 최근 30일).
-type RangePreset = 'default_30d' | '7d' | '1d' | 'all';
-const RANGE_LABEL: Record<RangePreset, string> = {
-  default_30d: '최근 30일',
-  '7d': '최근 7일',
-  '1d': '오늘',
-  all: '전체',
-};
-const RANGE_ORDER: RangePreset[] = ['all', '1d', '7d', 'default_30d'];
-
-function rangeToParams(preset: RangePreset): {
-  visitDateScope?: 'all' | 'none';
-  fromDate?: string;
-  toDate?: string;
-} {
-  if (preset === 'all') return { visitDateScope: 'all' };
-  if (preset === 'default_30d') return {}; // 백엔드 기본값
-  const now = new Date();
-  const days = preset === '7d' ? 7 : 1;
-  const from = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
-  return {
-    fromDate: from.toISOString().slice(0, 10),
-    toDate: now.toISOString().slice(0, 10),
-  };
-}
 
 export default function FieldsList() {
   const router = useRouter();
@@ -59,19 +27,22 @@ export default function FieldsList() {
   const refresh = useFieldStore((s) => s.refresh);
 
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<FieldStatus[]>([]);
-  const [rangePreset, setRangePreset] = useState<RangePreset>('all');
-  const [projectFilter, setProjectFilter] = useState<string[]>([]);
-  const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
+  const [status, setStatus] = useState<FieldStatus | null>(null);
+  const [fromDate, setFromDate] = useState<string | null>(null);
+  const [toDate, setToDate] = useState<string | null>(null);
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const [category, setCategory] = useState<string | null>(null);
 
   // 첫 진입은 즉시 페치, 이후 필터 변경은 300ms debounce.
-  // 사용자가 chip 을 빠르게 여러 번 토글해도 최종 상태로만 호출 → 백엔드 부담 + UX 깜박임 차단.
+  // status·방문일은 서버 refresh 로 재조회, project·category 는 아래 클라 필터로 처리.
   const fetchedOnceRef = useRef(false);
   useEffect(() => {
     const fire = () => {
       void refresh({
-        ...rangeToParams(rangePreset),
-        status: statusFilter.length > 0 ? statusFilter.join(',') : undefined,
+        status: status ?? undefined,
+        ...(fromDate || toDate
+          ? { fromDate: fromDate ?? undefined, toDate: toDate ?? undefined }
+          : { visitDateScope: 'all' }),
       });
     };
     if (!fetchedOnceRef.current) {
@@ -81,7 +52,7 @@ export default function FieldsList() {
     }
     const handle = setTimeout(fire, 300);
     return () => clearTimeout(handle);
-  }, [refresh, statusFilter, rangePreset]);
+  }, [refresh, status, fromDate, toDate]);
 
   // 본인 fields 만 — 이후 모든 파생값의 기준
   const myFields = useMemo(
@@ -98,30 +69,18 @@ export default function FieldsList() {
     () =>
       applyFieldFilters(myFields, {
         search,
-        projectIds: projectFilter,
-        categories: categoryFilter,
+        projectIds: projectId ? [projectId] : undefined,
+        categories: category ? [category] : undefined,
       }),
-    [myFields, projectFilter, categoryFilter, search],
+    [myFields, projectId, category, search],
   );
 
-  const toggleStatus = (s: FieldStatus) =>
-    setStatusFilter((prev) =>
-      prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s],
-    );
-  const toggleProject = (id: string) =>
-    setProjectFilter((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-    );
-  const toggleCategory = (c: string) =>
-    setCategoryFilter((prev) =>
-      prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c],
-    );
-
   const hasFilter =
-    statusFilter.length > 0 ||
-    rangePreset !== 'all' ||
-    projectFilter.length > 0 ||
-    categoryFilter.length > 0;
+    status !== null ||
+    projectId !== null ||
+    category !== null ||
+    fromDate !== null ||
+    toDate !== null;
 
   // FlatList renderItem — useCallback 으로 stable reference. router 만 deps.
   const renderItem = useCallback(
@@ -154,70 +113,30 @@ export default function FieldsList() {
           clearButtonMode="while-editing"
           leftSlot={<Ionicons name="search" size={18} color={colors.textMuted} />}
         />
-        <View style={styles.chipRow}>
-          {FIELD_STATUS_VALUES.map((s) => (
-            <FilterChip
-              key={s}
-              label={FIELD_STATUS_LABEL[s]}
-              active={statusFilter.includes(s)}
-              activeColor={colors.fieldStatus[s]}
-              onPress={() => toggleStatus(s)}
-            />
-          ))}
-          {hasFilter ? (
-            <FilterChip
-              label="필터 해제"
-              active={false}
-              onPress={() => {
-                setStatusFilter([]);
-                setRangePreset('all');
-                setProjectFilter([]);
-                setCategoryFilter([]);
-              }}
-              dashed
-              leftIcon="close"
-            />
-          ) : null}
-        </View>
-        {availableProjects.length > 0 ? (
-          <View style={styles.chipRow}>
-            {availableProjects.map((p) => (
-              <FilterChip
-                key={p.id}
-                label={p.name}
-                active={projectFilter.includes(p.id)}
-                leftIcon="folder-outline"
-                onPress={() => toggleProject(p.id)}
-              />
-            ))}
-          </View>
-        ) : null}
-        {availableCategories.length > 0 ? (
-          <View style={styles.chipRow}>
-            {availableCategories.map((c) => (
-              <FilterChip
-                key={c}
-                label={c}
-                active={categoryFilter.includes(c)}
-                leftIcon="pricetag-outline"
-                onPress={() => toggleCategory(c)}
-              />
-            ))}
-          </View>
-        ) : null}
-        <View style={styles.chipRowWithLabel}>
-          <Text variant="caption" weight="bold" color="textMuted" style={styles.rangeLabel}>
-            방문일
-          </Text>
-          {RANGE_ORDER.map((p) => (
-            <FilterChip
-              key={p}
-              label={RANGE_LABEL[p]}
-              active={rangePreset === p}
-              onPress={() => setRangePreset(p)}
-            />
-          ))}
-        </View>
+        <FieldFilterBar
+          status={status}
+          onStatus={setStatus}
+          projects={availableProjects}
+          projectId={projectId}
+          onProject={setProjectId}
+          categories={availableCategories}
+          category={category}
+          onCategory={setCategory}
+          fromDate={fromDate}
+          toDate={toDate}
+          onDateRange={(from, to) => {
+            setFromDate(from);
+            setToDate(to);
+          }}
+          onResetAll={() => {
+            setStatus(null);
+            setProjectId(null);
+            setCategory(null);
+            setFromDate(null);
+            setToDate(null);
+          }}
+          hasFilter={hasFilter}
+        />
       </View>
       <BottomSheetFlatList
         data={fields}
@@ -292,22 +211,6 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
     gap: spacing.sm,
     backgroundColor: colors.background,
-  },
-  chipRow: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-    flexWrap: 'wrap',
-  },
-  chipRowWithLabel: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-    flexWrap: 'wrap',
-    alignItems: 'center',
-  },
-  rangeLabel: {
-    marginRight: spacing.xs,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
   list: { padding: spacing.lg, paddingBottom: 120 },
   bottomBarRow: { flexDirection: 'row', gap: spacing.md },
