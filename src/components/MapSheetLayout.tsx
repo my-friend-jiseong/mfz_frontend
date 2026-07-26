@@ -26,8 +26,9 @@ const PEEK_HEIGHT = SHEET_HANDLE_HEIGHT + spacing.sm; // 32
 
 // 시트를 끝까지 올렸을 때 상단에 남길 여백 = safe area(상태바/노치) + 추가 여백.
 // safe area 만으로는(=insets.top) 시트가 상태바 바로 밑에 붙어 상단 카메라·지도가 답답해
-// 보였음(실기기 확인) → 지도 띠가 확실히 남도록 여유를 더한다.
-const SHEET_TOP_GAP_EXTRA = 64;
+// 보였음(실기기 확인). 추가값 56 = Material 상단 앱바 1개 높이 — 지도 앱(구글/애플)이
+// 확장 시 남기는 "툴바 한 줄" 노출 관용치. 기기별 목업 렌더로 40/56/72 비교해 56 채택.
+const SHEET_TOP_GAP_EXTRA = 56;
 
 interface Props {
   title: string;
