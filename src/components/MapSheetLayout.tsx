@@ -24,6 +24,11 @@ const SHEET_HANDLE_HEIGHT = 24;
 // 잡아 다시 끌어올릴 수 있다(완전히 닫지 않는 이유).
 const PEEK_HEIGHT = SHEET_HANDLE_HEIGHT + spacing.sm; // 32
 
+// 시트를 끝까지 올렸을 때 상단에 남길 여백 = safe area(상태바/노치) + 추가 여백.
+// safe area 만으로는(=insets.top) 시트가 상태바 바로 밑에 붙어 상단 카메라·지도가 답답해
+// 보였음(실기기 확인) → 지도 띠가 확실히 남도록 여유를 더한다.
+const SHEET_TOP_GAP_EXTRA = 64;
+
 interface Props {
   title: string;
   onBack?: () => void;
@@ -58,13 +63,14 @@ export function MapSheetLayout({
   const insets = useSafeAreaInsets();
   const sheetRef = useRef<BottomSheet>(null);
 
-  // 최대 snap = 화면 높이 − 상단 safe area(노치/상태바) px. 끝까지 올려도 상단에 지도(카메라)
-  // 영역을 status bar 만큼 남겨 지도를 완전히 덮지 않는다(사용자 요청). 이전 '100%' 는 컨테이너를
-  // 꽉 채워 지도가 안 보였음. 분율(%) 대신 px — safe area 는 화면 크기와 무관한 고정 px 라서.
-  // middle snap 55%·최하단 PEEK_HEIGHT(핸들 띠) 는 그대로.
+  // 최대 snap = 화면 높이 − (상단 safe area + 추가 여백). 끝까지 올려도 상단에 지도(카메라)
+  // 영역을 남겨 지도를 완전히 덮지 않는다(사용자 요청). 이전 '100%' 는 컨테이너를 꽉 채워
+  // 지도가 안 보였고, safe area 만(=insets.top) 남기면 상태바 바로 밑에 붙어 답답했음.
+  // 분율(%) 대신 px — safe area 는 화면 크기와 무관한 고정 px 라서. middle 55%·PEEK 은 그대로.
+  const topGap = insets.top + SHEET_TOP_GAP_EXTRA;
   const snapPoints = useMemo(
-    () => [PEEK_HEIGHT, '55%', screenHeight - insets.top],
-    [screenHeight, insets.top],
+    () => [PEEK_HEIGHT, '55%', screenHeight - topGap],
+    [screenHeight, topGap],
   );
 
   // ── 기기 "목록 끝까지 스크롤 안 됨" 버그의 진짜 원인 수정 (2026-06-05, 4번째 조치) ──
@@ -121,11 +127,11 @@ export function MapSheetLayout({
         handleIndicatorStyle={styles.handle}
       >
         {/* 명시적 height — gorhom 콘텐츠 래퍼 높이 미적용(Fabric+reanimated 4) 우회.
-            시트 최대 높이(screenHeight − insets.top)에서 핸들을 뺀 값 = 최대 snap 시 콘텐츠 영역.
-            insets.top 을 빼지 않으면 리스트가 시트 하단 밖으로 넘쳐 마지막 항목이 안 잡힘. */}
+            시트 최대 높이(screenHeight − topGap)에서 핸들을 뺀 값 = 최대 snap 시 콘텐츠 영역.
+            topGap 을 빼지 않으면 리스트가 시트 하단 밖으로 넘쳐 마지막 항목이 안 잡힘. */}
         <View
           style={{
-            height: (containerHeight ?? screenHeight) - insets.top - SHEET_HANDLE_HEIGHT,
+            height: (containerHeight ?? screenHeight) - topGap - SHEET_HANDLE_HEIGHT,
           }}
         >
           {/* 시트 상단이 이제 status bar 아래(insets.top)에서 시작 → 헤더에 status bar 보정
