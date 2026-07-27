@@ -25,10 +25,13 @@ const SHEET_HANDLE_HEIGHT = 24;
 const PEEK_HEIGHT = SHEET_HANDLE_HEIGHT + spacing.sm; // 32
 
 // 시트를 끝까지 올렸을 때 상단에 남길 여백 = safe area(상태바/노치) + 추가 여백.
-// safe area 만으로는(=insets.top) 시트가 상태바 바로 밑에 붙어 상단 카메라·지도가 답답해
-// 보였음(실기기 확인). 추가값 56 = Material 상단 앱바 1개 높이 — 지도 앱(구글/애플)이
-// 확장 시 남기는 "툴바 한 줄" 노출 관용치. 기기별 목업 렌더로 40/56/72 비교해 56 채택.
-const SHEET_TOP_GAP_EXTRA = 56;
+// 추가 여백은 지도 위에 떠 있는 검색창(MapSearchBar) 바로 아래에 시트 상단을 맞추기 위한 값.
+// MapSearchBar 는 anchor 를 insets.top + spacing.sm 위치에 height 44 로 띄운다
+// (MapSearchBar styles.anchor / MapDashboard placeCard top 계산과 동일 근거). 따라서 검색창
+// 하단 = spacing.sm + 44. 거기에 spacing.sm 만큼 더 내려 검색창을 온전히 남기고 시트가
+// 검색창을 덮거나 어중간하게 걸치지 않게 한다(사용자 요청: "검색창 하단 약간 아래에 맞춰").
+const MAP_SEARCHBAR_HEIGHT = 44; // MapSearchBar styles.anchor.height 와 일치시킬 것
+const SHEET_TOP_GAP_EXTRA = spacing.sm + MAP_SEARCHBAR_HEIGHT + spacing.sm; // 60
 
 interface Props {
   title: string;
