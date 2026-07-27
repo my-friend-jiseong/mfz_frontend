@@ -102,9 +102,21 @@ export function MapSheetLayout({
   //   "Snap point '-60' is invalid" invariant 로 앱을 죽인다.
   //   측정값이 쓸모없을 땐 screenHeight 로 되돌리고, 그래도 음수면 PEEK 위로 clamp 해
   //   snapPoints 가 항상 오름차순 양수가 되도록 한다.
+  //
+  // ★ 더 중요한 이유 — snapPoints 를 마운트 후에 바꾸지 않기 위해서다(실측):
+  //   onLayout 은 0 → 실제높이 순으로 두 번 오고, 그때마다 maxSheetHeight 가 바뀌면
+  //   (예: 579 → 523) snapPoints 배열이 교체된다. gorhom 은 배열이 바뀌면 현재 위치를
+  //   새 배열에 다시 맞추는데, 이때 시트가 peek 으로 떨어지고 focus 의 snapToIndex 로도
+  //   복구되지 않았다(목록→상세→뒤로 5/5 재현, 현장 탭도 동일).
+  //   그래서 측정 전에는 시트를 아예 렌더하지 않는다 — 아래 measuredHeight != null 가드.
+  //   덕분에 BottomSheet 는 첫 렌더부터 확정된 snapPoints 를 갖고, 이후 바뀌는 경우는
+  //   진짜 창 크기 변경뿐이다(그때는 재조정이 맞는 동작).
   const measuredHeight =
-    containerHeight != null && containerHeight > 0 ? containerHeight : screenHeight;
-  const maxSheetHeight = Math.max(PEEK_HEIGHT + 1, measuredHeight - topGap);
+    containerHeight != null && containerHeight > 0 ? containerHeight : null;
+  const maxSheetHeight = Math.max(
+    PEEK_HEIGHT + 1,
+    (measuredHeight ?? screenHeight) - topGap,
+  );
   const snapPoints = useMemo(
     () => [PEEK_HEIGHT, '55%', maxSheetHeight],
     [maxSheetHeight],
@@ -145,6 +157,10 @@ export function MapSheetLayout({
         routeFieldIds={routeFieldIds}
         keepGlobalChrome={keepGlobalChrome}
       />
+      {/* 컨테이너 높이가 측정되기 전엔 시트를 렌더하지 않는다 — snapPoints 를 마운트 후에
+          바꾸지 않기 위해서(위 measuredHeight 주석 참고). 지도는 그대로 깔려 있으므로
+          사용자에겐 시트가 한 프레임 늦게 올라오는 것으로만 보인다. */}
+      {measuredHeight == null ? null : (
       <BottomSheet
         ref={sheetRef}
         index={initialIndex}
@@ -190,6 +206,7 @@ export function MapSheetLayout({
           <View style={styles.content}>{children}</View>
         </View>
       </BottomSheet>
+      )}
     </View>
   );
 }
