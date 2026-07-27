@@ -143,6 +143,20 @@ export default function ComposeReport() {
   // submit 가드 — 외근 없는 사용자 동선 안내 (F5).
   const noTripsAtAll = myTrips.length === 0;
 
+  // CTA 가 왜 눌리지 않는지 — 누른 뒤가 아니라 누르기 전에 알려준다.
+  // handleSubmit 안의 '제목은 1~100자로…' 는 버튼이 disabled 라 도달할 수 없어(제목이 비면
+  // 애초에 못 누름) 사실상 죽은 안내였다. 아래 disabled 조건과 같은 순서로 사유를 도출해
+  // 둘이 어긋나지 않게 한다.
+  const blockedReason = noTripsAtAll
+    ? null // 위 '아직 작성된 외근이 없어요' 카드가 이미 설명 — 중복 안내 안 함
+    : !tripId
+      ? '연결할 외근을 선택해주세요'
+      : tripHydrating
+        ? '외근 정보를 불러오는 중입니다'
+        : !title.trim()
+          ? '제목을 입력하면 보고서를 만들 수 있어요'
+          : null;
+
   const handleSubmit = async () => {
     setError(null);
     const t = title.trim();
@@ -321,6 +335,20 @@ export default function ComposeReport() {
           </Text>
         ) : null}
 
+        {/* 실패 메시지(error, 빨강)와 분리 — 이건 아직 못 누르는 이유이지 오류가 아니다. */}
+        {!error && blockedReason ? (
+          <View style={styles.hintRow}>
+            <Ionicons
+              name="information-circle-outline"
+              size={14}
+              color={colors.textMuted}
+            />
+            <Text variant="caption" color="textMuted">
+              {blockedReason}
+            </Text>
+          </View>
+        ) : null}
+
         <Button
           onPress={handleSubmit}
           disabled={
@@ -453,6 +481,12 @@ const styles = StyleSheet.create({
   noTripsBody: { marginTop: 2 },
   noTripsCta: { alignSelf: 'flex-start', marginTop: spacing.sm },
   error: { marginTop: spacing.sm },
+  hintRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.md,
+  },
   submitBtn: { marginTop: spacing.xl },
   modalBackdrop: {
     flex: 1,

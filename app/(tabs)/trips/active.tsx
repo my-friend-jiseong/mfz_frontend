@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Platform, StyleSheet, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
@@ -56,6 +56,13 @@ export default function ActiveTrip() {
   const [optimizing, setOptimizing] = useState(false);
   const [elapsedTick, setElapsedTick] = useState(0);
   const [addOpen, setAddOpen] = useState(false);
+
+  // 종료 진행 중 표식 — 아래 `activeTripId === null` 리다이렉트 가드를 재운다.
+  // endTrip() 이 스토어의 activeTripId 를 비우는 순간 이 화면이 재렌더되는데, 그때 가드가
+  // 먼저 발화하면 finalizeEnd 의 router.replace('/trips/{id}') 를 이겨 목록으로 튕긴다
+  // (실측: 종료 후 외근 정리 화면 대신 /trips 에 도착). state 가 아니라 ref 인 이유는
+  // 어차피 스토어 변경이 렌더를 유발하고, 그 렌더에서 이 값을 읽기만 하면 되기 때문.
+  const endingRef = useRef(false);
 
   // Quick Photo — 외근 중 현장 도착 → 촬영이 주 사용처 (계획 §4-3 진입점 확장).
   // 훅 호출은 아래 activeTripId early return 보다 위에 — hook 순서 고정.
@@ -159,8 +166,12 @@ export default function ActiveTrip() {
   }, [destinations]);
 
   // 활성 외근이 없으면 이 화면에 머물 이유가 없음 — 외근 탭 메인으로 즉시 redirect.
+  // 단 '종료 진행 중' 이면 보류 — 종료가 activeTripId 를 비운 직후의 재렌더에서 이 가드가
+  // 상세 이동(router.replace)을 앞질러 목록으로 보내던 회로 차단 (endingRef 주석 참고).
   if (activeTripId === null) {
-    return <Redirect href="/(tabs)/trips" />;
+    // 종료 진행 중이면 리다이렉트를 보류하고 한 프레임 빈 화면으로 버틴다 —
+    // 곧 finalizeEnd 의 router.replace 가 외근 정리 화면으로 데려간다.
+    return endingRef.current ? null : <Redirect href="/(tabs)/trips" />;
   }
 
   const handleNavigate = () => {
@@ -308,6 +319,9 @@ export default function ActiveTrip() {
       return;
     }
     const tripId = activeTripId;
+    // 아래 모든 실패 경로에서 되돌린다 — 안 그러면 종료가 실패했는데도 가드가 잠든 채
+    // activeTripId 없는 화면에 갇힌다.
+    endingRef.current = true;
     const r = await endTrip();
     if (r.ok) {
       finalizeEnd(r.trip.id, tripId);
@@ -322,6 +336,7 @@ export default function ActiveTrip() {
           finalizeEnd(force.trip.id, tripId);
           return;
         }
+        endingRef.current = false;
         // force=true 호출이 또 needsConfirm 을 받았다 = 백엔드가 forceEndWithoutVisit:true 를
         // 못 받았거나 인식 안 하고 있음. 침묵하지 않고 사용자에게 명시.
         if ('needsConfirm' in force) {
@@ -345,15 +360,25 @@ export default function ActiveTrip() {
       if (Platform.OS === 'web') {
         if (window.confirm(r.message)) {
           void confirmEnd();
+        } else {
+          // 사용자가 재확인을 취소 — 종료 안 함.
+          endingRef.current = false;
         }
       } else {
         Alert.alert('외근 종료 확인', r.message, [
-          { text: '취소', style: 'cancel' },
+          {
+            text: '취소',
+            style: 'cancel',
+            onPress: () => {
+              endingRef.current = false;
+            },
+          },
           { text: '종료', style: 'destructive', onPress: () => void confirmEnd() },
         ]);
       }
       return;
     }
+    endingRef.current = false;
     if (Platform.OS === 'web') {
       window.alert(`오류: ${r.error}`);
     } else {

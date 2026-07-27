@@ -238,7 +238,7 @@ MARKERS.forEach(function(m){
 
     // KWCAG 1.4.1 — status 별 색 + 형상 + 라벨 3중 인코딩 SVG.
     // count>1: 우상단 카운트 뱃지. showLabel 일 때만 동 이름 라벨을 SVG 아래에 띄움.
-    function buildMarkerHtml(m, count, showLabel){
+    function buildMarkerHtml(m, count, showLabel, orderOverride){
       var color = m.color || '#2563eb';
       var shape = m.shape || 'circle';
       var badge = m.badge || '';
@@ -259,13 +259,20 @@ MARKERS.forEach(function(m){
       // 외근 순번 마커 — order 가 있으면 형상 대신 '숫자를 새긴 원' 으로 그린다.
       // KWCAG 1.4.1(색 단독 금지)은 그대로 지켜진다: 정보 전달자가 형상에서 숫자로 바뀔 뿐,
       // 색 없이도 순서를 읽을 수 있다. 체크 아이콘/삼각형 위에 숫자를 겹치면 둘 다 안 읽혀
-      // 형상 인코딩을 유지하는 쪽이 오히려 정보를 잃는다. 클러스터(count>1)는 카운트 뱃지와
-      // 충돌하므로 제외 — selected/highlighted 와 동일한 규칙.
-      var ordered = typeof m.order === 'number' && count === 1;
-      if (ordered) {
+      // 형상 인코딩을 유지하는 쪽이 오히려 정보를 잃는다.
+      //
+      // 클러스터(count>1)도 순번을 살린다 — 같은 건물에 목적지가 2곳이면 예전엔 카운트 뱃지만
+      // 남아 방문 순서를 아예 못 읽었다. 원 안에는 클러스터에서 가장 빠른 순번(orderOverride),
+      // 우상단에는 기존 카운트 뱃지를 함께 둬 "여기서 N곳, 첫 순번은 M" 으로 읽히게 한다.
+      var ord = (orderOverride !== undefined && orderOverride !== null) ? orderOverride : m.order;
+      if (typeof ord === 'number') {
+        var ordCount = count > 1
+          ? '<div style="position:absolute;top:-4px;right:-6px;min-width:20px;height:20px;padding:0 5px;border-radius:10px;background:#dc2626;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 1px 2px rgba(0,0,0,0.25);box-sizing:border-box;">' + count + '</div>'
+          : '';
         return '<div style="position:relative;width:26px;height:26px;cursor:pointer;">' + hlRing + selRing
           + '<svg width="26" height="26" viewBox="0 0 36 36"><circle cx="18" cy="18" r="14" fill="' + color + '" stroke="#fff" stroke-width="2"/></svg>'
-          + '<div style="position:absolute;top:0;left:0;width:26px;height:26px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:800;pointer-events:none;">' + m.order + '</div>'
+          + '<div style="position:absolute;top:0;left:0;width:26px;height:26px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:800;pointer-events:none;">' + ord + '</div>'
+          + ordCount
           + selCheck
           + (showLabel ? '<div style="position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:4px;background:#fff;padding:2px 6px;border-radius:8px;font-size:11px;font-weight:600;color:#0f172a;border:1px solid ' + color + ';white-space:nowrap;box-shadow:0 1px 2px rgba(0,0,0,0.15);">' + (m.label||'') + '</div>' : '')
           + '</div>';
@@ -313,8 +320,14 @@ MARKERS.forEach(function(m){
         if (placed) {
           placed.count++;
           placed.ids.push(m.id);
+          // 클러스터가 보여줄 순번 = 구성원 중 가장 빠른 것. head 는 좌표 무손실을 위해
+          // 첫 마커로 고정해야 하므로 순번만 따로 최솟값으로 모은다.
+          if (typeof m.order === 'number' && (placed.minOrder === null || m.order < placed.minOrder)) {
+            placed.minOrder = m.order;
+          }
         } else {
-          var nc = { head: m, px: pt.x, py: pt.y, count: 1, ids: [m.id] };
+          var nc = { head: m, px: pt.x, py: pt.y, count: 1, ids: [m.id],
+                     minOrder: (typeof m.order === 'number' ? m.order : null) };
           clusters.push(nc);
           var bk = gx + ':' + gy;
           (buckets[bk] = buckets[bk] || []).push(nc);
@@ -359,7 +372,7 @@ MARKERS.forEach(function(m){
         var head = cl.head;
         var content = document.createElement('div');
         // 라벨은 단일 마커이면서 충분히 줌인했을 때만 — 클러스터는 카운트 뱃지로 다중임을 표현.
-        content.innerHTML = buildMarkerHtml(head, cl.count, showLabel && cl.count === 1);
+        content.innerHTML = buildMarkerHtml(head, cl.count, showLabel && cl.count === 1, cl.minOrder);
         (function(c){
           content.firstChild.addEventListener('click', function(){
             if (c.count > 1) {

@@ -49,7 +49,12 @@ const LABEL_MAX_LEVEL = 5;
 // 마커 SVG 가 26px 이라 28 이면 사실상 겹치는 것만 묶음 — 점을 최대한 살려 허전함 방지.
 const CLUSTER_PX = 28;
 
-function buildMarkerHtml(m: KakaoMapMarker, count = 1, showLabel = true): string {
+function buildMarkerHtml(
+  m: KakaoMapMarker,
+  count = 1,
+  showLabel = true,
+  orderOverride?: number | null,
+): string {
   const color = m.color || '#2563eb';
   const shape = m.shape || 'circle';
   const badge = m.badge || '';
@@ -84,19 +89,28 @@ function buildMarkerHtml(m: KakaoMapMarker, count = 1, showLabel = true): string
     ? `<div class="mfz-hl-static"></div><div class="mfz-hl-ping"></div>`
     : '';
   // 외근 순번 마커 — 형상 대신 '숫자를 새긴 원'. 정보 전달자가 형상→숫자로 바뀔 뿐이라
-  // 색 단독 인코딩이 되지는 않는다. 클러스터는 카운트 뱃지와 충돌하므로 제외(네이티브와 동일 규칙).
-  if (typeof m.order === 'number' && count === 1) {
+  // 색 단독 인코딩이 되지는 않는다. 클러스터도 순번을 살린다 — 원 안엔 구성원 중 가장 빠른
+  // 순번(orderOverride), 우상단엔 카운트 뱃지. (네이티브 HTML 과 동일 규칙)
+  const ord = orderOverride ?? m.order;
+  if (typeof ord === 'number') {
     const orderSvg = `<svg width="26" height="26" viewBox="0 0 36 36"><circle cx="18" cy="18" r="14" fill="${color}" stroke="#fff" stroke-width="2"/></svg>`;
-    const orderNum = `<div style="position:absolute;top:0;left:0;width:26px;height:26px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:800;pointer-events:none;">${m.order}</div>`;
+    const orderNum = `<div style="position:absolute;top:0;left:0;width:26px;height:26px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:800;pointer-events:none;">${ord}</div>`;
     const plainLabel = showLabel
       ? `<div style="position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:4px;background:#fff;padding:2px 6px;border-radius:8px;font-size:11px;font-weight:600;color:#0f172a;border:1px solid ${color};white-space:nowrap;box-shadow:0 1px 2px rgba(0,0,0,0.15);">${m.label || ''}</div>`
       : '';
-    return `<div style="position:relative;width:26px;height:26px;cursor:pointer;">${hlRing}${selRing}${orderSvg}${orderNum}${selCheck}${plainLabel}</div>`;
+    return `<div style="position:relative;width:26px;height:26px;cursor:pointer;">${hlRing}${selRing}${orderSvg}${orderNum}${countBadge}${selCheck}${plainLabel}</div>`;
   }
   return `<div style="position:relative;width:26px;height:26px;cursor:pointer;">${hlRing}${selRing}${svg}${countBadge}${selCheck}${labelHtml}</div>`;
 }
 
-type PixelCluster = { head: KakaoMapMarker; count: number; ids: string[] };
+// minOrder — 클러스터가 보여줄 순번(구성원 중 최솟값). head 는 좌표 무손실을 위해 첫 마커로
+// 고정해야 하므로 순번만 따로 모은다. 순번 없는 마커만 모이면 null.
+type PixelCluster = {
+  head: KakaoMapMarker;
+  count: number;
+  ids: string[];
+  minOrder: number | null;
+};
 
 // 화면 픽셀 거리 기반 클러스터링. 두 좌표의 화면 거리는 pan 에 불변·줌에만 의존하므로
 // 줌 변화 시에만 재계산하면 된다. 그리드 버킷으로 인접 3×3 셀만 검사해 O(n) 에 가깝게 묶는다.
@@ -130,8 +144,21 @@ function clusterByPixel(
     if (placed) {
       placed.count++;
       placed.ids.push(m.id);
+      if (
+        typeof m.order === 'number' &&
+        (placed.minOrder === null || m.order < placed.minOrder)
+      ) {
+        placed.minOrder = m.order;
+      }
     } else {
-      const node: Node = { head: m, count: 1, ids: [m.id], px: pt.x, py: pt.y };
+      const node: Node = {
+        head: m,
+        count: 1,
+        ids: [m.id],
+        px: pt.x,
+        py: pt.y,
+        minOrder: typeof m.order === 'number' ? m.order : null,
+      };
       clusters.push(node);
       const bk = `${gx}:${gy}`;
       const arr = buckets.get(bk);
@@ -644,6 +671,7 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
           cl.head,
           cl.count,
           showLabel && cl.count === 1,
+          cl.minOrder,
         );
         const child = content.firstChild as HTMLElement | null;
         if (child) {
