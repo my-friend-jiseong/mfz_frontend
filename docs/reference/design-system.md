@@ -204,8 +204,9 @@ DESTINATION_STATUS_BADGE = {
 
 | 위치 | 컴포넌트 | 역할 |
 |---|---|---|
-| `src/components/trips/` | `TripSummaryCard` | 외근 진행률 (elapsed + bar + ratio) |
-| | `CurrentDestCard` | 체크인 풀폭 + 길찾기/재최적화/건너뛰기 utility row |
+| `src/components/trips/` | `TripProgressStrip` | 외근 진행률 한 줄 (elapsed + 카운트 + ratio + 3dp bar) |
+| | `TripCard` | 외근 목록 카드 (상태칩 + 보고서 배지 + 진행률 바) |
+| | `CurrentDestCard` | 현재 목적지 — 길찾기·체크인 동급 2분할 + 캡션 행에 재최적화·건너뛰기 |
 | | `AllDoneCard` | 모든 목적지 완료 상태 |
 | | `DestinationRow` | 목적지 행, memo + status Badge |
 | `src/components/fields/` | `ManualCoordinateForm` | KR 좌표 직접 입력 (new / edit 공유) |

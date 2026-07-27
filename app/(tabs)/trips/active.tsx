@@ -14,7 +14,7 @@ import {
   DESTINATION_STATUS_BADGE,
 } from '@/theme/statusBadge';
 import type { Visit } from '@/types/entities';
-import { TripSummaryCard } from '@/components/trips/TripSummaryCard';
+import { TripProgressStrip } from '@/components/trips/TripProgressStrip';
 import { CurrentDestCard } from '@/components/trips/CurrentDestCard';
 import { AllDoneCard } from '@/components/trips/AllDoneCard';
 import { DestinationRow } from '@/components/trips/DestinationRow';
@@ -389,7 +389,7 @@ export default function ActiveTrip() {
   const currentDestField = currentDest ? getField(currentDest.fieldId) : undefined;
   const listHeader = (
     <View style={styles.header}>
-      <TripSummaryCard
+      <TripProgressStrip
         startedAtLabel={elapsedLabel}
         arrived={progress.arrived}
         skipped={progress.skipped}

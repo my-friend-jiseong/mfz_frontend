@@ -12,12 +12,12 @@ interface Props {
   ratio: number;
 }
 
-// 진행 중 외근의 진행률 — 카드가 아니라 한 줄 스트립.
+// 진행 중 외근의 진행률 — 한 줄 스트립.
 //
-// 이전엔 Card 안에 경과시간/카운트/8dp 바가 3단으로 쌓여 ~82dp 를 썼는데, 그만큼
-// 현재 목적지 카드가 아래로 밀려 시트를 55%(지도 확보)로 낮추면 잘렸다. 정보량은 그대로
-// 두고 높이만 접는다 — 경과·카운트를 한 행에, 바는 3dp.
-export function TripSummaryCard({
+// 이전엔 Card 안에 경과시간/카운트/8dp 바가 3단으로 쌓여 ~82dp 를 썼는데(당시 이름
+// TripSummaryCard), 그만큼 현재 목적지 카드가 아래로 밀려 시트를 55%(지도 확보)로 낮추면
+// 잘렸다. 정보량은 그대로 두고 높이만 접었다 — 경과·카운트를 한 행에, 바는 3dp.
+export function TripProgressStrip({
   startedAtLabel,
   arrived,
   skipped,
