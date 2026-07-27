@@ -50,11 +50,16 @@ export const TripCard = memo(function TripCard({
   // (trips/index.tsx 가 activeTripId 있으면 active 화면으로 통째 redirect).
   const ended = !!trip.endedAt;
 
-  // 분모가 있을 때만 진행률 — 0 나눗셈·"5/0곳" 같은 깨진 표기 차단.
-  const ratio =
-    plannedCount && plannedCount > 0
-      ? Math.min(100, Math.round((visitCount / plannedCount) * 100))
+  // 분모가 방문 수보다 작으면 그 값은 믿을 수 없다 — 목록은 destinations 가 없어 서버
+  // Trip.siteCount 에 의존하는데, 실측상 이 값이 실제 계획 수와 어긋나는 외근이 있다
+  // (상세 화면은 destinations.length 로 3 인데 siteCount 는 1 로 내려온 케이스 확인).
+  // 그때 "방문 3 / 계획 1곳" 같은 말이 안 되는 문구가 나오므로, 분모를 버리고
+  // "방문 N건" 으로 폴백한다. 0 나눗셈·"5/0곳" 도 같은 가드에 걸린다.
+  const planned =
+    plannedCount != null && plannedCount > 0 && plannedCount >= visitCount
+      ? plannedCount
       : null;
+  const ratio = planned ? Math.round((visitCount / planned) * 100) : null;
 
   return (
     <Card
@@ -99,7 +104,7 @@ export const TripCard = memo(function TripCard({
         )}
         <Text variant="caption" weight="semibold" color="textMuted">
           {ratio !== null
-            ? `방문 ${visitCount} / 계획 ${plannedCount}곳`
+            ? `방문 ${visitCount} / 계획 ${planned}곳`
             : `방문 ${visitCount}건`}
         </Text>
         {onFocusMap ? (

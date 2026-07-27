@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import { Ionicons } from '@expo/vector-icons';
-import { Redirect, useRouter } from 'expo-router';
+import { Redirect, useFocusEffect, useRouter } from 'expo-router';
 import { useTripStore } from '@/stores/tripStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useVisitStore } from '@/stores/visitStore';
@@ -72,10 +72,15 @@ export default function TripsList() {
   const [search, setSearch] = useState('');
 
   // 보고서 마스터 로드 — 카드의 '보고서' 배지 판정에만 쓴다. 목록 1회 페치로
-  // trip 당 추가 요청 없이 tripId 매칭 (fields/index.tsx 의 categoryStore.hydrate 와 동일 패턴).
-  useEffect(() => {
-    void useReportStore.getState().hydrate();
-  }, []);
+  // trip 당 추가 요청 없이 tripId 매칭.
+  //
+  // mount 가 아니라 focus 마다 — 보고서는 이 세션 안에서 생긴다(외근 정리 → 보고서 작성 →
+  // 목록 복귀). mount 1회만 받으면 방금 만든 보고서가 배지에 안 뜨고 앱을 새로 켜야 보였다(실측).
+  useFocusEffect(
+    useCallback(() => {
+      void useReportStore.getState().hydrate();
+    }, []),
+  );
 
   const myTrips = useMemo(() => {
     if (!userId) return [];
@@ -233,6 +238,9 @@ export default function TripsList() {
       mapFieldIds={focusFieldIds}
       routeFieldIds={focusFieldIds}
       collapseOnScopeChange
+      // 목록의 지도 포커스는 메인 탭 안의 임시 상태 — 스코프가 걸려도 검색창·레이어 버튼과
+      // 히트맵 등 표시 설정은 그대로 둔다(토글 한 번에 컨트롤이 사라지지 않게).
+      keepGlobalChrome
     >
       <View style={styles.toolbar}>
         <Input

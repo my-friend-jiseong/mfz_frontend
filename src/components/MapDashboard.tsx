@@ -49,6 +49,10 @@ interface MapDashboardProps {
   // 외근 방문 순서(fieldId 배열). 주어지면 그 순서로 마커에 순번을 새기고 점선 경로를 잇는다.
   // scopeFieldIds 와 별개 축 — 스코프는 '무엇을 보여줄지', 이건 '어떤 순서로 도는지'.
   routeFieldIds?: string[];
+  // 스코프가 걸려도 메인 탭의 지도 크롬(검색창·레이어 패널·표시 설정)을 유지한다.
+  // 외근 목록의 '지도에서 보기' 는 상세 화면이 아니라 메인 탭 안의 임시 포커스라, 토글 한 번에
+  // 검색창·레이어 버튼이 사라지고 히트맵 설정이 마커로 리셋되면 고장으로 보인다.
+  keepGlobalChrome?: boolean;
 }
 
 export function MapDashboard({
@@ -57,6 +61,7 @@ export function MapDashboard({
   selectedFieldIds,
   onSelectField,
   routeFieldIds,
+  keepGlobalChrome = false,
 }: MapDashboardProps = {}) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -108,7 +113,10 @@ export function MapDashboard({
   // 공유 설정은 외근·현장 메인 탭(전역·비선택 지도)에만 적용한다. 스코프 상세·보고서 위치도는
   // 필터로 목적지가 가려지면 안 되고, 외근 시작 선택 화면은 히트맵이 되면 마커를 못 누른다 —
   // 이 화면들은 기존 안전 기본(마커·일반지도·필터 없음)을 유지해 회귀를 막는다.
-  const sharesSettings = isGlobalMap && !onSelectField;
+  // keepGlobalChrome 은 예외 — 메인 탭 안의 임시 포커스(외근 목록 '지도에서 보기')는 스코프가
+  // 걸려도 크롬·표시 설정을 그대로 둔다. 단 이때 공유 필터가 함께 살아나 목적지가 가려질 수 있어,
+  // 아래 route 는 visibleFields 가 아니라 scopedFields 로 계산한다(경로선이 질러가지 않게).
+  const sharesSettings = (isGlobalMap || keepGlobalChrome) && !onSelectField;
   const displayMode = sharesSettings ? sharedDisplayMode : 'markers';
   const baseMapType = sharesSettings ? sharedBaseMapType : 'roadmap';
   const showBoundary = sharesSettings ? sharedShowBoundary : false;
@@ -279,11 +287,13 @@ export function MapDashboard({
     orderByFieldId,
   ]);
 
-  // 경로선 좌표 — routeFieldIds 순서대로, 좌표가 있고 실제로 보이는 현장만.
-  // 스코프에서 빠졌거나 좌표가 (0,0)인 현장을 끼우면 선이 엉뚱한 곳으로 튄다.
+  // 경로선 좌표 — routeFieldIds 순서대로, 스코프에 있고 좌표가 있는 현장만.
+  // 기준을 visibleFields 가 아니라 scopedFields 로 두는 이유: keepGlobalChrome 이면 공유
+  // 필터(상태·기간·분류)가 살아 있어 중간 목적지가 마커에서 빠질 수 있는데, 그때 경로선까지
+  // 그 점을 건너뛰면 실제로 가지 않은 지름길이 그려진다. 동선은 필터와 무관한 사실이므로 고정.
   const route = useMemo(() => {
     if (!routeFieldIds || routeFieldIds.length < 2) return undefined;
-    const byId = new Map(visibleFields.map((f) => [f.id, f]));
+    const byId = new Map(scopedFields.map((f) => [f.id, f]));
     const pts: { lat: number; lng: number }[] = [];
     for (const id of routeFieldIds) {
       const f = byId.get(id);
@@ -292,7 +302,7 @@ export function MapDashboard({
       pts.push({ lat: f.latitude, lng: f.longitude });
     }
     return pts.length >= 2 ? pts : undefined;
-  }, [routeFieldIds, visibleFields]);
+  }, [routeFieldIds, scopedFields]);
 
   return (
     // 지도가 화면 위까지 꽉 차고, 설정은 우측 상단 떠 있는 '레이어' 버튼 오버레이로.

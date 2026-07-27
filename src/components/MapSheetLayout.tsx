@@ -48,6 +48,8 @@ interface Props {
   // true 면 mapFieldIds(지도 스코프)가 바뀔 때 시트를 내려 지도를 드러낸다.
   // 목록에서 특정 외근을 '지도에서 보기' 했을 때 시트가 지도를 덮고 있으면 아무 일도 안 일어난 것처럼 보인다.
   collapseOnScopeChange?: boolean;
+  // 스코프가 걸려도 지도 검색창·레이어 패널·표시 설정을 유지(메인 탭 안의 임시 포커스용).
+  keepGlobalChrome?: boolean;
   children: ReactNode;
 }
 
@@ -68,6 +70,7 @@ export function MapSheetLayout({
   onSelectField,
   routeFieldIds,
   collapseOnScopeChange = false,
+  keepGlobalChrome = false,
   children,
 }: Props) {
   const { height: screenHeight } = useWindowDimensions();
@@ -93,7 +96,15 @@ export function MapSheetLayout({
   //   콘텐츠 래퍼 높이(아래)도 동일하게 containerHeight 기준 → 둘이 일치해야 목록 잘림도 없음.
   // 분율(%) 대신 px — safe area·검색창 높이는 화면 크기와 무관한 고정 px. middle 55%·PEEK 은 그대로.
   const topGap = insets.top + SHEET_TOP_GAP_EXTRA;
-  const maxSheetHeight = (containerHeight ?? screenHeight) - topGap;
+  // ★ 0 높이 방어 (웹 실측: 시트 화면 → 시트 없는 화면(체크인) 전환 시 크래시).
+  //   전환 중 이 컨테이너의 onLayout 이 height 0 으로 한 번 보고되는데, ?? 폴백은 null 만 막아
+  //   0 이 그대로 통과했다. 그러면 max snap = 0 - 60 = -60 이 되고 gorhom 이
+  //   "Snap point '-60' is invalid" invariant 로 앱을 죽인다.
+  //   측정값이 쓸모없을 땐 screenHeight 로 되돌리고, 그래도 음수면 PEEK 위로 clamp 해
+  //   snapPoints 가 항상 오름차순 양수가 되도록 한다.
+  const measuredHeight =
+    containerHeight != null && containerHeight > 0 ? containerHeight : screenHeight;
+  const maxSheetHeight = Math.max(PEEK_HEIGHT + 1, measuredHeight - topGap);
   const snapPoints = useMemo(
     () => [PEEK_HEIGHT, '55%', maxSheetHeight],
     [maxSheetHeight],
@@ -132,6 +143,7 @@ export function MapSheetLayout({
         selectedFieldIds={selectedFieldIds}
         onSelectField={onSelectField}
         routeFieldIds={routeFieldIds}
+        keepGlobalChrome={keepGlobalChrome}
       />
       <BottomSheet
         ref={sheetRef}
