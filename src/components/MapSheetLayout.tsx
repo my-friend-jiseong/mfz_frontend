@@ -67,35 +67,30 @@ export function MapSheetLayout({
   const insets = useSafeAreaInsets();
   const sheetRef = useRef<BottomSheet>(null);
 
-  // 최대 snap = 화면 높이 − (상단 safe area + 추가 여백). 끝까지 올려도 상단에 지도(카메라)
-  // 영역을 남겨 지도를 완전히 덮지 않는다(사용자 요청). 이전 '100%' 는 컨테이너를 꽉 채워
-  // 지도가 안 보였고, safe area 만(=insets.top) 남기면 상태바 바로 밑에 붙어 답답했음.
-  // 분율(%) 대신 px — safe area 는 화면 크기와 무관한 고정 px 라서. middle 55%·PEEK 은 그대로.
-  const topGap = insets.top + SHEET_TOP_GAP_EXTRA;
-  const snapPoints = useMemo(
-    () => [PEEK_HEIGHT, '55%', screenHeight - topGap],
-    [screenHeight, topGap],
-  );
-
-  // ── 기기 "목록 끝까지 스크롤 안 됨" 버그의 진짜 원인 수정 (2026-06-05, 4번째 조치) ──
-  // gorhom v5 는 시트 콘텐츠 래퍼 높이를 useAnimatedStyle 로 주입하는데
-  // (BottomSheetContent.tsx contentMaskContainerAnimatedStyle), 이 worklet 은 컨테이너
-  // 측정 전 `{}` → 측정 후 `{height,...}` 로 반환 키가 달라진다. Fabric(RN 0.81) +
-  // reanimated 4 에선 나중에 추가된 height 키가 네이티브에 적용되지 않아 래퍼가
-  // auto 높이로 자식 크기만큼 자라고(기기 실측: 화면 773dp 에 래퍼 3763dp), 리스트
-  // 뷰포트 하단이 화면 밖에 렌더되어 마지막 항목들이 도달 불가가 된다. 웹 reanimated
-  // 는 DOM 스타일이라 정상 → 웹 미재현. 데이터(listMineAll)·flex:1·dynamicSizing 은
-  // 전부 무관했다 (1~3차 조치 오진).
-  // 해결: gorhom 의 깨진 height 에 기대지 않고, 컨테이너 실측 높이 - 핸들 높이를
-  // children 래퍼에 명시. gorhom 이 정상일 때 계산하는 값과 동일하므로 (sheetHeight
-  // = 최대 detent '100%' = containerHeight) 웹/수정된 future 버전에서도 무해.
+  // 시트 컨테이너(= 지도 배경 root View) 실측 높이. onRootLayout 로 채워진다.
+  // ★ 중요: 이 컨테이너는 window 전체가 아니라 "하단 탭바 위" 영역이라 screenHeight 보다 작다.
+  //   최대 snap·콘텐츠 높이는 반드시 이 값을 기준으로 계산해야 한다(아래 topGap 주석 참고).
   const [containerHeight, setContainerHeight] = useState<number | null>(null);
   const onRootLayout = useCallback(
     (e: { nativeEvent: { layout: { height: number } } }) =>
       setContainerHeight(e.nativeEvent.layout.height),
     [],
   );
-  // ──────────────────────────────────────────────────────────────────────────
+
+  // 최대 snap = 컨테이너 높이 − (상단 safe area + 추가 여백). 끝까지 올려도 상단에 지도·검색창을
+  // 남겨 지도를 완전히 덮지 않는다(사용자 요청).
+  // ★ 이전 버그(웹 실측으로 확인): screenHeight − topGap 을 썼음. 하지만 gorhom 의 숫자 snap 은
+  //   "컨테이너 하단 기준 시트 높이"이고, 컨테이너는 탭바 위 영역이라 window 보다 ~탭바만큼 짧다.
+  //   window 높이에서 빼면 시트가 컨테이너보다 커져 상단 여백이 topGap 만큼 안 남고 ~12px 로 줄어
+  //   지도 검색창을 절반쯤 덮었다. 컨테이너 높이 기준으로 빼면 상단 offset = topGap 으로 정확히 남음.
+  //   콘텐츠 래퍼 높이(아래)도 동일하게 containerHeight 기준 → 둘이 일치해야 목록 잘림도 없음.
+  // 분율(%) 대신 px — safe area·검색창 높이는 화면 크기와 무관한 고정 px. middle 55%·PEEK 은 그대로.
+  const topGap = insets.top + SHEET_TOP_GAP_EXTRA;
+  const maxSheetHeight = (containerHeight ?? screenHeight) - topGap;
+  const snapPoints = useMemo(
+    () => [PEEK_HEIGHT, '55%', maxSheetHeight],
+    [maxSheetHeight],
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -131,13 +126,17 @@ export function MapSheetLayout({
         handleIndicatorStyle={styles.handle}
       >
         {/* 명시적 height — gorhom 콘텐츠 래퍼 높이 미적용(Fabric+reanimated 4) 우회.
-            시트 최대 높이(screenHeight − topGap)에서 핸들을 뺀 값 = 최대 snap 시 콘텐츠 영역.
-            topGap 을 빼지 않으면 리스트가 시트 하단 밖으로 넘쳐 마지막 항목이 안 잡힘. */}
-        <View
-          style={{
-            height: (containerHeight ?? screenHeight) - topGap - SHEET_HANDLE_HEIGHT,
-          }}
-        >
+            최대 snap(maxSheetHeight)에서 핸들을 뺀 값 = 최대 detent 시 콘텐츠 영역. snapPoints 의
+            max 와 동일 기준(containerHeight)이라 항상 일치 → 리스트가 시트 밖으로 넘쳐 마지막
+            항목이 안 잡히던 문제 없음.
+            ── 왜 명시적 height 인가 (기기 "목록 끝까지 스크롤 안 됨" 4번째 조치, 2026-06-05) ──
+            gorhom v5 는 콘텐츠 래퍼 높이를 useAnimatedStyle 로 주입하는데(BottomSheetContent
+            contentMaskContainerAnimatedStyle), 이 worklet 은 측정 전 `{}` → 측정 후 `{height,...}`
+            로 반환 키가 달라진다. Fabric(RN 0.81)+reanimated 4 에선 나중에 추가된 height 키가
+            네이티브에 적용 안 돼 래퍼가 auto 로 자식만큼 자라고(실측: 화면 773dp 에 래퍼 3763dp)
+            리스트 하단이 화면 밖에 렌더돼 마지막 항목 도달 불가. 웹은 DOM 스타일이라 정상(미재현).
+            데이터·flex:1·dynamicSizing 은 전부 무관했다(1~3차 오진). */}
+        <View style={{ height: maxSheetHeight - SHEET_HANDLE_HEIGHT }}>
           {/* 시트 상단이 이제 status bar 아래(insets.top)에서 시작 → 헤더에 status bar 보정
               불필요, 일반 여백만. */}
           <View style={styles.sheetHeader}>
