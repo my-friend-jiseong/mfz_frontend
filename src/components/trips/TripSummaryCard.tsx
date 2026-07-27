@@ -1,6 +1,5 @@
 import { StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
@@ -13,6 +12,11 @@ interface Props {
   ratio: number;
 }
 
+// 진행 중 외근의 진행률 — 카드가 아니라 한 줄 스트립.
+//
+// 이전엔 Card 안에 경과시간/카운트/8dp 바가 3단으로 쌓여 ~82dp 를 썼는데, 그만큼
+// 현재 목적지 카드가 아래로 밀려 시트를 55%(지도 확보)로 낮추면 잘렸다. 정보량은 그대로
+// 두고 높이만 접는다 — 경과·카운트를 한 행에, 바는 3dp.
 export function TripSummaryCard({
   startedAtLabel,
   arrived,
@@ -21,49 +25,53 @@ export function TripSummaryCard({
   ratio,
 }: Props) {
   return (
-    <Card padding="md" style={styles.card}>
-      {startedAtLabel ? (
-        <View style={styles.elapsedRow}>
-          <Ionicons name="time-outline" size={14} color={colors.textMuted} />
-          <Text variant="caption" weight="semibold" color="textMuted">
-            {startedAtLabel}
-          </Text>
-        </View>
-      ) : null}
-      <View style={styles.progressRow}>
-        <Text variant="bodySm" weight="semibold">
+    <View style={styles.wrap}>
+      <View style={styles.row}>
+        {startedAtLabel ? (
+          <View style={styles.elapsed}>
+            <Ionicons name="time-outline" size={13} color={colors.textMuted} />
+            <Text variant="caption" weight="semibold" color="textMuted" numberOfLines={1}>
+              {startedAtLabel}
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.elapsed} />
+        )}
+        <Text variant="caption" weight="semibold" color="textMuted">
           방문 {arrived}
-          {skipped > 0 ? ` · 건너뜀 ${skipped}` : ''} / 총 {total}곳
+          {skipped > 0 ? ` · 건너뜀 ${skipped}` : ''} / {total}곳
         </Text>
-        <Text variant="bodySm" weight="heavy" color="primary">
+        <Text variant="caption" weight="heavy" color="primary">
           {ratio}%
         </Text>
       </View>
       <View style={styles.track}>
         <View style={[styles.fill, { width: `${ratio}%` }]} />
       </View>
-    </Card>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  card: { gap: spacing.xs, marginBottom: spacing.sm },
-  elapsedRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  progressRow: {
+  wrap: { gap: spacing.xs, marginBottom: spacing.sm },
+  row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  // 경과 라벨만 남는 공간을 차지 — 카운트·% 는 오른쪽에 붙는다.
+  elapsed: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    flexShrink: 1,
   },
   track: {
-    height: 8,
+    height: 3,
     borderRadius: radius.sm,
     backgroundColor: colors.surfaceMuted,
     overflow: 'hidden',
-    marginTop: spacing.xs,
   },
   fill: {
     height: '100%',

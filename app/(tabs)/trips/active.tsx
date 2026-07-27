@@ -9,7 +9,6 @@ import { useFieldStore } from '@/stores/fieldStore';
 import { useVisitStore } from '@/stores/visitStore';
 import { MapSheetLayout, sheetScrollableStyle } from '@/components/MapSheetLayout';
 import { Button } from '@/components/ui/Button';
-import { StickyBottomBar } from '@/components/ui/StickyBottomBar';
 import {
   VISIT_STATUS_BADGE,
   DESTINATION_STATUS_BADGE,
@@ -440,6 +439,26 @@ export default function ActiveTrip() {
     </View>
   );
 
+  // 종료는 외근당 한 번 — 목록 맨 아래에 둔다. 상시 고정 바에 두면 매 순간 주 CTA(길찾기·
+  // 체크인)와 자리를 다툰다. 파괴적 액션을 하단으로 내리는 건 이 저장소의 기존 패턴이다
+  // (ec6ab90 — 외근 삭제를 수정 화면 하단 위험 구역으로).
+  // 미완료가 남았으면 dangerGhost, 전부 처리되면 그때가 종료할 때이므로 destructive 로 승격.
+  const listFooter = (
+    <View style={styles.footer}>
+      <Button
+        onPress={handleEnd}
+        disabled={tripBusy}
+        loading={tripBusy}
+        variant={allDone ? 'destructive' : 'dangerGhost'}
+        size="lg"
+        fullWidth
+        leftIcon="stop-circle"
+      >
+        {allDone ? '외근 종료' : `외근 종료 (미완료 ${pendingDests.length}곳)`}
+      </Button>
+    </View>
+  );
+
   const renderItem = ({ item, index }: { item: Destination; index: number }) => {
     const field = getField(item.fieldId);
     const isCurrent = item.id === currentDest?.id;
@@ -479,7 +498,24 @@ export default function ActiveTrip() {
       <MapSheetLayout
         title="진행 중인 외근"
         onBack={() => safeBack(router)}
-        initialIndex={2}
+        // 55% — 이동 중 쓰는 화면이라 위 절반에 지도를 남긴다. 최대(2)로 열면 지도가 60dp 만
+        // 남아 순번 마커·경로선을 정작 이 화면에서 못 본다. select·order 와 같은 값.
+        initialIndex={1}
+        // 촬영은 외근 중 아무 때나 쓰는 동작이라 상시 노출이 필요한데, 화면 하단에 띄우면
+        // 55% 시트에서 현재 목적지 카드의 길찾기·체크인을 덮는다(실측: 35dp 겹침).
+        // 시트 헤더 우측이 항상 보이면서 주 CTA 와 자리를 다투지 않는 자리다.
+        headerRight={
+          <Button
+            onPress={() => void quickPhoto.start()}
+            variant="secondary"
+            size="sm"
+            leftIcon="camera"
+            loading={quickPhoto.preparing}
+            accessibilityLabel="빠른 촬영 — 가까운 현장에 사진 등록"
+          >
+            촬영
+          </Button>
+        }
         mapFieldIds={tripFieldIds}
         // 목적지 순서 그대로 — 배경 지도에 순번 마커 + 점선 동선.
         routeFieldIds={tripFieldIds}
@@ -489,39 +525,13 @@ export default function ActiveTrip() {
           keyExtractor={(d) => String(d.id)}
           renderItem={renderItem}
           ListHeaderComponent={listHeader}
+          ListFooterComponent={listFooter}
           style={sheetScrollableStyle}
           contentContainerStyle={styles.list}
         />
       </MapSheetLayout>
-      {/* 종료 버튼은 BottomSheet 외부에 둔다 — 시트 내부 absolute 자식의 터치를
-          @gorhom/bottom-sheet 의 pan 제스처가 가로채는 회로 차단. */}
-      <StickyBottomBar>
-        <View style={styles.bottomBarRow}>
-          <Button
-            onPress={handleEnd}
-            disabled={tripBusy}
-            loading={tripBusy}
-            variant="destructive"
-            size="lg"
-            leftIcon="stop-circle"
-            style={styles.bottomBarMain}
-          >
-            {allDone
-              ? '외근 종료'
-              : `외근 종료 (미완료 ${pendingDests.length}곳)`}
-          </Button>
-          <Button
-            onPress={() => void quickPhoto.start()}
-            variant="secondary"
-            size="lg"
-            leftIcon="camera"
-            loading={quickPhoto.preparing}
-            accessibilityLabel="빠른 촬영 — 가까운 현장에 사진 등록"
-          >
-            촬영
-          </Button>
-        </View>
-      </StickyBottomBar>
+      {/* 화면 하단에 떠 있는 바를 두지 않는다 — 시트를 55% 로 내리면 그 바가 현재 목적지
+          카드의 주 CTA 를 덮는다(실측). 종료는 목록 하단(listFooter), 촬영은 시트 헤더 우측. */}
       <QuickPhotoSheet
         session={quickPhoto.session}
         uploading={quickPhoto.uploading}
@@ -542,9 +552,8 @@ export default function ActiveTrip() {
 
 const styles = StyleSheet.create({
   screenRoot: { flex: 1 },
-  bottomBarRow: { flexDirection: 'row', gap: spacing.md },
-  bottomBarMain: { flex: 1 },
   list: { paddingHorizontal: spacing.lg, paddingBottom: 120 },
+  footer: { marginTop: spacing.lg },
   header: { paddingTop: spacing.md, gap: spacing.sm },
   sectionTitleRow: {
     flexDirection: 'row',

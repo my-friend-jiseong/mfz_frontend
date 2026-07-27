@@ -4,10 +4,8 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
 import { colors } from '@/theme/colors';
-import { spacing, radius } from '@/theme/spacing';
+import { spacing } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
-
-type IonName = React.ComponentProps<typeof Ionicons>['name'];
 
 interface Props {
   order: number;
@@ -25,49 +23,14 @@ interface Props {
   pendingCount?: number;
 }
 
-// 1차 액션(체크인) 풀폭 + utility row 3개 mini-card.
-type UtilTone = 'primary' | 'warning' | 'danger';
-
-const UTIL_COLOR: Record<UtilTone, string> = {
-  primary: colors.primary,
-  warning: colors.warning,
-  danger: colors.danger,
-};
-
-function UtilAction({
-  icon,
-  label,
-  onPress,
-  tone = 'primary',
-  loading,
-}: {
-  icon: IonName;
-  label: string;
-  onPress: () => void;
-  tone?: UtilTone;
-  loading?: boolean;
-}) {
-  const c = UTIL_COLOR[tone];
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={loading}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      style={({ pressed }) => [
-        styles.util,
-        pressed && !loading && { opacity: opacity.pressed },
-        loading && { opacity: opacity.disabled },
-      ]}
-    >
-      <Ionicons name={icon} size={22} color={c} />
-      <Text variant="caption" weight="semibold" style={{ color: c }}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
+// 액션 배치는 실사용 순서를 그대로 따른다 — 찾아간다(길찾기) → 도착해서 기록한다(체크인).
+//
+// 이전엔 체크인만 풀폭 버튼이고 길찾기·재최적화·건너뛰기가 22dp 아이콘 3분할 타일이었다.
+// 이동 중 가장 자주 누르는 길찾기가 가장 작게 눌려 있던 셈이라, 길찾기를 본문 버튼으로
+// 올려 체크인과 나란히 두고 보조 동작(재최적화·건너뛰기)만 작은 텍스트 행으로 내렸다.
+//
+// 도착 여부를 자동으로 감지해 primary 를 바꾸는 방식은 위치 추적(watch)이 필요해 이번 범위 밖 —
+// 고정 배치로 두되 순서로 맥락을 준다.
 export function CurrentDestCard({
   order,
   positionLabel,
@@ -83,10 +46,35 @@ export function CurrentDestCard({
 }: Props) {
   const showReop = onReoptimize && (pendingCount ?? 0) >= 2;
   return (
-    <Card padding="lg" style={styles.card}>
-      <Text variant="caption" weight="bold" color="primary">
-        현재 목적지 · {positionLabel ?? `${order}번째`}
-      </Text>
+    <Card padding="md" style={styles.card}>
+      {/* 보조 액션을 캡션과 같은 행에 올린다 — 별도 행으로 두면 카드가 191dp 가 되어
+          55% 시트에서 하단 고정 바가 길찾기·체크인을 덮었다(실측). 재최적화는 아이콘만
+          (드물게 쓰는 동작, accessibilityLabel 로 보완), 건너뛰기는 라벨 유지. */}
+      <View style={styles.capRow}>
+        <Text variant="caption" weight="bold" color="primary" numberOfLines={1} style={styles.cap}>
+          현재 목적지 · {positionLabel ?? `${order}번째`}
+        </Text>
+        {showReop ? (
+          <Button
+            onPress={onReoptimize}
+            variant="ghost"
+            size="sm"
+            leftIcon={optimizing ? 'hourglass-outline' : 'sparkles'}
+            loading={optimizing}
+            accessibilityLabel="남은 목적지 순서 다시 최적화"
+          >
+            {''}
+          </Button>
+        ) : null}
+        <Button
+          onPress={onSkip}
+          variant="dangerGhost"
+          size="sm"
+          leftIcon="play-skip-forward"
+        >
+          건너뛰기
+        </Button>
+      </View>
       {onShowField ? (
         <Pressable
           onPress={onShowField}
@@ -111,37 +99,24 @@ export function CurrentDestCard({
       )}
       {addressDetail ? <Text variant="bodySm">{addressDetail}</Text> : null}
 
-      <Button
-        onPress={onCheckIn}
-        leftIcon="checkmark-circle"
-        style={styles.checkIn}
-        fullWidth
-      >
-        체크인
-      </Button>
-
-      <View style={styles.utilRow}>
-        <UtilAction
-          icon="navigate"
-          label="길찾기"
-          tone="primary"
+      <View style={styles.mainRow}>
+        <Button
           onPress={onNavigate}
-        />
-        {showReop ? (
-          <UtilAction
-            icon="sparkles"
-            label={optimizing ? '최적화 중' : '다시 최적화'}
-            tone="warning"
-            onPress={onReoptimize}
-            loading={optimizing}
-          />
-        ) : null}
-        <UtilAction
-          icon="play-skip-forward"
-          label="건너뛰기"
-          tone="danger"
-          onPress={onSkip}
-        />
+          variant="secondary"
+          size="md"
+          leftIcon="navigate"
+          style={styles.mainBtn}
+        >
+          길찾기
+        </Button>
+        <Button
+          onPress={onCheckIn}
+          size="md"
+          leftIcon="checkmark-circle"
+          style={styles.mainBtn}
+        >
+          체크인
+        </Button>
       </View>
     </Card>
   );
@@ -160,19 +135,16 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   titleText: { flex: 1 },
-  checkIn: { marginTop: spacing.sm },
-  utilRow: {
+  capRow: {
     flexDirection: 'row',
-    marginTop: spacing.md,
-    gap: spacing.sm,
-  },
-  util: {
-    flex: 1,
     alignItems: 'center',
-    gap: 4,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.sm,
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
+    gap: spacing.xs,
   },
+  cap: { flex: 1 },
+  mainRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  mainBtn: { flex: 1 },
 });

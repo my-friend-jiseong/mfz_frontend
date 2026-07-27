@@ -36,6 +36,9 @@ const SHEET_TOP_GAP_EXTRA = spacing.sm + MAP_SEARCHBAR_HEIGHT + spacing.sm; // 6
 interface Props {
   title: string;
   onBack?: () => void;
+  // 시트 헤더 우측 액션 슬롯. 화면 하단에 떠 있는 StickyBottomBar 는 시트를 55% 로 내린
+  // 화면에서 시트 콘텐츠(주 CTA)를 덮으므로, 상시 노출이 필요한 보조 액션은 여기에 둔다.
+  headerRight?: ReactNode;
   initialIndex?: number; // 마운트/포커스 시 이 index로 reset. 미지정 시 2(최대)
   // 지도 배경에 노출할 현장 화이트리스트. 외근 상세/진행 중 화면에서
   // 해당 외근의 destinations.fieldId 만 넘기면 다른 현장이 흐려지지 않음.
@@ -64,6 +67,7 @@ interface Props {
 export function MapSheetLayout({
   title,
   onBack,
+  headerRight,
   initialIndex = 2,
   mapFieldIds,
   selectedFieldIds,
@@ -201,7 +205,10 @@ export function MapSheetLayout({
                 <Ionicons name="chevron-back" size={22} color={colors.text} />
               </Pressable>
             ) : null}
-            <Text variant="h3">{title}</Text>
+            <Text variant="h3" style={styles.headerTitle}>
+              {title}
+            </Text>
+            {headerRight}
           </View>
           <View style={styles.content}>{children}</View>
         </View>
@@ -233,6 +240,8 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
     gap: spacing.sm,
   },
+  // 제목이 남는 폭을 먹어 headerRight 가 오른쪽 끝에 붙는다.
+  headerTitle: { flex: 1 },
   backBtn: {
     padding: 2,
   },
