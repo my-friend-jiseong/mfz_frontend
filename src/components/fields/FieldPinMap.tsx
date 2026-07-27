@@ -15,6 +15,14 @@ interface Props {
   // 마운트 시점 값만 사용 (후속 prop 변경 무시).
   resolveInitialAddress?: boolean;
   height?: number;
+  // 지도에 손이 닿아 있는 동안 true. 부모 ScrollView 의 scrollEnabled 를 끄는 데 쓴다.
+  //
+  // 안드로이드에서 ScrollView 안 WebView 지도를 끌면 부모가 세로 드래그를 먼저 가로채
+  // 지도가 pan 을 아예 못 받는다. RN 쪽 responder 훅(onStartShouldSetResponderCapture)은
+  // WebView 자식이 있으면 신뢰도가 낮아(캡처하면 지도가 터치를 못 받고, 안 하면 release 가
+  // 안 온다), 터치가 실제로 떨어지는 WebView 내부에서 신호를 올려보낸다.
+  // 웹은 카카오 SDK 가 컨테이너에 touch-action:none 을 걸어 경합이 없으므로 호출하지 않는다.
+  onInteractionChange?: (active: boolean) => void;
 }
 
 // 마운트 후 임의 시점에 핀 이동 + 역지오코딩을 트리거하는 명령형 핸들
@@ -27,7 +35,7 @@ export interface FieldPinMapHandle {
 // 현장 등록/수정에서 핀 드래그로 좌표 미세 조정용 단일 마커 지도.
 // 일반 MapDashboard 와 분리 — 필터/그룹/myLocation 등 무관, 단일 마커만 표시.
 export const FieldPinMap = forwardRef<FieldPinMapHandle, Props>(function FieldPinMap(
-  { lat, lng, onDragEnd, resolveInitialAddress = false, height = 220 },
+  { lat, lng, onDragEnd, resolveInitialAddress = false, height = 220, onInteractionChange },
   ref,
 ) {
   const webRef = useRef<WebView>(null);
@@ -64,6 +72,35 @@ export const FieldPinMap = forwardRef<FieldPinMapHandle, Props>(function FieldPi
     webRef.current?.injectJavaScript(js);
   }, [lat, lng]);
 
+  // 안전장치 — touchend/touchcancel 이 유실되거나 WebView 가 리로드되면 active 가 true 로
+  // 굳어 화면이 영영 스크롤 불가가 된다(원래 버그보다 나쁘다). 마지막 touchstart 로부터
+  // 이 시간 안에 해제 신호가 없으면 스스로 푼다. 손가락을 오래 얹고 지도를 끄는 경우가 있어
+  // 짧게 잡지 않는다.
+  const releaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const setInteracting = (active: boolean) => {
+    if (releaseTimerRef.current) {
+      clearTimeout(releaseTimerRef.current);
+      releaseTimerRef.current = null;
+    }
+    onInteractionChange?.(active);
+    if (active) {
+      releaseTimerRef.current = setTimeout(() => {
+        releaseTimerRef.current = null;
+        onInteractionChange?.(false);
+      }, 3000);
+    }
+  };
+  // 언마운트 시 반드시 풀어준다 — 지도가 사라진 뒤에도 스크롤이 잠겨 있으면 복구 수단이 없다.
+  useEffect(
+    () => () => {
+      if (releaseTimerRef.current) clearTimeout(releaseTimerRef.current);
+      onInteractionChange?.(false);
+    },
+    // 마운트/언마운트 1회 — onInteractionChange 는 호출부에서 setState 라 안정적.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
   useImperativeHandle(ref, () => ({
     resolveAddress: (la: number, ln: number) => {
       if (!Number.isFinite(la) || !Number.isFinite(ln)) return;
@@ -89,6 +126,10 @@ export const FieldPinMap = forwardRef<FieldPinMapHandle, Props>(function FieldPi
           try {
             const msg = JSON.parse(event.nativeEvent.data);
             const okCoord = typeof msg.lat === 'number' && typeof msg.lng === 'number';
+            if (msg.type === 'mapTouch') {
+              setInteracting(!!msg.active);
+              return;
+            }
             if (msg.type === 'pinDragEnd' && okCoord) {
               lastEmittedRef.current = { lat: msg.lat, lng: msg.lng };
               onDragEnd(msg.lat, msg.lng);
@@ -121,6 +162,11 @@ function buildHtml(
 <script>
 (function(){
   function postMsg(m){var s=JSON.stringify(m);if(window.ReactNativeWebView){window.ReactNativeWebView.postMessage(s);}else if(window.parent&&window.parent!==window){window.parent.postMessage(s,'*');}}
+  // 부모 ScrollView 가 세로 드래그를 가로채는 것을 막기 위한 신호. 지도 동작 자체는 건드리지
+  // 않도록 passive 리스너로만 붙인다. SDK 로드 실패해도 스크롤 잠금이 남지 않게 load 밖에 둔다.
+  document.addEventListener('touchstart', function(){ postMsg({ type:'mapTouch', active:true }); }, {passive:true});
+  document.addEventListener('touchend', function(){ postMsg({ type:'mapTouch', active:false }); }, {passive:true});
+  document.addEventListener('touchcancel', function(){ postMsg({ type:'mapTouch', active:false }); }, {passive:true});
   kakao.maps.load(function(){
     var map = new kakao.maps.Map(document.getElementById('map'), {
       center: new kakao.maps.LatLng(${lat}, ${lng}),

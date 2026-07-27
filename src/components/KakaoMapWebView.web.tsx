@@ -190,6 +190,10 @@ interface Props {
   onMarkerPress?: (fieldId: string) => void;
   // 지도 뷰(center+level)가 정착할 때마다 보고 — 상위가 기억해 재마운트 시 복원에 사용.
   onViewChange?: (view: { lat: number; lng: number; level: number }) => void;
+  // 네이티브 전용 — shape 만 맞춘다(호출하지 않음). 안드로이드는 부모 ScrollView 가 지도
+  // 드래그를 가로채 이 신호로 스크롤을 잠그지만, 웹은 카카오 SDK 가 컨테이너에
+  // touch-action:none 을 걸어 경합이 없다. 여기서 호출하면 오히려 웹 스크롤이 잠긴다.
+  onInteractionChange?: (active: boolean) => void;
 }
 
 const DEFAULT_CENTER = { lat: 35.17, lng: 129.07 };

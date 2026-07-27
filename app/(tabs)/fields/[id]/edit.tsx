@@ -117,6 +117,8 @@ export default function EditField() {
   // 현 위치로 이동 — 수정 화면은 기존 주소가 출발점이므로 자동 측위는 하지 않고 버튼만.
   const [locating, setLocating] = useState(false);
   const mapRef = useRef<FieldPinMapHandle>(null);
+  // 지도 조작 중 부모 ScrollView 잠금 — 안드로이드 제스처 경합 해소용.
+  const [mapBusy, setMapBusy] = useState(false);
 
   // 장소(키워드) 검색 — new.tsx 와 동일하게 백엔드 주소검색(도로명)과 병행해 POI 도 잡는다.
   const { search: searchPlaces, element: placeSearchBridge } = useKakaoPlaceSearch();
@@ -396,7 +398,11 @@ export default function EditField() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       {placeSearchBridge}
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        keyboardShouldPersistTaps="handled"
+        scrollEnabled={!mapBusy}
+      >
         {/* 검색·현위치·지도 단일 화면 — new.tsx 와 동일 패턴, 주소 재검색과 핀 이동이 실시간 연동 */}
         <Input
           label="주소 · 건물명 · 장소명 검색"
@@ -554,6 +560,9 @@ export default function EditField() {
         </Text>
         <FieldPinMap
           ref={mapRef}
+          // 지도에 손이 닿아 있는 동안 화면 스크롤을 끈다 — 안드로이드에서 부모
+          // ScrollView 가 지도 드래그를 가로채던 문제(FieldPinMap 주석 참고).
+          onInteractionChange={setMapBusy}
           lat={pinLat}
           lng={pinLng}
           onDragEnd={(la, ln, addr) => {

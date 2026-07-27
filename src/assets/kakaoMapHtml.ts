@@ -68,6 +68,12 @@ export function buildKakaoMapHtml({
   // RN WebView와 웹 iframe 양쪽에서 메시지 전송 가능한 브리지 스크립트
   const postMsgFn = `function postMsg(msg){var s=JSON.stringify(msg);if(window.ReactNativeWebView){window.ReactNativeWebView.postMessage(s);}else if(window.parent&&window.parent!==window){window.parent.postMessage(s,'*');}}`;
 
+  // 지도에 손이 닿아 있는 동안을 상위(RN)에 알리는 신호. 스크롤 화면 안에 박힌 지도에서
+  // 부모 ScrollView 가 세로 드래그를 가로채는 것을 막는 데 쓴다(KakaoMapWebView
+  // onInteractionChange 주석 참고). passive 리스너라 지도 자체 제스처는 그대로 동작한다.
+  // 구독자가 없는 화면(배경 지도 등)에선 메시지가 그냥 무시된다.
+  const touchBridgeFn = `document.addEventListener('touchstart',function(){postMsg({type:'mapTouch',active:true});},{passive:true});document.addEventListener('touchend',function(){postMsg({type:'mapTouch',active:false});},{passive:true});document.addEventListener('touchcancel',function(){postMsg({type:'mapTouch',active:false});},{passive:true});`;
+
   if (!kakaoJsKey) {
     return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
@@ -137,6 +143,9 @@ MARKERS.forEach(function(m){
   var FIT_TO_MARKERS = ${fitToMarkers ? 'true' : 'false'};
   var INTERACTIVE = ${interactive ? 'true' : 'false'};
   ${postMsgFn}
+  // 조작 불가 지도(interactive=false, 예: 보고서 상세 위치도)는 신호를 보내지 않는다 —
+  // 끌 수 없는 지도 때문에 부모 스크롤이 잠기면 손해만 남는다.
+  ${interactive ? touchBridgeFn : ''}
 
   kakao.maps.load(function(){
     var container = document.getElementById('map');

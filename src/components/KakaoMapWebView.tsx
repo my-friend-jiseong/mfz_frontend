@@ -79,6 +79,11 @@ interface Props {
   // false 면 드래그/줌 비활성 — BottomSheet 안 등 pan 충돌 회피용 정적 위치도.
   interactive?: boolean;
   onMarkerPress?: (fieldId: string) => void;
+  // 지도에 손이 닿아 있는 동안 true — 스크롤 화면 안에 박힌 지도에서 부모 ScrollView 의
+  // scrollEnabled 를 끄는 데 쓴다. 안드로이드는 부모가 세로 드래그를 먼저 가로채 지도가
+  // pan 을 못 받는데, 터치가 실제로 떨어지는 WebView 내부에서 신호를 올려 이를 푼다.
+  // interactive=false 면 HTML 이 신호 자체를 안 보낸다(kakaoMapHtml 주석 참고).
+  onInteractionChange?: (active: boolean) => void;
   // 타일 페인트 완료 — 보고서 위치도 네이티브 캡처 타이밍용(초기·pan/zoom 마다 발화).
   onTilesLoaded?: () => void;
 }
@@ -110,6 +115,7 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
       onMarkerPress,
       onTilesLoaded,
       onViewChange,
+      onInteractionChange,
     }: Props,
     ref,
   ) {
@@ -188,6 +194,36 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
   const inject = useCallback((js: string) => {
     webRef.current?.injectJavaScript(`${js};true;`);
   }, []);
+
+  // 안전장치 — touchend/touchcancel 이 유실되거나 WebView 가 리로드되면 active 가 true 로
+  // 굳어 부모 화면이 영영 스크롤 불가가 된다(원래 버그보다 나쁘다). 마지막 touchstart 로부터
+  // 이 시간 안에 해제 신호가 없으면 스스로 푼다.
+  const releaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const setInteracting = useCallback(
+    (active: boolean) => {
+      if (releaseTimerRef.current) {
+        clearTimeout(releaseTimerRef.current);
+        releaseTimerRef.current = null;
+      }
+      onInteractionChange?.(active);
+      if (active) {
+        releaseTimerRef.current = setTimeout(() => {
+          releaseTimerRef.current = null;
+          onInteractionChange?.(false);
+        }, 3000);
+      }
+    },
+    [onInteractionChange],
+  );
+  // 언마운트 시 반드시 풀어준다 — 지도가 사라진 뒤 스크롤이 잠겨 있으면 복구 수단이 없다.
+  useEffect(
+    () => () => {
+      if (releaseTimerRef.current) clearTimeout(releaseTimerRef.current);
+      onInteractionChange?.(false);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
 
   // 명령형 복구 — '내 위치' 버튼이 사용자가 드래그한 지도를 다시 내 위치로 끌어온다.
   // center prop 재대입은 같은 값이면 effect 가 안 도므로(드래그 후 무반응) imperative 로 처리.
@@ -311,6 +347,10 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
         onMessage={(event) => {
           try {
             const msg = JSON.parse(event.nativeEvent.data);
+            if (msg.type === 'mapTouch') {
+              setInteracting(!!msg.active);
+              return;
+            }
             if (msg.type === 'ready') {
               setReady(true);
             } else if (msg.type === 'tilesloaded') {

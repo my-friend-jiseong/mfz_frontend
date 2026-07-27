@@ -13,6 +13,10 @@ interface Props {
   // 마운트 시점 값만 사용 (후속 prop 변경 무시).
   resolveInitialAddress?: boolean;
   height?: number;
+  // 네이티브 전용 — shape 만 맞춘다(호출하지 않음). 안드로이드는 부모 ScrollView 가 지도
+  // 드래그를 가로채 이 신호로 스크롤을 잠그지만, 웹은 카카오 SDK 가 컨테이너에
+  // touch-action:none 을 걸어 경합이 없다. 여기서 호출하면 오히려 웹 스크롤이 잠긴다.
+  onInteractionChange?: (active: boolean) => void;
 }
 
 // 마운트 후 임의 시점에 핀 이동 + 역지오코딩을 트리거하는 명령형 핸들

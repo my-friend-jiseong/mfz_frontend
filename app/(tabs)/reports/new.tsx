@@ -51,6 +51,8 @@ export default function ComposeReport() {
   const [submitting, setSubmitting] = useState(false);
   const [tripPickerOpen, setTripPickerOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 위치도 조작 중 부모 ScrollView 잠금 — 안드로이드 제스처 경합 해소용.
+  const [mapBusy, setMapBusy] = useState(false);
 
   const myTrips = useMemo(() => {
     if (!userId) return [];
@@ -211,7 +213,11 @@ export default function ComposeReport() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        keyboardShouldPersistTaps="handled"
+        scrollEnabled={!mapBusy}
+      >
         <View style={styles.headerRow}>
           <Pressable
             onPress={() => safeBack(router)}
@@ -302,7 +308,13 @@ export default function ComposeReport() {
               위치도 — 현장 {previewMarkers.length}곳
             </Text>
             <View style={styles.previewMap}>
-              <KakaoMapWebView markers={previewMarkers} fitToMarkers />
+              {/* 위치도는 자유 조작이 기능이라 interactive 를 끄지 않는다. 대신 손이 닿아
+                  있는 동안만 부모 ScrollView 를 잠가 드래그를 지도에 넘긴다(안드로이드). */}
+              <KakaoMapWebView
+                markers={previewMarkers}
+                fitToMarkers
+                onInteractionChange={setMapBusy}
+              />
             </View>
           </>
         ) : null}

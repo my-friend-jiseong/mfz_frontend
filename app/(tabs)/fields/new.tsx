@@ -124,6 +124,8 @@ export default function NewField() {
   // (기본 중심 fallback 은 임의 주소 자동 기입 금지 — 사용자가 고르지 않은 주소가 등록될 위험)
   const [resolveOnMount, setResolveOnMount] = useState(false);
   const mapRef = useRef<FieldPinMapHandle>(null);
+  // 지도 조작 중 부모 ScrollView 잠금 — 안드로이드 제스처 경합 해소용.
+  const [mapBusy, setMapBusy] = useState(false);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [categories, setCategories] = useState<string[]>([]);
   const [detail, setDetail] = useState('');
@@ -384,7 +386,11 @@ export default function NewField() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       {placeSearchBridge}
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        keyboardShouldPersistTaps="handled"
+        scrollEnabled={!mapBusy}
+      >
         <Text variant="h3" style={styles.title}>
           현장 등록
         </Text>
@@ -539,6 +545,9 @@ export default function NewField() {
             </Text>
             <FieldPinMap
               ref={mapRef}
+              // 지도에 손이 닿아 있는 동안 화면 스크롤을 끈다 — 안드로이드에서 부모
+              // ScrollView 가 지도 드래그를 가로채던 문제(FieldPinMap 주석 참고).
+              onInteractionChange={setMapBusy}
               lat={selected.lat}
               lng={selected.lng}
               // 현 위치 직행 마운트에서만 초기 역지오코딩 (마운트 시점 값만 사용).
