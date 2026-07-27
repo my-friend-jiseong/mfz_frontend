@@ -79,7 +79,12 @@ export const useVisitStore = create<VisitState>((set, get) => ({
         fieldId: res.fieldId,
         visitedAt: res.visitedAt,
       };
-      set((s) => ({ visits: [...s.visits, v] }));
+      // 무조건 append 하면 안 된다 — 백엔드는 (외근, 현장) 기준 멱등이라 체크인 화면에
+      // 다시 들어오면 같은 visitId 를 돌려준다(실측: 재진입 3회에도 방문 1건). 그때마다
+      // 같은 id 행이 쌓이면 visits 를 세는 쪽(외근 목록 카드의 '방문 N', 주간 요약)이
+      // 부풀려진다. 지금은 trip detail 진입 시 syncFromTimeline → mergeVisits 가 id 로
+      // 접어줘 가려져 있을 뿐이라, 동일 헬퍼로 여기서부터 접는다.
+      set((s) => ({ visits: mergeVisits(s.visits, [v]) }));
       return { ok: true, visit: v };
     } catch (e) {
       return { ok: false, error: describeError(e) };
