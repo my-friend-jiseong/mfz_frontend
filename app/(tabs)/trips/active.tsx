@@ -328,8 +328,13 @@ export default function ActiveTrip() {
       return;
     }
     if ('needsConfirm' in r) {
+      // 재확인 다이얼로그를 띄우는 동안엔 플래그를 내려둔다 — 안드로이드 back 으로 Alert 를
+      // 그냥 닫으면 어느 버튼의 onPress 도 안 돌아 플래그가 true 로 남고, 이후 외근이 다른
+      // 경로로 종료되면 이 화면이 영원히 빈 화면(null)이 된다. 실제 종료 호출 직전에만 켠다.
+      endingRef.current = false;
       const confirmEnd = async () => {
         if (__DEV__) console.log('[trips/end] confirmEnd → endTrip(true)');
+        endingRef.current = true;
         const force = await endTrip(true);
         if (__DEV__) console.log('[trips/end] confirmEnd result', force);
         if (force.ok) {
@@ -360,19 +365,12 @@ export default function ActiveTrip() {
       if (Platform.OS === 'web') {
         if (window.confirm(r.message)) {
           void confirmEnd();
-        } else {
-          // 사용자가 재확인을 취소 — 종료 안 함.
-          endingRef.current = false;
         }
       } else {
+        // 취소·바깥 닫기 모두 별도 처리가 필요 없다 — 위에서 이미 플래그를 내려뒀고
+        // confirmEnd 만 다시 켠다.
         Alert.alert('외근 종료 확인', r.message, [
-          {
-            text: '취소',
-            style: 'cancel',
-            onPress: () => {
-              endingRef.current = false;
-            },
-          },
+          { text: '취소', style: 'cancel' },
           { text: '종료', style: 'destructive', onPress: () => void confirmEnd() },
         ]);
       }

@@ -264,6 +264,11 @@ MARKERS.forEach(function(m){
       // 클러스터(count>1)도 순번을 살린다 — 같은 건물에 목적지가 2곳이면 예전엔 카운트 뱃지만
       // 남아 방문 순서를 아예 못 읽었다. 원 안에는 클러스터에서 가장 빠른 순번(orderOverride),
       // 우상단에는 기존 카운트 뱃지를 함께 둬 "여기서 N곳, 첫 순번은 M" 으로 읽히게 한다.
+      //
+      // ★ 라벨에 status 뱃지(조치 전/중/완료)를 반드시 유지할 것. 순번 마커는 형상을 원으로
+      //   고정하므로, 라벨에서까지 status 텍스트를 빼면 status 가 '색 단독' 인코딩이 되어
+      //   KWCAG 1.4.1 을 어긴다(초기 구현이 실제로 그랬다). 라벨이 안 뜨는 넓은 줌에서는
+      //   여전히 색만 남는 한계가 있어, 외근 화면은 목록에서 status 를 텍스트로 함께 제공한다.
       var ord = (orderOverride !== undefined && orderOverride !== null) ? orderOverride : m.order;
       if (typeof ord === 'number') {
         var ordCount = count > 1
@@ -274,7 +279,7 @@ MARKERS.forEach(function(m){
           + '<div style="position:absolute;top:0;left:0;width:26px;height:26px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:800;pointer-events:none;">' + ord + '</div>'
           + ordCount
           + selCheck
-          + (showLabel ? '<div style="position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:4px;background:#fff;padding:2px 6px;border-radius:8px;font-size:11px;font-weight:600;color:#0f172a;border:1px solid ' + color + ';white-space:nowrap;box-shadow:0 1px 2px rgba(0,0,0,0.15);">' + (m.label||'') + '</div>' : '')
+          + (showLabel ? '<div style="position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:4px;background:#fff;padding:2px 6px;border-radius:8px;font-size:11px;font-weight:600;color:#0f172a;border:1px solid ' + color + ';white-space:nowrap;box-shadow:0 1px 2px rgba(0,0,0,0.15);">' + (badge ? '<span style="color:' + color + ';">' + badge + '</span> · ' : '') + (m.label||'') + '</div>' : '')
           + '</div>';
       }
       var svg;

@@ -91,14 +91,14 @@ function buildMarkerHtml(
   // 외근 순번 마커 — 형상 대신 '숫자를 새긴 원'. 정보 전달자가 형상→숫자로 바뀔 뿐이라
   // 색 단독 인코딩이 되지는 않는다. 클러스터도 순번을 살린다 — 원 안엔 구성원 중 가장 빠른
   // 순번(orderOverride), 우상단엔 카운트 뱃지. (네이티브 HTML 과 동일 규칙)
+  //
+  // ★ 라벨은 status 뱃지를 포함한 labelHtml 을 그대로 쓴다 — 순번 마커는 형상을 원으로
+  //   고정하므로 라벨에서까지 status 텍스트를 빼면 status 가 색 단독이 된다(KWCAG 1.4.1).
   const ord = orderOverride ?? m.order;
   if (typeof ord === 'number') {
     const orderSvg = `<svg width="26" height="26" viewBox="0 0 36 36"><circle cx="18" cy="18" r="14" fill="${color}" stroke="#fff" stroke-width="2"/></svg>`;
     const orderNum = `<div style="position:absolute;top:0;left:0;width:26px;height:26px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:800;pointer-events:none;">${ord}</div>`;
-    const plainLabel = showLabel
-      ? `<div style="position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:4px;background:#fff;padding:2px 6px;border-radius:8px;font-size:11px;font-weight:600;color:#0f172a;border:1px solid ${color};white-space:nowrap;box-shadow:0 1px 2px rgba(0,0,0,0.15);">${m.label || ''}</div>`
-      : '';
-    return `<div style="position:relative;width:26px;height:26px;cursor:pointer;">${hlRing}${selRing}${orderSvg}${orderNum}${countBadge}${selCheck}${plainLabel}</div>`;
+    return `<div style="position:relative;width:26px;height:26px;cursor:pointer;">${hlRing}${selRing}${orderSvg}${orderNum}${countBadge}${selCheck}${labelHtml}</div>`;
   }
   return `<div style="position:relative;width:26px;height:26px;cursor:pointer;">${hlRing}${selRing}${svg}${countBadge}${selCheck}${labelHtml}</div>`;
 }
