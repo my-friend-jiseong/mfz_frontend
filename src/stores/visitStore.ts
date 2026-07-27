@@ -79,11 +79,17 @@ export const useVisitStore = create<VisitState>((set, get) => ({
         fieldId: res.fieldId,
         visitedAt: res.visitedAt,
       };
-      // 무조건 append 하면 안 된다 — 백엔드는 (외근, 현장) 기준 멱등이라 체크인 화면에
-      // 다시 들어오면 같은 visitId 를 돌려준다(실측: 재진입 3회에도 방문 1건). 그때마다
-      // 같은 id 행이 쌓이면 visits 를 세는 쪽(외근 목록 카드의 '방문 N', 주간 요약)이
-      // 부풀려진다. 지금은 trip detail 진입 시 syncFromTimeline → mergeVisits 가 id 로
-      // 접어줘 가려져 있을 뿐이라, 동일 헬퍼로 여기서부터 접는다.
+      // 백엔드는 (외근, 현장) 기준 멱등이라 체크인 화면에 다시 들어오면 같은 visitId 를
+      // 돌려준다(실측: 재진입 3회에도 방문 1건). 무조건 append 하면 같은 id 행이 쌓여
+      // visits 를 세는 쪽(외근 목록 카드의 '방문 N', 주간 요약)이 부풀려진다.
+      //
+      // ★ 이미 있는 visit 이면 스토어를 건드리지 않고 그대로 돌려준다. mergeVisits 로 덮으면
+      //   안 되는 이유: 그 헬퍼는 incoming 이 이기고 fieldId·reason 만 보존한다. 반면 위 v 의
+      //   status 는 '체크인 직후 백엔드 초기값' 가정으로 박은 'completed' 라, 사용자가 이미
+      //   '부재'·'수취거절' 로 저장해둔 현장에 다시 들어오면 그 결과가 completed 로 되돌아간다.
+      //   (append 시절엔 find() 가 첫 행을 집어 우연히 보존되던 자리 — 리뷰에서 발견)
+      const existing = get().visits.find((x) => x.id === v.id);
+      if (existing) return { ok: true, visit: existing };
       set((s) => ({ visits: mergeVisits(s.visits, [v]) }));
       return { ok: true, visit: v };
     } catch (e) {
