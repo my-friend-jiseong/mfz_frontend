@@ -17,12 +17,9 @@ import { spacing, radius } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
 import { FilterChip } from '@/components/ui/FilterChip';
 import { StickyBottomBar } from '@/components/ui/StickyBottomBar';
-import {
-  FIELD_STATUS_VALUES,
-  FIELD_STATUS_LABEL,
-  type Field,
-  type FieldStatus,
-} from '@/types/entities';
+import { FieldCard } from '@/components/FieldCard';
+import { FieldFilterBar } from '@/components/fields/FieldFilterBar';
+import { type Field, type FieldStatus } from '@/types/entities';
 import { collectFieldFacets, applyFieldFilters, mergeCategoryNames } from '@/utils/fieldFacets';
 import { useCategoryStore } from '@/stores/categoryStore';
 
@@ -37,10 +34,12 @@ export default function NewTripSelect() {
     [allFields, userId],
   );
 
+  // 필터는 현장 목록 탭과 동일하게 그룹당 단일 선택 — 같은 FieldFilterBar 를 재사용해
+  // 두 화면의 조작법을 하나로 통일한다(이전엔 여기만 다중선택 칩 3줄이었음).
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<FieldStatus[]>([]);
-  const [projectFilter, setProjectFilter] = useState<string[]>([]);
-  const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
+  const [status, setStatus] = useState<FieldStatus | null>(null);
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const [category, setCategory] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const { projects: availableProjects, categories: facetCategories } = useMemo(
@@ -57,12 +56,14 @@ export default function NewTripSelect() {
     () =>
       applyFieldFilters(myFields, {
         search,
-        statuses: statusFilter,
-        projectIds: projectFilter,
-        categories: categoryFilter,
+        statuses: status ? [status] : undefined,
+        projectIds: projectId ? [projectId] : undefined,
+        categories: category ? [category] : undefined,
       }),
-    [myFields, statusFilter, projectFilter, categoryFilter, search],
+    [myFields, status, projectId, category, search],
   );
+
+  const hasFilter = status !== null || projectId !== null || category !== null;
 
   // 선택된 현장 요약 — id → field (주소) lookup. 해제 chip 의 X 클릭으로 즉시 토글.
   // hooks 는 early return (activeTripId !== null 분기) 위에 모아둔다 — order/active 화면에서
@@ -82,19 +83,6 @@ export default function NewTripSelect() {
   const toggle = (id: string) =>
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-    );
-
-  const toggleStatus = (s: FieldStatus) =>
-    setStatusFilter((prev) =>
-      prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s],
-    );
-  const toggleProject = (id: string) =>
-    setProjectFilter((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-    );
-  const toggleCategory = (c: string) =>
-    setCategoryFilter((prev) =>
-      prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c],
     );
 
   // 현재 보이는 (필터링된) 현장이 모두 선택됐는지 — 전체 선택 토글 상태
@@ -137,37 +125,16 @@ export default function NewTripSelect() {
     );
   }
 
-  const renderItem = ({ item }: { item: Field }) => {
-    const checked = selectedIds.includes(item.id);
-    return (
-      <Pressable
-        onPress={() => toggle(item.id)}
-        accessibilityRole="checkbox"
-        accessibilityState={{ checked }}
-        style={({ pressed }) => [
-          styles.row,
-          checked && styles.rowChecked,
-          pressed && { opacity: opacity.pressed },
-        ]}
-      >
-        <Ionicons
-          name={checked ? 'checkbox' : 'square-outline'}
-          size={22}
-          color={checked ? colors.primary : colors.textMuted}
-        />
-        <View style={styles.rowText}>
-          <Text variant="body" weight="semibold">
-            {item.address}
-          </Text>
-          {item.addressDetail ? (
-            <Text variant="bodySm" color="textMuted" style={styles.detail}>
-              {item.addressDetail}
-            </Text>
-          ) : null}
-        </View>
-      </Pressable>
-    );
-  };
+  // 현장 목록 탭과 같은 카드 — 상태·프로젝트·분류를 보고 고를 수 있게 한다.
+  // (이전엔 주소만 나와 "어떤 현장이었지" 를 기억에 의존해야 했음)
+  const renderItem = ({ item }: { item: Field }) => (
+    <FieldCard
+      field={item}
+      selected={selectedIds.includes(item.id)}
+      showCheckbox
+      onPress={() => toggle(item.id)}
+    />
+  );
 
   return (
     <MapSheetLayout
@@ -181,12 +148,21 @@ export default function NewTripSelect() {
     >
       <View style={styles.head}>
         <View style={styles.headRow}>
-          <Text variant="body" weight="bold">
-            방문할 현장 선택
-          </Text>
           <Text variant="bodySm" weight="bold" color="primary">
-            {selectedIds.length}/{myFields.length}개
+            {selectedIds.length}/{myFields.length}개 선택
           </Text>
+          {/* '모두 선택' 은 필터 칩이 아니라 선택 동작 — 필터 바에서 분리해 카운트 옆에 둔다. */}
+          {fields.length > 0 ? (
+            <FilterChip
+              label={visibleAllSelected ? '모두 해제' : '모두 선택'}
+              active={false}
+              dashed
+              leftIcon={
+                visibleAllSelected ? 'remove-circle-outline' : 'checkbox-outline'
+              }
+              onPress={toggleSelectAll}
+            />
+          ) : null}
         </View>
         {selectedFields.length > 0 ? (
           <ScrollView
@@ -227,54 +203,28 @@ export default function NewTripSelect() {
           clearButtonMode="while-editing"
           leftSlot={<Ionicons name="search" size={18} color={colors.textMuted} />}
         />
-        <View style={styles.chipRow}>
-          {FIELD_STATUS_VALUES.map((s) => (
-            <FilterChip
-              key={s}
-              label={FIELD_STATUS_LABEL[s]}
-              active={statusFilter.includes(s)}
-              activeColor={colors.fieldStatus[s]}
-              onPress={() => toggleStatus(s)}
-            />
-          ))}
-          {fields.length > 0 ? (
-            <FilterChip
-              label={visibleAllSelected ? '모두 해제' : '모두 선택'}
-              active={false}
-              dashed
-              leftIcon={
-                visibleAllSelected ? 'remove-circle-outline' : 'checkbox-outline'
-              }
-              onPress={toggleSelectAll}
-            />
-          ) : null}
-        </View>
-        {availableProjects.length > 0 ? (
-          <View style={styles.chipRow}>
-            {availableProjects.map((p) => (
-              <FilterChip
-                key={p.id}
-                label={p.name}
-                active={projectFilter.includes(p.id)}
-                leftIcon="folder-outline"
-                onPress={() => toggleProject(p.id)}
-              />
-            ))}
-          </View>
-        ) : null}
-        {availableCategories.length > 0 ? (
-          <View style={styles.chipRow}>
-            {availableCategories.map((c) => (
-              <FilterChip
-                key={c}
-                label={c}
-                active={categoryFilter.includes(c)}
-                leftIcon="pricetag-outline"
-                onPress={() => toggleCategory(c)}
-              />
-            ))}
-          </View>
-        ) : null}
+        {/* 방문일 그룹은 숨김 — 이 화면은 클라이언트 필터(applyFieldFilters)만 쓰므로
+            기간 조건이 동작하지 않는다. */}
+        <FieldFilterBar
+          status={status}
+          onStatus={setStatus}
+          projects={availableProjects}
+          projectId={projectId}
+          onProject={setProjectId}
+          categories={availableCategories}
+          category={category}
+          onCategory={setCategory}
+          fromDate={null}
+          toDate={null}
+          onDateRange={() => {}}
+          onResetAll={() => {
+            setStatus(null);
+            setProjectId(null);
+            setCategory(null);
+          }}
+          hasFilter={hasFilter}
+          showDate={false}
+        />
       </View>
       <BottomSheetFlatList
         data={fields}
@@ -284,19 +234,17 @@ export default function NewTripSelect() {
         contentContainerStyle={styles.list}
         ListEmptyComponent={
           <EmptyState
-            icon={search || statusFilter.length > 0 ? 'search-outline' : 'location-outline'}
+            icon={search || hasFilter ? 'search-outline' : 'location-outline'}
             title={
-              search || statusFilter.length > 0
-                ? '검색 결과가 없습니다'
-                : '담당 현장이 없습니다'
+              search || hasFilter ? '검색 결과가 없습니다' : '담당 현장이 없습니다'
             }
             description={
-              search || statusFilter.length > 0
+              search || hasFilter
                 ? '검색어 또는 필터를 조정해보세요'
                 : '아래 버튼으로 첫 현장을 등록하세요'
             }
             action={
-              !search && statusFilter.length === 0 ? (
+              !search && !hasFilter ? (
                 <Button
                   onPress={() => router.push('/(tabs)/fields/new' as never)}
                   leftIcon="add-circle"
@@ -335,7 +283,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  chipRow: { flexDirection: 'row', gap: spacing.xs, flexWrap: 'wrap' },
   selectedRow: { gap: spacing.xs, paddingVertical: 2 },
   selectedChip: {
     flexDirection: 'row',
@@ -351,21 +298,4 @@ const styles = StyleSheet.create({
   },
   selectedChipLabel: { flexShrink: 1 },
   list: { paddingHorizontal: spacing.lg, paddingBottom: 120 },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: spacing.sm,
-    gap: spacing.md,
-  },
-  rowChecked: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primaryMuted,
-  },
-  rowText: { flex: 1 },
-  detail: { marginTop: 2 },
 });

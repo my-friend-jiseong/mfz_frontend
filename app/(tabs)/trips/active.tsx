@@ -458,6 +458,8 @@ export default function ActiveTrip() {
         onBack={() => safeBack(router)}
         initialIndex={2}
         mapFieldIds={tripFieldIds}
+        // 목적지 순서 그대로 — 배경 지도에 순번 마커 + 점선 동선.
+        routeFieldIds={tripFieldIds}
       >
         <BottomSheetFlatList
           data={destinations}

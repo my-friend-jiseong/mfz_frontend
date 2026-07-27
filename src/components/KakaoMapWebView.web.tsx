@@ -27,6 +27,8 @@ export interface KakaoMapMarker {
   color: string;
   shape?: 'triangle' | 'circle' | 'check';
   badge?: string;
+  // 외근 방문 순번(1-based). 있으면 '숫자를 새긴 원' 으로 그린다. 네이티브와 동일.
+  order?: number;
   // 현장 선택 모드 — true 면 brand 링+✓ 오버레이(상태색·형상 유지). 네이티브와 동일.
   selected?: boolean;
   // 검색 결과 하이라이트 — true 면 brand 링+핑 펄스(selected 와 독립).
@@ -81,6 +83,16 @@ function buildMarkerHtml(m: KakaoMapMarker, count = 1, showLabel = true): string
   const hlRing = highlighted
     ? `<div class="mfz-hl-static"></div><div class="mfz-hl-ping"></div>`
     : '';
+  // 외근 순번 마커 — 형상 대신 '숫자를 새긴 원'. 정보 전달자가 형상→숫자로 바뀔 뿐이라
+  // 색 단독 인코딩이 되지는 않는다. 클러스터는 카운트 뱃지와 충돌하므로 제외(네이티브와 동일 규칙).
+  if (typeof m.order === 'number' && count === 1) {
+    const orderSvg = `<svg width="26" height="26" viewBox="0 0 36 36"><circle cx="18" cy="18" r="14" fill="${color}" stroke="#fff" stroke-width="2"/></svg>`;
+    const orderNum = `<div style="position:absolute;top:0;left:0;width:26px;height:26px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:800;pointer-events:none;">${m.order}</div>`;
+    const plainLabel = showLabel
+      ? `<div style="position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:4px;background:#fff;padding:2px 6px;border-radius:8px;font-size:11px;font-weight:600;color:#0f172a;border:1px solid ${color};white-space:nowrap;box-shadow:0 1px 2px rgba(0,0,0,0.15);">${m.label || ''}</div>`
+      : '';
+    return `<div style="position:relative;width:26px;height:26px;cursor:pointer;">${hlRing}${selRing}${orderSvg}${orderNum}${selCheck}${plainLabel}</div>`;
+  }
   return `<div style="position:relative;width:26px;height:26px;cursor:pointer;">${hlRing}${selRing}${svg}${countBadge}${selCheck}${labelHtml}</div>`;
 }
 
@@ -142,6 +154,8 @@ interface Props {
   myLocation?: { lat: number; lng: number } | null;
   // 검색한 '새 위치' 비컨 — 좌표에 핀을 떨어뜨려 등록 전 위치를 보여준다(null 이면 제거).
   beacon?: { lat: number; lng: number } | null;
+  // 외근 동선 — 목적지 순서대로 잇는 점선. 2점 미만이면 선을 그리지 않는다.
+  route?: { lat: number; lng: number }[];
   // true 면 모든 마커가 한 화면에 들어오도록 자동 프레이밍 (center 무시). 위치도 미리보기용.
   fitToMarkers?: boolean;
   // false 면 드래그/줌 비활성 — BottomSheet 안 등 pan 충돌 회피용 정적 위치도.
@@ -243,6 +257,13 @@ type KakaoGlobal = {
       fillColor?: string;
       fillOpacity?: number;
     }) => Overlay;
+    Polyline: new (options: {
+      path: unknown[];
+      strokeWeight?: number;
+      strokeColor?: string;
+      strokeOpacity?: number;
+      strokeStyle?: string;
+    }) => Overlay;
     event: {
       addListener: (target: unknown, type: string, handler: () => void) => void;
       removeListener: (target: unknown, type: string, handler: () => void) => void;
@@ -309,6 +330,7 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
       baseMapType = 'roadmap',
       myLocation = null,
       beacon = null,
+      route,
       fitToMarkers = false,
       interactive = true,
       onMarkerPress,
@@ -321,6 +343,7 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
   const overlaysRef = useRef<Overlay[]>([]);
   const myLocOverlayRef = useRef<Overlay | null>(null);
   const beaconOverlayRef = useRef<Overlay | null>(null);
+  const routeLineRef = useRef<Overlay | null>(null);
   const boundaryOverlaysRef = useRef<Overlay[]>([]);
   // KDE 히트맵 — 캔버스 div + h337 인스턴스. redraw 클로저가 최신 모드/점을 읽도록 ref 미러.
   const heatRef = useRef<HTMLDivElement | null>(null);
@@ -508,6 +531,26 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
       zIndex: 6,
     });
   }, [ready, beacon?.lat, beacon?.lng]);
+
+  // 외근 동선 경로선 — 마커 레이어와 독립이라 표시 방식(markers/heatmap/choropleth) 전환에도 남는다.
+  // route 배열 identity 로 재생성 — 상위(MapDashboard)가 useMemo 로 안정화해 넘긴다.
+  useEffect(() => {
+    if (!ready || !mapRef.current) return;
+    const k = getKakao();
+    if (!k) return;
+    routeLineRef.current?.setMap(null);
+    routeLineRef.current = null;
+    if (!route || route.length < 2) return;
+    const line = new k.maps.Polyline({
+      path: route.map((p) => new k.maps.LatLng(p.lat, p.lng)),
+      strokeWeight: 4,
+      strokeColor: colors.primary,
+      strokeOpacity: 0.7,
+      strokeStyle: 'shortdash',
+    });
+    line.setMap(mapRef.current);
+    routeLineRef.current = line;
+  }, [ready, route]);
 
   // 단계구분도 카운트 집계 — 폴리곤 effect 와 분리해, 경계만 토글(markers 불변)할 땐 재집계 생략.
   // 렌더 단계라 throw 가 화면을 깨므로 try 로 감싸 실패 시 null(채색 생략)로 폴백.

@@ -46,6 +46,9 @@ interface MapDashboardProps {
   selectedFieldIds?: string[];
   // 마커 탭 동작 오버라이드 — 주어지면 현장 상세 이동 대신 이 콜백으로 선택 토글.
   onSelectField?: (fieldId: string) => void;
+  // 외근 방문 순서(fieldId 배열). 주어지면 그 순서로 마커에 순번을 새기고 점선 경로를 잇는다.
+  // scopeFieldIds 와 별개 축 — 스코프는 '무엇을 보여줄지', 이건 '어떤 순서로 도는지'.
+  routeFieldIds?: string[];
 }
 
 export function MapDashboard({
@@ -53,6 +56,7 @@ export function MapDashboard({
   legendBottomInset,
   selectedFieldIds,
   onSelectField,
+  routeFieldIds,
 }: MapDashboardProps = {}) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -240,6 +244,17 @@ export function MapDashboard({
     [selectedFieldIds],
   );
 
+  // fieldId → 방문 순번(1-based). routeFieldIds 미지정 화면(현장 탭 등)은 빈 Map → 기존 상태 마커 유지.
+  const orderByFieldId = useMemo(() => {
+    const m = new Map<string, number>();
+    if (routeFieldIds) {
+      routeFieldIds.forEach((id, i) => {
+        if (!m.has(id)) m.set(id, i + 1);
+      });
+    }
+    return m;
+  }, [routeFieldIds]);
+
   const markers = useMemo(() => {
     const base = fieldsToMarkers(visibleFields);
     return base.map((m) => {
@@ -253,7 +268,7 @@ export function MapDashboard({
         if (visibleAttachments.photo && presence.photo) tags.push('사진');
         if (tags.length > 0) label = `${m.label} · ${tags.join('·')}`;
       }
-      return { ...m, label, selected, highlighted };
+      return { ...m, label, selected, highlighted, order: orderByFieldId.get(m.id) };
     });
   }, [
     visibleFields,
@@ -261,7 +276,23 @@ export function MapDashboard({
     visibleAttachments,
     selectedSet,
     highlightedFieldId,
+    orderByFieldId,
   ]);
+
+  // 경로선 좌표 — routeFieldIds 순서대로, 좌표가 있고 실제로 보이는 현장만.
+  // 스코프에서 빠졌거나 좌표가 (0,0)인 현장을 끼우면 선이 엉뚱한 곳으로 튄다.
+  const route = useMemo(() => {
+    if (!routeFieldIds || routeFieldIds.length < 2) return undefined;
+    const byId = new Map(visibleFields.map((f) => [f.id, f]));
+    const pts: { lat: number; lng: number }[] = [];
+    for (const id of routeFieldIds) {
+      const f = byId.get(id);
+      if (!f) continue;
+      if (f.latitude === 0 && f.longitude === 0) continue;
+      pts.push({ lat: f.latitude, lng: f.longitude });
+    }
+    return pts.length >= 2 ? pts : undefined;
+  }, [routeFieldIds, visibleFields]);
 
   return (
     // 지도가 화면 위까지 꽉 차고, 설정은 우측 상단 떠 있는 '레이어' 버튼 오버레이로.
@@ -275,6 +306,7 @@ export function MapDashboard({
         baseMapType={baseMapType}
         myLocation={myLocation}
         beacon={pendingPlace ? { lat: pendingPlace.lat, lng: pendingPlace.lng } : null}
+        route={route}
         center={mapCenter}
         initialLevel={lastViewAtMount?.level}
         onViewChange={handleViewChange}

@@ -49,6 +49,8 @@ export interface KakaoMapMarker {
   color: string;
   shape?: MarkerShape;
   badge?: string;
+  // 외근 방문 순번(1-based). 있으면 마커가 '숫자를 새긴 원' 으로 그려진다.
+  order?: number;
   // 현장 선택 모드 — true 면 마커에 brand 링+✓ 오버레이(상태색은 유지). (외근 시작 현장 선택)
   selected?: boolean;
   // 검색 결과 하이라이트 — true 면 마커에 brand 링+핑 펄스(selected 와 독립).
@@ -68,6 +70,8 @@ interface Props {
   myLocation?: { lat: number; lng: number } | null;
   // 검색한 '새 위치' 비컨 — 좌표에 핀을 떨어뜨려 등록 전 위치를 보여준다(null 이면 제거).
   beacon?: { lat: number; lng: number } | null;
+  // 외근 동선 — 목적지 순서대로 잇는 점선. 2점 미만이면 선을 그리지 않는다.
+  route?: { lat: number; lng: number }[];
   // 지도 뷰(center+level)가 정착할 때마다 보고 — 상위가 기억해 재마운트 시 복원에 사용.
   onViewChange?: (view: { lat: number; lng: number; level: number }) => void;
   // true 면 모든 마커가 한 화면에 들어오도록 자동 프레이밍 (center 무시). 위치도 미리보기용.
@@ -100,6 +104,7 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
       baseMapType = 'roadmap',
       myLocation = null,
       beacon = null,
+      route,
       fitToMarkers = false,
       interactive = true,
       onMarkerPress,
@@ -277,6 +282,14 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
     const payload = beacon ? `{lat:${beacon.lat},lng:${beacon.lng}}` : 'null';
     inject(`window.__mfzSetBeacon&&window.__mfzSetBeacon(${payload})`);
   }, [ready, beacon?.lat, beacon?.lng, inject]);
+
+  // 외근 동선 경로선.
+  useEffect(() => {
+    if (!ready) return;
+    inject(
+      `window.__mfzSetRoute&&window.__mfzSetRoute(${JSON.stringify(route ?? [])})`,
+    );
+  }, [ready, route, inject]);
 
   // center 변경 → in-place setCenter (pan/zoom 보존). fitToMarkers 모드는 fitBounds 가 잡으므로 생략.
   useEffect(() => {

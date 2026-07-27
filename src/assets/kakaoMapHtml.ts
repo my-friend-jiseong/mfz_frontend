@@ -40,6 +40,8 @@ interface MapHtmlOptions {
     color: string;
     shape?: 'triangle' | 'circle' | 'check';
     badge?: string;
+    // 외근 방문 순번(1-based). 있으면 마커 안에 숫자를 새긴다 — 아래 buildMarkerHtml 주석 참고.
+    order?: number;
     count?: number;
     groupIds?: string[];
     selected?: boolean;
@@ -254,6 +256,20 @@ MARKERS.forEach(function(m){
       var selCheck = selected
         ? '<div style="position:absolute;bottom:-5px;right:-5px;width:16px;height:16px;border-radius:50%;background:#2563eb;border:2px solid #fff;display:flex;align-items:center;justify-content:center;box-sizing:border-box;"><svg width="9" height="9" viewBox="0 0 24 24"><polyline points="4,12 10,18 20,6" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>'
         : '';
+      // 외근 순번 마커 — order 가 있으면 형상 대신 '숫자를 새긴 원' 으로 그린다.
+      // KWCAG 1.4.1(색 단독 금지)은 그대로 지켜진다: 정보 전달자가 형상에서 숫자로 바뀔 뿐,
+      // 색 없이도 순서를 읽을 수 있다. 체크 아이콘/삼각형 위에 숫자를 겹치면 둘 다 안 읽혀
+      // 형상 인코딩을 유지하는 쪽이 오히려 정보를 잃는다. 클러스터(count>1)는 카운트 뱃지와
+      // 충돌하므로 제외 — selected/highlighted 와 동일한 규칙.
+      var ordered = typeof m.order === 'number' && count === 1;
+      if (ordered) {
+        return '<div style="position:relative;width:26px;height:26px;cursor:pointer;">' + hlRing + selRing
+          + '<svg width="26" height="26" viewBox="0 0 36 36"><circle cx="18" cy="18" r="14" fill="' + color + '" stroke="#fff" stroke-width="2"/></svg>'
+          + '<div style="position:absolute;top:0;left:0;width:26px;height:26px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:800;pointer-events:none;">' + m.order + '</div>'
+          + selCheck
+          + (showLabel ? '<div style="position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:4px;background:#fff;padding:2px 6px;border-radius:8px;font-size:11px;font-weight:600;color:#0f172a;border:1px solid ' + color + ';white-space:nowrap;box-shadow:0 1px 2px rgba(0,0,0,0.15);">' + (m.label||'') + '</div>' : '')
+          + '</div>';
+      }
       var svg;
       if (shape === 'triangle') {
         svg = '<svg width="26" height="26" viewBox="0 0 36 36"><polygon points="18,4 32,30 4,30" fill="' + color + '" stroke="#fff" stroke-width="2"/></svg>';
@@ -305,6 +321,28 @@ MARKERS.forEach(function(m){
         }
       }
       return clusters;
+    }
+
+    // === 외근 경로선 ===
+    // 목적지 순서대로 잇는 점선. 마커 레이어와 독립이라 표시 방식(markers/heatmap/choropleth)
+    // 전환에도 살아있다 — "이 외근이 어떤 동선이었나" 는 오버레이 종류와 무관한 정보.
+    var ROUTE = [];
+    var routeLine = null;
+    function applyRoute(){
+      if (routeLine) { routeLine.setMap(null); routeLine = null; }
+      if (!ROUTE || ROUTE.length < 2) return;
+      var path = [];
+      for (var i = 0; i < ROUTE.length; i++) {
+        path.push(new kakao.maps.LatLng(ROUTE[i].lat, ROUTE[i].lng));
+      }
+      routeLine = new kakao.maps.Polyline({
+        path: path,
+        strokeWeight: 4,
+        strokeColor: '#2563eb',
+        strokeOpacity: 0.7,
+        strokeStyle: 'shortdash',
+      });
+      routeLine.setMap(map);
     }
 
     // === 마커 레이어 (히트맵은 위 캔버스로 분리) ===
@@ -429,6 +467,7 @@ MARKERS.forEach(function(m){
 
     // === 세터 (RN injectJavaScript 진입점) ===
     window.__mfzSetMarkers = function(markers){ MARKERS = markers || []; applyData(); };
+    window.__mfzSetRoute = function(pts){ ROUTE = pts || []; applyRoute(); };
     // 히트맵 점 — [{lat,lng,value}]. value 는 동일좌표 군집 count(가중). 모드 가드는 heatSchedule 몫.
     window.__mfzSetHeatPoints = function(pts){ HEAT_POINTS = pts || []; heatSchedule(); };
     window.__mfzSetMode = function(mode){ MODE = mode; applyData(); applyBoundaryStyle(); applyHeat(); };

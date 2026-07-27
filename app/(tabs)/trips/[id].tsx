@@ -196,6 +196,8 @@ export default function TripDetail() {
         onBack={() => safeBack(router)}
         initialIndex={2}
         mapFieldIds={tripFieldIds}
+        // tripFieldIds 는 destination.order → visit 순으로 쌓인 방문 순서 그대로다(위 memo 참고).
+        routeFieldIds={tripFieldIds}
       >
         <BottomSheetScrollView style={sheetScrollableStyle} contentContainerStyle={styles.scroll}>
         <View style={styles.header}>

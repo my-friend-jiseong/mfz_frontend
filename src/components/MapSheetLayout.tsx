@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BottomSheet from '@gorhom/bottom-sheet';
@@ -43,6 +43,11 @@ interface Props {
   // 현장 선택 모드(외근 시작) — 배경 지도 마커를 탭해 선택 토글. 리스트와 동기화.
   selectedFieldIds?: string[];
   onSelectField?: (fieldId: string) => void;
+  // 외근 방문 순서(fieldId 배열) — 마커 순번 + 점선 경로. 순서 화면/진행 중/정리 화면에서 사용.
+  routeFieldIds?: string[];
+  // true 면 mapFieldIds(지도 스코프)가 바뀔 때 시트를 내려 지도를 드러낸다.
+  // 목록에서 특정 외근을 '지도에서 보기' 했을 때 시트가 지도를 덮고 있으면 아무 일도 안 일어난 것처럼 보인다.
+  collapseOnScopeChange?: boolean;
   children: ReactNode;
 }
 
@@ -61,6 +66,8 @@ export function MapSheetLayout({
   mapFieldIds,
   selectedFieldIds,
   onSelectField,
+  routeFieldIds,
+  collapseOnScopeChange = false,
   children,
 }: Props) {
   const { height: screenHeight } = useWindowDimensions();
@@ -92,6 +99,20 @@ export function MapSheetLayout({
     [maxSheetHeight],
   );
 
+  // 지도 스코프 전환 → 시트 내림(55%). 해제되면 다시 initialIndex 로 복귀.
+  // useFocusEffect 의 initialIndex reset 과 달리 '포커스'가 아니라 '스코프 변화'에만 반응하므로
+  // 탭 재진입 시의 reset 과 서로 밟지 않는다. 첫 렌더(prev === null)는 건너뛴다 — 마운트 시엔
+  // useFocusEffect 가 이미 initialIndex 로 맞춰 놓기 때문.
+  const scopeKey = mapFieldIds ? mapFieldIds.join(',') : '';
+  const prevScopeKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!collapseOnScopeChange) return;
+    const prev = prevScopeKeyRef.current;
+    prevScopeKeyRef.current = scopeKey;
+    if (prev === null || prev === scopeKey) return;
+    sheetRef.current?.snapToIndex(scopeKey ? 1 : initialIndex);
+  }, [collapseOnScopeChange, scopeKey, initialIndex]);
+
   useFocusEffect(
     useCallback(() => {
       // mount race 차단 — sheetRef 가 ready 되기 전에 snapToIndex 가 호출되면
@@ -110,6 +131,7 @@ export function MapSheetLayout({
         legendBottomInset={PEEK_HEIGHT}
         selectedFieldIds={selectedFieldIds}
         onSelectField={onSelectField}
+        routeFieldIds={routeFieldIds}
       />
       <BottomSheet
         ref={sheetRef}

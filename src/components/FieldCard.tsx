@@ -10,6 +10,10 @@ import { withAlpha } from '@/theme/withAlpha';
 interface Props {
   field: Field;
   onPress?: () => void;
+  // 선택 모드(외근 시작 현장 선택) — brand 테두리+배경으로 선택 상태를 표시.
+  selected?: boolean;
+  // 좌측 체크박스 노출. selected 와 함께 쓰면 목록이 체크리스트로 동작한다.
+  showCheckbox?: boolean;
 }
 
 const STATUS_SHAPE: Record<Field['status'], string> = {
@@ -18,7 +22,7 @@ const STATUS_SHAPE: Record<Field['status'], string> = {
   done: '■',
 };
 
-export function FieldCard({ field, onPress }: Props) {
+export function FieldCard({ field, onPress, selected, showCheckbox }: Props) {
   const statusColor = colors.fieldStatus[field.status];
   const hasMeta =
     !!field.projectName || (field.categories && field.categories.length > 0);
@@ -27,8 +31,9 @@ export function FieldCard({ field, onPress }: Props) {
   const subtitle = field.name?.trim()
     ? [field.address, field.addressDetail].filter(Boolean).join(' ')
     : field.addressDetail;
-  return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
+
+  const content = (
+    <>
       <View style={styles.header}>
         <View style={[styles.statusChip, { backgroundColor: withAlpha(statusColor, 0.13) }]}>
           <Text variant="caption" style={{ color: statusColor }}>
@@ -67,6 +72,32 @@ export function FieldCard({ field, onPress }: Props) {
           ) : null}
         </View>
       ) : null}
+    </>
+  );
+
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole={showCheckbox ? 'checkbox' : undefined}
+      accessibilityState={showCheckbox ? { checked: !!selected } : undefined}
+      style={({ pressed }) => [
+        styles.card,
+        selected && styles.cardSelected,
+        pressed && styles.pressed,
+      ]}
+    >
+      {showCheckbox ? (
+        <View style={styles.checkRow}>
+          <Ionicons
+            name={selected ? 'checkbox' : 'square-outline'}
+            size={22}
+            color={selected ? colors.primary : colors.textMuted}
+          />
+          <View style={styles.checkBody}>{content}</View>
+        </View>
+      ) : (
+        content
+      )}
     </Pressable>
   );
 }
@@ -80,7 +111,13 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     marginBottom: spacing.sm,
   },
+  cardSelected: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryMuted,
+  },
   pressed: { opacity: 0.7 },
+  checkRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md },
+  checkBody: { flex: 1 },
   header: {
     flexDirection: 'row',
     marginBottom: spacing.sm,

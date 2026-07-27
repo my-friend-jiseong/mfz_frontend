@@ -112,6 +112,10 @@ export default function NewTripOrder() {
     setOptimized(false);
   };
 
+  // 지도에 넘길 방문 순서 — 리스트 순서를 그대로 따라가 위/아래 이동·제외가 즉시 지도에 반영된다.
+  // (순서를 정하는 화면인데 정작 동선이 안 보이던 문제)
+  const routeFieldIds = useMemo(() => list.map((f) => f.id), [list]);
+
   const totalDistanceKm = optimized
     ? list.reduce((a, x) => a + (x.distanceFromPrevKm ?? 0), 0)
     : null;
@@ -232,7 +236,10 @@ export default function NewTripOrder() {
     <MapSheetLayout
       title="방문 순서 확인"
       onBack={() => safeBack(router)}
-      mapFieldIds={list.map((f) => f.id)}
+      mapFieldIds={routeFieldIds}
+      routeFieldIds={routeFieldIds}
+      // 순서 확인 화면은 시트를 55%로 — 위 절반에 동선이 보여야 순서 조정이 의미가 있다.
+      initialIndex={1}
     >
       <View style={styles.head}>
         <Input

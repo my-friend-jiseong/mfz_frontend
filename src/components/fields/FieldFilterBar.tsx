@@ -35,6 +35,9 @@ interface Props {
   onDateRange: (from: string | null, to: string | null) => void;
   onResetAll: () => void;
   hasFilter: boolean;
+  // 방문일 그룹 노출 여부. 현장 목록은 서버 refresh 로 기간을 거르지만, 외근 시작
+  // 현장 선택은 클라이언트 필터(applyFieldFilters)만 쓰므로 동작하지 않는 그룹을 숨긴다.
+  showDate?: boolean;
 }
 
 // 'YYYY-MM-DD' → 'MM.DD' (헤더 요약용)
@@ -65,6 +68,7 @@ export function FieldFilterBar({
   onDateRange,
   onResetAll,
   hasFilter,
+  showDate = true,
 }: Props) {
   const [open, setOpen] = useState<GroupKey | null>(null);
   const [picking, setPicking] = useState<'from' | 'to' | null>(null);
@@ -86,7 +90,9 @@ export function FieldFilterBar({
     { key: 'status', base: '조치상태', value: status ? FIELD_STATUS_LABEL[status] : null },
     { key: 'project', base: '프로젝트', value: projectName },
     { key: 'category', base: '카테고리', value: category },
-    { key: 'date', base: '방문일', value: dateSummary(fromDate, toDate) },
+    ...(showDate
+      ? ([{ key: 'date', base: '방문일', value: dateSummary(fromDate, toDate) }] as const)
+      : []),
   ];
 
   // 시작일이 종료일보다 늦으면 반대쪽을 당겨 from<=to 유지.
@@ -218,7 +224,7 @@ export function FieldFilterBar({
         </Panel>
       ) : null}
 
-      {open === 'date' ? (
+      {showDate && open === 'date' ? (
         <Panel>
           <DateRow
             label="시작일"
@@ -239,7 +245,7 @@ export function FieldFilterBar({
       ) : null}
 
       {/* 네이티브 전용 — 웹은 DateRow 내부의 <input type=date> 로 대체 */}
-      {Platform.OS !== 'web' && picking ? (
+      {showDate && Platform.OS !== 'web' && picking ? (
         <DateTimePicker
           value={parseISO(
             (picking === 'from' ? fromDate : toDate) ?? toISO(new Date()),
