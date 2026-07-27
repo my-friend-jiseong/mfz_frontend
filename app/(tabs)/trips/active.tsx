@@ -512,6 +512,8 @@ export default function ActiveTrip() {
             leftIcon="camera"
             loading={quickPhoto.preparing}
             accessibilityLabel="빠른 촬영 — 가까운 현장에 사진 등록"
+            // size="sm" 은 높이 36 — 최소 44dp 타깃까지 세로 여백으로 채운다.
+            style={styles.headerAction}
           >
             촬영
           </Button>
@@ -552,8 +554,13 @@ export default function ActiveTrip() {
 
 const styles = StyleSheet.create({
   screenRoot: { flex: 1 },
-  list: { paddingHorizontal: spacing.lg, paddingBottom: 120 },
+  // ★ paddingBottom 이 큰 이유 — 시트 콘텐츠 래퍼는 최대 detent 높이로 고정돼 있어(가로채기
+  //   회피용, MapSheetLayout 주석 참고) 기본 detent(55%)에서는 래퍼 하단 ~130dp 가 화면
+  //   밖이고 그 위 56dp 는 탭바에 가린다. 이 여백이 없으면 목록 끝까지 스크롤해도 마지막
+  //   요소(외근 종료)가 탭바 뒤에 남아 아예 누를 수 없다(실측: 종료 611~631 vs 탭바 583~639).
+  list: { paddingHorizontal: spacing.lg, paddingBottom: 240 },
   footer: { marginTop: spacing.lg },
+  headerAction: { minHeight: 44, justifyContent: 'center' },
   header: { paddingTop: spacing.md, gap: spacing.sm },
   sectionTitleRow: {
     flexDirection: 'row',

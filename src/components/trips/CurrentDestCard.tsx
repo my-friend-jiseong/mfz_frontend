@@ -55,22 +55,32 @@ export function CurrentDestCard({
           현재 목적지 · {positionLabel ?? `${order}번째`}
         </Text>
         {showReop ? (
-          <Button
+          <Pressable
             onPress={onReoptimize}
-            variant="ghost"
-            size="sm"
-            leftIcon={optimizing ? 'hourglass-outline' : 'sparkles'}
-            loading={optimizing}
+            disabled={optimizing}
+            // hitSlop 으로 실제 탭 영역을 44dp 로 넓힌다 — 시각 크기는 캡션 행에 맞춰 작지만
+            // 이동 중 한 손으로 누르는 화면이라 타깃까지 작아지면 안 된다.
+            hitSlop={10}
+            accessibilityRole="button"
             accessibilityLabel="남은 목적지 순서 다시 최적화"
+            style={({ pressed }) => [
+              styles.iconBtn,
+              (pressed || optimizing) && { opacity: opacity.pressed },
+            ]}
           >
-            {''}
-          </Button>
+            <Ionicons
+              name={optimizing ? 'hourglass-outline' : 'sparkles'}
+              size={18}
+              color={colors.primary}
+            />
+          </Pressable>
         ) : null}
         <Button
           onPress={onSkip}
           variant="dangerGhost"
           size="sm"
           leftIcon="play-skip-forward"
+          style={styles.skipBtn}
         >
           건너뛰기
         </Button>
@@ -141,6 +151,16 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   cap: { flex: 1 },
+  // 아이콘 전용 액션 — Button 은 항상 <Text>{children}</Text> 를 gap 과 함께 그려서
+  // 빈 라벨을 넘기면 잉여 gap 이 남는다. 이런 자리는 Pressable 로 직접 만든다.
+  iconBtn: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // 최소 44dp 타깃 — size="sm"(높이 36) 이라 부족한 만큼 세로 여백으로 채운다.
+  skipBtn: { minHeight: 44, justifyContent: 'center' },
   mainRow: {
     flexDirection: 'row',
     gap: spacing.sm,
