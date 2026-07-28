@@ -7,7 +7,7 @@ import type { CategoryItem } from '@/api';
 // 사용자 커스텀 카테고리(분류) 마스터. (backend-backlog §25 — release 2026-07-26 배포 완료)
 //
 // **서버가 진실원이다.** AsyncStorage 는 오프라인 표시용 캐시로만 남는다.
-// 단 백엔드 배포 전에 로컬에서 만든 항목(id 가 `cat-` 접두)이 있을 수 있어, 서버 목록을
+// 단 백엔드 배포 전에 로컬에서 만든 항목이 있을 수 있어, 서버 목록을
 // 채택하기 전에 **최초 1회 flush** 로 밀어 올린다. 이 단계가 없으면 첫 실행에서 로컬 전용
 // 카테고리가 통째로 증발한다.
 //
@@ -22,8 +22,10 @@ const STORAGE_KEY = 'mfz.categories.v1';
 const FLUSHED_KEY = 'mfz.categories.flushed.v1';
 
 let nextSeq = 1;
+// `cat-` 를 쓰지 않는다 — 백엔드 categoryId 가 `cat-<epoch>-<hex>` 라 겹친다.
+// 판정은 어차피 아래 local 플래그로 하지만, 로그에서 눈으로 구분되게 접두도 분리.
 function nextLocalId(): string {
-  return `cat-${Date.now().toString(36)}-${nextSeq++}`;
+  return `localcat-${Date.now().toString(36)}-${nextSeq++}`;
 }
 
 function serverToCategory(it: CategoryItem): Category | null {
@@ -50,8 +52,11 @@ type CreateResult =
 
 type MutateResult = { ok: true } | { ok: false; error: string };
 
-/** 로컬에서만 만들어진(서버에 없는) 항목인지. */
-const isLocalId = (id: string) => id.startsWith('cat-');
+// 로컬에서만 만들어진(서버에 없는) 항목인지 — **명시 플래그로만** 판정한다.
+// id 접두(`cat-`)로 추론하던 이전 방식은 백엔드 categoryId 와 형식이 겹쳐
+// 서버 항목을 전부 로컬로 오인했고, 그래서 rename/remove 가 서버에 가지 않았다
+// (실측 2026-07-28: 이름 변경 후 새로고침하면 옛 이름으로 되돌아감).
+const isLocal = (c: Category) => c.local === true;
 
 interface CategoryState {
   categories: Category[];
@@ -102,9 +107,12 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
       // 서버 목록을 그냥 채택해 버리면 백엔드 배포 전에 만든 카테고리가 사라진다.
       const flushed = await AsyncStorage.getItem(FLUSHED_KEY).catch(() => null);
       if (!flushed) {
+        // 선정 기준은 id 형식이 아니라 **서버에 그 이름이 없다**는 사실.
+        // (id 접두 판정은 백엔드 categoryId 와 겹쳐 못 쓴다 — isLocal 주석 참고.)
+        // 마이그레이션 직전이라 서버에 없는 이름 = 아직 안 올라간 항목이다.
         const serverNames = new Set(res.items.map((it) => norm(it.name)));
         const orphans = get().categories.filter(
-          (c) => isLocalId(c.id) && !serverNames.has(norm(c.name)),
+          (c) => !serverNames.has(norm(c.name)),
         );
         if (orphans.length > 0) {
           // 하나라도 실패하면 플래그를 남기지 않는다 — 다음 기회에 다시 시도.
@@ -170,6 +178,7 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
       id: nextLocalId(),
       name,
       createdAt: new Date().toISOString(),
+      local: true,
     };
     const next = sortByName([
       resolved,
@@ -196,8 +205,8 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
     );
     set({ categories: next });
     void persist(next);
-    // 로컬 전용 항목(cat-)은 서버에 없으니 로컬 변경으로 끝.
-    if (isLocalId(id)) return { ok: true };
+    // 로컬 전용 항목은 서버에 없으니 로컬 변경으로 끝.
+    if (before.some((c) => c.id === id && isLocal(c))) return { ok: true };
     try {
       await categoriesApi.update(id, { name });
       return { ok: true };
@@ -213,7 +222,7 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
     const next = before.filter((c) => c.id !== id);
     set({ categories: next });
     void persist(next);
-    if (isLocalId(id)) return { ok: true };
+    if (before.some((c) => c.id === id && isLocal(c))) return { ok: true };
     try {
       await categoriesApi.remove(id);
       return { ok: true };
@@ -266,6 +275,7 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
         id: nextLocalId(),
         name,
         createdAt: new Date().toISOString(),
+        local: true,
       })),
     );
     set({ categories: next });

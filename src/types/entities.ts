@@ -147,6 +147,11 @@ export interface Category {
   id: string;
   name: string;
   createdAt: string;
+  // 서버에 아직 없는 항목(오프라인 생성). **id 문자열로 추론하지 말 것** —
+  // 백엔드 categoryId 도 `cat-` 로 시작해서(예: cat-1785238001539-f7e6c788) 접두 판정이
+  // 서버 항목을 로컬로 오인한다. 실측 2026-07-28: 그 오인으로 rename/remove 가
+  // 서버에 전송되지 않아 새로고침 시 값이 되돌아갔다.
+  local?: boolean;
 }
 
 // ERD v2 신규 — 현장 주소·좌표 1:1 (fields.location_id UNIQUE).
