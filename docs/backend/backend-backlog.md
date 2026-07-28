@@ -191,13 +191,84 @@
 
 ---
 
+## 28. 🟠 주소검색 응답에 **장소명(`buildingName`)** 이 없다 — 클라이언트 SDK 를 못 걷어냄
+
+§3 으로 백엔드가 `address.json` + `keyword.json` 병합을 배포해 **장소명으로 검색은 된다**.
+그런데 **응답이 장소명을 담아 오지 않아**, 프론트는 여전히 클라이언트 카카오 JS SDK 키워드검색
+(헤드리스 WebView 브리지)을 떼지 못한다. §3 아카이브에 "잔여는 프론트 선택 정리뿐" 이라 적었던 것은
+오판이었다.
+
+### 실측 (2026-07-28, 로그인 세션에서 앱이 실제로 보낸 호출)
+
+`GET /api/fields/address/search?keyword=동아대학교` → 200, **10건**. 매칭은 정상(승학·부민캠퍼스 등).
+
+```json
+{ "roadAddress": "부산 사하구 낙동대로550번길 37",
+  "jibunAddress": "부산 사하구 하단동 840",
+  "sido": null, "sigungu": null,
+  "lat": 35.115446, "lng": 128.967669 }
+```
+
+| 항목 | 결과 |
+|---|---|
+| `buildingName` 키 존재 | **10건 중 0건** (키 자체가 없음) |
+| `sido` / `sigungu` | 전부 `null` (POI 출처라 주소 depth 없음 — 예상된 동작) |
+
+프론트 타입 [`AddressSearchItem`](../../src/api/endpoints/fields.ts#L162) 은 `buildingName: string | null` 로
+선언돼 있으나 실제 응답엔 그 키가 오지 않는다.
+
+### 왜 막히나
+
+- 클라이언트 SDK 는 `place_name` → `buildingName` 으로 매핑한다
+  ([`useKakaoPlaceSearch.web.tsx:71`](../../src/components/fields/useKakaoPlaceSearch.web.tsx#L71)).
+- [`MapSearchBar`](../../src/components/MapSearchBar.tsx) 의 「새 위치 등록」 목록은
+  `p.buildingName || p.roadAddress || p.jibunAddress` 를 1차 라벨로 쓴다. 서버 결과만 쓰면
+  **"동아대학교" 가 "부산 사하구 낙동대로550번길 37" 로 표시**된다 — 이름으로 장소를 찾는 목록의
+  존재 이유가 사라진다.
+- `fields/new`·`fields/[id]/edit` 도 서버·클라이언트 결과를 `mergeSearchItems` 로 합쳐 쓰는데,
+  이름이 없으면 병합의 의미가 없다.
+
+### 요청
+
+`keyword.json` 출처 item 에 **장소명을 실어 달라.** 필드명은 기존 프론트 타입에 맞춰
+`buildingName` 이면 프론트 변경 0 이다(다른 이름이면 프론트가 매핑 추가).
+주소(`address.json`) 출처 item 은 지금처럼 비워 두면 된다.
+
+### 그러면 프론트가 할 일 (이 요청이 충족된 뒤)
+
+1. `useKakaoPlaceSearch.tsx` / `.web.tsx` 삭제 — 헤드리스 WebView 브리지 제거(약 236줄).
+2. `MapSearchBar` 의 장소 검색을 `fieldsApi.addressSearch` 로 교체.
+3. `fields/new`·`fields/[id]/edit` 에서 클라이언트 검색·`mergeSearchItems` 제거.
+4. 부수 효과: 카카오 **JS 키 도메인 화이트리스트 의존이 검색 경로에서 사라진다**
+   (지도 렌더는 여전히 필요). 개발 포트를 8081 이외로 띄울 때의 제약도 그만큼 줄어든다.
+
+### 우선순위
+
+🟠 중상 — 기능은 지금도 동작하므로 차단은 아니다. 다만 **한 줄 추가로 프론트 코드 236줄과
+런타임 의존(헤드리스 WebView·SDK 준비 경합)이 사라지는** 비용 대비가 크다.
+
+### 발견 시점
+
+2026-07-28, §3 잔여 정리를 착수하려고 범위를 분석하다 발견. 착수 전에 서버 응답을 실측해
+드러났다 — 문서(§3 아카이브)만 믿었으면 회귀를 배포할 뻔했다.
+
+### 관련 코드
+
+- 프론트 타입 [`src/api/endpoints/fields.ts:162`](../../src/api/endpoints/fields.ts#L162) `AddressSearchItem.buildingName`
+- 클라이언트 SDK 훅 [`src/components/fields/useKakaoPlaceSearch.tsx`](../../src/components/fields/useKakaoPlaceSearch.tsx) · [`.web.tsx`](../../src/components/fields/useKakaoPlaceSearch.web.tsx)
+- 병합 [`src/utils/addressSearch.ts`](../../src/utils/addressSearch.ts) `mergeSearchItems`
+- 소비 화면 [`MapSearchBar`](../../src/components/MapSearchBar.tsx)(지도 공용) · `fields/new` · `fields/[id]/edit`
+- 관련 항목: §3(병합 배포, ✅)
+
+---
+
 ## ✅ 완료 항목 (아카이브)
 
 > 조치 완료된 요청을 한 줄로 압축. 상세(커밋 diff·probe 로그)는 git 이력 + 아래 「변경 이력」 참조.
 > §N 은 원 번호 유지 — 변경 이력·상호참조 앵커.
 
 - **§2 ✅ `PATCH`/`DELETE /api/trips/:tripId`** (release 2026-06) — PATCH 제목·시간 보정(응답 비의존, 로컬 패치), DELETE 관련 레코드 시 `409 has_related_trip_records`→`?force=true`. `tripStore.update`/`remove`. 커밋 `18414f6`·`10b4cd0`·`ec6ab90`.
-- **§3 ✅ 주소검색 `address.json`+`keyword.json` 병합 — 기구현 확인** (2026-07-26) — 백엔드 `searchFieldAddress` 가 이미 두 API 를 병렬 호출·병합·중복제거하고 있음(추가 커밋 없음). 백엔드 측 요청 충족. 잔여는 프론트 **선택** 정리뿐 — 클라이언트 카카오 JS SDK 키워드검색(`useKakaoPlaceSearch`, 헤드리스 WebView) 의존을 걷어낼 수 있음(차단 아님, 미적용).
+- **§3 ✅ 주소검색 `address.json`+`keyword.json` 병합 — 기구현 확인** (2026-07-26) — 백엔드 `searchFieldAddress` 가 이미 두 API 를 병렬 호출·병합·중복제거하고 있음(추가 커밋 없음). 백엔드 측 요청 충족(매칭 기준). ⚠️ **2026-07-28 정정**: "잔여는 프론트 선택 정리뿐" 은 틀렸다 — 응답에 **장소명이 없어** 프론트가 클라이언트 SDK 를 걷어낼 수 없다. → **§28**.
 - **§4 ✅ `detailAddress` optional 완화** (release 2026-06) — `detail_address_required` 400 제거, point 성 현장(가로수·광장) 등록 OK. 프론트 무변경.
 - **§5 ✅ `POST /trips/navigation/optimize-preview` 404 → 클라이언트 only 확정** (2026-05-31) — `optimizePreview`·관련 타입 삭제, `order.tsx` 는 `nearestNeighborOrder` 만. (외근 시작 후 `/optimize` 는 유지.)
 - **§7 ✅ 보고서 본문 검증 완화 + 사진 첨부 → 새 양식으로 해소** (2026-06-04) — content·보고서 레벨 사진 개념 제거(본문=`field_reports`), 사진은 `POST /reports/:id/field-reports`.
@@ -222,6 +293,12 @@
 ---
 
 ## 변경 이력
+
+- **2026-07-28**: **§28 추가(🟠)** — 주소검색 응답에 장소명이 없어 클라이언트 카카오 SDK 키워드검색을
+  걷어낼 수 없다. §3 잔여 정리를 착수하려 범위를 분석하다, 서버 응답을 실측해 발견
+  (`keyword=동아대학교` → 200·10건이지만 `buildingName` 키가 **0건**). §3 아카이브의
+  "잔여는 프론트 선택 정리뿐" 을 정정. 문서만 믿고 진행했으면 `MapSearchBar` 의 「새 위치 등록」
+  라벨이 장소명에서 도로명으로 바뀌는 회귀를 배포할 뻔했다.
 
 - **2026-07-28**: **§12 ✅ 종결** — (B) `ERD.drawio` 갱신 완료. 백엔드 저장소를 pull 해
   `docs/db-schema.md` 를 확보하고, 백엔드 `scripts/gen-erd.mjs` 를 `docs/diagram/gen-erd.mjs` 로
