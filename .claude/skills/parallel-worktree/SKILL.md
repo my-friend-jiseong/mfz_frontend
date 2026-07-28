@@ -109,17 +109,31 @@ PLANS_DIR="$MAIN_ROOT/.claude/worktrees/plans"
 
 이 프로젝트는 백엔드처럼 도메인 패키지가 한 폴더에 모여 있지 않다. **한 기능은 4계층에 흩어져 있으므로**, 슬라이스를 고르면 그 4계층을 각각 열어 실제로 건드릴 파일을 산출한다.
 
+### 3-1. 독립 슬라이스 — 병렬화하기 좋은 단위
+
 | 슬라이스 | 라우트 | 스토어 | API | 컴포넌트 |
 |---|---|---|---|---|
 | `fields` | `app/(tabs)/fields/**` | `src/stores/fieldStore.ts` | `src/api/endpoints/fields.ts` | `src/components/fields/**`, `FieldCard.tsx` |
 | `trips` | `app/(tabs)/trips/**` | `src/stores/tripStore.ts`, `destinationStore.ts` | `src/api/endpoints/trips.ts` | `src/components/trips/**`, `TripStatusBanner.tsx` |
-| `visits` | `app/(tabs)/trips/visit.tsx`, `fields/[id]/checkin.tsx` | `src/stores/visitStore.ts` | `src/api/endpoints/visits.ts` | — |
-| `reports` | `app/(tabs)/reports/**` | `src/stores/reportStore.ts` | `src/api/endpoints/reports.ts` | `AttachmentPreview.tsx` |
-| `map` | `app/(tabs)/index.tsx` | `src/stores/mapSettingsStore.ts` | `src/api/endpoints/map.ts` | `KakaoMapWebView*.tsx`, `MapDashboard/MapSheetLayout/MapFilterBar/MapLegend/MapSearchBar` |
+| `reports` | `app/(tabs)/reports/**` | `src/stores/reportStore.ts` | `src/api/endpoints/reports.ts` | — |
 | `categories` | `app/(tabs)/fields/categories.tsx` | `src/stores/categoryStore.ts` | `src/api/endpoints/categories.ts` | `CategoryMultiPicker.tsx` |
 | `projects` | — | `src/stores/projectStore.ts` | `src/api/endpoints/projects.ts` | `ProjectPicker.tsx` |
 | `auth` | `app/(auth)/**` | `src/stores/authStore.ts`, `sessionGuardStore.ts`, `sessionActivity.ts` | `src/api/endpoints/auth.ts` | `SessionGuardModal.tsx` |
-| `profile` | `app/(tabs)/profile/**` | `authStore.ts`(사용자 정보) | `src/api/endpoints/auth.ts` | — |
+| `profile` | `app/(tabs)/profile/**` | `authStore.ts` | `auth.updateMe` / `auth.changePassword` (`endpoints/auth.ts`) | — |
+
+`app/(tabs)/index.tsx` 는 `/(tabs)/trips` 로 보내는 리다이렉트일 뿐이다 — 여기엔 화면이 없다.
+
+### 3-2. 교차 레이어 — 슬라이스가 아니다. 병렬화에 취약하다
+
+아래 셋은 **여러 슬라이스의 화면이 함께 소비**한다. "map 작업" 이라고만 선언하면 실제로는 trips·fields·reports 를 동시에 잠그는데 레지스트리는 그걸 못 본다. 그래서 이 레이어를 건드리는 작업은 **소비 화면을 files 에 전부 적고**, 되도록 다른 작업과 동시에 돌리지 않는다.
+
+| 레이어 | 실체 | 소비 화면 (files 에 포함) |
+|---|---|---|
+| `map` | `MapSheetLayout` → `MapDashboard` → `KakaoMapWebView`/`MapFilterBar`/`MapLegend`/`MapSearchBar`, `src/stores/mapSettingsStore.ts`, `src/api/endpoints/map.ts` | `fields/index`, `fields/[id]/index`, `trips/index`, `trips/[id]`, `trips/active`, `trips/visit`, `trips/new/select`, `trips/new/order`, `reports/index`, `reports/[id]/index` — 지도 직접 사용: `trips/navigate`, `reports/new` — 핀 편집: `fields/new`, `fields/[id]/edit`(`FieldPinMap`) |
+| `visits` | `src/stores/visitStore.ts`, `src/api/endpoints/visits.ts`, `AttachmentPreview.tsx`, `src/components/trips/ReviewVisitCard.tsx` | `fields/[id]/checkin`·`index`·`edit`, `trips/visit`·`active`·`index`·`[id]`, `reports/index`·`new`·`[id]/index`·`[id]/field-report` |
+| `ui/theme` | `src/components/ui/**`, `src/theme/**` | 사실상 전 화면 — 토큰·공용 컴포넌트 변경은 단독 사이클로 돌린다 |
+
+슬라이스 간 다리 역할 파일도 같이 본다: `src/utils/postTripFlow.ts`(외근 종료 → 보고서), `src/components/fields/quickPhotoHandoff.ts`·`useQuickPhoto.ts`(`fields/new` ↔ `trips/active`).
 
 범위가 불확실하면 `Grep`/`Glob`로 후보를 좁히고, 넓게 퍼질 가능성이 있으면 `Explore` 에이전트로 추정한다. 추정 범위는 보수적으로(넓게) 잡아 충돌을 놓치지 않는다.
 
@@ -154,6 +168,7 @@ PLANS_DIR="$MAIN_ROOT/.claude/worktrees/plans"
 | **무충돌** | 둘 다 안 겹침 | 바로 「격리 & 부팅」으로 |
 
 - glob 비교는 의미 기준으로 한다 (`app/(tabs)/trips/**`와 `app/(tabs)/trips/active.tsx`는 겹침).
+- **교차 레이어(§3-2: map · visits · ui/theme) 작업은 병렬 후보가 아니다.** 소비 화면이 슬라이스를 가로지르므로 사실상 모든 활성 작업과 겹친다 — 다른 작업이 도는 중이면 그 사실을 알리고 **단독 사이클로 미루자고 제안**한다. 강행 시엔 소비 화면을 files 에 전부 적어 다른 세션이 오탐 없이 보게 한다.
 - **`docs/backend/backend-backlog.md` 는 append-only 라 예외**다. 두 작업이 서로 다른 §항목을 추가하는 것뿐이면 강충돌로 보지 않고 **약충돌로 낮춘다** — 대신 머지 순서가 뒤인 쪽이 §번호 중복을 직접 확인한다(§번호는 고정 식별자라 재번호 금지).
 - 포트가 겹치면 새 작업의 포트를 비어 있는 번호로 올린다 (판정 대상 아님, 그냥 조정).
 - 사용자가 강행을 택하면 그 결정을 계획서에 기록한다.
@@ -183,9 +198,10 @@ PLANS_DIR="$MAIN_ROOT/.claude/worktrees/plans"
    cp "$MAIN_ROOT/.env.local" .
    ```
 2. **`node_modules` 확보** — 둘 중 하나:
-   - *의존성 변경이 없는 작업* → 메인의 것을 junction 으로 공유 (Windows, 관리자 권한 불필요):
+   - *의존성 변경이 없는 작업* → 메인의 것을 junction 으로 공유 (Windows, 관리자 권한 불필요). 워크트리 안에서 PowerShell 로:
      ```powershell
-     cmd /c mklink /J "$PWD\node_modules" "C:\Users\user\vsproject\mfz_frontend\node_modules"
+     $main = Split-Path (Resolve-Path (git rev-parse --git-common-dir)) -Parent
+     cmd /c mklink /J "$PWD\node_modules" "$main\node_modules"
      ```
    - *`package.json` 을 건드리는 작업* → **공유 금지**. 워크트리 안에서 `npm install` 을 따로 돌린다(메인 트리 의존성을 오염시키지 않기 위해).
 3. **포트 지정** — 메인 체크아웃이 8081 을 쓰므로 워크트리는 자기 번호로 띄운다:
@@ -194,12 +210,14 @@ PLANS_DIR="$MAIN_ROOT/.claude/worktrees/plans"
    ```
    레지스트리 `port` 열에 기록한다. 확인 URL 도 `localhost:8081` 이 아니라 그 포트가 된다.
 
-> **알려진 위험**: 워크트리가 메인 루트 하위(`.claude/worktrees/`)에 생기므로, 메인에서 돌던 Metro 가 워크트리 사본까지 크롤링해 haste 중복/과다 감시를 일으킬 수 있다. 증상(중복 모듈 경고·느린 리로드)이 보이면 `metro.config.js` 에 `.claude/worktrees` 를 `resolver.blockList` 로 제외하고, 그 파일은 cross-cutting 으로 선언한다. 증상이 없으면 손대지 않는다.
+> **포트를 바꾸면 웹에서 지도가 안 뜬다.** 카카오 JS SDK 는 Kakao Developers 에 등록된 웹 플랫폼 도메인(`http://localhost:8081`, 포트 포함)에서만 뜬다 — `KakaoMapWebView.web.tsx` 의 실패 안내문이 그렇게 말한다. 지도 화면을 웹으로 확인해야 하는 작업이면 (a) 쓸 포트를 Kakao Developers 에 등록하거나, (b) 메인 dev 서버를 잠깐 내리고 그 워크트리를 8081 로 띄운다. 지도와 무관한 작업이면 그냥 8082+ 로 둔다.
+
+> Metro 가 `.claude/worktrees/` 사본까지 크롤링해 haste 중복·과다 감시를 일으키는 문제는 `metro.config.js` 의 `resolver.blockList` 에서 이미 차단해 뒀다(2026-07-28). 이 파일을 건드릴 일이 생기면 cross-cutting 으로 선언한다.
 
 ### 5-3. 등록·계획서
 
-3. **레지스트리 등록**: `REGISTRY.md`를 **쓰기 직전에 다시 read**한 뒤(다른 세션이 그 사이 추가했을 수 있음) 새 행을 추가한다. status=`in-progress`.
-4. **계획서 작성**: `plans/{slug}.md`에 목표·영향범위·구현 순서·검증 방법(특히 "이 변경을 무엇으로 확인할 것인가")을 적는다. 이후 작업 중 계속 참조·갱신한다.
+1. **레지스트리 등록**: `REGISTRY.md`를 **쓰기 직전에 다시 read**한 뒤(다른 세션이 그 사이 추가했을 수 있음) 새 행을 추가한다. status=`in-progress`.
+2. **계획서 작성**: `plans/{slug}.md`에 목표·영향범위·구현 순서·검증 방법(특히 "이 변경을 무엇으로 확인할 것인가")을 적는다. 이후 작업 중 계속 참조·갱신한다.
 
 > 동시성은 단순 처리한다: 쓰기 전 재-read만 한다. 락 파일·낙관적 동시성은 도입하지 않는다 — **개인이 소수 세션을 저빈도로 운용**하는 전제라 두 세션이 같은 순간 등록하는 경쟁은 사실상 발생하지 않는다고 본다. 재-read는 그 드문 창을 좁히는 용도지 경쟁을 원천 차단하진 못한다.
 
@@ -230,7 +248,7 @@ PLANS_DIR="$MAIN_ROOT/.claude/worktrees/plans"
 
 1. **self-review**: diff 를 직접 읽고 정확성 버그·누락 케이스·동작 변경·컨벤션 위반을 점검. 의심 지점은 코드로 검증 후 단정.
 2. **정적 검증**: `npm run typecheck` (필수). 유틸 로직을 건드렸으면 `npm test` 도.
-3. **시각 변경이면 실물 렌더 확인 (필수)** — 목업·추측으로 끝내지 않는다. `npx expo start --web --port {port}` 로 띄워 브라우저에서 직접 본다. 기기 전용 이슈(제스처·바텀시트·안전영역)는 Expo Go + `console.log` 계측으로 **수치를 먼저 확정**한 뒤 고친다.
+3. **시각 변경이면 실물 렌더 확인 (필수)** — 목업·추측으로 끝내지 않는다. `npx expo start --web --port {port}` 로 띄워 브라우저에서 직접 본다. 지도가 포함된 화면이면 §5-2 의 카카오 도메인 제약 때문에 8081 이 필요할 수 있다. 기기 전용 이슈(제스처·바텀시트·안전영역)는 Expo Go + `console.log` 계측으로 **수치를 먼저 확정**한 뒤 고친다.
 4. **contract 의심 시 실측**: 응답 형태를 OpenAPI(`https://ilgayo.co.kr/api-docs.json`)만 보고 단정하지 않는다 — 변경계 200 본문이 문서에 누락돼 있다. 실제 호출로 확인.
 5. **백로그 반영 확인**: 이번 작업에서 백엔드 요청이 생겼다면 `docs/backend/backend-backlog.md` 에 빠짐없이 들어갔는지 점검(§6).
 6. **`/code-review` (high effort)** 실행 → 지적사항 조치 → 통과까지 반복.
