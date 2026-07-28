@@ -7,12 +7,8 @@ import type { CategoryItem } from '@/api';
 // 사용자 커스텀 카테고리(분류) 마스터. (backend-backlog §25 — release 2026-07-26 배포 완료)
 //
 // **서버가 진실원이다.** AsyncStorage 는 오프라인 표시용 캐시로만 남는다.
-// 단 백엔드 배포 전에 로컬에서 만든 항목이 있을 수 있어, 서버 목록을
-// 채택하기 전에 **최초 1회 flush** 로 밀어 올린다. 이 단계가 없으면 첫 실행에서 로컬 전용
-// 카테고리가 통째로 증발한다.
-//
-// flush 가 1회성이어야 하는 이유: 매번 돌면 사용자가 서버에서 지운 카테고리가 로컬 캐시
-// 잔재 때문에 되살아난다.
+// 서버 목록을 채택하기 전에 **아직 서버에 없는 항목을 올린다**(refresh 의 (a)/(b) 참고).
+// 이 단계가 없으면 오프라인 생성분과 백엔드 배포 전 만든 카테고리가 통째로 증발한다.
 //
 // 현장은 카테고리 "이름"을 저장(Field.categories: string[])하므로 이 마스터는 "허용된 이름
 // 목록"으로 작동한다. 이름변경/삭제는 기존 현장 값에 캐스케이드되지 않음(§25 후속, 백엔드 FK 필요).
@@ -103,40 +99,45 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
     try {
       let res = await categoriesApi.list({ limit: 200 });
 
-      // ---- 최초 1회: 로컬 전용 항목을 서버로 올린다 ----
-      // 서버 목록을 그냥 채택해 버리면 백엔드 배포 전에 만든 카테고리가 사라진다.
+      const serverNames = new Set(res.items.map((it) => norm(it.name)));
       const flushed = await AsyncStorage.getItem(FLUSHED_KEY).catch(() => null);
-      if (!flushed) {
-        // 선정 기준은 id 형식이 아니라 **서버에 그 이름이 없다**는 사실.
-        // (id 접두 판정은 백엔드 categoryId 와 겹쳐 못 쓴다 — isLocal 주석 참고.)
-        // 마이그레이션 직전이라 서버에 없는 이름 = 아직 안 올라간 항목이다.
-        const serverNames = new Set(res.items.map((it) => norm(it.name)));
-        const orphans = get().categories.filter(
-          (c) => !serverNames.has(norm(c.name)),
-        );
-        if (orphans.length > 0) {
-          // 하나라도 실패하면 플래그를 남기지 않는다 — 다음 기회에 다시 시도.
-          let allOk = true;
-          for (const c of orphans) {
-            try {
-              await categoriesApi.create({ name: c.name });
-            } catch (e) {
-              // 409(이름 중복)는 이미 서버에 있다는 뜻 — 성공으로 친다.
-              if (errorCode(e) !== 'category_name_taken') allOk = false;
-            }
-          }
-          if (allOk) res = await categoriesApi.list({ limit: 200 });
-          else if (__DEV__) {
-            console.warn('[categoryStore.refresh] 로컬 항목 flush 일부 실패 — 다음 refresh 에 재시도');
-          }
-          if (!allOk) {
-            // 일부만 올라간 상태로 서버 목록을 채택하면 남은 로컬 항목이 사라진다.
-            // 이번 회차는 서버 채택을 건너뛰고 로컬을 유지한다.
-            return;
-          }
+
+      // ---- 서버에 아직 없는 항목을 올린다 ----
+      // 두 종류를 구분한다:
+      //  (a) 상시 — `local` 플래그가 붙은 오프라인 생성분. 정의상 서버에 없으므로 매번 올려도
+      //      "지운 카테고리가 되살아나는" 위험이 없다. 1회성으로 두면 오프라인에서 만든
+      //      카테고리가 온라인 복귀 시 조용히 사라진다(실측 2026-07-28).
+      //  (b) 1회성 — 이 버전 이전에 만들어져 플래그가 없는 레거시 항목. 서버 항목과 구분할
+      //      단서가 이름뿐이라, 반복하면 다른 기기에서 삭제한 카테고리를 되살린다. 그래서 1회만.
+      const pendingLocal = get().categories.filter(
+        (c) => isLocal(c) && !serverNames.has(norm(c.name)),
+      );
+      const legacy = flushed
+        ? []
+        : get().categories.filter(
+            (c) => !isLocal(c) && !serverNames.has(norm(c.name)),
+          );
+      const toUpload = [...pendingLocal, ...legacy];
+
+      let allOk = true;
+      for (const c of toUpload) {
+        try {
+          await categoriesApi.create({ name: c.name });
+        } catch (e) {
+          // 409(이름 중복)는 이미 서버에 있다는 뜻 — 성공으로 친다.
+          if (errorCode(e) !== 'category_name_taken') allOk = false;
         }
-        await AsyncStorage.setItem(FLUSHED_KEY, '1').catch(() => {});
       }
+      if (!allOk) {
+        // 일부만 올라간 상태로 서버 목록을 채택하면 남은 항목이 사라진다.
+        // 이번 회차는 서버 채택을 건너뛰고 로컬을 유지한 뒤 다음 refresh 에 재시도.
+        if (__DEV__) {
+          console.warn('[categoryStore.refresh] 미동기 항목 업로드 일부 실패 — 로컬 유지');
+        }
+        return;
+      }
+      if (toUpload.length > 0) res = await categoriesApi.list({ limit: 200 });
+      if (!flushed) await AsyncStorage.setItem(FLUSHED_KEY, '1').catch(() => {});
 
       // ---- 서버를 진실원으로 채택 ----
       const items = res.items
@@ -158,8 +159,8 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
     if (existing) return { ok: true, category: existing }; // 중복은 기존 것 반환
 
     set({ busy: true });
-    // 서버 생성이 정상 경로. 실패해도 로컬 항목은 만들어 두고(오프라인 계속 사용),
-    // 다음 refresh 의 flush 가 아니라 — flush 는 1회성이므로 — 사용자가 재시도할 때 올라간다.
+    // 서버 생성이 정상 경로. 실패해도 로컬 항목(local: true)은 만들어 둔다 —
+    // 오프라인에서 계속 쓰고, 다음 성공하는 refresh 가 (a) 경로로 서버에 올린다.
     let category: Category | null = null;
     try {
       category = serverToCategory(await categoriesApi.create({ name }));

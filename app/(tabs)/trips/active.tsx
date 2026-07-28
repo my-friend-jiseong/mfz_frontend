@@ -317,23 +317,29 @@ export default function ActiveTrip() {
       .filter((d) => d.status !== 'pending')
       .map((d) => d.id);
     const nextOrder = [...resolvedIds, ...pendingOrderedIds];
-    reorderDestinations(activeTripId, nextOrder);
 
     // backend-backlog §22 — 새 순서의 **실도로** 거리·소요를 받아 직선 추정치를 대체한다.
-    // 여기서 받아둔 결과를 지도 폴리라인에도 그대로 물려 이펙트의 중복 호출을 없앤다
-    // (카카오모빌리티 쿼터 절약). 실패하면 아래 직선 추정치로 폴백.
+    // 여기서 받은 결과를 지도 폴리라인에도 물려 경로 이펙트가 같은 순서를 또 요청하지 않게 한다.
+    //
+    // 순서가 중요하다: reorderDestinations 가 리렌더를 유발하면 경로 이펙트가 **먼저** 발화한다.
+    // 그래서 키를 미리 선점해 둬야 이펙트가 건너뛴다. 실측(2026-07-28): 선점 없이 두면
+    // 재최적화 한 번에 /route 가 2회 호출됐다 — 카카오모빌리티 쿼터가 유한하다.
     const byId = new Map(destinations.map((d) => [d.id, d]));
     const orderedDests = nextOrder
       .map((id) => byId.get(id))
       .filter((d): d is Destination => d !== undefined);
     const pts = pointsOfDestinations(orderedDests, getField);
+    fetchedRouteKeyRef.current = routeKeyOf(pts);
+    reorderDestinations(activeTripId, nextOrder);
+
     const road = await requestRoute(activeTripId, pts);
-    if (road) {
-      fetchedRouteKeyRef.current = routeKeyOf(pts);
-      setRouteVertexes(
-        road.vertexes && road.vertexes.length >= 2 ? road.vertexes : undefined,
-      );
-    }
+    const vertexes =
+      road?.vertexes && road.vertexes.length >= 2 ? road.vertexes : undefined;
+    // 실패하면 새 순서의 직선으로 폴백한다 — 이전 순서의 실도로 선을 남겨두면
+    // 지도가 실제와 다른 동선을 보여준다.
+    setRouteVertexes(vertexes);
+    // 못 받았으면 선점을 풀어 다음 기회(재마운트·순서 변경)에 다시 시도하게 둔다.
+    if (!road) fetchedRouteKeyRef.current = null;
 
     const km =
       road?.distance != null ? road.distance / 1000 : summary.totalDistanceKm;
