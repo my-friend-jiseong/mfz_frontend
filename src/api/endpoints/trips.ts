@@ -188,12 +188,24 @@ export interface RouteResponse {
 export const ROUTE_MAX_WAYPOINTS = 30;
 
 /**
- * `POST /api/trips/start` 의 `plannedFields` 상한.
- * OpenAPI 에는 없고 실호출로 확인한 값 — 초과 시 400
- * "plannedFields 는 200건 이하로 보내주세요" (실측 2026-07-28, 433건).
- * 프론트가 미리 막지 않으면 사용자가 현장을 다 고르고 순서까지 정한 뒤 마지막에 튕긴다.
+ * 외근 하나에 담을 수 있는 계획 목적지 수 — **제품 가드**.
+ *
+ * 백엔드 하드 상한은 200 이다(OpenAPI 미기재, 실호출로 확인: 433건 요청 시 400
+ * "plannedFields 는 200건 이하로 보내주세요", 2026-07-28). 프론트가 미리 막지 않으면
+ * 사용자가 현장을 다 고르고 순서까지 정한 뒤 마지막 단계에서 튕긴다.
+ *
+ * 그런데 200 곳은 하루 외근으로 현실성이 없다 — 실제 하루 방문은 많아야 수십 곳이다.
+ * 백엔드 한계선이 아니라 **현실적인 상한**을 노출하는 편이 사용자에게 정직하고,
+ * 200곳짜리 목록·지도 마커·경로 계산이 만드는 성능 부담도 미리 막는다.
+ * 그래서 백엔드 상한보다 낮은 50 을 쓴다.
+ *
+ * ※ 로드맵 03(현장 재정의: 거점 → 점/가로수)이 들어오면 한 외근의 목적지 수가
+ *   구조적으로 늘 수 있다. 그때 이 값을 재검토할 것.
  */
-export const TRIP_MAX_PLANNED_FIELDS = 200;
+export const TRIP_MAX_PLANNED_FIELDS = 50;
+
+/** 백엔드가 실제로 거절하는 경계 — 위 제품 가드의 근거이자 상한. */
+export const TRIP_BACKEND_MAX_PLANNED_FIELDS = 200;
 
 export const trips = {
   start: (body?: TripStartBody) =>

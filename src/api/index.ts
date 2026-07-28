@@ -9,6 +9,7 @@ export {
   trips,
   ROUTE_MAX_WAYPOINTS,
   TRIP_MAX_PLANNED_FIELDS,
+  TRIP_BACKEND_MAX_PLANNED_FIELDS,
 } from './endpoints/trips';
 export type {
   LatLng,
