@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import { Ionicons } from '@expo/vector-icons';
+import { ReportFilterBar } from '@/components/reports/ReportFilterBar';
 import { useRouter } from 'expo-router';
 import { useReportStore } from '@/stores/reportStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -36,6 +37,11 @@ export default function ReportsIndex() {
   const visitsByTrip = useVisitStore((s) => s.byTrip);
 
   const [search, setSearch] = useState('');
+  // 작성일 기간 필터 — 클라이언트 필터. reports API 가 fromDate/toDate 를 지원하지만
+  // 목록이 이미 로컬에 전부 있어 서버 왕복을 추가할 이유가 없다.
+  const [fromDate, setFromDate] = useState<string | null>(null);
+  const [toDate, setToDate] = useState<string | null>(null);
+  const hasFilter = fromDate !== null || toDate !== null;
 
   useEffect(() => {
     void refresh();
@@ -45,8 +51,13 @@ export default function ReportsIndex() {
     if (!userId) return [];
     const mine = allReports.filter((r) => r.creatorId === userId);
     const q = search.trim().toLowerCase();
-    const matches = (r: Report) =>
-      !q || r.title.toLowerCase().includes(q);
+    const matches = (r: Report) => {
+      if (q && !r.title.toLowerCase().includes(q)) return false;
+      const day = r.createdAt.slice(0, 10);
+      if (fromDate && day < fromDate) return false;
+      if (toDate && day > toDate) return false;
+      return true;
+    };
 
     const byTripId = new Map<string, Report[]>();
     const unresolved: Report[] = [];
@@ -99,7 +110,7 @@ export default function ReportsIndex() {
       });
     }
     return result;
-  }, [allReports, allTrips, userId, search]);
+  }, [allReports, allTrips, userId, search, fromDate, toDate]);
 
   const { onScroll, visible } = useHideOnScroll();
 
@@ -113,6 +124,19 @@ export default function ReportsIndex() {
           autoCapitalize="none"
           clearButtonMode="while-editing"
           leftSlot={<Ionicons name="search" size={18} color={colors.textMuted} />}
+        />
+        <ReportFilterBar
+          fromDate={fromDate}
+          toDate={toDate}
+          onDateRange={(f, t) => {
+            setFromDate(f);
+            setToDate(t);
+          }}
+          hasFilter={hasFilter}
+          onResetAll={() => {
+            setFromDate(null);
+            setToDate(null);
+          }}
         />
       </View>
       <BottomSheetFlatList
@@ -185,15 +209,19 @@ export default function ReportsIndex() {
         {...({ onScroll } as object)}
         ListEmptyComponent={
           <EmptyState
-            icon={search ? 'search-outline' : 'document-text-outline'}
-            title={search ? '검색 결과가 없습니다' : '작성된 보고서가 없습니다'}
+            icon={search || hasFilter ? 'search-outline' : 'document-text-outline'}
+            title={
+              search || hasFilter
+                ? '조건에 맞는 보고서가 없습니다'
+                : '작성된 보고서가 없습니다'
+            }
             description={
-              search
-                ? '제목을 다시 입력해보세요'
+              search || hasFilter
+                ? '검색어나 기간을 바꿔보세요'
                 : '아래 버튼으로 첫 보고서를 작성하세요'
             }
             action={
-              !search ? (
+              !search && !hasFilter ? (
                 <Button
                   onPress={() => router.push('/(tabs)/reports/new' as never)}
                   leftIcon="document-text"

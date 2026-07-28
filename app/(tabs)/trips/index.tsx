@@ -11,6 +11,10 @@ import { useReportStore } from '@/stores/reportStore';
 import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout, sheetScrollableStyle } from '@/components/MapSheetLayout';
 import { TripCard } from '@/components/trips/TripCard';
+import {
+  TripFilterBar,
+  type TripReportFilter,
+} from '@/components/trips/TripFilterBar';
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
 import { Input } from '@/components/ui/Input';
@@ -70,6 +74,11 @@ export default function TripsList() {
   const allReports = useReportStore((s) => s.reports);
 
   const [search, setSearch] = useState('');
+  // 필터 — 기간(시작일)·보고 여부. 둘 다 클라이언트 필터(trips API 는 필터 파라미터가 없다).
+  const [fromDate, setFromDate] = useState<string | null>(null);
+  const [toDate, setToDate] = useState<string | null>(null);
+  const [reported, setReported] = useState<TripReportFilter>(null);
+  const hasFilter = fromDate !== null || toDate !== null || reported !== null;
 
   // 보고서 마스터 로드 — 카드의 '보고서' 배지 판정에만 쓴다. 목록 1회 페치로
   // trip 당 추가 요청 없이 tripId 매칭.
@@ -90,10 +99,6 @@ export default function TripsList() {
   }, [allTrips, userId]);
 
   const query = search.trim().toLowerCase();
-  const trips = useMemo(
-    () => (query ? myTrips.filter((t) => tripTitle(t).toLowerCase().includes(query)) : myTrips),
-    [myTrips, query],
-  );
 
   // tripId → visit 카운트 Map — renderItem 의 per-row .filter (O(N×M)) 제거.
   // allVisits 가 바뀔 때만 재계산. 단 visitStore 는 각 외근 loadDetail 시에만 채워지므로,
@@ -112,6 +117,19 @@ export default function TripsList() {
     for (const r of allReports) if (r.tripId) s.add(r.tripId);
     return s;
   }, [allReports]);
+
+  // 검색 + 필터 적용. 보고 여부는 카드 배지와 같은 판정(reportedTripIds)을 써서
+  // "배지는 있는데 필터에선 안 걸린다" 는 어긋남이 생기지 않게 한다.
+  // 기간은 시작일(startedAt) 기준 — 목록의 날짜 그룹핑과 같은 축이다.
+  const trips = useMemo(() => {
+    let out = myTrips;
+    if (query) out = out.filter((t) => tripTitle(t).toLowerCase().includes(query));
+    if (fromDate) out = out.filter((t) => t.startedAt.slice(0, 10) >= fromDate);
+    if (toDate) out = out.filter((t) => t.startedAt.slice(0, 10) <= toDate);
+    if (reported === 'reported') out = out.filter((t) => reportedTripIds.has(t.id));
+    else if (reported === 'unreported') out = out.filter((t) => !reportedTripIds.has(t.id));
+    return out;
+  }, [myTrips, query, fromDate, toDate, reported, reportedTripIds]);
 
   // 상단 요약 — 검색 결과가 아니라 '이번 주 내가 뭘 했나' 를 답한다. 그래서 검색 필터
   // 이전 값(myTrips)으로 집계. 검색 중엔 아래에서 결과 건수 문구로 대체된다.
@@ -251,11 +269,27 @@ export default function TripsList() {
           clearButtonMode="while-editing"
           leftSlot={<Ionicons name="search" size={18} color={colors.textMuted} />}
         />
-        {query ? (
+        <TripFilterBar
+          fromDate={fromDate}
+          toDate={toDate}
+          onDateRange={(f, t) => {
+            setFromDate(f);
+            setToDate(t);
+          }}
+          reported={reported}
+          onReported={setReported}
+          hasFilter={hasFilter}
+          onResetAll={() => {
+            setFromDate(null);
+            setToDate(null);
+            setReported(null);
+          }}
+        />
+        {query || hasFilter ? (
           <View style={styles.summary}>
             <Ionicons name="search" size={14} color={colors.textMuted} />
             <Text variant="caption" weight="semibold" color="textMuted">
-              검색 결과 {trips.length}건
+              {query ? '검색 결과' : '필터 결과'} {trips.length}건
             </Text>
           </View>
         ) : myTrips.length > 0 ? (
@@ -301,10 +335,14 @@ export default function TripsList() {
         {...({ onScroll } as object)}
         ListEmptyComponent={
           <EmptyState
-            icon={query ? 'search-outline' : 'briefcase-outline'}
-            title={query ? '검색 결과가 없습니다' : '외근 기록이 없습니다'}
+            icon={query || hasFilter ? 'search-outline' : 'briefcase-outline'}
+            title={
+              query || hasFilter ? '조건에 맞는 외근이 없습니다' : '외근 기록이 없습니다'
+            }
             description={
-              query ? '제목을 다시 입력해보세요' : '아래 버튼을 눌러 첫 외근을 시작하세요'
+              query || hasFilter
+                ? '검색어나 필터를 바꿔보세요'
+                : '아래 버튼을 눌러 첫 외근을 시작하세요'
             }
           />
         }

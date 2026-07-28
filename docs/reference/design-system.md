@@ -192,6 +192,7 @@ DESTINATION_STATUS_BADGE = {
 | `Card` | `padding: none/sm/md/lg` · `variant: outline/elevated/flat` · `onPress` | 카드/타일 |
 | `Input` | `label` · `error` · `helperText` · `leftSlot` / `rightSlot` (forwardRef) | 폼 입력 |
 | `FilterChip` | `label` · `active` · `activeColor` · `dashed` · `leftIcon` · `disabled` | 선택 가능 chip (`withAlpha(c, 0.13)` 배경) |
+| `FilterAccordion` | `groups: {key, base, value, render}[]` · `hasFilter` · `onResetAll` | 목록 필터 껍데기 — 칩 줄 + 한 번에 하나만 열리는 패널. 함께 export: `FilterPanel` · `FilterOptionRow` · `FilterDateRange`(플랫폼 분기 날짜 범위) · `dateRangeSummary` |
 | `SectionHeader` | `title` · `description` · `action` | 섹션 구분 |
 | `LoadingState` | `label` · `inline` | 로딩 표시 |
 | `Skeleton` | `width` · `height` · `rounded` | 로딩 placeholder (reanimated shimmer) |
@@ -205,11 +206,14 @@ DESTINATION_STATUS_BADGE = {
 | 위치 | 컴포넌트 | 역할 |
 |---|---|---|
 | `src/components/trips/` | `TripProgressStrip` | 외근 진행률 한 줄 (elapsed + 카운트 + ratio + 3dp bar) |
+| | `TripFilterBar` | 외근 필터 — 기간(시작일)·보고 여부 |
 | | `TripCard` | 외근 목록 카드 (상태칩 + 보고서 배지 + 진행률 바) |
 | | `CurrentDestCard` | 현재 목적지 — 길찾기·체크인 동급 2분할 + 캡션 행에 재최적화·건너뛰기 |
 | | `AllDoneCard` | 모든 목적지 완료 상태 |
 | | `DestinationRow` | 목적지 행, memo + status Badge |
 | `src/components/fields/` | `ManualCoordinateForm` | KR 좌표 직접 입력 (new / edit 공유) |
+| | `FieldFilterBar` | 현장 필터 4그룹 (조치상태·프로젝트·카테고리·방문일) |
+| `src/components/reports/` | `ReportFilterBar` | 보고서 필터 — 작성일 기간 |
 | `src/components/` | `FieldCard` | 현장 카드 (status chip + 주소) |
 | | `TripStatusBanner` | root layout 상단 진행 중 외근 배너 |
 | | `MapSheetLayout` | 지도 + BottomSheet 공통 (snap `['18%','55%','92%']` + uiStore 인덱스 공유 + mount race fix) |
