@@ -70,8 +70,10 @@ PLANS_DIR="$MAIN_ROOT/.claude/worktrees/plans"
 
 | slug | branch | worktree | status | port | files | slices | plan | created |
 |------|--------|----------|--------|------|-------|--------|------|---------|
-| pdf-export | feat/pdf-export | .claude/worktrees/pdf-export | in-progress | 8082 | `app/(tabs)/reports/**`, `src/api/endpoints/reports.ts`, `src/stores/reportStore.ts` | reports | plans/pdf-export.md | 2026-07-28 |
+| pdf-export | worktree-pdf-export | .claude/worktrees/pdf-export | in-progress | 8082 | `app/(tabs)/reports/**`, `src/api/endpoints/reports.ts`, `src/stores/reportStore.ts` | reports | plans/pdf-export.md | 2026-07-28 |
 ```
+
+- **branch**: `EnterWorktree` 가 `worktree-{slug}` 로 자동 생성한다 (`feat/*` 가 아니다 — 실측). 커밋 메시지 규약은 그대로지만 브랜치명은 이 형태를 그대로 쓴다.
 
 - **status**: `in-progress` → `review` → `ready` (머지·release 대기). 「격리 & 부팅」에서 행을 만들 때 이미 작업이 시작되므로 `in-progress`부터다.
 - **port**: 이 워크트리 전용 Metro/Expo 포트 (§5-2). 메인 체크아웃이 8081을 점유하므로 워크트리는 **8082부터** 비어 있는 번호를 잡는다. 포트도 충돌 대상이다.
@@ -192,18 +194,24 @@ PLANS_DIR="$MAIN_ROOT/.claude/worktrees/plans"
 ### 5-2. 워크트리 부팅 (JS 프로젝트 특유 — 빼먹으면 아무것도 안 돌아간다)
 
 새 워크트리에는 gitignore 된 것이 전부 없다. 세 가지를 채운다.
+**실측 비용**(2026-07-28): 세팅 약 2분(`npm install` 1분 20초 + Metro 부팅 15초), 정리 약 1분 20초. 30분 미만 작업을 워크트리로 빼는 건 손해다.
 
 1. **`.env.local` 복사** (git 에 없으므로 워크트리에 존재하지 않는다):
    ```bash
    cp "$MAIN_ROOT/.env.local" .
    ```
-2. **`node_modules` 확보** — 둘 중 하나:
-   - *의존성 변경이 없는 작업* → 메인의 것을 junction 으로 공유 (Windows, 관리자 권한 불필요). 워크트리 안에서 PowerShell 로:
+2. **`node_modules` 확보** — 기본은 워크트리 자체 설치다 (2026-07-28 드라이런 실측):
+   ```bash
+   npm install --no-audit --no-fund   # 약 1분 20초, 782 패키지
+   ```
+   - **junction 공유는 `expo start` 를 깨뜨린다.** `@expo/cli` 의 `withMetroMultiPlatform.js` 에 `if (!isDirectoryIn(__dirname, projectRoot))` 분기가 있는데, junction 은 realpath 가 메인 트리로 풀려 CLI 가 "프로젝트 밖"으로 판정된다. 그러면 `require.resolve('metro-runtime/package.json')` 을 타는데 이 의존성 트리에 top-level `metro-runtime` 이 없어(`@expo/metro/metro-runtime` 만 존재) `MODULE_NOT_FOUND` 로 죽는다. 실측 확인된 실패다.
+   - junction 이 유효한 범위는 **`npm run typecheck` / `npm test` 뿐**이다. dev 서버 없이 타입만 볼 작업이면 이걸로 1분을 아낄 수 있다:
      ```powershell
      $main = Split-Path (Resolve-Path (git rev-parse --git-common-dir)) -Parent
      cmd /c mklink /J "$PWD\node_modules" "$main\node_modules"
      ```
-   - *`package.json` 을 건드리는 작업* → **공유 금지**. 워크트리 안에서 `npm install` 을 따로 돌린다(메인 트리 의존성을 오염시키지 않기 위해).
+     나중에 dev 서버가 필요해지면 `cmd /c rmdir "$PWD\node_modules"` 로 링크만 걷고(메인 트리는 무사) `npm install` 로 전환한다.
+   - `package.json` 을 건드리는 작업은 당연히 자체 설치만 허용된다.
 3. **포트 지정** — 메인 체크아웃이 8081 을 쓰므로 워크트리는 자기 번호로 띄운다:
    ```
    npx expo start --web --port 8082
@@ -284,8 +292,10 @@ git branch -d {branch}                                       # 미머지면 사�
 git push origin --delete {branch}                            # 원격에 올렸던 경우, 사용자 동의 후
 ```
 
-- 같은 세션 안에서 끝내는 경우엔 `ExitWorktree(action="remove")`도 가능하다.
-- node_modules 를 junction 으로 걸었다면 `git worktree remove` 가 그 안을 지우려다 실패할 수 있다. 먼저 링크만 제거한다: `cmd /c rmdir "{worktree}\node_modules"` (junction 제거는 대상 폴더를 지우지 않는다 — 반드시 `rmdir`, `Remove-Item -Recurse` 금지).
+- 같은 세션 안에서 끝내는 경우엔 `ExitWorktree(action="remove")`도 가능하다. 위 raw-git 경로는 2026-07-28 드라이런에서 그대로 검증했다.
+- `git worktree remove` 는 워크트리에 `node_modules`·`.env.local` 이 남아 있어도 **거부하지 않는다**(둘 다 gitignore 대상). 다만 782 패키지를 지우느라 **약 1분 20초** 걸린다 — 멈춘 게 아니니 기다린다.
+- node_modules 가 **junction 이면** 먼저 링크만 걷는다: `cmd /c rmdir "{worktree}\node_modules"`. junction 제거는 대상 폴더를 지우지 않는다 — 반드시 `rmdir`, `Remove-Item -Recurse` 금지(메인 트리 node_modules 가 통째로 날아간다).
+- 브랜치명은 `worktree-{slug}` 다 (§1).
 - `plans/{slug}.md`를 삭제한다.
 - `REGISTRY.md`에서 해당 행을 삭제한다 (쓰기 전 재-read).
 - 정리 완료 후 다음 작업을 대기한다.
