@@ -187,6 +187,14 @@ export interface RouteResponse {
 /** 스펙 명시 상한 — 호출 측 가드에서 공유. */
 export const ROUTE_MAX_WAYPOINTS = 30;
 
+/**
+ * `POST /api/trips/start` 의 `plannedFields` 상한.
+ * OpenAPI 에는 없고 실호출로 확인한 값 — 초과 시 400
+ * "plannedFields 는 200건 이하로 보내주세요" (실측 2026-07-28, 433건).
+ * 프론트가 미리 막지 않으면 사용자가 현장을 다 고르고 순서까지 정한 뒤 마지막에 튕긴다.
+ */
+export const TRIP_MAX_PLANNED_FIELDS = 200;
+
 export const trips = {
   start: (body?: TripStartBody) =>
     request<TripStartResponse>('/api/trips/start', {

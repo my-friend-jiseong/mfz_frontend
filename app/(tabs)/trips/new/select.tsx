@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,6 +22,7 @@ import { FieldFilterBar } from '@/components/fields/FieldFilterBar';
 import { type Field, type FieldStatus } from '@/types/entities';
 import { collectFieldFacets, applyFieldFilters, mergeCategoryNames } from '@/utils/fieldFacets';
 import { useCategoryStore } from '@/stores/categoryStore';
+import { TRIP_MAX_PLANNED_FIELDS } from '@/api';
 
 export default function NewTripSelect() {
   const router = useRouter();
@@ -80,10 +81,25 @@ export default function NewTripSelect() {
     [selectedIds, fieldById],
   );
 
+  // 백엔드 plannedFields 상한(200). 여기서 막지 않으면 현장을 다 고르고 순서까지 정한 뒤
+  // 마지막 '외근 시작' 에서 400 으로 튕긴다 — 되돌릴 방법도 안내도 없는 막다른 길이었다.
+  const atLimit = selectedIds.length >= TRIP_MAX_PLANNED_FIELDS;
+
   const toggle = (id: string) =>
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-    );
+    setSelectedIds((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id);
+      if (prev.length >= TRIP_MAX_PLANNED_FIELDS) {
+        // 해제는 언제나 되고 추가만 막는다 — 상한에 걸렸을 때 목록이 굳어버리지 않게.
+        Alert.alert(
+          '한 번에 최대 ' + TRIP_MAX_PLANNED_FIELDS + '곳',
+          '외근 하나에 담을 수 있는 현장은 ' +
+            TRIP_MAX_PLANNED_FIELDS +
+            '곳까지입니다. 일부를 해제한 뒤 다시 선택해주세요.',
+        );
+        return prev;
+      }
+      return [...prev, id];
+    });
 
   // 현재 보이는 (필터링된) 현장이 모두 선택됐는지 — 전체 선택 토글 상태
   const visibleAllSelected =
@@ -92,9 +108,23 @@ export default function NewTripSelect() {
     const visibleIds = fields.map((f) => f.id);
     if (visibleAllSelected) {
       setSelectedIds((prev) => prev.filter((id) => !visibleIds.includes(id)));
-    } else {
-      setSelectedIds((prev) => Array.from(new Set([...prev, ...visibleIds])));
+      return;
     }
+    setSelectedIds((prev) => {
+      const merged = Array.from(new Set([...prev, ...visibleIds]));
+      if (merged.length <= TRIP_MAX_PLANNED_FIELDS) return merged;
+      // 상한까지만 담는다. 조용히 잘라내면 사용자는 전부 선택된 줄 안다.
+      const dropped = merged.length - TRIP_MAX_PLANNED_FIELDS;
+      Alert.alert(
+        '한 번에 최대 ' + TRIP_MAX_PLANNED_FIELDS + '곳',
+        '선택한 현장이 상한을 넘어 앞에서부터 ' +
+          TRIP_MAX_PLANNED_FIELDS +
+          '곳만 담았습니다. (' +
+          dropped +
+          '곳 제외)',
+      );
+      return merged.slice(0, TRIP_MAX_PLANNED_FIELDS);
+    });
   };
 
   const handleNext = () => {
@@ -148,8 +178,14 @@ export default function NewTripSelect() {
     >
       <View style={styles.head}>
         <View style={styles.headRow}>
-          <Text variant="bodySm" weight="bold" color="primary">
+          <Text
+            variant="bodySm"
+            weight="bold"
+            color={atLimit ? 'danger' : 'primary'}
+          >
             {selectedIds.length}/{myFields.length}개 선택
+            {/* 상한에 닿았을 때만 알린다 — 평소엔 200 이라는 숫자가 의미 없는 노이즈다. */}
+            {atLimit ? ` · 최대 ${TRIP_MAX_PLANNED_FIELDS}곳` : ''}
           </Text>
           {/* '모두 선택' 은 필터 칩이 아니라 선택 동작 — 필터 바에서 분리해 카운트 옆에 둔다. */}
           {fields.length > 0 ? (
