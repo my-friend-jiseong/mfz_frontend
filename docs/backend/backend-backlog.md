@@ -13,19 +13,20 @@
 
 ---
 
-## 🔗 프론트 연동 대기 — 백엔드 배포 완료, 프론트 미배선
+## 🔗 2026-07-26 배치 프론트 연동 — 현황
 
 > 2026-07-26 백엔드 배치([release-2026-07-26-backend-backlog.md](./release-2026-07-26-backend-backlog.md))로
-> 활성 큐 6건이 운영에 나갔다. **백엔드 요청으로서는 종결(아카이브)이지만 프론트가 아직 안 붙었다.**
-> 여기가 다음 프론트 사이클의 작업 목록이다. 프론트 현황은 2026-07-28 코드 실측.
+> 활성 큐 6건이 운영에 나갔고, **2026-07-28 사이클에서 §19·§15·§25·§22 를 연동했다.**
+> 남은 프론트 작업은 **§12-B(ERD) 하나**. §9 는 연동 대상이 아니라 백엔드 재요청(**§27**)으로 전환됐다 —
+> 백엔드가 phase 를 붙인 리소스가 프론트가 쓰는 리소스와 달라 프론트가 할 수 있는 일이 없다.
 
 | § | 백엔드 | 프론트 현황 (실측) | 해야 할 것 |
 |---|---|---|---|
-| §25 categories | ✅ | `src/api/endpoints/categories.ts` 는 있음 / `categoryStore` 가 AsyncStorage 진실원 | store 를 서버 단일 소스로 스왑, `TODO(backend)` 제거 |
-| §9 visit phase | ✅ | `endpoints/visits.ts`·타입에 `phase` **0건** | 사진 업로드 `phase` 전송 + 체크인 chip + visit 상세 phase 섹션 + `phaseProgress` 표시 |
-| §19 PDF export | ✅ | `endpoints/reports.ts` 에 pdf **0건** | `exportPdf` 배선 + 보고서 상세에 PDF 다운로드 버튼 |
-| §15 프로필 수정 | ✅ | `endpoints/` 에 me 파일 **없음** | `PATCH /api/me`·`/me/password` + `profile.tsx` 폼 |
-| §22 경로 프록시 | ✅ | `endpoints/trips.ts` 에 route **0건** | `POST /trips/:id/route` → 진행 중 지도 실도로 폴리라인 + ETA 대체 |
+| ~~§25 categories~~ | ✅ | **연동 완료** (2026-07-28, `c0bcbae`) — 서버 단일 소스 + 최초 1회 로컬 flush | — |
+| ~~§9 visit phase~~ | ✅ | **프론트는 이미 phase 를 보내고 있다** — 다만 백엔드가 받는 엔드포인트가 다름 | **프론트 작업 없음. → §27 로 백엔드 재요청** |
+| ~~§19 PDF export~~ | ✅ | **연동 완료** (2026-07-28, `bea5141`) — 생성 후 즉시 열기 단발(URL 미영속) | — |
+| ~~§15 프로필 수정~~ | ✅ | **연동 완료** (2026-07-28, `4d8d79c`) — profile/edit 화면 신설 | — |
+| ~~§22 경로 프록시~~ | ✅ | **연동 완료** (2026-07-28, `49bd539`) — 실도로 폴리라인 + 재최적화 ETA 대체 | — |
 | §12-B ERD | (A) ✅ | `ERD.drawio` 미갱신 | 백엔드 `db-schema.md` 기준 drawio 갱신 (§12 활성 유지) |
 
 §10(파일 인프라)은 서버측 드라이버 교체라 프론트 contract 무변경 — 배선 불요.
@@ -60,6 +61,8 @@
 
 ### 발견 시점
 2026-05-10 (요구사항 정리 #10). 2026-07-26 드라이버·사진 압축 배포로 부분 완료.
+
+---
 
 ## 12. 🟠 ERD 최신화 — (A) 백엔드 스키마 dump ✅ / (B) `ERD.drawio` 갱신 잔여 (프론트 합동)
 
@@ -103,7 +106,9 @@
 - 백엔드 `docs/db-schema.md` — 스키마 dump (§12-A 산출물)
 - [`docs/ERD.drawio`](../diagram/ERD.drawio) — 현재 ERD (검증 미수행)
 - 프론트 [`src/types/entities.ts`](../../src/types/entities.ts) — 프론트 데이터 모델
-- 관련 항목: §26(파생값 `siteCount` 의미 미정의)
+- 관련 항목: §26(파생값 `siteCount` 의미 미정의) · §27(§9 phase 가 프론트 경로와 어긋남)
+
+---
 
 ## 26. 🟡 `GET /api/trips/list` — `siteCount` 가 계획 목적지 수와 불일치 (의미 미정의)
 
@@ -162,6 +167,65 @@
 
 ---
 
+## 27. 🟠 §9 visit phase — 붙인 리소스가 프론트 경로와 다름 (배포됐지만 동작 불가)
+
+§9(visit 단계 모델)는 백엔드가 2026-07-26 에 배포했지만, **프론트에서는 절대 발화하지 않는다.**
+붙인 자리가 프론트가 쓰는 자리와 다르다.
+
+### 실측 (운영 OpenAPI, 2026-07-28)
+
+| 엔드포인트 | `phase` | 프론트가 호출하나 |
+|---|---|---|
+| `POST /api/fields/{fieldId}/photos` | **없음** (`file`+`caption` 뿐) | **예** — 체크인 화면의 단계 슬롯이 여기로 올린다 |
+| `POST /api/visits/{visitId}/photos` | 있음 (`before\|during\|after`) | **아니오** — 프론트에 호출 0건 |
+
+- 프론트는 체크인(`app/(tabs)/fields/[id]/checkin.tsx`)에서 작업 전/중/후 3슬롯을 이미 제공하고
+  `fieldStore.addPhoto(fieldId, file, { phase })` 로 **phase 를 실어 보내고 있다.** 그런데 그 엔드포인트가
+  phase 를 받지 않으므로 서버에서 조용히 버려진다.
+- 그래서 `POST /reports/from-trip/:tripId` 의 phase→슬롯 자동 매핑도 매칭할 데이터가 없어 발화하지 않는다.
+  §9 의 실제 목적(보고서마다 사진을 다시 분류하는 번거로움 제거)이 달성되지 않은 상태.
+- 결과보고서가 "trip timeline / visit 상세에 `phaseProgress` 포함" 이라 했으나 **OpenAPI 전체에서 0건**.
+  `GET /api/trips/{tripId}` 의 timeline 항목 스키마에도 없다.
+
+### 왜 프론트가 visit 쪽으로 옮기면 안 되나
+
+**visit 첨부를 돌려주는 GET 이 스펙에 하나도 없다.** `GET /api/trips/{tripId}/visits/{visitId}` 는
+응답 스키마 자체가 비어 있고, trip 상세 timeline 에도 첨부가 없다. 지금 프론트가 사진을 visit 으로
+옮기면 **찍은 사진을 앱에서 다시 볼 수 없게 된다** — 현장 상세 갤러리에서 사라지고 대체 조회 경로도 없다.
+자동 매핑을 얻는 대가로 가시성을 잃는 거래라 채택하지 않았다.
+
+또한 ERD v2 이후 이 앱의 사진은 **현장(field) 자산**이다(체크인 화면 주석: "체크인은 방문 기록만 생성,
+첨부는 현장에서 관리"). visit 첨부로 옮기는 건 데이터 모델 결정을 되돌리는 일이라 §12(ERD) 선행이 필요하다.
+
+### 요청 — 셋 중 하나
+
+1. **`POST /api/fields/{fieldId}/photos` 에 `phase` 추가** (**선호**).
+   프론트가 이미 보내고 있어 **백엔드 배포 즉시 동작**한다. 프론트 변경 0.
+   응답 `FieldPhotoAttachment` 에도 echo 하면 보고서 편집기 prefill 까지 살아난다
+   (`FieldPhotoItem.phase?` 는 이미 optional 로 선반영돼 있음).
+2. visit 첨부 조회 GET 신설 — `GET /api/visits/{visitId}/photos` 또는 trip 상세 timeline 에 첨부 포함.
+   그래야 프론트가 visit 쪽으로 옮겨도 사진이 사라지지 않는다. (1번보다 프론트 작업이 큼)
+3. `phaseProgress` 를 실제로 응답에 싣고 OpenAPI 에 반영. 현재 스펙 0건이라 프론트가 신뢰할 근거가 없다.
+
+### 우선순위
+
+🟠 중상 — 배포는 됐는데 **사용자에게 도달하는 효과가 0** 이다. 1번이면 백엔드 한 줄 수준이고
+프론트는 손댈 게 없다.
+
+### 발견 시점
+
+2026-07-28, 2026-07-26 배치 프론트 연동 사이클 착수 시 운영 OpenAPI 대조 중.
+
+### 관련 코드
+
+- 프론트 업로드 [`src/api/endpoints/fields.ts:254`](../../src/api/endpoints/fields.ts#L254) `addPhoto(..., opts.phase)`
+- 프론트 UI [`app/(tabs)/fields/[id]/checkin.tsx`](../../app/\(tabs\)/fields/\[id\]/checkin.tsx) 단계 슬롯 3개
+- 프론트 타입 [`src/api/endpoints/fields.ts:51`](../../src/api/endpoints/fields.ts#L51) `AttachmentPhase`
+- 임시 대안 [`app/(tabs)/reports/[id]/field-report.tsx`](../../app/\(tabs\)/reports/\[id\]/field-report.tsx) `pickFromField` (현장 갤러리에서 수동 선택)
+- 관련 항목: §9(✅ 배포, 그러나 미도달) · §12(ERD — 사진 소유 리소스 결정)
+
+---
+
 ## ✅ 완료 항목 (아카이브)
 
 > 조치 완료된 요청을 한 줄로 압축. 상세(커밋 diff·probe 로그)는 git 이력 + 아래 「변경 이력」 참조.
@@ -173,7 +237,7 @@
 - **§5 ✅ `POST /trips/navigation/optimize-preview` 404 → 클라이언트 only 확정** (2026-05-31) — `optimizePreview`·관련 타입 삭제, `order.tsx` 는 `nearestNeighborOrder` 만. (외근 시작 후 `/optimize` 는 유지.)
 - **§7 ✅ 보고서 본문 검증 완화 + 사진 첨부 → 새 양식으로 해소** (2026-06-04) — content·보고서 레벨 사진 개념 제거(본문=`field_reports`), 사진은 `POST /reports/:id/field-reports`.
 - **§8 ✅ 자동 체크인 — 현 반자동 정책 유지(변경 없음)** (2026-05-10) — arrival→Alert→사용자 탭→checkIn confirm 안전망이 의도된 동작. 재개 조건: 현장 작업자 "확인 번거로움" 신호 누적 시.
-- **§9 ✅ visit 단계 모델(phase: 조치 전/중/후)** (release 2026-07-26) — `visit_photos.phase`(`before|during|after|null`), `POST /visits/:visitId/photos` multipart `phase?`, 응답 `attachment.phase` + 파생 `phaseProgress`(trip timeline·visit 상세 포함), `POST /reports/from-trip/:tripId` 이 phase→`beforePhotoUrl`/`pendingPhotoUrl`/`afterPhotoUrl` 자동 매핑. `visit_phase_invalid`(400). 커밋 `5a53b02`. **프론트 미배선** — 상단 「프론트 연동 대기」.
+- **§9 ✅ visit 단계 모델(phase: 조치 전/중/후)** (release 2026-07-26) — `visit_photos.phase`(`before|during|after|null`), `POST /visits/:visitId/photos` multipart `phase?`, 응답 `attachment.phase` + 파생 `phaseProgress`(trip timeline·visit 상세 포함), `POST /reports/from-trip/:tripId` 이 phase→`beforePhotoUrl`/`pendingPhotoUrl`/`afterPhotoUrl` 자동 매핑. `visit_phase_invalid`(400). 커밋 `5a53b02`. ⚠️ **배포됐으나 프론트에 도달하지 않음** — phase 가 붙은 곳은 visit 사진인데 프론트는 현장 사진 엔드포인트를 쓴다(2026-07-28 OpenAPI 실측). → **§27 로 재요청.**
 - **§11 ✅ 외근 destinations 영속화 + GET/PATCH** (release 2026-06 batch3) — `trips/start` plannedFields 수용·`destinations[]`, `GET/PATCH /trips/:id/destinations`, 체크인 자동 arrived. `destinationStore` 서버+캐시 전환. 커밋 `ea9a33f`·`caf2d1f`. (진행 중 단건 add 는 §24.)
 - **§13 ✅ `POST /reports/generate` 500 → 프론트 미사용으로 종결** (2026-06-04) — AI 초안 분기 프론트 완전 제거(`/reports/generate`는 redirect만). 백엔드엔 미사용 endpoint 정리(제거/410) 권고만 잔존.
 - **§14 ✅ 현장 메모/사진 개별 삭제** (release 2026-06) — `DELETE /fields/:id/memos/:memoId`·`.../photos/:photoId` 204(디스크 객체 정리). 프론트 `removeTextMemo`/`removePhoto` 선반영.
@@ -193,6 +257,14 @@
 
 ## 변경 이력
 
+- **2026-07-28**: 2026-07-26 배치 프론트 연동 사이클. **§19·§15·§25·§22 연동 완료**
+  (`bea5141`·`4d8d79c`·`c0bcbae`·`49bd539`). **§27 추가(🟠)** — §9 visit phase 가 배포됐는데
+  프론트에 도달하지 않는다: 운영 OpenAPI 실측 결과 `phase` 는 `POST /api/visits/{visitId}/photos`
+  에만 있고, 프론트가 실제로 쓰는 `POST /api/fields/{fieldId}/photos` 는 `file`+`caption` 뿐이라
+  체크인 화면이 보내는 phase 가 서버에서 버려진다. visit 첨부를 돌려주는 GET 이 스펙에 하나도
+  없어 프론트가 visit 쪽으로 옮기면 사진이 앱에서 사라지므로, 코드 대신 백엔드 재요청으로 전환.
+  결과보고서가 주장한 `phaseProgress` 도 스펙 전체 0건. §12-B(ERD)는 백엔드 저장소 체크아웃이
+  `af5320e`(배치 직전)에 멈춰 `db-schema.md` 부재 — 별도 사이클로 이월.
 - **2026-07-28**: 백로그 정리 — 2026-07-26 백엔드 배치 반영(결과보고서 `release-2026-07-26-backend-backlog.md`
   저장소 반영). **§3·§9·§15·§19·§22·§25 → ✅ 아카이브 이관**(백엔드 배포 완료). **§10 부분 완료**로 재기술
   (S3/MinIO 드라이버·사진 1920/q72 ✅ / 음성 비트레이트·보고서 zip<20MB 잔여). **§12 (A) 스키마 dump ✅,
