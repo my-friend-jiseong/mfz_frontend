@@ -163,6 +163,13 @@ export default function Profile() {
             label="가입일"
             value={fmtDate(user?.createdAt)}
           />
+          <View style={styles.divider} />
+          {/* backend-backlog §15 — 이름·비밀번호 변경. 이전엔 '관리자 문의' 안내뿐이었다. */}
+          <MenuRow
+            icon="create-outline"
+            label="내 정보 수정"
+            onPress={() => router.push('/(tabs)/profile/edit' as never)}
+          />
         </Card>
 
         <Text

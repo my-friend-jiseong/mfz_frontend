@@ -32,6 +32,17 @@ export interface LoginBody {
   password: string;
 }
 
+// backend-backlog §15 — release 2026-07-26: 프로필 수정.
+// 이메일은 인증 식별자라 변경 불가(백엔드가 name 만 받는다).
+export interface UpdateMeBody {
+  name?: string;
+}
+export interface ChangePasswordBody {
+  currentPassword: string;
+  newPassword: string;
+  newPasswordConfirm: string;
+}
+
 export const auth = {
   signup: (body: SignupBody) =>
     request<AuthSession>('/auth/signup', { method: 'POST', body, skipAuth: true }),
@@ -54,4 +65,13 @@ export const auth = {
     }),
 
   me: () => request<ApiUser>('/api/me'),
+
+  // backend-backlog §15 — 이름 변경. 응답은 { user } 래핑(me() 의 flat ApiUser 와 다름).
+  updateMe: (body: UpdateMeBody) =>
+    request<{ user: ApiUser }>('/api/me', { method: 'PATCH', body }),
+
+  // backend-backlog §15 — 비밀번호 변경. 에러: current_password_invalid /
+  // password_confirm_mismatch / password_policy_violation.
+  changePassword: (body: ChangePasswordBody) =>
+    request<{ updated: boolean }>('/api/me/password', { method: 'PATCH', body }),
 };

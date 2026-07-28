@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '@/stores/authStore';
 import { safeBack } from '@/utils/backNavigation';
+import { checkPasswordPolicy, PASSWORD_HINT } from '@/utils/password';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 import { Button } from '@/components/ui/Button';
@@ -54,23 +55,8 @@ function openExternal(url: string, fallbackTitle: string) {
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PASSWORD_HINT = '10자 이상 · 영대/영소/숫자/특수문자 중 3종 이상 조합';
 
-// 백엔드 정책: 10자 이상 + 영대/영소/숫자/특수문자 중 3종 이상.
-// 한글은 4종 어디에도 매칭되지 않음 — 백엔드가 거부할 가능성 높아 명시적 안내.
-function checkPasswordPolicy(pw: string): string | null {
-  if (pw.length < 10) return '비밀번호는 10자 이상이어야 합니다';
-  if (/[가-힯ᄀ-ᇿ㄰-㆏]/.test(pw)) {
-    return '비밀번호에 한글은 사용할 수 없습니다';
-  }
-  let kinds = 0;
-  if (/[A-Z]/.test(pw)) kinds++;
-  if (/[a-z]/.test(pw)) kinds++;
-  if (/[0-9]/.test(pw)) kinds++;
-  if (/[^A-Za-z0-9]/.test(pw)) kinds++;
-  if (kinds < 3) return '영대/영소/숫자/특수문자 중 3종 이상을 조합해주세요';
-  return null;
-}
+// 비밀번호 정책은 프로필 비밀번호 변경(§15)과 공유 — src/utils/password.ts 단일 출처.
 
 // 백엔드 error.code → 어느 필드 인라인 에러로 매핑할지.
 const CODE_TO_FIELD: Record<string, keyof FieldErrors> = {

@@ -36,6 +36,14 @@ interface AuthState {
   ) => Promise<Result>;
   logout: () => Promise<void>;
 
+  // backend-backlog §15 — 프로필 수정. 실패 code 를 그대로 실어 화면이 필드 인라인 에러로 매핑.
+  updateName: (name: string) => Promise<Result>;
+  changePassword: (
+    currentPassword: string,
+    newPassword: string,
+    newPasswordConfirm: string,
+  ) => Promise<Result>;
+
   // 내부 — client.ts 가 401 처리 시 호출
   _refreshAccess: () => Promise<string | null>;
 }
@@ -243,6 +251,32 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       refreshToken: null,
       isAuthenticated: false,
     });
+  },
+
+  // backend-backlog §15 — 이름 변경. 응답의 user 로 메모리 갱신해 프로필 헤더가 즉시 반영된다.
+  // 응답에 user 가 없으면(본문 미보장) 로컬 병합으로 폴백 — 저장은 됐는데 화면만 안 바뀌는 상태 방지.
+  updateName: async (name) => {
+    try {
+      const res = await auth.updateMe({ name });
+      const next = res?.user ?? null;
+      set((s) => ({
+        user: next ?? (s.user ? { ...s.user, name } : s.user),
+      }));
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: describeError(e), code: errorCode(e) ?? undefined };
+    }
+  },
+
+  // backend-backlog §15 — 비밀번호 변경. 세션 무효화 여부가 스펙에 없어 로그아웃은 하지 않는다
+  // (백엔드가 무효화한다면 다음 요청의 401 → 기존 refresh 회로가 처리).
+  changePassword: async (currentPassword, newPassword, newPasswordConfirm) => {
+    try {
+      await auth.changePassword({ currentPassword, newPassword, newPasswordConfirm });
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: describeError(e), code: errorCode(e) ?? undefined };
+    }
   },
 
   _refreshAccess: async () => {
