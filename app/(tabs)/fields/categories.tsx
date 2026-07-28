@@ -18,7 +18,8 @@ import type { Category } from '@/types/entities';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
 
-// 카테고리(분류) 관리 — 추가·이름변경·삭제. categoryStore(임시 로컬 영속, 백엔드 배포 후 서버).
+// 카테고리(분류) 관리 — 추가·이름변경·삭제. 진실원은 서버(/api/categories, 백로그 §25).
+// AsyncStorage 는 오프라인 표시용 캐시라, 서버 실패 시 store 가 화면 변경을 되돌린다.
 export default function CategoriesManage() {
   const categories = useCategoryStore((s) => s.categories);
   const busy = useCategoryStore((s) => s.busy);
@@ -41,7 +42,7 @@ export default function CategoriesManage() {
       await refresh();
       if (cancelled) return;
       const mine = userId ? allFields.filter((f) => f.userId === userId) : [];
-      seed(collectFieldFacets(mine).categories);
+      await seed(collectFieldFacets(mine).categories);
     })();
     return () => {
       cancelled = true;
@@ -78,7 +79,15 @@ export default function CategoriesManage() {
       `"${c.name}" 을(를) 삭제할까요?\n이미 이 분류가 붙은 현장의 값은 그대로 남습니다.`,
       [
         { text: '취소', style: 'cancel' },
-        { text: '삭제', style: 'destructive', onPress: () => void remove(c.id) },
+        {
+          text: '삭제',
+          style: 'destructive',
+          // 서버가 진실원이라 실패 시 store 가 목록을 되돌린다 — 사용자에게 이유를 알려준다.
+          onPress: () =>
+            void remove(c.id).then((r) => {
+              if (!r.ok) Alert.alert('카테고리 삭제 실패', r.error);
+            }),
+        },
       ],
     );
   };

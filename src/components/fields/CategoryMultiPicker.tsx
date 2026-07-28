@@ -51,7 +51,7 @@ export function CategoryMultiPicker({ value, onChange, disabled }: Props) {
       await refresh();
       if (cancelled) return;
       const mine = userId ? allFields.filter((f) => f.userId === userId) : [];
-      seed(collectFieldFacets(mine).categories);
+      await seed(collectFieldFacets(mine).categories);
     })();
     return () => {
       cancelled = true;
