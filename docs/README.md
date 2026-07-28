@@ -9,6 +9,7 @@
 | [reference/tech_stack.md](reference/tech_stack.md) | 기술 스택 정리 (프론트 RN/Expo · 백엔드 Node/Express/Prisma) |
 | [reference/design-system.md](reference/design-system.md) | 디자인 시스템 단일 진실 출처 — 토큰(`src/theme/`)·공용 컴포넌트(`src/components/ui/`) |
 | [reference/ERD_REVOLUTION.md](reference/ERD_REVOLUTION.md) | ERD v2 스키마 단순화 changelog (백엔드 변경 요약) |
+| [reference/in-app-route.md](reference/in-app-route.md) | 인앱 경로 표시(차량) — 구현 완료 명세, 로드맵 01 에서 이관 |
 
 ## 다이어그램 — `diagram/`
 

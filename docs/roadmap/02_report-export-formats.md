@@ -1,18 +1,23 @@
 # 보고서 내보내기 포맷 확장 — PDF · HWP
 
-> **상태**: 확정 (2026-06-06 사용자 결정 — HWP 는 기술 제약으로 HWPX 타깃 권장, 하단)
-> **백로그**: PDF = [backend-backlog §19](../backend/backend-backlog.md) — **백엔드 배포 완료(2026-07-26), ✅ 아카이브. 프론트 배선만 남음** · 위치도 삽입 = §20(✅) · HWP 는 방식 확정 후 등재
-> **현황**: Word(docx) 내보내기는 **구현 완료** (`reports.output_file_url`). 이 명세는 그 파이프라인의 포맷 확장.
+> **상태**: **PDF 구현 완료 (2026-07-28)** · HWP 미착수 — 남은 건 HWP 뿐이라 로드맵에 유지한다.
+> **백로그**: PDF = [§19](../backend/backend-backlog.md) ✅ · 위치도 = §20 ✅ · HWP 는 방식 확정 후 등재
+> **현황**: Word(docx)·PDF 모두 내보내기 가능. 이 명세의 잔여 범위는 HWP(HWPX 타깃) 한 가지다.
+> **결정 이력**: 2026-06-06 사용자 결정 — HWP 는 기술 제약상 HWPX 타깃 권장(하단).
 
-## 1. PDF (= 백로그 §19, 우선) — 백엔드 ✅ / 프론트 ⬜
+## 1. PDF (= 백로그 §19) — ✅ 구현 완료
 
 **백엔드 완료 (release 2026-07-26, 커밋 `7b02fb4`, `pdfkit`)**
 - `POST /api/reports/:reportId/export/pdf` · `POST /api/reports/:reportId/export?format=pdf|word`
 - 응답 `{ url, downloadUrl, format }`. **Word 의 `outputFileUrl` 은 덮어쓰지 않는다** — 두 포맷 공존.
 - 에러 `export_format_invalid`(400).
 
-**프론트 할 일**
-- `src/api/endpoints/reports.ts` 에 pdf 배선(현재 0건) → 보고서 상세에 'PDF 다운로드' 를 기존 'Word 파일 다운로드' 옆에 추가.
+**프론트 완료 (2026-07-28, 커밋 `bea5141`)**
+- `reports.exportPdf` + `reportStore.exportPdf` + 보고서 상세 'PDF 내보내기' 버튼.
+- **결과 URL 이 서버에 영속되지 않아**(reports 에 pdf 컬럼 없음) 상시 다운로드 버튼이 성립하지 않는다
+  → 누를 때마다 생성 후 즉시 열기 단발. 액션이 URL 자체를 반환하는 이유도 이것.
+- 실측: 263KB `%PDF-1.3` 생성 확인. 현장보고 0건이면 서버가 400 으로 거절(에러 표시).
+  ⚠️ 백엔드 메시지가 PDF 요청인데도 "Word를 생성할 수 없습니다" 로 온다 — §19 아카이브에 정정 요망 기록.
 - 용도: 인쇄·모바일 공유 (Word 는 편집용, PDF 는 제출·열람용).
 - §20(위치도 자동 삽입)은 이미 Word 파이프라인에 반영됨 — PDF 에도 들어가는지는 실호출로 확인 필요.
 
