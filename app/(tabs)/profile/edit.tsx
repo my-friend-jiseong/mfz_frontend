@@ -119,8 +119,9 @@ export default function ProfileEdit() {
             이름
           </Text>
           <Card style={styles.card}>
+            {/* 섹션 제목이 이미 '이름' 이라 Input 라벨은 중복 — 스크린리더용 라벨만 남긴다. */}
             <Input
-              label="이름"
+              accessibilityLabel="이름"
               value={name}
               onChangeText={(v) => {
                 setName(v);
