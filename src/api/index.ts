@@ -5,8 +5,11 @@ export { request, configureAuth } from './client';
 export { auth } from './endpoints/auth';
 export type { ApiUser, AuthSession, SignupBody, LoginBody } from './endpoints/auth';
 
-export { trips } from './endpoints/trips';
+export { trips, ROUTE_MAX_WAYPOINTS } from './endpoints/trips';
 export type {
+  LatLng,
+  RouteBody,
+  RouteResponse,
   TripStartBody,
   TripUpdateBody,
   PlannedFieldInput,

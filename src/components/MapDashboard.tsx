@@ -49,6 +49,10 @@ interface MapDashboardProps {
   // 외근 방문 순서(fieldId 배열). 주어지면 그 순서로 마커에 순번을 새기고 점선 경로를 잇는다.
   // scopeFieldIds 와 별개 축 — 스코프는 '무엇을 보여줄지', 이건 '어떤 순서로 도는지'.
   routeFieldIds?: string[];
+  // backend-backlog §22 — 실도로 경로 좌표열(백엔드 카카오모빌리티 프록시 응답의 vertexes).
+  // 주어지면 routeFieldIds 로 만든 직선 대신 이걸 그린다. 순번 마커는 routeFieldIds 가 계속 담당 —
+  // 두 축이 다르다: 이건 '어떤 길로 가는지', routeFieldIds 는 '어떤 순서로 도는지'.
+  routeVertexes?: { lat: number; lng: number }[];
   // 스코프가 걸려도 메인 탭의 지도 크롬(검색창·레이어 패널·표시 설정)을 유지한다.
   // 외근 목록의 '지도에서 보기' 는 상세 화면이 아니라 메인 탭 안의 임시 포커스라, 토글 한 번에
   // 검색창·레이어 버튼이 사라지고 히트맵 설정이 마커로 리셋되면 고장으로 보인다.
@@ -61,6 +65,7 @@ export function MapDashboard({
   selectedFieldIds,
   onSelectField,
   routeFieldIds,
+  routeVertexes,
   keepGlobalChrome = false,
 }: MapDashboardProps = {}) {
   const router = useRouter();
@@ -291,7 +296,10 @@ export function MapDashboard({
   // 기준을 visibleFields 가 아니라 scopedFields 로 두는 이유: keepGlobalChrome 이면 공유
   // 필터(상태·기간·분류)가 살아 있어 중간 목적지가 마커에서 빠질 수 있는데, 그때 경로선까지
   // 그 점을 건너뛰면 실제로 가지 않은 지름길이 그려진다. 동선은 필터와 무관한 사실이므로 고정.
+  // §22: 실도로 좌표열이 있으면 그쪽이 우선. 직선 계산은 폴백으로 남긴다 —
+  // 경로 API 실패(503 등)와 routeFieldIds 만 주는 화면(외근 상세)이 계속 이 경로를 탄다.
   const route = useMemo(() => {
+    if (routeVertexes && routeVertexes.length >= 2) return routeVertexes;
     if (!routeFieldIds || routeFieldIds.length < 2) return undefined;
     const byId = new Map(scopedFields.map((f) => [f.id, f]));
     const pts: { lat: number; lng: number }[] = [];
@@ -302,7 +310,7 @@ export function MapDashboard({
       pts.push({ lat: f.latitude, lng: f.longitude });
     }
     return pts.length >= 2 ? pts : undefined;
-  }, [routeFieldIds, scopedFields]);
+  }, [routeVertexes, routeFieldIds, scopedFields]);
 
   return (
     // 지도가 화면 위까지 꽉 차고, 설정은 우측 상단 떠 있는 '레이어' 버튼 오버레이로.

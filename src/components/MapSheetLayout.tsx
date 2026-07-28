@@ -48,6 +48,8 @@ interface Props {
   onSelectField?: (fieldId: string) => void;
   // 외근 방문 순서(fieldId 배열) — 마커 순번 + 점선 경로. 순서 화면/진행 중/정리 화면에서 사용.
   routeFieldIds?: string[];
+  // backend-backlog §22 — 실도로 경로 좌표열. 주어지면 직선 대신 이 선을 그린다(순번은 routeFieldIds 담당).
+  routeVertexes?: { lat: number; lng: number }[];
   // true 면 mapFieldIds(지도 스코프)가 바뀔 때 시트를 내려 지도를 드러낸다.
   // 목록에서 특정 외근을 '지도에서 보기' 했을 때 시트가 지도를 덮고 있으면 아무 일도 안 일어난 것처럼 보인다.
   collapseOnScopeChange?: boolean;
@@ -73,6 +75,7 @@ export function MapSheetLayout({
   selectedFieldIds,
   onSelectField,
   routeFieldIds,
+  routeVertexes,
   collapseOnScopeChange = false,
   keepGlobalChrome = false,
   children,
@@ -159,6 +162,7 @@ export function MapSheetLayout({
         selectedFieldIds={selectedFieldIds}
         onSelectField={onSelectField}
         routeFieldIds={routeFieldIds}
+        routeVertexes={routeVertexes}
         keepGlobalChrome={keepGlobalChrome}
       />
       {/* 컨테이너 높이가 측정되기 전엔 시트를 렌더하지 않는다 — snapPoints 를 마운트 후에

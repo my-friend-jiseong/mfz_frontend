@@ -165,6 +165,28 @@ export interface OptimizeNavigationResponse {
   summary: { algorithm: string; totalDistanceKm: number; totalEtaMinutes: number };
 }
 
+// backend-backlog §22 — release 2026-07-26: 카카오모빌리티 자동차 경로 프록시.
+// REST 키가 서버 전용이라 백엔드를 통해야 한다. 응답 vertexes 로 직선 폴리라인을 대체.
+export interface LatLng {
+  lat: number;
+  lng: number;
+}
+export interface RouteBody {
+  origin: LatLng;
+  destination: LatLng;
+  /** 경유지 — 스펙상 최대 30개. 초과분을 잘라내면 실제로 가지 않는 경로가 그려지므로 호출 측이 포기할 것. */
+  waypoints?: LatLng[];
+}
+/** 백엔드 응답 — distance(m), duration(초). 본문 미보장 대비로 전부 optional. */
+export interface RouteResponse {
+  distance?: number;
+  duration?: number;
+  vertexes?: LatLng[];
+}
+
+/** 스펙 명시 상한 — 호출 측 가드에서 공유. */
+export const ROUTE_MAX_WAYPOINTS = 30;
+
 export const trips = {
   start: (body?: TripStartBody) =>
     request<TripStartResponse>('/api/trips/start', {
@@ -241,4 +263,12 @@ export const trips = {
       `/api/trips/${tripId}/navigation/optimize`,
       { method: 'POST', body },
     ),
+
+  // backend-backlog §22 — 실도로 차량 경로. 503 kakao_provider_unavailable 은 정상적으로
+  // 발생할 수 있는 실패다(외부 제공자 장애) — 호출 측은 직선 폴리라인으로 폴백할 것.
+  route: (tripId: string, body: RouteBody) =>
+    request<RouteResponse>(`/api/trips/${tripId}/route`, {
+      method: 'POST',
+      body,
+    }),
 };

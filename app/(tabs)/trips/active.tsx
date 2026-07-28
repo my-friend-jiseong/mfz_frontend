@@ -22,12 +22,56 @@ import { AddDestinationModal } from '@/components/trips/AddDestinationModal';
 import { useQuickPhoto } from '@/components/fields/useQuickPhoto';
 import { QuickPhotoSheet } from '@/components/fields/QuickPhotoSheet';
 import { navigateToTripDetail } from '@/utils/postTripFlow';
-import { trips as tripsApi, localizeError } from '@/api';
+import { trips as tripsApi, localizeError, ROUTE_MAX_WAYPOINTS } from '@/api';
 import { VISIT_STATUS_LABEL } from '@/types/entities';
 import { nearestNeighborOrder } from '@/utils/routeOptimize';
 import { safeBack } from '@/utils/backNavigation';
 import { spacing } from '@/theme/spacing';
 import type { Destination } from '@/types/entities';
+
+// ----- backend-backlog §22 헬퍼 -----
+// 목적지 배열 → 경로 좌표열. 좌표가 없는 현장(0,0)은 건너뛴다.
+function pointsOfDestinations(
+  dests: readonly Destination[],
+  getField: (id: string) => { latitude: number; longitude: number } | undefined,
+): { lat: number; lng: number }[] {
+  const pts: { lat: number; lng: number }[] = [];
+  for (const d of dests) {
+    const f = getField(d.fieldId);
+    if (!f) continue;
+    if (f.latitude === 0 && f.longitude === 0) continue;
+    pts.push({ lat: f.latitude, lng: f.longitude });
+  }
+  return pts;
+}
+
+/** 좌표열의 동일성 키 — 재요청 판단과 중복 호출 차단에 공유. */
+function routeKeyOf(pts: readonly { lat: number; lng: number }[]): string {
+  return pts.map((p) => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`).join('|');
+}
+
+/**
+ * 실도로 경로 요청. 실패(503 kakao_provider_unavailable 등)는 null 로 삼킨다 —
+ * 호출 측은 직선 폴리라인·직선 ETA 로 폴백하면 되고, 지도는 계속 쓸모 있으므로
+ * 사용자를 Alert 로 막지 않는다.
+ */
+async function requestRoute(
+  tripId: string,
+  pts: { lat: number; lng: number }[],
+): Promise<{ vertexes?: { lat: number; lng: number }[]; distance?: number; duration?: number } | null> {
+  if (pts.length < 2) return null;
+  if (pts.length - 2 > ROUTE_MAX_WAYPOINTS) return null;
+  try {
+    return await tripsApi.route(tripId, {
+      origin: pts[0],
+      destination: pts[pts.length - 1],
+      waypoints: pts.slice(1, -1),
+    });
+  } catch (e) {
+    if (__DEV__) console.warn('[trips/route] 실도로 경로 실패, 직선 폴백', e);
+    return null;
+  }
+}
 
 export default function ActiveTrip() {
   const router = useRouter();
@@ -112,6 +156,51 @@ export default function ActiveTrip() {
       void loadFieldDetail(fid);
     }
   }, [tripFieldIds, loadFieldDetail]);
+
+  // ----- backend-backlog §22: 실도로 차량 경로 -----
+  // 지도의 점선은 지금까지 목적지를 직선으로 이었다(1단계). 백엔드 프록시가 배포돼
+  // 실제 도로 좌표열로 바꾼다. 순서는 직선과 동일하게 destinations 순 — 두 표현이 어긋나면
+  // 순번 마커와 선이 다른 이야기를 하게 된다.
+  const routePoints = useMemo(
+    () => pointsOfDestinations(destinations, getField),
+    [destinations, getField],
+  );
+
+  // 좌표열이 실제로 바뀔 때만 재요청 — destinations 객체 정체성 변화로 매 렌더 호출되는 걸 막는다.
+  const routeKey = useMemo(() => routeKeyOf(routePoints), [routePoints]);
+
+  const [routeVertexes, setRouteVertexes] = useState<
+    { lat: number; lng: number }[] | undefined
+  >(undefined);
+  // 이미 요청을 마친 좌표열 — 재최적화가 직접 경로를 받아오면 여기에 기록해
+  // 곧이은 이펙트의 중복 호출을 막는다. 카카오모빌리티 무료 쿼터가 유한하다(백로그 §22).
+  const fetchedRouteKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!activeTripId || routePoints.length < 2) {
+      setRouteVertexes(undefined);
+      return;
+    }
+    if (fetchedRouteKeyRef.current === routeKey) return;
+    // 경유지 상한(스펙 30). 초과분을 잘라내면 실제로 가지 않는 지름길이 그려지므로
+    // 아예 요청하지 않고 직선 폴백을 유지한다.
+    if (routePoints.length - 2 > ROUTE_MAX_WAYPOINTS) {
+      setRouteVertexes(undefined);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const res = await requestRoute(activeTripId, routePoints);
+      if (cancelled) return;
+      fetchedRouteKeyRef.current = routeKey;
+      setRouteVertexes(res?.vertexes && res.vertexes.length >= 2 ? res.vertexes : undefined);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // routeKey 가 좌표열의 진짜 변화를 대표한다 — routePoints 자체는 매 렌더 새 배열.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTripId, routeKey]);
 
   // 진행률 통계 — arrived + skipped 가 처리됨, pending 만 남음.
   const progress = useMemo(() => {
@@ -219,7 +308,7 @@ export default function ActiveTrip() {
     ]);
   };
 
-  const applyOptimizedOrder = (
+  const applyOptimizedOrder = async (
     pendingOrderedIds: string[],
     summary: { algorithm: string; totalDistanceKm: number; totalEtaMinutes: number },
   ) => {
@@ -227,10 +316,36 @@ export default function ActiveTrip() {
     const resolvedIds = destinations
       .filter((d) => d.status !== 'pending')
       .map((d) => d.id);
-    reorderDestinations(activeTripId, [...resolvedIds, ...pendingOrderedIds]);
+    const nextOrder = [...resolvedIds, ...pendingOrderedIds];
+    reorderDestinations(activeTripId, nextOrder);
+
+    // backend-backlog §22 — 새 순서의 **실도로** 거리·소요를 받아 직선 추정치를 대체한다.
+    // 여기서 받아둔 결과를 지도 폴리라인에도 그대로 물려 이펙트의 중복 호출을 없앤다
+    // (카카오모빌리티 쿼터 절약). 실패하면 아래 직선 추정치로 폴백.
+    const byId = new Map(destinations.map((d) => [d.id, d]));
+    const orderedDests = nextOrder
+      .map((id) => byId.get(id))
+      .filter((d): d is Destination => d !== undefined);
+    const pts = pointsOfDestinations(orderedDests, getField);
+    const road = await requestRoute(activeTripId, pts);
+    if (road) {
+      fetchedRouteKeyRef.current = routeKeyOf(pts);
+      setRouteVertexes(
+        road.vertexes && road.vertexes.length >= 2 ? road.vertexes : undefined,
+      );
+    }
+
+    const km =
+      road?.distance != null ? road.distance / 1000 : summary.totalDistanceKm;
+    const min =
+      road?.duration != null
+        ? Math.max(1, Math.round(road.duration / 60))
+        : summary.totalEtaMinutes;
+    // 실도로 값인지 직선 추정인지 밝힌다 — 숫자만 바뀌면 사용자가 오차를 오해한다.
+    const basis = road?.distance != null ? '실도로 기준' : '직선거리 추정';
     Alert.alert(
       '경로 재최적화 완료',
-      `알고리즘: ${summary.algorithm}\n총 거리: ${summary.totalDistanceKm.toFixed(1)} km\n예상 ETA: ${summary.totalEtaMinutes}분`,
+      `알고리즘: ${summary.algorithm}\n총 거리: ${km.toFixed(1)} km (${basis})\n예상 ETA: ${min}분`,
     );
   };
 
@@ -280,7 +395,7 @@ export default function ActiveTrip() {
       if (orderedDestIds.length !== pendingFields.length) {
         throw new Error('optimized_order_mismatch');
       }
-      applyOptimizedOrder(orderedDestIds, res.summary);
+      await applyOptimizedOrder(orderedDestIds, res.summary);
     } catch (e) {
       const ordered = nearestNeighborOrder(
         start,
@@ -291,7 +406,7 @@ export default function ActiveTrip() {
         0,
       );
       const totalEtaMinutes = ordered.reduce((sum, n) => sum + n.etaMinutes, 0);
-      applyOptimizedOrder(
+      await applyOptimizedOrder(
         ordered.map((n) => n.id),
         {
           algorithm: `nearest_neighbor (offline · ${localizeError(e)})`,
@@ -521,6 +636,7 @@ export default function ActiveTrip() {
         mapFieldIds={tripFieldIds}
         // 목적지 순서 그대로 — 배경 지도에 순번 마커 + 점선 동선.
         routeFieldIds={tripFieldIds}
+        routeVertexes={routeVertexes}
       >
         <BottomSheetFlatList
           data={destinations}
