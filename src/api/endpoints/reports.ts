@@ -78,6 +78,17 @@ export interface ExportWordResponse {
   photoCount?: number;
 }
 
+// backend-backlog §19 — release 2026-07-26: PDF export.
+// Word 와 달리 결과 URL 이 서버에 영속되지 않는다(reports 에 pdf 컬럼 없음, 스펙도
+// "Word outputFileUrl 은 변경하지 않음" 명시). 그래서 이 응답 URL 이 유일한 출처 —
+// 호출 측이 곧바로 열어야 하고, 화면 재진입 후엔 다시 생성해야 한다.
+// OpenAPI 는 200 본문을 미기재하지만 실제로는 반환(운영 관례) → 필드 전부 optional.
+export interface ExportPdfResponse {
+  url?: string;
+  downloadUrl?: string;
+  format?: string;
+}
+
 // backend-backlog §20 — release 2026-06-19: 위치도 업로드 응답.
 export interface OverviewPhotoResponse {
   reportId: string;
@@ -143,6 +154,14 @@ export const reports = {
     request<ExportWordResponse>(`/api/reports/${reportId}/export/word`, {
       method: 'POST',
       body: regenerate ? { regenerate: true } : {},
+    }),
+
+  // backend-backlog §19 — release 2026-07-26: field_reports → PDF 생성(위치도·전중후 사진).
+  // 전용 경로(/export/pdf)를 쓴다 — /export?format=pdf 도 있지만 한 가지만 유지해 분기를 줄인다.
+  exportPdf: (reportId: string) =>
+    request<ExportPdfResponse>(`/api/reports/${reportId}/export/pdf`, {
+      method: 'POST',
+      body: {},
     }),
 
   // ----- field-reports CRUD -----

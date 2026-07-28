@@ -113,6 +113,7 @@ export default function ReportDetail() {
   const loadDetail = useReportStore((s) => s.loadDetail);
   const remove = useReportStore((s) => s.remove);
   const exportWord = useReportStore((s) => s.exportWord);
+  const exportPdf = useReportStore((s) => s.exportPdf);
   const uploadOverviewPhoto = useReportStore((s) => s.uploadOverviewPhoto);
   const removeFieldReport = useReportStore((s) => s.removeFieldReport);
   const allTrips = useTripStore((s) => s.trips);
@@ -124,6 +125,7 @@ export default function ReportDetail() {
 
   const [deleting, setDeleting] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
   // 위치도 캡처(§20) — 캡처 대상 View ref + 타일 페인트 완료 여부. tilesReady 전에는
   // 빈 지도를 찍지 않도록 캡처를 건너뛴다. web 은 captureOverviewMap 가 항상 null(taint).
   const overviewMapRef = useRef<View>(null);
@@ -219,20 +221,51 @@ export default function ReportDetail() {
   const isOwner = userId === report.creatorId;
   const hasOutput = !!(report.outputFileUrl && report.outputFileUrl.trim());
 
+  // 위치도 네이티브 캡처 → 업로드(§20) — best-effort. 문서 생성 직전에 찍어 최신 위치도 반영.
+  // 캡처/업로드 실패(안드 WebView 빈칸·네트워크 등)는 throw 하지 않고 위치도 없이 진행.
+  // web 은 captureOverviewMap 가 null 반환(taint) → 자연 skip. 타일 미로드 시도 skip.
+  // Word·PDF 양쪽이 같은 위치도를 쓰므로 공통 함수로 둔다.
+  const syncOverviewMap = async () => {
+    if (overviewMarkers.length === 0 || !tilesReady) return;
+    const file = await captureOverviewMap(overviewMapRef);
+    if (file) await uploadOverviewPhoto(report.id, file);
+  };
+
+  // 생성된 파일 열기 — web 은 새 탭, 네이티브는 외부 앱. 실패가 silent 로 끝나지 않게 alert.
+  const openFileUrl = (rawUrl: string) => {
+    const url = toAbsoluteFileUrl(rawUrl);
+    if (Platform.OS === 'web') {
+      window.open(url, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    Linking.openURL(url).catch(() => {
+      Alert.alert('다운로드 실패', '파일을 열 수 없습니다. 잠시 후 다시 시도해주세요.');
+    });
+  };
+
   const handleExport = async (regenerate: boolean) => {
     if (exporting) return;
     setExporting(true);
-    // 위치도 네이티브 캡처 → 업로드(§20) — best-effort. Word 생성 직전에 찍어 최신 위치도 반영.
-    // 캡처/업로드 실패(안드 WebView 빈칸·네트워크 등)는 throw 하지 않고 위치도 없이 진행.
-    // web 은 captureOverviewMap 가 null 반환(taint) → 자연 skip. 타일 미로드 시도 skip.
-    if (overviewMarkers.length > 0 && tilesReady) {
-      const file = await captureOverviewMap(overviewMapRef);
-      if (file) await uploadOverviewPhoto(report.id, file);
-    }
+    await syncOverviewMap();
     const r = await exportWord(report.id, regenerate);
     setExporting(false);
     // web 은 webAlertPatch 가 window.alert 로 라우팅 — 분기 불필요.
     if (!r.ok) Alert.alert('Word 생성 실패', r.error);
+  };
+
+  // backend-backlog §19 — PDF 는 서버가 URL 을 영속하지 않는다(보고서에 pdf 컬럼 없음).
+  // 그래서 Word 처럼 '다운로드 버튼 상시 노출' 이 불가능하고, 누를 때마다 생성→즉시 열기 단발로 간다.
+  const handleExportPdf = async () => {
+    if (exportingPdf) return;
+    setExportingPdf(true);
+    await syncOverviewMap();
+    const r = await exportPdf(report.id);
+    setExportingPdf(false);
+    if (!r.ok) {
+      Alert.alert('PDF 생성 실패', r.error);
+      return;
+    }
+    openFileUrl(r.url);
   };
 
   const handleDeleteFr = (frId: string) => {
@@ -384,20 +417,7 @@ export default function ReportDetail() {
         {hasOutput ? (
           <>
             <Button
-              onPress={() => {
-                const url = toAbsoluteFileUrl(report.outputFileUrl!.trim());
-                // web 에선 새 탭, 모바일은 외부 앱 — 실패 시 silent 종결되지 않도록 alert.
-                if (Platform.OS === 'web') {
-                  window.open(url, '_blank', 'noopener,noreferrer');
-                  return;
-                }
-                Linking.openURL(url).catch(() => {
-                  Alert.alert(
-                    '다운로드 실패',
-                    '파일을 열 수 없습니다. 잠시 후 다시 시도해주세요.',
-                  );
-                });
-              }}
+              onPress={() => openFileUrl(report.outputFileUrl!.trim())}
               variant="primary"
               fullWidth
               leftIcon="download-outline"
@@ -428,6 +448,22 @@ export default function ReportDetail() {
             style={styles.downloadBtn}
           >
             Word 생성
+          </Button>
+        ) : null}
+
+        {/* PDF(§19) — 결과 URL 이 서버에 남지 않아 '생성 후 즉시 열기' 단발. 그래서 Word 처럼
+            '다운로드 / 다시 생성' 2단 구성이 성립하지 않고 버튼 하나로 끝난다.
+            노출 조건은 Word '생성' 과 동일 — 현장 보고가 없으면 서버가 400 으로 거절. */}
+        {isOwner && fieldReports.length > 0 ? (
+          <Button
+            onPress={() => void handleExportPdf()}
+            loading={exportingPdf}
+            variant="secondary"
+            fullWidth
+            leftIcon="document-outline"
+            style={styles.pdfBtn}
+          >
+            PDF 내보내기
           </Button>
         ) : null}
 
@@ -527,6 +563,8 @@ const styles = StyleSheet.create({
   downloadBtn: { marginTop: spacing.md },
   // '다시 생성'은 보조 — 폭을 줄여(self) 다운로드 primary 보다 약하게.
   regenBtn: { alignSelf: 'center', marginTop: spacing.xs },
+  // PDF 는 Word 영역과 같은 '문서 내보내기' 묶음 — downloadBtn 과 같은 간격으로 이어 붙인다.
+  pdfBtn: { marginTop: spacing.sm },
   // 보고서 관리(수정/삭제) 그룹.
   actions: {
     flexDirection: 'row',

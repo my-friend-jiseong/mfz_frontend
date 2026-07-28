@@ -58,6 +58,11 @@ interface ReportState {
   update: (id: string, body: UpdateReportBody) => Promise<GenericResult>;
   // field_reports → Word 생성/재생성. 성공 시 outputFileUrl 갱신 (다운로드 버튼 노출).
   exportWord: (reportId: string, regenerate?: boolean) => Promise<GenericResult>;
+  // backend-backlog §19 — PDF 는 서버에 영속되지 않아 loadDetail 로 회수할 수 없다.
+  // 그래서 유일하게 결과 URL 자체를 반환하는 액션 — 호출 측이 즉시 열어야 한다.
+  exportPdf: (
+    reportId: string,
+  ) => Promise<{ ok: true; url: string } | { ok: false; error: string }>;
   // 위치도(개요 지도) 캡처 이미지 업로드 (backend-backlog §20). 서버가 압축·저장하고
   // 재업로드 시 outputFileUrl 을 null 로 초기화 → 곧이은 exportWord 가 새 위치도로 재생성.
   // 응답 비의존 — loadDetail 로 overviewMapUrl/outputFileUrl 재동기화.
@@ -316,6 +321,24 @@ export const useReportStore = create<ReportState>((set, get) => ({
       set({ busy: false });
       await get().loadDetail(reportId);
       return { ok: true };
+    } catch (e) {
+      set({ busy: false });
+      return { ok: false, error: describeError(e) };
+    }
+  },
+
+  exportPdf: async (reportId) => {
+    set({ busy: true });
+    try {
+      const res = await reportsApi.exportPdf(reportId);
+      set({ busy: false });
+      // downloadUrl 우선 — 백엔드가 둘 다 줄 때 downloadUrl 이 첨부 다운로드용.
+      const url = (res?.downloadUrl ?? res?.url ?? '').trim();
+      if (!url) {
+        // 200 인데 URL 이 없으면 열 대상이 없다 — 조용히 성공 처리하면 아무 일도 안 일어난 것처럼 보인다.
+        return { ok: false, error: 'PDF 주소를 받지 못했습니다. 잠시 후 다시 시도해주세요.' };
+      }
+      return { ok: true, url };
     } catch (e) {
       set({ busy: false });
       return { ok: false, error: describeError(e) };
