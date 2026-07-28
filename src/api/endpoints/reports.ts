@@ -10,13 +10,19 @@ import type { FieldReport } from '@/types/entities';
 export interface ReportListItem {
   reportId: string;
   tripId: string | null;
-  trip: { tripDate: string | null; startedAt: string | null; endedAt: string | null };
   title: string;
   createdAt: string;
   updatedAt: string | null;
   outputFileUrl: string | null;
   // backend-backlog §20 — release 2026-06-19: 위치도 이미지 URL(미첨부 시 null).
   overviewMapUrl?: string | null;
+  // 서버가 실제로 보내는데 타입에 없던 필드 (실측 2026-07-29: 19/19 항목에 존재).
+  // 현재 화면은 안 쓰지만 계약을 사실대로 적어 둔다 — 보고서 카드에 '현장 N곳' 을
+  // 붙이거나 export 가능 여부를 미리 판정하는 데 쓸 수 있다.
+  fieldReportCount?: number;
+  // ⚠️ `trip: { tripDate, startedAt, endedAt }` 은 여기 선언돼 있었으나 **응답에 없다**
+  //    (실측 2026-07-29: 0/19). 읽는 코드도 없어 런타임 문제는 없었지만, 타입이 거짓말을
+  //    하고 있어 목록이 외근 정보를 로컬 tripStore 에 의존하게 만든 원인이다 → 백로그 §29.
 }
 
 export interface ReportListResponse {

@@ -26,7 +26,16 @@ import type { Report, Trip } from '@/types/entities';
 // 새 양식(2026-05-31 결정 §2): 외근 없이 작성 그룹 폐지. 모든 보고서는 tripId 필수.
 // orphan(tripId 없거나 trips store 에 매칭 안 되는 경우) 도 동일한 trip-block 으로 흡수하되
 // trip 정보 없으면 'trip 정보 없음' 헤더로 graceful 표시 (백엔드 race 안전망).
-type Group = { trip: Trip | null; reports: Report[] };
+// 그룹 세 종류를 구분한다. 이전엔 뒤 둘을 한 덩어리로 묶어 '외근 정보 없음' 이라 적었는데,
+// 실제로는 **외근이 있는데 로컬에 안 불러왔을 뿐**인 경우가 대부분이라 거짓 표기였다
+// (실측 2026-07-29: 서버가 tripId 를 19/19 전부 채워 보내는데 화면은 15건을 '없음' 으로 표시).
+//  - trip: 로컬 tripStore 에서 찾은 외근 — 날짜·시간·방문 수까지 보여주고 상세로 이동
+//  - 'unloaded': tripId 는 있는데 store 에 없음(외근 목록 페이지네이션 밖) — 정보 미로드
+//  - 'none': tripId 자체가 없음 — 구 양식 데이터
+type Group =
+  | { kind: 'trip'; trip: Trip; reports: Report[] }
+  | { kind: 'unloaded'; trip: null; reports: Report[] }
+  | { kind: 'none'; trip: null; reports: Report[] };
 
 export default function ReportsIndex() {
   const router = useRouter();
@@ -60,12 +69,13 @@ export default function ReportsIndex() {
     };
 
     const byTripId = new Map<string, Report[]>();
-    const unresolved: Report[] = [];
+    const noTrip: Report[] = [];
+    const unloaded: Report[] = [];
     mine.forEach((r) => {
       if (!matches(r)) return;
       if (!r.tripId) {
-        // 신 양식에선 tripId 필수 — 과거 보고서만 이 분기. 'trip 정보 없음' 헤더로 흡수.
-        unresolved.push(r);
+        // 신 양식에선 tripId 필수 — 구 양식 데이터만 이 분기.
+        noTrip.push(r);
         return;
       }
       const arr = byTripId.get(r.tripId) ?? [];
@@ -84,6 +94,7 @@ export default function ReportsIndex() {
         if (reports && reports.length > 0) {
           matchedTripIds.add(t.id);
           tripGroups.push({
+            kind: 'trip',
             trip: t,
             reports: reports.sort((a, b) =>
               b.createdAt.localeCompare(a.createdAt),
@@ -92,22 +103,19 @@ export default function ReportsIndex() {
         }
       });
 
-    // tripId 는 있는데 trips store 에 없는 보고서들 — unresolved 로 흡수 (페이지네이션·캐시 race).
+    // tripId 는 있는데 trips store 에 없는 보고서들 — 외근이 없는 게 아니라 **미로드**다.
     for (const [tripId, reports] of byTripId) {
-      if (!matchedTripIds.has(tripId)) {
-        unresolved.push(...reports);
-      }
+      if (!matchedTripIds.has(tripId)) unloaded.push(...reports);
     }
 
+    const byNewest = (a: Report, b: Report) => b.createdAt.localeCompare(a.createdAt);
     const result: Group[] = [...tripGroups];
-    if (unresolved.length > 0) {
-      // trip 정보 없는 보고서들 — 그룹 맨 아래로 (의도된 흐름 아닌 폴백이므로 눈에 덜 띄게).
-      result.push({
-        trip: null,
-        reports: unresolved.sort((a, b) =>
-          b.createdAt.localeCompare(a.createdAt),
-        ),
-      });
+    // 폴백 그룹은 맨 아래로 (의도된 흐름이 아니므로 눈에 덜 띄게).
+    if (unloaded.length > 0) {
+      result.push({ kind: 'unloaded', trip: null, reports: unloaded.sort(byNewest) });
+    }
+    if (noTrip.length > 0) {
+      result.push({ kind: 'none', trip: null, reports: noTrip.sort(byNewest) });
     }
     return result;
   }, [allReports, allTrips, userId, search, fromDate, toDate]);
@@ -142,7 +150,7 @@ export default function ReportsIndex() {
       <BottomSheetFlatList
         data={groups}
         style={sheetScrollableStyle}
-        keyExtractor={(g) => (g.trip ? `trip-${g.trip.id}` : 'orphan')}
+        keyExtractor={(g) => (g.trip ? `trip-${g.trip.id}` : g.kind)}
         renderItem={({ item }) => (
           <View style={styles.group}>
             {item.trip ? (
@@ -174,11 +182,22 @@ export default function ReportsIndex() {
                 <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
               </Pressable>
             ) : (
-              // 신 양식에선 외근 필수 — 이 헤더는 trip 정보 race / 과거 데이터 폴백.
+              // 폴백 헤더. '없음' 과 '미로드' 를 구분해 적는다 — 외근이 있는데 없다고
+              // 적으면 사용자가 데이터가 유실된 줄 안다(실측으로 드러난 거짓 표기).
               <View style={styles.orphanHeader}>
-                <Ionicons name="alert-circle-outline" size={16} color={colors.textMuted} />
+                <Ionicons
+                  name={
+                    item.kind === 'unloaded'
+                      ? 'cloud-offline-outline'
+                      : 'alert-circle-outline'
+                  }
+                  size={16}
+                  color={colors.textMuted}
+                />
                 <Text variant="bodySm" weight="bold" color="textMuted">
-                  외근 정보 없음
+                  {item.kind === 'unloaded'
+                    ? '외근 정보 미로드'
+                    : '외근 없이 작성된 보고서'}
                 </Text>
               </View>
             )}
