@@ -10,6 +10,13 @@ import { writeFileSync } from "node:fs";
 const esc = (s) =>
   String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
+// 여러 줄 텍스트 셀용 — esc() 가 & 를 먼저 escape 하므로 `&#xa;` 를 문자열에 직접 쓰면
+// `&amp;#xa;` 가 되어 줄바꿈이 죽는다(실측: 노트가 한 줄로 이어붙음).
+// 각 줄을 따로 escape 한 뒤 html=1 셀이 해석하는 <br> 로 잇는다.
+// join 은 &lt;br&gt; — 속성값 안이라 `<br>` 를 날것으로 넣으면 XML 이 깨진다(실측).
+// XML 파서가 &lt;br&gt; → <br> 로 되돌리고, html=1 셀이 그걸 줄바꿈으로 렌더한다.
+const escLines = (lines) => lines.map(esc).join("&lt;br&gt;");
+
 const TABLE_STYLE =
   "shape=table;startSize=30;container=1;collapsible=1;childLayout=tableLayout;fixedRows=1;rowLines=1;fontStyle=1;align=center;resizeLast=1;html=1;rounded=1;arcSize=14;absoluteArcSize=1;fillColor=light-dark(#FFCC99,#663300);horizontal=1;swimlaneFillColor=default;fontSize=12;";
 const ROW_STYLE =
@@ -272,24 +279,27 @@ const ex = { id: "lg_ex", head: "entity_example (엔티티 예제)", x: 700, y: 
     });
   });
 }
-// 복합 제약 · 파생값 — 컬럼 단위 제약 칸에 담기지 않는 정보 (백엔드 docs/db-schema.md 기준)
-out.push(`        <mxCell id="lg_multi" value="${esc(
-  "복합 제약 · 파생값&#xa;" +
-  "&#xa;" +
-  "UQ (user_id, name) — categories&#xa;" +
-  "UQ (trip_id, field_id) — trip_destinations&#xa;" +
-  "PK (field_id, category) — field_categories&#xa;" +
-  "&#xa;" +
-  "API 파생값 (컬럼 아님)&#xa;" +
-  "· visitCount = COUNT(visits WHERE trip_id)&#xa;" +
-  "· siteCount = 해당 trip visits 의 DISTINCT field_id&#xa;" +
-  "  (계획 목적지 수가 아님 — 백로그 §26)&#xa;" +
-  "· phaseProgress = visit_photos.phase 집합 파생&#xa;" +
-  "  (field_photos 에는 phase 없음 — 백로그 §27)"
-)}" style="text;html=1;strokeColor=#666666;fillColor=none;align=left;verticalAlign=top;fontSize=12;spacing=6;" parent="1" vertex="1"><mxGeometry x="1600" y="${ly}" width="440" height="240" as="geometry"/></mxCell>`);
+// 복합 제약 · 파생값 — 컬럼 제약 칸에 안 담기는 정보 (백엔드 docs/db-schema.md 기준)
+out.push(`        <mxCell id="lg_multi" value="${escLines([
+  "복합 UNIQUE",
+  "· categories (user_id, name)",
+  "· trip_destinations (trip_id, field_id)",
+  "",
+  "API 파생값 — 컬럼 아님",
+  "· visitCount = COUNT(visits)",
+  "· siteCount = visits 의 DISTINCT field_id",
+  "· phaseProgress = visit_photos.phase 파생",
+])}" style="text;html=1;strokeColor=#666666;fillColor=none;align=left;verticalAlign=top;fontSize=12;spacing=6;" parent="1" vertex="1"><mxGeometry x="1600" y="${ly}" width="420" height="200" as="geometry"/></mxCell>`);
 
 // 제약 표기 설명
-out.push(`        <mxCell id="lg_con" value="${esc("제약 표기&#xa;PK: Primary Key&#xa;FK: Foreign Key&#xa;UQ: Unique&#xa;NN: Not Null&#xa;(빈칸 = NULL 허용)")}" style="text;html=1;strokeColor=#666666;fillColor=none;align=left;verticalAlign=top;fontSize=12;spacing=6;" parent="1" vertex="1"><mxGeometry x="1200" y="${ly}" width="320" height="120" as="geometry"/></mxCell>`);
+out.push(`        <mxCell id="lg_con" value="${escLines([
+  "제약 표기",
+  "PK: Primary Key",
+  "FK: Foreign Key",
+  "UQ: Unique",
+  "NN: Not Null",
+  "(빈칸 = NULL 허용)",
+])}" style="text;html=1;strokeColor=#666666;fillColor=none;align=left;verticalAlign=top;fontSize=12;spacing=6;" parent="1" vertex="1"><mxGeometry x="1200" y="${ly}" width="320" height="120" as="geometry"/></mxCell>`);
 
 out.push("      </root>");
 out.push("    </mxGraphModel>");
