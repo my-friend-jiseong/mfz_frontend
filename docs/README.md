@@ -21,7 +21,8 @@
 
 | 파일 | 내용 |
 |---|---|
-| [backend/backend-backlog.md](backend/backend-backlog.md) | 프런트 측 누적 백엔드 요청 큐 |
+| [backend/backend-backlog.md](backend/backend-backlog.md) | 프런트 측 누적 백엔드 요청 큐 — 상단 「프론트 연동 대기」가 다음 프론트 작업 목록 |
+| `backend/release-*.md` | 백엔드 배치 결과보고서(백엔드 팀 작성) — [2026-07-26](backend/release-2026-07-26-backend-backlog.md) · [2026-06-19](backend/release-2026-06-19-destinations-overview.md) · [2026-06](backend/release-2026-06-backend-backlog.md) |
 | [backend/backend-handoff.md](backend/backend-handoff.md) | 백엔드 보충 가이드라인 — 프런트 선행 개발 항목 중 백엔드 활성화/명세 필요분 (활성 요청 0건, §1 `title` 완료) |
 | [backend/demo-seed-request.md](backend/demo-seed-request.md) | 발표용 데모 데이터 — 프론트 자가 시드(`presentation/seed_demo_data.mjs`)로 전부 해결, 백엔드 작업 불필요(probe 검증) |
 

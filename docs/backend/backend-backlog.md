@@ -13,94 +13,30 @@
 
 ---
 
-## 3. 🟡 주소검색 — 백엔드 keyword.json 병합(POI) 선택적 보강 (운영 키 정상 확인)
+## 🔗 프론트 연동 대기 — 백엔드 배포 완료, 프론트 미배선
 
-> **갱신 (release 2026-06)**: 백엔드가 `address.json + keyword.json` 병합·중복제거를 배포(release §7) →
-> **백엔드 측 요청은 충족.** 잔여는 프론트 선택 정리뿐 — 클라이언트 카카오 JS SDK 키워드검색(헤드리스
-> WebView) 의존을 걷어낼 수 있음(차단 아님, 미적용). 그래서 🟡 유지.
+> 2026-07-26 백엔드 배치([release-2026-07-26-backend-backlog.md](./release-2026-07-26-backend-backlog.md))로
+> 활성 큐 6건이 운영에 나갔다. **백엔드 요청으로서는 종결(아카이브)이지만 프론트가 아직 안 붙었다.**
+> 여기가 다음 프론트 사이클의 작업 목록이다. 프론트 현황은 2026-07-28 코드 실측.
 
-### 현황 (2026-06-01 read-only probe 로 정정)
-**과거 전제("어떤 키워드든 0건 = `KAKAO_REST_API_KEY` 만료/권한")는 무효.** 운영
-`GET /api/fields/address/search` 가 실주소에 정상 응답:
-`부산 연제구 중앙대로 1001`→1 · `낙동대로 550`→1(부산 사하구 낙동대로 550) · `해운대구 우동`→4 ·
-`부산 중구 중앙대로`→10 · `서면`→10 · `동래구`→1.
-0건인 것은 전부 **장소명(POI)** (`부산광역시청`·`해운대해수욕장`·`센텀`) — 카카오 Local **주소**
-API(`address.json`)가 상호·기관명을 구조적으로 못 잡는 정상 동작. **운영 키 이슈는 종결.**
-남은 건 POI 검색 한 가지인데 이미 프론트 클라이언트 키워드검색으로 해소(아래).
+| § | 백엔드 | 프론트 현황 (실측) | 해야 할 것 |
+|---|---|---|---|
+| §25 categories | ✅ | `src/api/endpoints/categories.ts` 는 있음 / `categoryStore` 가 AsyncStorage 진실원 | store 를 서버 단일 소스로 스왑, `TODO(backend)` 제거 |
+| §9 visit phase | ✅ | `endpoints/visits.ts`·타입에 `phase` **0건** | 사진 업로드 `phase` 전송 + 체크인 chip + visit 상세 phase 섹션 + `phaseProgress` 표시 |
+| §19 PDF export | ✅ | `endpoints/reports.ts` 에 pdf **0건** | `exportPdf` 배선 + 보고서 상세에 PDF 다운로드 버튼 |
+| §15 프로필 수정 | ✅ | `endpoints/` 에 me 파일 **없음** | `PATCH /api/me`·`/me/password` + `profile.tsx` 폼 |
+| §22 경로 프록시 | ✅ | `endpoints/trips.ts` 에 route **0건** | `POST /trips/:id/route` → 진행 중 지도 실도로 폴리라인 + ETA 대체 |
+| §12-B ERD | (A) ✅ | `ERD.drawio` 미갱신 | 백엔드 `db-schema.md` 기준 drawio 갱신 (§12 활성 유지) |
 
-### 정정 경위
-2026-06-01 오전 probe 는 우연히 POI/부정확 키워드(`부산광역시청`·`해운대해수욕장`·`부산 사하구 낙동대로 100`)만
-넣어 4/4 0건 → "키 만료"로 오판. 같은 날 정상 도로명/지역 키워드로 재확인하니 정상 응답 → 키는 살아 있음.
-데모 시드 지오코딩도 정상 좌표를 받는다.
-
-### 추가 (2026-06-01): 장소명(POI) 검색 — 주소 API 구조적 한계 + 프론트 선보완
-운영 키가 정상화돼도 `/address/search` 는 카카오 Local **주소** API(`address.json`) 만 호출하므로
-`동아대학교` 같은 **장소명(POI)** 은 구조적으로 0건이다. 도로명/지번만 매칭되고 상호·기관명은 못 잡음.
-- **프론트 선보완(완료)**: 클라이언트 카카오 JS SDK `services.Places.keywordSearch` 로 장소명 검색을
-  병행해 주소 결과와 병합. 네이티브는 헤드리스 WebView 브릿지([`useKakaoPlaceSearch.tsx`](../../src/components/fields/useKakaoPlaceSearch.tsx)),
-  웹은 직접 SDK([`.web.tsx`](../../src/components/fields/useKakaoPlaceSearch.web.tsx)). 병합·중복제거는
-  [`mergeSearchItems`](../../src/utils/addressSearch.ts). JS 키만으로 동작(REST 키 불요).
-- **백엔드 요청(이상적)**: `/address/search` 가 서버측에서 `keyword.json` 도 호출해 주소+장소를 합쳐 반환하면
-  클라이언트 SDK 의존(JS 키 도메인 화이트리스트, 헤드리스 WebView)을 걷어낼 수 있음. 응답 shape 동일 유지,
-  장소 출처 item 은 `sido/sigungu` 가 빌 수 있음(주소 depth 미제공).
-
-### 우선순위
-🟡 낮음~중간 — **차단 아님**(주소검색 정상 + POI 는 프론트 키워드검색으로 해소). 백엔드 `keyword.json`
-병합은 클라이언트 SDK 의존(JS 키 도메인 화이트리스트·헤드리스 WebView) 제거용 선택 보강.
-
-### 발견 시점
-2026-05-09 최초(당시 0건 관측) → 2026-06-01 운영 probe 로 키 정상 확인, 🔴→🟡 강등·재기술.
-
-### 관련 코드
-- 프론트 호출 [`src/api/endpoints/fields.ts:192`](../../src/api/endpoints/fields.ts#L192) `addressSearch`
-- 프론트 사용 [`app/(tabs)/fields/new.tsx:75-100`](../../app/\(tabs\)/fields/new.tsx#L75) 디바운스 + 카카오 호출
+§10(파일 인프라)은 서버측 드라이버 교체라 프론트 contract 무변경 — 배선 불요.
 
 ---
 
-## 9. 🟠 visit 단계 모델(phase: 조치 전/중/후) 도입
+## 10. 🟢 파일 저장 인프라 — MinIO 도입 + 보고서 < 20MB 압축 (부분 완료)
 
-### 배경
-요구사항 #9 — "현장 정보는 [조치 전 / 조치 중 / 조치 후] 세 분류로 나뉘어야 한다." 사용자(현장 청취) 워크플로우:
-
-> 체크인 → **조치 전** 사진/설명 → 조치 및 **조치 중** 사진/설명 → 조치 완료 → **조치 후** 사진/설명
-
-각 phase 별 사진+짧은 설명이 결국 보고서에 그대로 들어감. 현재 데이터 모델은 visit 하위 attachment 가 평면적(`text`/`photo`/`audio`) 이라 phase 구분이 없음. 결과: 사용자가 보고서 작성 시 어떤 사진이 "조치 전" 인지 매번 다시 분류해야 함 (현재 [`reports/new.tsx:156-162`](../../app/\(tabs\)/reports/new.tsx#L156) 의 promptChoice 로 사용자가 직접 슬롯 지정).
-
-### 백엔드가 해야 할 것
-**(A) attachment 에 phase 필드 추가**
-- 컬럼 또는 JSON meta: `phase: 'before' | 'during' | 'after' | null`
-- `POST /api/visits/:visitId/attachments/photo|audio|text` body 에 `phase?` 추가.
-- 응답에도 echo. 기존 데이터는 `null` 로 유지(소급 변환 X).
-
-**(B) visit 에 phase progress 필드(파생)**
-- 응답 contract: `visit.phaseProgress: 'before' | 'during' | 'after' | 'done'`
-- 어떤 phase 의 attachment 가 1건 이상 있는지 기준으로 derive.
-
-**(C) 보고서 generate 시 phase 자동 매핑**
-- `POST /api/reports/generate` 가 visit phase 별 사진을 자동으로 `before_photo` / `after_photo` 슬롯에 매핑.
-- 사용자가 일일이 다시 선택 안 해도 되도록.
-
-### 프론트엔드가 해야 할 것 (별도 사이클)
-- 체크인 화면 (`fields/[id]/checkin.tsx`) 에 phase 선택 chip 도입 (기본 'before').
-- visit 상세 (`trips/visit.tsx`) 에 phase 별 섹션 분리.
-- 체크인 시 fieldStatus pending → in_progress 자동 전환, after phase 첫 attachment 추가 시 in_progress → done 제안.
-- 보고서 작성 (`reports/new.tsx`) — phase 별 importablePhotos 자동 슬롯 매핑.
-
-### 우선순위
-🟠 중상 — UX/도메인 핵심. 사용자가 보고서마다 사진을 다시 분류하는 번거로움이 누적. 다만 구조적 변경이 커서 별도 사이클 권장.
-
-### 발견 시점
-2026-05-10 (요구사항 정리 #9 — 현장 워크플로우 청취 결과 반영)
-
-### 관련 코드
-- 프론트 [`app/(tabs)/fields/[id]/checkin.tsx`](../../app/\(tabs\)/fields/\[id\]/checkin.tsx)
-- 프론트 [`app/(tabs)/trips/visit.tsx`](../../app/\(tabs\)/trips/visit.tsx)
-- 프론트 [`app/(tabs)/reports/new.tsx:142-162`](../../app/\(tabs\)/reports/new.tsx#L142) `handleImportPhotoTap`
-- 프론트 [`src/types/entities.ts`](../../src/types/entities.ts) attachment 타입
-
----
-
-## 10. 🟢 파일 저장 인프라 — MinIO 도입 + 보고서 < 20MB 압축
+> **갱신 (release 2026-07-26)**: 백엔드가 **S3/MinIO 드라이버 + 사진 정규화**를 배포(커밋 `3603a31`·`2a97fab`).
+> `FILE_STORAGE_DRIVER=disk|s3|minio` (S3 호환, `@aws-sdk/client-s3`), 사진 정규화 long edge **1920** /
+> JPEG **q=72**. 잔여는 음성·zip 두 가지뿐 → 🟢 유지.
 
 ### 배경
 현재 `photos`/`voiceMemos` 의 `fileUrl` 이 정확히 어디 저장되고 어떻게 호스팅되는지 프론트에서 추적 불가. 운용 단계로 가려면:
@@ -108,187 +44,66 @@ API(`address.json`)가 상호·기관명을 구조적으로 못 잡는 정상 �
 - 보고서 패키지(첨부 포함) 의 송신 크기 < 20MB — 사진 압축·리샘플 + 음성 비트레이트 다운.
 
 ### 백엔드가 해야 할 것
-- MinIO 도입 — bucket 정책(visit-attachments, report-bundle 분리), presigned upload URL endpoint, lifecycle.
-- 사진 업로드 시 서버측 리샘플 (예: long edge 1920px, JPEG q=72).
-- 음성 업로드 시 비트레이트 정규화 (예: opus 32kbps mono).
-- 보고서 export(공유 URL/다운로드) 시 zip 패키지 < 20MB 보장 (초과 시 추가 압축 라운드 또는 분할).
+- ✅ **MinIO/S3 드라이버 도입** (2026-07-26). 단 bucket 정책 분리(visit-attachments / report-bundle)·
+  presigned upload URL·lifecycle 은 결과보고서에 언급 없음 — 필요 시 별도 확인.
+- ✅ **사진 업로드 서버측 리샘플** — long edge 1920px, JPEG q=72 (2026-07-26).
+- ⬜ 음성 업로드 시 비트레이트 정규화 (예: opus 32kbps mono).
+- ⬜ 보고서 export(공유 URL/다운로드) 시 zip 패키지 < 20MB 보장 (초과 시 추가 압축 라운드 또는 분할).
 
 ### 프론트엔드 영향
+- **2026-07-26 배포는 서버측 드라이버 교체라 프론트 contract 무변경** — 배선 불요.
 - 업로드 응답이 presigned URL 흐름으로 바뀌면 [`src/utils/media.ts`](../../src/utils/media.ts) 의 업로드 회로 재작성 필요.
 - 클라이언트도 사전 리샘플 1라운드 두면 백엔드 부하 감소 (대개 sharp/canvas — `expo-image-manipulator` 사용 가능).
 
 ### 우선순위
-🟢 낮음(인프라) — 즉시 막힘은 없으나 사용량 증가 시 빠르게 진입할 워크. 별도 사이클로 분리 권장.
+🟢 낮음(인프라) — 잔여 2건 모두 즉시 막힘 없음.
 
 ### 발견 시점
-2026-05-10 (요구사항 정리 #10)
+2026-05-10 (요구사항 정리 #10). 2026-07-26 드라이버·사진 압축 배포로 부분 완료.
 
----
+## 12. 🟠 ERD 최신화 — (A) 백엔드 스키마 dump ✅ / (B) `ERD.drawio` 갱신 잔여 (프론트 합동)
 
-## 12. 🟠 ERD 파악 및 최신화 — 프론트와 합동 진행
+> **갱신 (release 2026-07-26)**: 백엔드가 **(A) 현재 스키마 dump 를 완료**(커밋 `62bc3dd`, 백엔드 저장소
+> `docs/db-schema.md` — 테이블·FK·파생값·`ERD.drawio` diff·예정 레이어 포함). **잔여는 (B) drawio 갱신뿐이고,
+> 이건 프론트 합동 작업이라 이제 프론트가 착수 가능하다.**
 
 ### 배경
-[`docs/ERD.drawio`](../diagram/ERD.drawio) 가 현재 백엔드 실제 스키마와 어디까지 맞물리는지 확인된 바 없음. 본 백로그 §6~§11 (현장 cascade, 보고서 본문/multipart, visit phase, MinIO/압축, destinations 영속화) 가 모두 데이터 모델 변경을 동반하는데, 단일한 ERD 진실값이 없어 다음 회로에서 어긋남:
+[`docs/ERD.drawio`](../diagram/ERD.drawio) 가 백엔드 실제 스키마와 어디까지 맞물리는지 확인된 바 없음.
+데이터 모델을 건드리는 항목(§9 visit phase, §25 categories 등)이 계속 들어오는데 단일한 ERD 진실값이
+없어 다음 회로에서 어긋난다:
 
-- 프론트 [`src/types/entities.ts`](../../src/types/entities.ts) 의 `Trip`/`Field`/`Visit`/`Destination` 등 인터페이스가 백엔드 실제 컬럼과 1:1 인지 검증 어려움 (현재는 응답 typing 으로만 간접 추적).
-- `TripListItem.siteCount`/`visitCount` 같은 derived 값이 어떤 join/count 로 계산되는지 ERD 만 봐선 모름 — §11 destinations 영속화 후 변경 영향 평가도 막힘.
-- visit phase (§9) / report 첨부 분기 (§7) / fields cascade (§6) 가 들어가면 어떤 FK/제약/인덱스가 추가/수정되는지 ERD 에 반영 필요.
+- 프론트 [`src/types/entities.ts`](../../src/types/entities.ts) 의 `Trip`/`Field`/`Visit`/`Destination` 인터페이스가
+  백엔드 실제 컬럼과 1:1 인지 검증 어려움 (현재는 응답 typing 으로만 간접 추적).
+- `TripListItem.siteCount`/`visitCount` 같은 derived 값이 어떤 join/count 로 계산되는지 ERD 만 봐선 모름
+  — **§26 이 정확히 이 지점에서 터진 사례다.**
+- §9(visit phase)·§25(categories)가 들어가면서 실제로 추가된 FK/제약/인덱스가 ERD 에 미반영.
 
-### 해야 할 것 (백엔드·프론트 합동)
+### 해야 할 것
 
-**(A) 현재 스키마 추출 — 백엔드 주도**
-- 운영 DB 의 실제 테이블·컬럼·FK·인덱스·제약을 dump (예: `pg_dump --schema-only` 또는 dbml export).
-- 컬럼별 의미·nullable·기본값·enum·CASCADE 정책을 한국어 주석으로 정리.
+**(A) 현재 스키마 추출 — 백엔드 주도 ✅ 완료 (2026-07-26)**
+- 백엔드 저장소 `docs/db-schema.md` 에 테이블·컬럼·FK·파생값·`ERD.drawio` diff·"예정" 레이어까지 정리됨.
 
-**(B) ERD.drawio 비교·갱신 — 프론트 합류**
-- 추출한 스키마를 `docs/ERD.drawio` 와 diff. 누락 테이블/컬럼·잘못 그려진 관계·실제와 다른 cardinality 를 좌우 비교 노트로.
-- 본 백로그 §6~§11 에서 합의된 변경 (예: §11 destinations 테이블 신설, §9 visit_phase 컬럼) 을 ERD 의 "예정" 레이어로 별도 표기 — 현재 vs 미래 동시 가시화.
-- `src/types/entities.ts` 의 프론트 인터페이스와 칼럼 매핑 표 1장 첨부. (2026-07 추가: `categories` 마스터(§25)도 반영 대상.)
+**(B) `ERD.drawio` 비교·갱신 — 프론트 합류 ⬜ 잔여**
+- 백엔드 dump 를 `docs/diagram/ERD.drawio` 와 diff. 누락 테이블/컬럼·잘못된 관계·실제와 다른 cardinality 를
+  좌우 비교 노트로.
+- 2026-07-26 신설분 반영: `categories`(user 스코프, `(user_id, name)` UQ), `visit_photos.phase`.
+- `src/types/entities.ts` 의 프론트 인터페이스와 컬럼 매핑 표 1장 첨부.
+- 마이그레이션 참조: `20260726120000_add_categories`, `20260726130000_visit_photo_phase`.
 
-**(C) 갱신 ERD 합의 후 PR 분리**
-- 백엔드 schema migration 은 §6~§11 각 항목의 별도 PR 로.
-- ERD.drawio 갱신은 본 항목(§12) PR 단독으로 — 데이터 모델 진실값을 먼저 합의한 뒤 코드 진입.
-
-### 프론트엔드 영향
-- `src/types/entities.ts` 와 `src/api/endpoints/*` 의 타입을 ERD 와 줄 맞춤. 차이가 있으면 프론트가 먼저 옮겨가고 백엔드 응답 정합성은 §6~§11 진행 시점에 맞춤.
-- 합동 작업 — 백엔드가 (A) dump 를 내면 프론트가 (B) 비교·drawio 갱신을 같이 함. 회의 또는 GitHub PR 코멘트로 양쪽이 한 번에 합의.
+**(C) ERD 갱신은 단독 PR 로** — 데이터 모델 진실값을 먼저 합의한 뒤 코드 진입.
 
 ### 우선순위
-🟠 중상 — §11 destinations 영속화 등 본 백로그의 다른 데이터 모델 변경이 시작되기 전에 끝나야 충돌·재작업 없음. §6~§11 을 한 사이클로 묶을 거라면 그 사이클의 첫 워크.
+🟠 중상 — (A) 가 끝나 **차단 해소**. 다만 §26 처럼 "파생값 의미 미정의"가 반복되고 있어,
+프론트가 (B) 를 처리하는 것이 다음 데이터 모델 변경의 선행 워크.
 
 ### 발견 시점
-2026-05-11 (사용자 — "ERD 파악 및 최신화도 백로그에 추가, 프론트랑 합동")
+2026-05-11 (사용자 — "ERD 파악 및 최신화도 백로그에 추가, 프론트랑 합동"). 2026-07-26 (A) 완료.
 
 ### 관련 자료
+- 백엔드 `docs/db-schema.md` — 스키마 dump (§12-A 산출물)
 - [`docs/ERD.drawio`](../diagram/ERD.drawio) — 현재 ERD (검증 미수행)
 - 프론트 [`src/types/entities.ts`](../../src/types/entities.ts) — 프론트 데이터 모델
-- 본 백로그 §9 (visit phase), §10 (파일 인프라), §25 (categories 마스터) — 각 항목이 ERD 변경을 동반
-
----
-
-## 15. 🟢 프로필 수정 endpoint — `PATCH /api/me`
-
-### 배경
-프로필 화면(`profile.tsx`)에 이름·비밀번호 변경 진입로가 없다. `src/api/endpoints/auth.ts` 에 `me()` GET 만 있고 수정 endpoint 부재. 사용자가 이름을 잘못 등록하거나 비밀번호 정기 변경을 원할 때 자체 처리 못 함.
-
-### 백엔드가 해야 할 것
-
-```
-PATCH /api/me
-  body: { name?: string }                           // 이름 변경
-PATCH /api/me/password
-  body: { currentPassword: string, newPassword: string, newPasswordConfirm: string }
-```
-
-- 이메일은 PK 정합 + 인증 식별자라 변경 불가가 합리적 (선택).
-- 비밀번호 변경 시 `currentPassword` 검증 + 정책 (signup 과 동일: 10자 + 4종 중 3종).
-- 응답: `{ user: ApiUser }` (이름 변경) 또는 `{ updated: true }` (비밀번호).
-- 에러: Phase 7 shape. `current_password_invalid` / `password_policy_violation` 등.
-
-### 프론트엔드 영향 / 현황 (2026-05-30 기준)
-- 프론트는 현재 fallback 으로 "관리자에게 문의" 안내만 노출.
-- endpoint 가 들어오면 `profile.tsx` 에 "내 정보 수정" 진입로 + 폼.
-
-### 우선순위
-🟢 낮음 — 일가요는 운영 초기, 단일 actor 정책상 관리자 경로로 충분. 사용자 자체 처리 의지가 누적되면 격상.
-
-### 발견 시점
-2026-05-30 (인증/프로필 UX 검토 — B-5).
-
-### 관련 코드
-- 프론트 [`src/api/endpoints/auth.ts`](../../src/api/endpoints/auth.ts), [`app/(tabs)/profile.tsx`](../../app/\(tabs\)/profile.tsx)
-
----
-
-## 19. 🟡 `POST /api/reports/:id/export?format=pdf` — PDF 출력
-
-### 배경
-새 양식의 다운로드 결정 §6 (2026-05-31): Word 유지 + PDF 추가. 현재 `outputFileUrl` 은 Word 만.
-사용자 요구가 인쇄/공유에 PDF 가 더 적합한 케이스가 많음 (현장 보고에 사진 다수 포함되는 새 양식 특히).
-
-### 백엔드가 해야 할 것
-```
-POST /api/reports/:id/export?format=pdf
-response: { url, expiresAt? }
-```
-또는 다중 포맷 지원:
-```
-POST /api/reports/:id/export
-body: { format: 'word' | 'pdf' }
-```
-보고서 개요 위치도(자동 생성) + 현장 보고 N개를 단일 문서로 렌더.
-
-### 프론트엔드 영향
-- 보고서 상세 화면에 "PDF 다운로드" 버튼 추가 (현재 'Word 파일 다운로드' 옆).
-- endpoint 도착 전 UI 는 hidden.
-
-### 발견 시점
-2026-05-31 (보고서 양식 변경 — 결정 §6).
-
-### 관련 코드
-- 프론트 [`app/(tabs)/reports/[id]/index.tsx`](../../app/\(tabs\)/reports/\[id\]/index.tsx)
-
----
-
-## 22. 🟡 인앱 경로 표시 — 카카오모빌리티 길찾기 프록시 (2학기 후보)
-
-> **결정 (2026-06-06)**: **차량 경로만 추진** — 도보(Tmap)·대중교통(ODsay) 대안은 보류. 상세 명세: [docs/roadmap/01_in-app-route.md](../roadmap/01_in-app-route.md)
-
-### 배경
-- 현재 "길찾기"는 카카오 외부 앱 deep-link 뿐 (§1) — 앱 안에서는 목적지 간 **경로가 전혀 표시되지 않아** 진행 중 외근에서 동선을 가늠하기 어렵다는 사용자 불편이 있었음. 항목화되지 않고 있다가 2026-06-06 MVP 동결 회고에서 재발견·등재.
-- 지도에 그려지는 선은 시군구 경계 폴리곤뿐, 경로선 렌더는 미구현.
-
-### 단계 제안
-1. **(프론트 단독, 백엔드 무관)** active 외근 지도에 방문 순서 직선 폴리라인 + 순서 번호 — `kakaoMapHtml` 마커 파이프라인 확장. 2학기 초 후보.
-2. **(백엔드 필요)** 카카오모빌리티 길찾기 REST 프록시 — REST 키가 서버 전용이라 백엔드 엔드포인트 필수. 예: `POST /api/trips/:id/route` → origin/waypoints/destination 좌표로 `apis-navi.kakaomobility.com/v1/directions`(자동차) 호출, `vertexes`(경로 좌표열)·`distance`·`duration` 반환. 프론트는 Polyline 렌더 + nearest-neighbor 의 직선거리 ETA 를 실도로 값으로 대체.
-
-### 제약 (2026-06-06 웹 확인)
-- 카카오모빌리티 **셀프서브 공개 API 는 자동차 길찾기 계열뿐** (directions·다중 경유지·미래 운행). 경유지 개수 제한·무료 쿼터 확인 필요.
-- **도보·자전거**: 카카오모빌리티에 존재하나 **제휴(Partnership) API** — 일반 키 신청 불가, 제휴 계약 필요. 학생 프로젝트 현실성 낮음.
-- **대중교통**: 카카오 공개·제휴 어디에도 미확인 — 사실상 미제공.
-- **타사 대안** (카카오 지도 위에 데이터만 얹는 방안): 도보 = **Tmap 보행자 경로 API**(SK open API, 셀프서브·무료 쿼터). 대중교통 = **ODsay**(대중교통 전문, "원하는 지도와 매칭 가능" 명시) 또는 TMAP 대중교통 API. 단 타사 경로를 카카오 지도에 표시하는 약관 검토 선행 (ODsay 는 지도 무관 명시라 가장 안전해 보임).
-
-### 프론트엔드 영향
-- 1단계는 프론트 자체 처리. 2단계 머지 시 active/상세 지도에 경로선·실도로 ETA 표시.
-
-### 발견 시점
-2026-06-06 (MVP 동결 회고 — "인앱 경로 미제공 불편" 재확인, 미등재 상태였음).
-
-### 관련 코드
-- 프론트 [`src/assets/kakaoMapHtml.ts`](../../src/assets/kakaoMapHtml.ts) (마커·경계 렌더 — 폴리라인 추가 지점)
-- 프론트 [`src/utils/routeOptimize.ts`](../../src/utils/routeOptimize.ts) (`nearestNeighborOrder` — 직선거리 ETA, 2단계에서 실도로 값으로 대체)
-
----
-
-## 25. 🟠 사용자 커스텀 카테고리(분류) 마스터 리소스 — `categories` CRUD
-
-카테고리를 자유 문자열 → **사용자가 관리하는 커스텀 Enum**으로 승격. 현재 `field_categories`
-는 복합 PK `(field_id, category)` 문자열 태그라 마스터 목록/소유자/CRUD 가 없어, "한 번도
-안 쓰인 카테고리"가 존재할 수 없고 오타·표기 흔들림이 그대로 쌓인다.
-
-- **요청 계약(projects 패턴 + 관리용 PATCH/DELETE)**:
-  - `GET /api/categories` (본인 것, 페이지네이션) → `{ items: [{ categoryId, name, createdAt }], pagination }`
-  - `POST /api/categories { name }` → 생성(이름 유니크, 사용자 스코프). 중복이름 `409 category_name_taken`.
-  - `PATCH /api/categories/:categoryId { name }` → 이름변경.
-  - `DELETE /api/categories/:categoryId` → 삭제.
-  - 신규 에러코드 후보: `category_name_required`, `category_name_taken`, `category_not_found`.
-- **현장 저장 모델**: 당장은 `Field.categories: string[]`(이름) **계약 무변경** — 마스터는 "허용된
-  이름 목록". 후속 옵션(별도 결정 필요): 현장이 name 대신 `category_id` FK 참조 / 이름변경 시
-  기존 현장 값 캐스케이드 갱신 / 카테고리 색상·아이콘 속성.
-- **프론트 현황(선행)**: contract 를 `src/api/endpoints/categories.ts` 로 정의하고 `categoryStore`
-  (AsyncStorage 임시 영속 + 서버 fire-and-forget)로 관리 화면·다중선택 피커를 **지금 동작**시킴.
-  백엔드 배포 후 store 소스만 서버 단일로 스왑(코드에 `TODO(backend)` 표식). 현재는 기기 내 로컬
-  영속이라 기기 간 동기화 없음.
-
-### 발견 시점
-2026-07-24 (카테고리 커스텀 Enum 전환 요구 — 프론트 선행 배선 + 백엔드 마스터 리소스 요청).
-
-### 관련 코드
-- 프론트 [`src/api/endpoints/categories.ts`](../../src/api/endpoints/categories.ts) (contract)
-- 프론트 [`src/stores/categoryStore.ts`](../../src/stores/categoryStore.ts) (임시 로컬 영속 + 서버 스왑 TODO)
-- 프론트 [`src/components/fields/CategoryMultiPicker.tsx`](../../src/components/fields/CategoryMultiPicker.tsx), [`app/(tabs)/fields/categories.tsx`](../../app/(tabs)/fields/categories.tsx)
-
----
+- 관련 항목: §26(파생값 `siteCount` 의미 미정의)
 
 ## 26. 🟡 `GET /api/trips/list` — `siteCount` 가 계획 목적지 수와 불일치 (의미 미정의)
 
@@ -353,25 +168,36 @@ body: { format: 'word' | 'pdf' }
 > §N 은 원 번호 유지 — 변경 이력·상호참조 앵커.
 
 - **§2 ✅ `PATCH`/`DELETE /api/trips/:tripId`** (release 2026-06) — PATCH 제목·시간 보정(응답 비의존, 로컬 패치), DELETE 관련 레코드 시 `409 has_related_trip_records`→`?force=true`. `tripStore.update`/`remove`. 커밋 `18414f6`·`10b4cd0`·`ec6ab90`.
+- **§3 ✅ 주소검색 `address.json`+`keyword.json` 병합 — 기구현 확인** (2026-07-26) — 백엔드 `searchFieldAddress` 가 이미 두 API 를 병렬 호출·병합·중복제거하고 있음(추가 커밋 없음). 백엔드 측 요청 충족. 잔여는 프론트 **선택** 정리뿐 — 클라이언트 카카오 JS SDK 키워드검색(`useKakaoPlaceSearch`, 헤드리스 WebView) 의존을 걷어낼 수 있음(차단 아님, 미적용).
 - **§4 ✅ `detailAddress` optional 완화** (release 2026-06) — `detail_address_required` 400 제거, point 성 현장(가로수·광장) 등록 OK. 프론트 무변경.
 - **§5 ✅ `POST /trips/navigation/optimize-preview` 404 → 클라이언트 only 확정** (2026-05-31) — `optimizePreview`·관련 타입 삭제, `order.tsx` 는 `nearestNeighborOrder` 만. (외근 시작 후 `/optimize` 는 유지.)
 - **§7 ✅ 보고서 본문 검증 완화 + 사진 첨부 → 새 양식으로 해소** (2026-06-04) — content·보고서 레벨 사진 개념 제거(본문=`field_reports`), 사진은 `POST /reports/:id/field-reports`.
 - **§8 ✅ 자동 체크인 — 현 반자동 정책 유지(변경 없음)** (2026-05-10) — arrival→Alert→사용자 탭→checkIn confirm 안전망이 의도된 동작. 재개 조건: 현장 작업자 "확인 번거로움" 신호 누적 시.
+- **§9 ✅ visit 단계 모델(phase: 조치 전/중/후)** (release 2026-07-26) — `visit_photos.phase`(`before|during|after|null`), `POST /visits/:visitId/photos` multipart `phase?`, 응답 `attachment.phase` + 파생 `phaseProgress`(trip timeline·visit 상세 포함), `POST /reports/from-trip/:tripId` 이 phase→`beforePhotoUrl`/`pendingPhotoUrl`/`afterPhotoUrl` 자동 매핑. `visit_phase_invalid`(400). 커밋 `5a53b02`. **프론트 미배선** — 상단 「프론트 연동 대기」.
 - **§11 ✅ 외근 destinations 영속화 + GET/PATCH** (release 2026-06 batch3) — `trips/start` plannedFields 수용·`destinations[]`, `GET/PATCH /trips/:id/destinations`, 체크인 자동 arrived. `destinationStore` 서버+캐시 전환. 커밋 `ea9a33f`·`caf2d1f`. (진행 중 단건 add 는 §24.)
 - **§13 ✅ `POST /reports/generate` 500 → 프론트 미사용으로 종결** (2026-06-04) — AI 초안 분기 프론트 완전 제거(`/reports/generate`는 redirect만). 백엔드엔 미사용 endpoint 정리(제거/410) 권고만 잔존.
 - **§14 ✅ 현장 메모/사진 개별 삭제** (release 2026-06) — `DELETE /fields/:id/memos/:memoId`·`.../photos/:photoId` 204(디스크 객체 정리). 프론트 `removeTextMemo`/`removePhoto` 선반영.
+- **§15 ✅ 프로필 수정 `PATCH /api/me` · `PATCH /api/me/password`** (release 2026-07-26) — `{name?}`→`{user}`, 비밀번호는 `{updated:true}`. 에러 `name_required`·`current_password_invalid`·`password_confirm_mismatch`·`password_policy_violation`(정책은 signup 과 동일, 현재 최소 8자). 커밋 `37135e6`. **프론트 미배선** — `src/api/endpoints/` 에 me 파일 없음.
 - **§16 ✅ `GET /trips/:tripId` timeline[].fieldId 정식 포함** (2026-06-01, 라이브 검증 닫힘) — 운영이 이미 `fieldId` 실어보냄(전제 오류; QA 당시 mock 배포였던 것으로 추정). `syncFromTimeline` 그대로 동작.
 - **§17 ✅ 더미 데이터 보강 → 프론트 자가 시드로 해결(백엔드 불요)** (2026-06-01) — `seed_demo_data.mjs` 로 현장·외근·방문·보고서 전·중·후 사진 생성. `field-reports` 외부 photo URL 저장·회수 확인.
 - **§18 ✅ `POST /reports/from-trip/:tripId`** (release 2026-06 batch2) — `{title}`→`{reportId, fieldReports[]}`. `createWithVisitScaffold` from-trip 1콜 우선 + 404/405 폴백. 커밋 `df6fc2d`.
+- **§19 ✅ 보고서 PDF export** (release 2026-07-26) — `POST /reports/:reportId/export/pdf` + `POST /reports/:reportId/export?format=pdf|word`(`pdfkit`). 응답 `{url, downloadUrl, format}`, Word `outputFileUrl` 은 덮어쓰지 않음. `export_format_invalid`(400). 커밋 `7b02fb4`. **프론트 미배선**.
 - **§20 ✅ 보고서 Word 위치도 — 네이티브 캡처→백엔드 임베드** (2026-06-19, 백엔드·프론트 완료+실기기 검증) — `POST /reports/:id/overview-photo`(sharp) + export/word 최상단 삽입 + `reports.overview_map_url`. 프론트 `react-native-view-shot` 캡처→업로드. 커밋 `5e5844b`·`2c48874`, `apk-v0.1.0-15`. (web 은 canvas-taint 로 위치도 없이 진행 — 실사용 아님.)
 - **§21 ✅ `visits.reason`('기타' 사유) 영속·노출** (release 2026-06 batch1) — `status_reason` 영속 + 응답(`reason`)·timeline·recentVisits 노출. 프론트 4개 타입 `reason?` + 카드 '사유:' 표시. 커밋 `18414f6`·`bacdd47`.
+- **§22 ✅ 인앱 경로 — 카카오모빌리티 자동차 경로 프록시(2단계)** (release 2026-07-26) — `POST /api/trips/:tripId/route` `{origin, destination, waypoints?}` → `{distance(m), duration(s), vertexes[{lat,lng}]}`. 카카오모빌리티 `v1/directions`·`v1/waypoints/directions`. 커밋 `386a195`. 1단계(직선 폴리라인·순번 마커)는 프론트 완료(외근 탭 사이클). **잔여: 실도로 vertexes 렌더 + `nearestNeighborOrder` 직선 ETA 대체 — 프론트.**
 - **§23 ✅ 처리방침·약관 정적 페이지 호스팅** (release 2026-06) — `GET /privacy`·`/terms` 200(Play Console 링크 해소). ⚠️ 잔여(코드 아님): 서빙 본문은 **초안** — 법적 문구 팀 작성·교체 필요.
 - **§24 ✅ `POST /trips/:tripId/destinations` 진행 중 단건 추가** (release 2026-06-19) — `{fieldId, order?}`→Destination, 멱등·active-only(`409 already_ended_trip`). `destinationStore.add` 낙관적 temp→fire-and-forget. 커밋 `5e5844b`. probe 6/6 PASS.
+- **§25 ✅ 사용자 커스텀 카테고리 마스터 `categories` CRUD** (release 2026-07-26) — `GET/POST /api/categories`, `PATCH/DELETE /api/categories/:categoryId`, user 스코프 `(user_id, name)` UQ. 에러 `category_name_required`(400)·`category_name_taken`(409)·`category_not_found`(404). `Field.categories: string[]`/`field_categories` **계약 무변경**. 커밋 `8cc8e12`. **프론트 잔여**: `categoryStore` 가 아직 AsyncStorage 진실원(`TODO(backend)`). 후속(별도 결정): `field_categories`→`category_id` FK / rename cascade.
 
 ---
 
 ## 변경 이력
 
+- **2026-07-28**: 백로그 정리 — 2026-07-26 백엔드 배치 반영(결과보고서 `release-2026-07-26-backend-backlog.md`
+  저장소 반영). **§3·§9·§15·§19·§22·§25 → ✅ 아카이브 이관**(백엔드 배포 완료). **§10 부분 완료**로 재기술
+  (S3/MinIO 드라이버·사진 1920/q72 ✅ / 음성 비트레이트·보고서 zip<20MB 잔여). **§12 (A) 스키마 dump ✅,
+  (B) `ERD.drawio` 갱신만 잔여**로 재기술. 활성 큐 **8건 → 3건**(§10·§12·§26). 백엔드는 냈는데 프론트가
+  아직 안 붙은 5건(+§12-B)은 상단 「프론트 연동 대기」로 분리 — 2026-07-28 코드 실측 기준.
 - **2026-07-28**: §26 추가 — `GET /trips/list` 의 `siteCount` 가 계획 목적지 수와 불일치(🟡).
   외근 탭 UI/UX 사이클 E2E 중 상세 `계획 3` vs 목록 카드 `계획 1` 모순 발견. 운영 OpenAPI 대조 결과
   `siteCount` 는 스펙에 description 없이 `integer` 로만 1회 등장 — 의미 미정의. 프론트는 분모가

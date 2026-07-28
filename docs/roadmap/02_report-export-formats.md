@@ -1,13 +1,20 @@
 # 보고서 내보내기 포맷 확장 — PDF · HWP
 
 > **상태**: 확정 (2026-06-06 사용자 결정 — HWP 는 기술 제약으로 HWPX 타깃 권장, 하단)
-> **백로그**: PDF = [backend-backlog §19](../backend/backend-backlog.md) (기등재·백엔드 대기) · 위치도 삽입 = §20 · HWP 는 방식 확정 후 등재
+> **백로그**: PDF = [backend-backlog §19](../backend/backend-backlog.md) — **백엔드 배포 완료(2026-07-26), ✅ 아카이브. 프론트 배선만 남음** · 위치도 삽입 = §20(✅) · HWP 는 방식 확정 후 등재
 > **현황**: Word(docx) 내보내기는 **구현 완료** (`reports.output_file_url`). 이 명세는 그 파이프라인의 포맷 확장.
 
-## 1. PDF (= 백로그 §19, 우선)
-- `POST /api/reports/:id/export?format=pdf` — 기존 Word 생성 파이프라인에서 분기 (docx→pdf 변환 또는 직접 렌더).
+## 1. PDF (= 백로그 §19, 우선) — 백엔드 ✅ / 프론트 ⬜
+
+**백엔드 완료 (release 2026-07-26, 커밋 `7b02fb4`, `pdfkit`)**
+- `POST /api/reports/:reportId/export/pdf` · `POST /api/reports/:reportId/export?format=pdf|word`
+- 응답 `{ url, downloadUrl, format }`. **Word 의 `outputFileUrl` 은 덮어쓰지 않는다** — 두 포맷 공존.
+- 에러 `export_format_invalid`(400).
+
+**프론트 할 일**
+- `src/api/endpoints/reports.ts` 에 pdf 배선(현재 0건) → 보고서 상세에 'PDF 다운로드' 를 기존 'Word 파일 다운로드' 옆에 추가.
 - 용도: 인쇄·모바일 공유 (Word 는 편집용, PDF 는 제출·열람용).
-- §20(위치도 자동 삽입)과 같은 파이프라인에서 처리하면 한 번에.
+- §20(위치도 자동 삽입)은 이미 Word 파이프라인에 반영됨 — PDF 에도 들어가는지는 실호출로 확인 필요.
 
 ## 2. HWP — 기술 제약을 전제로 한 선택지
 
