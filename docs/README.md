@@ -14,7 +14,8 @@
 
 | 파일 | 내용 |
 |---|---|
-| [diagram/ERD.drawio](diagram/ERD.drawio) | ERD 다이어그램 (drawio) — 현 DB 상태 |
+| [diagram/ERD.drawio](diagram/ERD.drawio) | ERD 다이어그램 (drawio) — 현 DB 상태. **직접 편집하지 말 것**, 아래 생성기로 재생성 |
+| [diagram/gen-erd.mjs](diagram/gen-erd.mjs) | ERD 재생성기 — `node docs/diagram/gen-erd.mjs`. 진실 출처는 백엔드 `prisma/schema.prisma`(dump: 백엔드 `docs/db-schema.md`). 겹침·앵커·관통 자가검증 포함 |
 | [diagram/IAD.drawio](diagram/IAD.drawio) | IA 다이어그램 (drawio) — 현 프론트 구조 |
 
 ## 백엔드 협업 — `backend/`

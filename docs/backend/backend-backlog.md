@@ -17,8 +17,8 @@
 
 > 2026-07-26 백엔드 배치([release-2026-07-26-backend-backlog.md](./release-2026-07-26-backend-backlog.md))로
 > 활성 큐 6건이 운영에 나갔고, **2026-07-28 사이클에서 §19·§15·§25·§22 를 연동했다.**
-> 남은 프론트 작업은 **§12-B(ERD) 하나**. §9 는 연동 대상이 아니라 백엔드 재요청(**§27**)으로 전환됐다 —
-> 백엔드가 phase 를 붙인 리소스가 프론트가 쓰는 리소스와 달라 프론트가 할 수 있는 일이 없다.
+> **2026-07-28 기준 프론트 작업은 전부 끝났다.** §9 는 연동 대상이 아니라 백엔드 재요청(**§27**)으로
+> 전환됐다 — 백엔드가 phase 를 붙인 리소스가 프론트가 쓰는 리소스와 달라 프론트가 할 수 있는 일이 없다.
 
 | § | 백엔드 | 프론트 현황 (실측) | 해야 할 것 |
 |---|---|---|---|
@@ -27,7 +27,7 @@
 | ~~§19 PDF export~~ | ✅ | **연동 완료** (2026-07-28, `bea5141`) — 생성 후 즉시 열기 단발(URL 미영속) | — |
 | ~~§15 프로필 수정~~ | ✅ | **연동 완료** (2026-07-28, `4d8d79c`) — profile/edit 화면 신설 | — |
 | ~~§22 경로 프록시~~ | ✅ | **연동 완료** (2026-07-28, `49bd539`) — 실도로 폴리라인 + 재최적화 ETA 대체 | — |
-| §12-B ERD | (A) ✅ | `ERD.drawio` 미갱신 | 백엔드 `db-schema.md` 기준 drawio 갱신 (§12 활성 유지) |
+| ~~§12-B ERD~~ | (A) ✅ | **갱신 완료** (2026-07-28) — 3개 테이블 신설 + 컬럼 3개 반영 | — |
 
 §10(파일 인프라)은 서버측 드라이버 교체라 프론트 contract 무변경 — 배선 불요.
 
@@ -64,53 +64,7 @@
 
 ---
 
-## 12. 🟠 ERD 최신화 — (A) 백엔드 스키마 dump ✅ / (B) `ERD.drawio` 갱신 잔여 (프론트 합동)
-
-> **갱신 (release 2026-07-26)**: 백엔드가 **(A) 현재 스키마 dump 를 완료**(커밋 `62bc3dd`, 백엔드 저장소
-> `docs/db-schema.md` — 테이블·FK·파생값·`ERD.drawio` diff·예정 레이어 포함). **잔여는 (B) drawio 갱신뿐이고,
-> 이건 프론트 합동 작업이라 이제 프론트가 착수 가능하다.**
-
-### 배경
-[`docs/ERD.drawio`](../diagram/ERD.drawio) 가 백엔드 실제 스키마와 어디까지 맞물리는지 확인된 바 없음.
-데이터 모델을 건드리는 항목(§9 visit phase, §25 categories 등)이 계속 들어오는데 단일한 ERD 진실값이
-없어 다음 회로에서 어긋난다:
-
-- 프론트 [`src/types/entities.ts`](../../src/types/entities.ts) 의 `Trip`/`Field`/`Visit`/`Destination` 인터페이스가
-  백엔드 실제 컬럼과 1:1 인지 검증 어려움 (현재는 응답 typing 으로만 간접 추적).
-- `TripListItem.siteCount`/`visitCount` 같은 derived 값이 어떤 join/count 로 계산되는지 ERD 만 봐선 모름
-  — **§26 이 정확히 이 지점에서 터진 사례다.**
-- §9(visit phase)·§25(categories)가 들어가면서 실제로 추가된 FK/제약/인덱스가 ERD 에 미반영.
-
-### 해야 할 것
-
-**(A) 현재 스키마 추출 — 백엔드 주도 ✅ 완료 (2026-07-26)**
-- 백엔드 저장소 `docs/db-schema.md` 에 테이블·컬럼·FK·파생값·`ERD.drawio` diff·"예정" 레이어까지 정리됨.
-
-**(B) `ERD.drawio` 비교·갱신 — 프론트 합류 ⬜ 잔여**
-- 백엔드 dump 를 `docs/diagram/ERD.drawio` 와 diff. 누락 테이블/컬럼·잘못된 관계·실제와 다른 cardinality 를
-  좌우 비교 노트로.
-- 2026-07-26 신설분 반영: `categories`(user 스코프, `(user_id, name)` UQ), `visit_photos.phase`.
-- `src/types/entities.ts` 의 프론트 인터페이스와 컬럼 매핑 표 1장 첨부.
-- 마이그레이션 참조: `20260726120000_add_categories`, `20260726130000_visit_photo_phase`.
-
-**(C) ERD 갱신은 단독 PR 로** — 데이터 모델 진실값을 먼저 합의한 뒤 코드 진입.
-
-### 우선순위
-🟠 중상 — (A) 가 끝나 **차단 해소**. 다만 §26 처럼 "파생값 의미 미정의"가 반복되고 있어,
-프론트가 (B) 를 처리하는 것이 다음 데이터 모델 변경의 선행 워크.
-
-### 발견 시점
-2026-05-11 (사용자 — "ERD 파악 및 최신화도 백로그에 추가, 프론트랑 합동"). 2026-07-26 (A) 완료.
-
-### 관련 자료
-- 백엔드 `docs/db-schema.md` — 스키마 dump (§12-A 산출물)
-- [`docs/ERD.drawio`](../diagram/ERD.drawio) — 현재 ERD (검증 미수행)
-- 프론트 [`src/types/entities.ts`](../../src/types/entities.ts) — 프론트 데이터 모델
-- 관련 항목: §26(파생값 `siteCount` 의미 미정의) · §27(§9 phase 가 프론트 경로와 어긋남)
-
----
-
-## 26. 🟡 `GET /api/trips/list` — `siteCount` 가 계획 목적지 수와 불일치 (의미 미정의)
+## 26. 🟡 `GET /api/trips/list` — 목록에 **계획 목적지 수**가 없다 (`siteCount` 는 방문 현장 수)
 
 외근 목록 카드가 "방문 N / 계획 M곳"을 보여줘야 하는데, 목록 API 에는 목적지 배열이 없어
 `siteCount` 를 계획 수(M)로 쓴다. 그런데 이 값이 상세의 `destinations[]` 길이와 어긋난다.
@@ -128,29 +82,40 @@
 | 결과저장후 재진입 | 2 | **1** |
 | 진행중 화면 검증 | 3 | **0 또는 null** |
 
-방문 수와 상관관계가 있어 보이나(방문 1 → 1, 방문 0 → 0) 규칙을 단정할 수는 없다.
-어느 쪽이든 **계획 수가 아니다.**
+방문 수와 상관관계가 있어 보이나(방문 1 → 1, 방문 0 → 0) 규칙을 단정할 수는 없었다.
 
-### 요청
+### ✅ 의미 확정 (2026-07-28, 백엔드 `docs/db-schema.md`)
 
-셋 중 하나면 된다 — 프론트는 어느 쪽이든 대응 가능하다.
+§12-A dump 의 「API에서만 존재하는 파생 값」이 답을 담고 있었다:
 
-1. `siteCount` 를 **계획 목적지 수**(= `destinations[]` 길이)로 정정하고 스펙에 description 추가. (선호)
-2. 의미가 원래 다른 것이라면(예: 실제 들른 현장 수) **스펙에 명시**하고, 목록 items 에
-   `plannedSiteCount` 같은 계획 수 필드를 별도 추가.
-3. 목록 items 에 `destinationCount` 를 추가하고 `siteCount` 는 그대로 둔다.
+> `TripListItem.siteCount` = **해당 trip visits 의 `DISTINCT field_id` 개수**
+
+즉 **실제로 들른 현장 수**이고, 계획 목적지 수가 아니다. 관측치(방문 1 → 1, 방문 0 → 0)와 정확히 맞는다.
+프론트가 "계획 수"로 해석한 것이 오해였다. **버그가 아니라 미문서화 문제였다.**
+
+정의상 `siteCount ≤ visitCount` 이므로, 프론트의 기존 가드(`분모 < 방문 수면 신뢰 불가`)는
+사실상 항상 발동한다 → 목록 카드는 계속 "방문 N건" 폴백으로 남는다.
+
+### 남은 요청 (범위 축소)
+
+1. **OpenAPI 에 description 추가** — 지금 `{"siteCount": {"type": "integer"}}` 로 설명이 없다.
+   이 항목이 생긴 근본 원인이 그것이고, dump 를 안 봤으면 또 오해했을 것이다. (필수)
+2. 목록 items 에 **계획 목적지 수**(`plannedSiteCount` 또는 `destinationCount`) 추가. (선호)
+   목록에서 "계획 대비 얼마나 돌았는지"를 읽으려면 계획 수가 필요한데, 목록 API 에는
+   `destinations[]` 가 없어 상세를 열지 않으면 알 수 없다.
 
 ### 프론트 현황 (선조치 완료 — 차단 아님)
 
 분모가 방문 수보다 작으면 신뢰할 수 없다고 보고 **계획 표기를 버리고 "방문 N건"으로 폴백**한다
 (커밋 `b9daf9f`). 그전엔 `방문 3 / 계획 1곳` 같은 말이 안 되는 문구가 카드에 노출됐다.
-백엔드 정정 후 이 가드를 걷어내면 된다.
+의미가 확정된 지금 보면 **이 가드는 우연히 옳게 동작하고 있었다** — `siteCount` 는 계획 수가
+아니므로 분모로 쓰면 안 되는 값이었다. 위 2번(계획 수 필드)이 오면 그때 진행률 바가 살아난다.
 
 ### 우선순위
 
 🟡 낮음~중간 — 폴백이 있어 차단은 아니지만, 목록에서 **진행률 바가 사라진 카드**가 생겨
-"이 외근이 계획 대비 얼마나 돌았는지"를 목록에서 못 읽는다. §11(destinations 영속화)이
-끝난 지금은 상세에 진실값이 있으므로 목록에도 같은 수를 실어주기만 하면 된다.
+"이 외근이 계획 대비 얼마나 돌았는지"를 목록에서 못 읽는다. 상세에는 `destinations[]` 진실값이
+있으므로 목록에도 그 길이를 실어주기만 하면 된다.
 
 ### 발견 시점
 
@@ -239,6 +204,7 @@
 - **§8 ✅ 자동 체크인 — 현 반자동 정책 유지(변경 없음)** (2026-05-10) — arrival→Alert→사용자 탭→checkIn confirm 안전망이 의도된 동작. 재개 조건: 현장 작업자 "확인 번거로움" 신호 누적 시.
 - **§9 ✅ visit 단계 모델(phase: 조치 전/중/후)** (release 2026-07-26) — `visit_photos.phase`(`before|during|after|null`), `POST /visits/:visitId/photos` multipart `phase?`, 응답 `attachment.phase` + 파생 `phaseProgress`(trip timeline·visit 상세 포함), `POST /reports/from-trip/:tripId` 이 phase→`beforePhotoUrl`/`pendingPhotoUrl`/`afterPhotoUrl` 자동 매핑. `visit_phase_invalid`(400). 커밋 `5a53b02`. ⚠️ **배포됐으나 프론트에 도달하지 않음** — phase 가 붙은 곳은 visit 사진인데 프론트는 현장 사진 엔드포인트를 쓴다(2026-07-28 OpenAPI 실측). → **§27 로 재요청.**
 - **§11 ✅ 외근 destinations 영속화 + GET/PATCH** (release 2026-06 batch3) — `trips/start` plannedFields 수용·`destinations[]`, `GET/PATCH /trips/:id/destinations`, 체크인 자동 arrived. `destinationStore` 서버+캐시 전환. 커밋 `ea9a33f`·`caf2d1f`. (진행 중 단건 add 는 §24.)
+- **§12 ✅ ERD 최신화 — (A) 백엔드 스키마 dump + (B) `ERD.drawio` 갱신** (2026-07-28) — (A) 백엔드 `docs/db-schema.md`(커밋 `62bc3dd`). (B) 프론트가 백엔드 `scripts/gen-erd.mjs` 를 `docs/diagram/gen-erd.mjs` 로 들여와 스키마 기준 재생성: **`categories`·`trip_destinations`·`visit_photos` 3개 테이블 신설**, `trips.deleted_at`·`reports.overview_map_url`·`visits.status_reason` 컬럼 추가, 관계 4개(users→categories, trips/fields→trip_destinations, visits→visit_photos) 연결, 복합제약·파생값 노트 추가. 생성기 자가검증(겹침·앵커중복·엣지관통·포개짐) 통과. ⚠️ 기존 ERD 의 `destinations` 는 실제 테이블명이 `trip_destinations` 이고 `order`→`sort_order` 였다 — 이름·컬럼 모두 틀려 있었다.
 - **§13 ✅ `POST /reports/generate` 500 → 프론트 미사용으로 종결** (2026-06-04) — AI 초안 분기 프론트 완전 제거(`/reports/generate`는 redirect만). 백엔드엔 미사용 endpoint 정리(제거/410) 권고만 잔존.
 - **§14 ✅ 현장 메모/사진 개별 삭제** (release 2026-06) — `DELETE /fields/:id/memos/:memoId`·`.../photos/:photoId` 204(디스크 객체 정리). 프론트 `removeTextMemo`/`removePhoto` 선반영.
 - **§15 ✅ 프로필 수정 `PATCH /api/me` · `PATCH /api/me/password`** (release 2026-07-26) — `{name?}`→`{user}`, 비밀번호는 `{updated:true}`. 에러 `name_required`·`current_password_invalid`·`password_confirm_mismatch`·`password_policy_violation`(정책은 signup 과 동일, 현재 최소 8자). 커밋 `37135e6`. **프론트 미배선** — `src/api/endpoints/` 에 me 파일 없음.
@@ -256,6 +222,16 @@
 ---
 
 ## 변경 이력
+
+- **2026-07-28**: **§12 ✅ 종결** — (B) `ERD.drawio` 갱신 완료. 백엔드 저장소를 pull 해
+  `docs/db-schema.md` 를 확보하고, 백엔드 `scripts/gen-erd.mjs` 를 `docs/diagram/gen-erd.mjs` 로
+  들여와 스키마 기준 재생성(자가검증 통과). 누락 테이블 3개(`categories`·`trip_destinations`·
+  `visit_photos`) 신설, 컬럼 3개(`trips.deleted_at`·`reports.overview_map_url`·`visits.status_reason`)
+  반영. 기존 ERD 의 `destinations` 는 테이블명·컬럼명이 모두 실제와 달랐다(`trip_destinations`,
+  `order`→`sort_order`). **§26 재기술**: dump 의 파생값 표에서 `siteCount` = 「해당 trip visits 의
+  DISTINCT field_id」로 **의미가 확정**됨 — 계획 수가 아니라 방문 현장 수이고, 프론트 해석이
+  오해였다. 버그가 아니라 미문서화 문제로 판명돼 요청을 (1) OpenAPI description 추가,
+  (2) 계획 수 필드 신설로 축소. §27 도 독립 확인됨 — dump 의 `field_photos` 에 `phase` 컬럼이 없다.
 
 - **2026-07-28**: 2026-07-26 배치 프론트 연동 사이클. **§19·§15·§25·§22 연동 완료**
   (`bea5141`·`4d8d79c`·`c0bcbae`·`49bd539`). **§27 추가(🟠)** — §9 visit phase 가 배포됐는데
