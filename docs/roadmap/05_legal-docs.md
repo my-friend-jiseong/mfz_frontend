@@ -113,10 +113,10 @@ docs/legal/            ← 백엔드 repo
 
 | # | 작업 | 파일 | 의존 |
 |---|---|---|---|
-| F1 | `LOCATION_TERMS_AVAILABLE = true` | `src/utils/contact.ts` | B2 |
+| F1 | `LEGAL_DOCS` 의 `effectiveDate` 3개를 배포된 시행일로 — 메뉴 노출·동의 버전이 함께 갱신된다 | `src/utils/contact.ts` | B2 |
 | F2 | 가입 화면 `location` 링크 `/terms` → `/location-terms` | `app/(auth)/signup.tsx:40` | B2 |
 | ~~F3~~ | ~~`SUPPORT_EMAIL` 확정~~ — **✅ 완료** (`c577c31`). 결정된 주소와 이미 일치해 추가 작업 없음 | `src/utils/contact.ts` | — |
-| F4 | 시행일 상수 + `SignupBody.agreedTerms?` optional 전송 | `src/api/endpoints/auth.ts`, `authStore.ts` | — (시행일 확정됨) |
+| ~~F4~~ | ~~시행일 상수 + `agreedTerms` 전송~~ — **✅ 완료 (2026-07-29)**. `LEGAL_DOCS` 가 URL·시행일 단일 출처, `LOCATION_TERMS_AVAILABLE` 은 파생. 값은 **배포된 시행일**(현재 `2026-06-18`)이고 미배포 문서는 싣지 않는다. 테스트 5건 | `src/utils/contact.ts`, `api/endpoints/auth.ts`, `authStore.ts` | — |
 | F5 | (후속) 개정 감지 시 재동의 배너 | — | B5 |
 
 > **F4 는 이제 착수 가능하다.** 초안 계획서가 걸어둔 조건(시행일 확정)이 `2026-08-03` 으로 충족됐다.

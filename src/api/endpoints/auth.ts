@@ -25,6 +25,10 @@ export interface SignupBody {
   passwordConfirm: string;
   name: string;
   termsAgreed: true;
+  // backend-backlog §30-D — 어느 문서의 어느 버전에 동의했는지. 값은 **시행일**(YYYY-MM-DD).
+  // 백엔드 미구현 상태에선 무시된다(signup 이 필드를 골라 읽는 구조라 안전 — 실측 확인).
+  // 배포된 문서만 실린다 — utils/contact.ts `agreedTermsPayload` 참조.
+  agreedTerms?: Partial<Record<'service' | 'privacy' | 'location', string>>;
 }
 
 export interface LoginBody {

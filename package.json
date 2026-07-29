@@ -9,7 +9,7 @@
     "web": "expo start --web",
     "build:web": "expo export -p web",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/utils/__tests__/nearestField.test.ts"
+    "test": "tsx --test src/utils/__tests__/nearestField.test.ts src/utils/__tests__/contact.test.ts"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",

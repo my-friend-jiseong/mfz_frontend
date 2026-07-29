@@ -14,7 +14,7 @@ import { useTripStore } from './tripStore';
 import { useReportStore } from './reportStore';
 import { useProjectStore } from './projectStore';
 import { useCategoryStore } from './categoryStore';
-import { SUPPORT_EMAIL } from '@/utils/contact';
+import { SUPPORT_EMAIL, agreedTermsPayload } from '@/utils/contact';
 
 type Result<T = void> =
   | { ok: true; value?: T }
@@ -211,6 +211,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         passwordConfirm,
         name,
         termsAgreed: true,
+        // backend-backlog §30-D — 동의한 문서의 시행일을 함께 남긴다.
+        // 이 값은 소급 생성이 불가능해서, 서버가 아직 안 받더라도 먼저 보낸다.
+        agreedTerms: agreedTermsPayload(),
       });
       if (!isValidSession(session)) {
         if (__DEV__) console.warn('[authStore] signup 응답 shape 비정상:', session);
