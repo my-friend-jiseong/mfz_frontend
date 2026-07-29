@@ -11,9 +11,10 @@ yarn-error.*
 .env
 .env.local
 
-# Claude Code 로컬 상태 — 스킬(.claude/skills/)만 버전 관리, 나머지는 무시
+# Claude Code 로컬 상태 — 스킬/커맨드만 버전 관리, 나머지는 무시
 .claude/*
 !.claude/skills/
+!.claude/commands/
 
 # 스크래치·발표 산출물 — 재생성 가능하거나 자격증명 포함(MAIL.txt 등)이라 커밋 금지
 docs/tmp/
