@@ -2,7 +2,7 @@
 // 흩어져 있던 탓에 로그인 화면만 죽은 도메인(ilgayo.kr)을 계속 가리키고 있었다 —
 // 커밋 f079108 에서 약관 링크로 같은 사고가 났고, 그때 프로필 화면만 고쳐졌다.
 
-// 실제 수신 중인 팀 주소. docs/REQUIREMENTS_BEFORE_LAUCHING.md 와
+// 실제 수신 중인 팀 주소. docs/REQUIREMENTS_BEFORE_LAUNCHING.md 와
 // docs/일가요 서비스 운영 현황 확인 질문지.md 는 support@ilgayo.co.kr 를 적고 있지만,
 // 그 수신함은 살아 있지 않다 — 2026-07-29 사용자 확인. 닿지 않는 주소를 심사용
 // 공식 연락처로 노출하는 게 도메인 일관성보다 훨씬 나쁘다.

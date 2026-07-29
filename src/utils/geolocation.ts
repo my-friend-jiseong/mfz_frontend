@@ -6,7 +6,7 @@ export interface LatLng {
   lng: number;
 }
 
-// docs/REQUIREMENTS_BEFORE_LAUCHING.md §5 — OS 권한 팝업이 뜨기 **전에** 위치를 어디에 쓰는지,
+// docs/REQUIREMENTS_BEFORE_LAUNCHING.md §5 — OS 권한 팝업이 뜨기 **전에** 위치를 어디에 쓰는지,
 // 백그라운드로는 수집하지 않는다는 점을 먼저 알린다. 개인정보처리방침과 실제 동작을 맞추고,
 // 맥락 없이 뜨는 팝업에 반사적으로 '거부' 를 누르는 것을 줄이려는 목적이다.
 //

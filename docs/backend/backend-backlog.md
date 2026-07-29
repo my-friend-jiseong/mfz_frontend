@@ -420,7 +420,7 @@ Body: { "password": "..." }     ← 재인증을 요구한다면
 
 ### 발견 시점
 
-2026-07-29, `docs/REQUIREMENTS_BEFORE_LAUCHING.md` 검토 중 OpenAPI 대조로 확인.
+2026-07-29, `docs/REQUIREMENTS_BEFORE_LAUNCHING.md` 검토 중 OpenAPI 대조로 확인.
 
 ---
 
