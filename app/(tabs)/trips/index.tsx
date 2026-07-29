@@ -323,9 +323,10 @@ export default function TripsList() {
                 <Text variant="caption" weight="semibold" color="textMuted">
                   누적 시간
                 </Text>
-                {/* 순수 숫자가 아니라 "2시간 40분" 이라 폭이 넓고, 셋 중 가장 덜
-                    행동으로 이어지는 값이라 한 단계 낮춘다. */}
-                <Text variant="h3" color="textMuted" numeric>
+                {/* 세 열은 크기를 같게 둔다. 한 열만 h3(18) 로 낮췄더니 컬럼 높이가
+                    46 vs 50 이 되어 flex-end 정렬에서 이 열의 라벨만 4px 내려앉았다(실측).
+                    위계는 색으로 충분하다 — 건수는 primary, 시간은 textMuted. */}
+                <Text variant="metricSm" color="textMuted" numeric>
                   {fmtMinutes(weekStats.minutes)}
                 </Text>
               </View>
@@ -405,11 +406,12 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     paddingHorizontal: spacing.xs,
   },
-  // 숫자 밑변을 맞춰 크기 차이가 위계로 읽히게 한다. 카드 껍데기 없이 캔버스 위에 —
-  // 시트 안이라 세로가 귀하고, 이건 목록의 머리말이지 또 하나의 카드가 아니다.
+  // 정렬 기준은 라벨 줄(위)이다. 바닥을 맞추면 숫자 크기가 다른 열의 라벨만 내려앉는다.
+  // 카드 껍데기 없이 캔버스 위에 — 시트 안이라 세로가 귀하고, 이건 목록의 머리말이지
+  // 또 하나의 카드가 아니다.
   weekStats: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'flex-start',
     gap: spacing.xl,
     paddingHorizontal: spacing.xs,
     paddingTop: spacing.xs,

@@ -380,11 +380,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs,
   },
-  // 숫자 밑변을 맞춰 크기 차이가 위계로 읽히게 한다. 열을 flex 로 늘리지 않고 왼쪽에
-  // 모아 두고 오른쪽은 비운다 — 여백이 divider 를 대신한다.
+  // 정렬 기준은 라벨 줄(위)이다. 라벨은 셋 다 caption 이라 한 줄로 맞고, 크기가 큰
+  // 방문 숫자만 아래로 더 자란다 — 그게 위계로 읽힌다. 바닥을 맞추면(flex-end) 반대로
+  // 작은 열의 라벨이 6px 내려앉아 어긋난 것처럼 보인다(실측).
+  // 열을 flex 로 늘리지 않고 왼쪽에 모아 두고 오른쪽은 비운다 — 여백이 divider 를 대신한다.
   statsCard: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'flex-start',
     gap: spacing.xl,
     marginTop: spacing.md,
   },
