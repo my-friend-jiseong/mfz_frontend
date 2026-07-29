@@ -1,10 +1,10 @@
 import { memo } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { Badge, type BadgeShape, type BadgeTone } from '@/components/ui/Badge';
+import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
-import { opacity } from '@/theme/motion';
 
 interface Props {
   order: number;
@@ -30,19 +30,20 @@ export const DestinationRow = memo(function DestinationRow({
   onPress,
 }: Props) {
   return (
-    <Pressable
+    // 표면을 손으로 짜지 않는다 — surface+border+radius 는 Card 가 준다 (강령 7).
+    // 현재 목적지 강조(파랑 채움·테두리)만 style 로 덮어쓴다.
+    <Card
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.row,
-        isCurrent && styles.current,
-        pressed && { opacity: opacity.pressed },
-      ]}
+      padding="md"
+      style={[styles.row, isCurrent && styles.current]}
+      accessibilityLabel={`${order}번째 ${address}, ${statusLabel}`}
     >
       <View style={[styles.orderBadge, isCurrent && styles.orderBadgeCurrent]}>
         <Text
           variant="caption"
           weight="bold"
           color={isCurrent ? 'onPrimary' : 'text'}
+          numeric
         >
           {order}
         </Text>
@@ -58,7 +59,7 @@ export const DestinationRow = memo(function DestinationRow({
         ) : null}
       </View>
       <Badge label={statusLabel} tone={statusTone} shape={statusShape} />
-    </Pressable>
+    </Card>
   );
 });
 
@@ -66,11 +67,6 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
     marginBottom: spacing.xs,
     gap: spacing.sm,
   },
@@ -81,7 +77,7 @@ const styles = StyleSheet.create({
   orderBadge: {
     width: 28,
     height: 28,
-    borderRadius: 14,
+    borderRadius: radius.pill,
     backgroundColor: colors.surfaceMuted,
     borderWidth: 1,
     borderColor: colors.border,

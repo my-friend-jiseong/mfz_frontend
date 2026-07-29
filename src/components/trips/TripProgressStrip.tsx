@@ -37,11 +37,13 @@ export function TripProgressStrip({
         ) : (
           <View style={styles.elapsed} />
         )}
-        <Text variant="caption" weight="semibold" color="textMuted">
+        <Text variant="caption" weight="semibold" color="textMuted" numeric>
           방문 {arrived}
           {skipped > 0 ? ` · 건너뜀 ${skipped}` : ''} / {total}곳
         </Text>
-        <Text variant="caption" weight="heavy" color="primary">
+        {/* 이 화면의 focal 은 아래 현재 목적지 카드다 — 진행률은 맥락이라 키우지 않는다.
+            1 화면 = 1 결정(강령 1). 대신 tabular 로 방문 수가 바뀔 때 폭이 안 흔들리게. */}
+        <Text variant="caption" weight="heavy" color="primary" numeric>
           {ratio}%
         </Text>
       </View>

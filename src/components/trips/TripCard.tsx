@@ -102,7 +102,9 @@ export const TripCard = memo(function TripCard({
         ) : (
           <View style={styles.trackSpacer} />
         )}
-        <Text variant="caption" weight="semibold" color="textMuted">
+        {/* 목록 카드의 숫자는 키우지 않는다 — 카드마다 큰 숫자가 있으면 목록에
+            focal 이 N 개가 되어 아무것도 focal 이 아니게 된다. tabular 만 적용. */}
+        <Text variant="caption" weight="semibold" color="textMuted" numeric>
           {ratio !== null
             ? `방문 ${visitCount} / 계획 ${planned}곳`
             : `방문 ${visitCount}건`}

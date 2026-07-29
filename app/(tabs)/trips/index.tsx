@@ -293,14 +293,44 @@ export default function TripsList() {
             </Text>
           </View>
         ) : myTrips.length > 0 ? (
-          <View style={styles.summary}>
-            <Ionicons name="calendar-outline" size={14} color={colors.primary} />
-            <Text variant="caption" weight="semibold" color="textMuted">
-              {weekStats.count === 0
-                ? '이번 주 외근 없음'
-                : `이번 주 외근 ${weekStats.count}건 · 방문 ${weekStats.visits}곳 · ${fmtMinutes(weekStats.minutes)}`}
-            </Text>
-          </View>
+          weekStats.count === 0 ? (
+            <View style={styles.summary}>
+              <Ionicons name="calendar-outline" size={14} color={colors.textMuted} />
+              <Text variant="caption" weight="semibold" color="textMuted">
+                이번 주 외근 없음
+              </Text>
+            </View>
+          ) : (
+            // 이 화면의 focal — 목록은 '찾기'용이고, 탭을 열었을 때 답이 필요한 질문은
+            // "이번 주에 내가 얼마나 돌았나" 다 (강령 1·8). 이전엔 셋 다 caption(12) 한 줄에
+            // 가운뎃점으로 붙어 있어 숫자가 라벨과 같은 크기였다.
+            <View style={styles.weekStats}>
+              <View style={styles.statCol}>
+                <Text variant="caption" weight="semibold" color="textMuted">
+                  이번 주 외근
+                </Text>
+                <Text variant="metricSm" color="primary">
+                  {weekStats.count}
+                </Text>
+              </View>
+              <View style={styles.statCol}>
+                <Text variant="caption" weight="semibold" color="textMuted">
+                  방문
+                </Text>
+                <Text variant="metricSm">{weekStats.visits}</Text>
+              </View>
+              <View style={styles.statCol}>
+                <Text variant="caption" weight="semibold" color="textMuted">
+                  누적 시간
+                </Text>
+                {/* 순수 숫자가 아니라 "2시간 40분" 이라 폭이 넓고, 셋 중 가장 덜
+                    행동으로 이어지는 값이라 한 단계 낮춘다. */}
+                <Text variant="h3" color="textMuted" numeric>
+                  {fmtMinutes(weekStats.minutes)}
+                </Text>
+              </View>
+            </View>
+          )
         ) : null}
       </View>
       <BottomSheetFlatList
@@ -375,6 +405,16 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     paddingHorizontal: spacing.xs,
   },
+  // 숫자 밑변을 맞춰 크기 차이가 위계로 읽히게 한다. 카드 껍데기 없이 캔버스 위에 —
+  // 시트 안이라 세로가 귀하고, 이건 목록의 머리말이지 또 하나의 카드가 아니다.
+  weekStats: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: spacing.xl,
+    paddingHorizontal: spacing.xs,
+    paddingTop: spacing.xs,
+  },
+  statCol: { gap: spacing.xs },
   list: { padding: spacing.lg, paddingBottom: 120 },
   // 날짜 그룹 구분선. 첫 그룹이 목록 맨 위에 붙지 않도록 상단 여백을 조금 더 준다.
   groupHeader: {

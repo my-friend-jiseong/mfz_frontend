@@ -16,7 +16,8 @@ import { StickyBottomBar } from '@/components/ui/StickyBottomBar';
 import { ReviewVisitCard } from '@/components/trips/ReviewVisitCard';
 import { safeBack } from '@/utils/backNavigation';
 import { colors } from '@/theme/colors';
-import { spacing } from '@/theme/spacing';
+import { spacing, radius } from '@/theme/spacing';
+import { opacity } from '@/theme/motion';
 import { fmtDate, fmtDateTime, fmtDuration } from '@/utils/datetime';
 
 // 외근 상세 — 종료된 외근 전용. 진행 중인 외근은 activeTripId === id 가드로 active 화면에 위임.
@@ -215,7 +216,7 @@ export default function TripDetail() {
                 hitSlop={8}
                 style={({ pressed }) => [
                   styles.editBtn,
-                  pressed && { opacity: 0.6 },
+                  pressed && { opacity: opacity.pressed },
                 ]}
               >
                 <Ionicons name="create-outline" size={20} color={colors.textMuted} />
@@ -232,32 +233,32 @@ export default function TripDetail() {
                 : ''}
             </Text>
           </View>
-          <Card padding="md" style={styles.statsCard}>
-            <View style={styles.statRow}>
-              <Text variant="caption" weight="bold" color="textMuted">
+          {/* 이 화면의 focal — "이 외근이 어땠나" 에 답하는 집계 (강령 1·8).
+              방문이 답이고 건너뜀·계획은 그 답을 읽는 맥락이라 한 단계 낮춘다.
+              이전엔 셋 다 body(16) 동일 크기 + 세로 divider 3분할이라 무엇이 답인지
+              안 보였다. 구분은 divider 가 아니라 여백·크기로 한다. */}
+          <Card padding="lg" style={styles.statsCard}>
+            <View style={styles.statCol}>
+              <Text variant="caption" weight="semibold" color="textMuted">
                 방문
               </Text>
-              <Text variant="body" weight="heavy" color="primary">
+              <Text variant="metric" color="primary">
                 {visitCount}
               </Text>
             </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statRow}>
-              <Text variant="caption" weight="bold" color="textMuted">
+            <View style={styles.statCol}>
+              <Text variant="caption" weight="semibold" color="textMuted">
                 건너뜀
               </Text>
-              <Text variant="body" weight="heavy" color="textMuted">
+              <Text variant="metricSm" color="textMuted">
                 {skippedCount}
               </Text>
             </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statRow}>
-              <Text variant="caption" weight="bold" color="textMuted">
+            <View style={styles.statCol}>
+              <Text variant="caption" weight="semibold" color="textMuted">
                 계획
               </Text>
-              <Text variant="body" weight="heavy">
-                {totalDest}
-              </Text>
+              <Text variant="metricSm">{totalDest}</Text>
             </View>
           </Card>
         </View>
@@ -312,7 +313,7 @@ export default function TripDetail() {
                     <Card key={d.id} padding="md" style={styles.skippedCard}>
                       <View style={styles.skippedHead}>
                         <View style={styles.skippedOrderBadge}>
-                          <Text variant="caption" weight="bold" color="textMuted">
+                          <Text variant="caption" weight="bold" color="textMuted" numeric>
                             {i + 1}
                           </Text>
                         </View>
@@ -369,7 +370,7 @@ const styles = StyleSheet.create({
   editBtn: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surfaceMuted,
@@ -379,13 +380,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs,
   },
+  // 숫자 밑변을 맞춰 크기 차이가 위계로 읽히게 한다. 열을 flex 로 늘리지 않고 왼쪽에
+  // 모아 두고 오른쪽은 비운다 — 여백이 divider 를 대신한다.
   statsCard: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: spacing.sm,
+    alignItems: 'flex-end',
+    gap: spacing.xl,
+    marginTop: spacing.md,
   },
-  statRow: { flex: 1, alignItems: 'center', gap: 2 },
-  statDivider: { width: 1, height: 28, backgroundColor: colors.border },
+  statCol: { gap: spacing.xs },
   sectionTitle: { marginBottom: spacing.sm },
   skippedSection: { marginTop: spacing.lg },
   skippedCard: {
@@ -401,7 +404,7 @@ const styles = StyleSheet.create({
   skippedOrderBadge: {
     width: 24,
     height: 24,
-    borderRadius: 12,
+    borderRadius: radius.pill,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,

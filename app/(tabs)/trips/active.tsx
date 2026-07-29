@@ -681,13 +681,15 @@ const styles = StyleSheet.create({
   //   밖이고 그 위 56dp 는 탭바에 가린다. 이 여백이 없으면 목록 끝까지 스크롤해도 마지막
   //   요소(외근 종료)가 탭바 뒤에 남아 아예 누를 수 없다(실측: 종료 611~631 vs 탭바 583~639).
   list: { paddingHorizontal: spacing.lg, paddingBottom: 240 },
-  footer: { marginTop: spacing.lg },
+  // 간격 리듬 — 진행률·현재 목적지는 한 덩어리(md), 목적지 목록과 종료 버튼은 다른
+  // 그룹이라 xl 로 벌린다. 전부 lg 로 균일하면 무엇이 한 덩어리인지 눈이 못 읽는다.
+  footer: { marginTop: spacing.xl },
   headerAction: { minHeight: 44, justifyContent: 'center' },
-  header: { paddingTop: spacing.md, gap: spacing.sm },
+  header: { paddingTop: spacing.md, gap: spacing.md },
   sectionTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: spacing.lg,
+    marginTop: spacing.xl,
   },
 });
