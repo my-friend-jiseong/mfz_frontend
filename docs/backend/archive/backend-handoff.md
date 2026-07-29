@@ -3,7 +3,7 @@
 > **갱신일**: 2026-05-08
 > **대상**: 백엔드 팀
 > **컨텍스트**: 일가요 프로젝트는 "프런트엔드가 contract 를 정해 선행 개발 → 백엔드가 부족한 부분만 보충" 정책으로 진행. 본 문서는 **현재 백엔드 작업이 필요한 신규 요청만** 담는다.
-> **이전 항목**: 2026-05-06 작성 13개 항목은 [`backend-handoff-response.md`](../../../mfz_backend/docs/backend-handoff-response.md) 로 처리 완료 (§1·§2·§3·§5·§6·§9b·§13) 또는 합의 보류 (§4·§8·§9a·§12). 보류 항목은 다음 사이클 작업 시점에 별도 트래킹.
+> **이전 항목**: 2026-05-06 작성 13개 항목은 [`backend-handoff-response.md`](../../../../mfz_backend/docs/backend-handoff-response.md) 로 처리 완료 (§1·§2·§3·§5·§6·§9b·§13) 또는 합의 보류 (§4·§8·§9a·§12). 보류 항목은 다음 사이클 작업 시점에 별도 트래킹.
 > **응답 contract 표준**: 모든 4xx/5xx 는 Phase 7 단일 shape `{ code, message, fields?, details? }`.
 
 ---
@@ -20,12 +20,12 @@
 외근·현장 카드의 제목이 "시작 날짜" / "주소" 로 자동 결정돼 사람이 의미 단위로 식별하기 어려웠음 — 같은 주소에 가로수가 여러 그루 있거나, 같은 날 외근 종류가 달라도 카드만 보고 구분 불가. 사용자 입력 제목(예: "1번 가로수", "가로수 보수 공사") 을 받아 카드 헤더에 노출.
 
 ### 프론트엔드 상태 (2026-05-07 머지)
-- [`src/types/entities.ts`](../../src/types/entities.ts): `Trip.title?: string`, `Field.title?: string` 추가.
-- [`src/api/endpoints/trips.ts`](../../src/api/endpoints/trips.ts): `TripStartBody.title?`, `TripStartResponse.title?`, `TripListItem.title?`, `TripDetailResponse.title?`.
-- [`src/api/endpoints/fields.ts`](../../src/api/endpoints/fields.ts): `FieldCore.title?`, `CreateFieldBody.title?`, `UpdateFieldBody.title?`.
-- 외근 시작 폼 ([`app/(tabs)/trips/new/order.tsx`](../../app/\(tabs\)/trips/new/order.tsx)) — 제목 입력 추가 (선택, 50자).
-- 현장 등록 폼 ([`app/(tabs)/fields/new.tsx`](../../app/\(tabs\)/fields/new.tsx)) — 제목 입력 추가 (선택, 50자).
-- 현장 수정 폼 ([`app/(tabs)/fields/[id]/edit.tsx`](../../app/\(tabs\)/fields/\[id\]/edit.tsx)) — 제목 수정 가능.
+- [`src/types/entities.ts`](../../../src/types/entities.ts): `Trip.title?: string`, `Field.title?: string` 추가.
+- [`src/api/endpoints/trips.ts`](../../../src/api/endpoints/trips.ts): `TripStartBody.title?`, `TripStartResponse.title?`, `TripListItem.title?`, `TripDetailResponse.title?`.
+- [`src/api/endpoints/fields.ts`](../../../src/api/endpoints/fields.ts): `FieldCore.title?`, `CreateFieldBody.title?`, `UpdateFieldBody.title?`.
+- 외근 시작 폼 ([`app/(tabs)/trips/new/order.tsx`](../../../app/\(tabs\)/trips/new/order.tsx)) — 제목 입력 추가 (선택, 50자).
+- 현장 등록 폼 ([`app/(tabs)/fields/new.tsx`](../../../app/\(tabs\)/fields/new.tsx)) — 제목 입력 추가 (선택, 50자).
+- 현장 수정 폼 ([`app/(tabs)/fields/[id]/edit.tsx`](../../../app/\(tabs\)/fields/\[id\]/edit.tsx)) — 제목 수정 가능.
 - 카드·상세 화면 — `title` 있으면 큰 글자, 없으면 기존 fallback (Trip=날짜, Field=주소).
 - 스토어 매핑 — 응답에 title 없으면 사용자가 보낸 값을 로컬에 보존 (백엔드 미구현 단계에서도 UX 동작).
 

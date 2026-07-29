@@ -1,8 +1,10 @@
 # 백엔드 백로그 — 일가요(mfz) 프론트엔드 요청 누적
 
 > 프론트에서 발견·합의한 백엔드 작업 항목을 누적. 사이클 시작 시점에 우선순위
-> 정해 작업으로 빼는 방식. 활발히 진행 중인 항목은 backend-handoff.md (있을 때)
-> 가 1차 소스, 본 문서는 그 위에 쌓이는 큐.
+> 정해 작업으로 빼는 방식. 본 문서가 **활성 큐의 1차 소스**이고, 백엔드에 실제로
+> 넘길 때는 `handoff-*.md` 전달본을 따로 뽑는다 (현행:
+> [`handoff-2026-07-29-store-release.md`](./handoff-2026-07-29-store-release.md)).
+> 종결된 전달본·백엔드 결과보고서는 [`archive/`](./archive/) 로 옮긴다.
 >
 > **응답 contract 표준**: 모든 4xx/5xx 는 Phase 7 단일 shape `{ code, message, fields?, details? }`.
 >
@@ -10,52 +12,6 @@
 >
 > **항목 번호**: §N 은 고정 식별자(변경 이력·상호참조에서 사용) — 완료 시 재번호 없이
 > 하단 「완료 항목(아카이브)」로 한 줄 압축. 그래서 활성 큐 번호에 공백이 있는 게 정상.
-
----
-
-## 10. 🟢 파일 저장 인프라 — MinIO ✅ / 내보내기 크기만 잔여
-
-> **갱신 (release 2026-07-26)**: 백엔드가 **S3/MinIO 드라이버 + 사진 정규화**를 배포(커밋 `3603a31`·`2a97fab`).
-> `FILE_STORAGE_DRIVER=disk|s3|minio` (S3 호환, `@aws-sdk/client-s3`), 사진 정규화 long edge **1920** / JPEG **q=72**.
->
-> **정정 (2026-07-28)**: 잔여로 적어 둔 두 항목 중 **음성 비트레이트는 요청에서 삭제**한다 —
-> 음성 메모는 ERD v2 에서 폐기됐고 프론트에 녹음·업로드 경로가 없다(실측: `expo-av` 미설치,
-> 관련 코드 0건, `src/utils/media.ts` 에 "음성 메모 폐기" 주석만 남음). 없는 기능의 서버 처리를
-> 요청하고 있었다. **zip 항목도 전제가 틀렸다** — 아래 참조.
-
-### 배경
-`photos` 의 `fileUrl` 이 어디 저장되고 어떻게 호스팅되는지 프론트에서 추적 불가한 상태였다.
-운용 단계 요건: 객체 저장소 표준화(권한·lifecycle·감사 로그) + 보고서 전송 크기 억제(요구사항 #10).
-
-### 백엔드가 해야 할 것
-- ✅ **MinIO/S3 드라이버 도입** (2026-07-26). 단 bucket 정책 분리(visit-attachments / report-bundle)·
-  presigned upload URL·lifecycle 은 결과보고서에 언급 없음 — 필요 시 별도 확인.
-- ✅ **사진 업로드 서버측 리샘플** — long edge 1920px, JPEG q=72 (2026-07-26).
-- ~~음성 업로드 비트레이트 정규화~~ — **요청 철회** (기능 폐기, 위 정정 참조).
-- 🔍 **내보내기 파일 크기** — 아래.
-
-### 내보내기 크기 — 전제 정정 (2026-07-28)
-
-원 요청은 "보고서 **zip 패키지** < 20MB" 였으나 **zip 패키지는 존재하지 않는다.**
-현재 내보내기는 Word(`/export/word`)·PDF(`/export/pdf`) **단일 파일** 두 가지뿐이고,
-프론트·백엔드 어디에도 번들/zip 경로가 없다(실측 2026-07-28).
-
-요구사항 #10 의 의도(전송 크기 억제)는 살아 있으므로 대상만 그 두 파일로 옮긴다.
-다만 **현재 문제가 관측되지 않았다** — 현장보고 1건 PDF 실측 **263KB**. 사진이 많은 보고서에서
-커질 수 있으나 임계 사례를 아직 못 봤다. 그래서 요청이 아니라 **관찰 항목**으로 둔다.
-
-- 관찰 방법: 현장보고 10건 이상 + 슬롯 3장 채운 보고서로 export 해 크기 측정.
-- 임계 초과가 실제로 관측되면 그때 압축 라운드·해상도 하향을 요청한다.
-
-### 프론트엔드 영향
-- 2026-07-26 배포는 서버측 드라이버 교체라 **프론트 contract 무변경** — 배선 불요.
-- 업로드 응답이 presigned URL 흐름으로 바뀌면 [`src/utils/media.ts`](../../src/utils/media.ts) 의 업로드 회로 재작성 필요.
-
-### 우선순위
-🟢 낮음 — 백엔드 요청은 사실상 종결. 남은 건 프론트가 수치를 관측하는 일뿐이다.
-
-### 발견 시점
-2026-05-10 (요구사항 정리 #10). 2026-07-26 드라이버·사진 압축 배포. 2026-07-28 잔여 2건 전제 정정.
 
 ---
 
@@ -470,7 +426,7 @@ Body: { "password": "..." }     ← 재인증을 요구한다면
 
 ## 🔗 2026-07-26 배치 프론트 연동 — ✅ 종결 (이력)
 
-> 2026-07-26 백엔드 배치([release-2026-07-26-backend-backlog.md](./release-2026-07-26-backend-backlog.md))로
+> 2026-07-26 백엔드 배치([release-2026-07-26-backend-backlog.md](./archive/release-2026-07-26-backend-backlog.md))로
 > 활성 큐 6건이 운영에 나갔고, **2026-07-28 사이클에서 §19·§15·§25·§22 를 연동했다.**
 > **2026-07-28 기준 프론트 작업은 전부 끝났다.** §9 는 연동 대상이 아니라 백엔드 재요청(**§27**)으로
 > 전환됐다 — 백엔드가 phase 를 붙인 리소스가 프론트가 쓰는 리소스와 달라 프론트가 할 수 있는 일이 없다.
@@ -500,6 +456,7 @@ Body: { "password": "..." }     ← 재인증을 요구한다면
 - **§7 ✅ 보고서 본문 검증 완화 + 사진 첨부 → 새 양식으로 해소** (2026-06-04) — content·보고서 레벨 사진 개념 제거(본문=`field_reports`), 사진은 `POST /reports/:id/field-reports`.
 - **§8 ✅ 자동 체크인 — 현 반자동 정책 유지(변경 없음)** (2026-05-10) — arrival→Alert→사용자 탭→checkIn confirm 안전망이 의도된 동작. 재개 조건: 현장 작업자 "확인 번거로움" 신호 누적 시.
 - **§9 ✅ visit 단계 모델(phase: 조치 전/중/후)** (release 2026-07-26) — `visit_photos.phase`(`before|during|after|null`), `POST /visits/:visitId/photos` multipart `phase?`, 응답 `attachment.phase` + 파생 `phaseProgress`(trip timeline·visit 상세 포함), `POST /reports/from-trip/:tripId` 이 phase→`beforePhotoUrl`/`pendingPhotoUrl`/`afterPhotoUrl` 자동 매핑. `visit_phase_invalid`(400). 커밋 `5a53b02`. ⚠️ **배포됐으나 프론트에 도달하지 않음** — phase 가 붙은 곳은 visit 사진인데 프론트는 현장 사진 엔드포인트를 쓴다(2026-07-28 OpenAPI 실측). → **§27 로 재요청.**
+- **§10 ✅ 파일 저장 인프라 — MinIO/S3 + 사진 정규화** (release 2026-07-26) — `FILE_STORAGE_DRIVER=disk|s3|minio`(`@aws-sdk/client-s3`), 업로드 사진 long edge **1920**·JPEG **q=72**. 커밋 `3603a31`·`2a97fab`. 서버측 드라이버 교체라 **프론트 contract 무변경**. ⚠️ 잔여 2건은 2026-07-28 전제 정정으로 **둘 다 소멸** — ①음성 비트레이트: 음성 메모가 ERD v2 폐기라 녹음·업로드 경로 자체가 없다(요청 철회), ②"보고서 zip < 20MB": **zip 패키지가 존재하지 않는다**(내보내기는 Word·PDF 단일 파일뿐). 전송 크기 억제 의도만 살려 **프론트 관찰 항목**으로 강등 — 현장보고 10건+ 슬롯 3장 보고서로 export 크기를 재고, 임계 초과가 실제 관측되면 그때 압축을 요청한다(현재 실측 PDF 263KB). bucket 정책 분리·presigned upload·lifecycle 은 결과보고서에 언급 없어 필요 시 별도 확인.
 - **§11 ✅ 외근 destinations 영속화 + GET/PATCH** (release 2026-06 batch3) — `trips/start` plannedFields 수용·`destinations[]`, `GET/PATCH /trips/:id/destinations`, 체크인 자동 arrived. `destinationStore` 서버+캐시 전환. 커밋 `ea9a33f`·`caf2d1f`. (진행 중 단건 add 는 §24.)
 - **§12 ✅ ERD 최신화 — (A) 백엔드 스키마 dump + (B) `ERD.drawio` 갱신** (2026-07-28) — (A) 백엔드 `docs/db-schema.md`(커밋 `62bc3dd`). (B) 프론트가 백엔드 `scripts/gen-erd.mjs` 를 `docs/diagram/gen-erd.mjs` 로 들여와 스키마 기준 재생성: **`categories`·`trip_destinations`·`visit_photos` 3개 테이블 신설**, `trips.deleted_at`·`reports.overview_map_url`·`visits.status_reason` 컬럼 추가, 관계 4개(users→categories, trips/fields→trip_destinations, visits→visit_photos) 연결, 복합제약·파생값 노트 추가. 생성기 자가검증(겹침·앵커중복·엣지관통·포개짐) 통과. ⚠️ 기존 ERD 의 `destinations` 는 실제 테이블명이 `trip_destinations` 이고 `order`→`sort_order` 였다 — 이름·컬럼 모두 틀려 있었다.
 - **§13 ✅ `POST /reports/generate` 500 → 프론트 미사용으로 종결** (2026-06-04) — AI 초안 분기 프론트 완전 제거(`/reports/generate`는 redirect만). 백엔드엔 미사용 endpoint 정리(제거/410) 권고만 잔존.
@@ -519,6 +476,12 @@ Body: { "password": "..." }     ← 재인증을 요구한다면
 ---
 
 ## 변경 이력
+
+- **2026-07-29**: **문서 정리** — 종결된 전달본·백엔드 결과보고서 4건을 [`archive/`](./archive/) 로
+  이동(`backend-handoff.md`, `release-2026-06-*`, `release-2026-06-19-*`, `release-2026-07-26-*`).
+  **§10 을 활성 큐에서 아카이브로 내렸다** — 2026-07-28 정정으로 잔여 2건이 모두 소멸해
+  백엔드 요청으로서는 이미 종결돼 있었는데 활성 항목 자리를 차지하고 있었다. 남은 건
+  프론트 관찰 항목이라 아카이브 한 줄에 함께 적었다.
 
 - **2026-07-29**: **§30 에 (D) 추가** — 약관 동의를 `termsAgreed: true` 불리언 하나로만 받고
   있어 **어느 문서의 어느 버전에 동의했는지 기록이 없다.** 화면은 3종을 각각 체크받는데
@@ -574,7 +537,7 @@ Body: { "password": "..." }     ← 재인증을 요구한다면
   없어 프론트가 visit 쪽으로 옮기면 사진이 앱에서 사라지므로, 코드 대신 백엔드 재요청으로 전환.
   결과보고서가 주장한 `phaseProgress` 도 스펙 전체 0건. §12-B(ERD)는 백엔드 저장소 체크아웃이
   `af5320e`(배치 직전)에 멈춰 `db-schema.md` 부재 — 별도 사이클로 이월.
-- **2026-07-28**: 백로그 정리 — 2026-07-26 백엔드 배치 반영(결과보고서 `release-2026-07-26-backend-backlog.md`
+- **2026-07-28**: 백로그 정리 — 2026-07-26 백엔드 배치 반영(결과보고서 `archive/release-2026-07-26-backend-backlog.md`
   저장소 반영). **§3·§9·§15·§19·§22·§25 → ✅ 아카이브 이관**(백엔드 배포 완료). **§10 부분 완료**로 재기술
   (S3/MinIO 드라이버·사진 1920/q72 ✅ / 음성 비트레이트·보고서 zip<20MB 잔여). **§12 (A) 스키마 dump ✅,
   (B) `ERD.drawio` 갱신만 잔여**로 재기술. 활성 큐 **8건 → 3건**(§10·§12·§26). 백엔드는 냈는데 프론트가

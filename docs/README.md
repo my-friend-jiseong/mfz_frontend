@@ -1,6 +1,6 @@
 # 일가요(mfz) 프런트엔드 문서 인덱스
 
-> **갱신일**: 2026-06-01
+> **갱신일**: 2026-07-29
 
 ## 레퍼런스 — `reference/`
 
@@ -23,10 +23,12 @@
 
 | 파일 | 내용 |
 |---|---|
-| [backend/backend-backlog.md](backend/backend-backlog.md) | 프런트 측 누적 백엔드 요청 큐 — 상단이 활성 항목, 하단에 종결 이력·아카이브 |
-| `backend/release-*.md` | 백엔드 배치 결과보고서(백엔드 팀 작성) — [2026-07-26](backend/release-2026-07-26-backend-backlog.md) · [2026-06-19](backend/release-2026-06-19-destinations-overview.md) · [2026-06](backend/release-2026-06-backend-backlog.md) |
-| [backend/backend-handoff.md](backend/backend-handoff.md) | 백엔드 보충 가이드라인 — 프런트 선행 개발 항목 중 백엔드 활성화/명세 필요분 (활성 요청 0건, §1 `title` 완료) |
-| [backend/demo-seed-request.md](backend/demo-seed-request.md) | 발표용 데모 데이터 — 프론트 자가 시드(`presentation/seed_demo_data.mjs`)로 전부 해결, 백엔드 작업 불필요(probe 검증) |
+| [backend/backend-backlog.md](backend/backend-backlog.md) | **활성 큐의 1차 소스** — 프런트 측 누적 백엔드 요청. 상단이 활성 항목, 하단에 종결 이력·아카이브 |
+| [backend/handoff-2026-07-29-store-release.md](backend/handoff-2026-07-29-store-release.md) | **현행 전달본** — 스토어 출시 차단(§30 A~E). 백로그에서 넘길 것만 뽑은 문서 |
+| [backend/archive/](backend/archive/) | 종결 문서 — 이전 전달본 1건 + 백엔드 결과보고서 3건. [인덱스](backend/archive/README.md) 참조 |
+
+> 백엔드에 넘길 때는 백로그를 통째로 주지 않고 `handoff-*.md` 전달본을 뽑는다.
+> 전달이 끝나면 `archive/` 로 옮기고, 백로그 항목은 「완료 항목(아카이브)」에 한 줄로 압축한다.
 
 ## QA — `qa/`
 
