@@ -10,7 +10,7 @@
 3. 미결 — 스킬 기준으로 아직 결정되지 않은 것
 
 값이 필요하면 `docs/reference/design-system.md` → `src/theme/*` 순으로 본다.
-마지막 동기화: 2026-07-29
+마지막 동기화: 2026-07-30
 
 ---
 
@@ -39,17 +39,23 @@
 | Pretendard 4 weight 만. Medium 추가 금지 | 문서 1절, 번들 크기 |
 | `palette` 직접 import 금지, `colors.*` 로만 | 문서 4절 |
 | 알파 합성은 항상 `withAlpha()` | 문서 5.7절 |
+| Depth 는 하나 — 문서 흐름 테두리 / 지도 부유물 그림자 | 강령 6, 문서 7절 |
+| 표면을 손으로 짜지 않는다 — `<Card>` 로 | 강령 7 |
+| focal 숫자는 `metric`, 그 외 변하는 숫자는 `<Text numeric>` | 강령 8, 문서 3.1절 |
+| Input 은 inset (`colors.control.*`) | 문서 5.3.1절 |
+| 간격은 "무엇 사이인가" 로 tier 결정 | 문서 2.1절 |
+| Concentric radius — inset ≤ 8px 일 때만 적용 | 문서 2.2절 |
+| 토큰 이름 도메인화 안 함 (`slate`/`blue` 유지) | 문서 14절 "보류한 것" |
+
+> 2026-07-30 재검토에서 위 6줄이 "스킬이 이기는 것" → "프로젝트 결정" 으로 넘어왔다.
+> 이유까지 SSOT 에 적혔으므로 이제는 결정이다.
 
 ### 스킬이 이기는 것 (프로젝트에 결정 기록 없음)
 
-- **Concentric radius** — `outer = inner + padding`. 현재 어디에도 없음. 중첩 카드/버튼에 적용.
-- **숫자 정렬** — 변하는 숫자(카운트·진행률·시각·거리)는 `fontVariant: ['tabular-nums']`. **RN 지원됨**, 현재 사용처 0.
-- **Depth 전략 하나로 통일** — 아래 3절 참조. 지금은 outline 기본 + elevation 5단계가 근거 없이 공존.
-- **Input 은 inset** — 아래 3절 참조.
-- **간격 리듬을 불균등하게** — 그룹 안은 좁게, 그룹 사이는 넓게. 현재 lg(16) 균일.
-- **선보다 여백·톤차** — 위계를 border 로 먼저 만들지 않는다.
+- **선보다 여백·톤차** — 위계를 border 로 먼저 만들지 않는다. Depth 결정(테두리)과 충돌 아님: 테두리는 *표면 경계*, 위계는 *여백·굵기·크기*로.
 - **60/30/10 배분** — 중립 표면이 대부분, accent 는 10% 내외.
 - **hover/active 색 변형** — 문서 14절에 차후 과제로 올라와 있음. "RN 이라 불가"가 아니다.
+- **press 는 `scale(0.97)`** — 현재 `opacity.pressed` 만. 촉감은 크기 변화가 더 정확하다.
 
 ---
 
@@ -84,28 +90,22 @@
 아래는 **결정된 규칙이 아니라 열린 항목**이다. 건드리는 화면이 생기면 그때 스킬 쪽으로 정리하되,
 시각 변경이므로 8081 웹 렌더 확인 + 사용자 확인 전에는 release 로 넘기지 않는다.
 
-1. **Depth 전략이 둘로 갈려 있다.** `Card` 기본은 `outline`(1px border)인데 `elevation` 은 5단계가 있다.
-   스킬은 하나를 골라 commit 하라고 한다. 어느 쪽을 고를지 기록이 없음.
-2. **Input 이 주변보다 밝다.** canvas slate50 위에 흰 필드 + border. 스킬은 입력을 inset(더 어둡게)으로 본다.
-   현재는 `Card`(흰 배경 + border)와 `Input` 이 채움·radius 가 같아 **테두리 색으로만 구분**된다.
-   `surfaceMuted`(slate100) 채움이 후보. 폼 전 화면에 걸리는 변경.
-3. **토큰 이름이 도메인을 말하지 않는다.** `slate`/`blue` 는 Tailwind 기본. 스킬 기준 "템플릿 신호".
-   단 `palette.ts` 는 의도적으로 raw scale 이고 semantic 층이 따로 있으므로, 바꾼다면 `colors.ts` 쪽이지
-   palette 가 아니다. 40+ 화면에 flat alias 가 흩어져 있어 별도 작업.
-4. **h1(28/heavy) 사용 화면이 거의 없다.** 강령 1이 "1 화면 = 1 결정"인데 화면별 focal element 가
-   지정된 적이 없음.
-5. **간격이 lg(16) 하나로 균일하다.** 그룹 안/그룹 사이 구분이 없어 리듬이 단조로움.
-6. **Direction 을 사람이 정한 적이 없다.** 아래 4절은 내가 코드에서 추론한 것이지 승인된 방향이 아니다.
+1. **60/30/10 배분을 잰 적이 없다.** accent(blue) 가 화면에서 얼마를 차지하는지 측정 없음.
+   탭별 작업에서 스크린샷 기준으로 확인.
+2. **press 피드백이 opacity 뿐.** 스킬은 `scale(0.97)` 을 본다. `Pressable` + reanimated 로 가능.
+   전역 변경이라 `Button`·`Card`·`FieldCard` 를 한 번에 바꿔야 함.
+3. **hover/active 색 변형·다크 모드** — 문서 14절 차후 과제. 야외 앱이라 다크 모드는 우선순위 낮음
+   (햇빛 아래에선 밝은 화면이 읽힌다) — 다만 "불가"가 아니라 "안 함"이라는 이유가 아직 SSOT 에 없음.
+
+> 2026-07-30 에 닫힌 것: Depth 전략 · Input inset · 토큰 이름 · focal element · 간격 리듬 · Direction.
+> 전부 `docs/reference/design-system.md` 에 이유와 함께 들어갔다.
 
 ---
 
-## 4. Direction (추론, 미승인)
+## 4. Direction — 확정됨
 
-> 스킬은 작업 전에 domain/color world/signature/rejecting 을 요구한다.
-> 아래는 코드에서 읽어낸 잠정치 — 사용자 확인 전까지 **결정으로 인용하지 말 것**.
+**야외 계측기** (2026-07-30, 사용자 확정). 전문은 `docs/reference/design-system.md` 최상단 "Direction" 절.
 
-- **Human:** 가로수·현장 점검 담당자. 이동 중이거나 현장에 서 있음. 5분 전에 한 곳을 방문 완료 처리했고 5분 뒤 다음 목적지로 걷는다.
-- **Core verb:** 다음 목적지를 찾아 방문 결과를 남긴다.
-- **Signature:** 색+형상+라벨 3중 인코딩 상태 배지 (`theme/statusBadge.ts`). 이건 추론이 아니라 문서화된 것 — 상태를 표시하는 새 UI는 전부 이 규칙을 따른다.
-- **Density:** 터치 타깃 44px 이상 (`Button` md=44, `Input`=48). 밀도를 위해 깎지 않는다.
-- **미확정:** personality / color world / 거부할 기본값 3개 — 사람이 정해야 함.
+요약: 이동 중이거나 현장에 서 있는 점검 담당자의 **계측기**. cold neutral + blue 유지(햇빛 대비),
+focal element 는 거의 항상 **숫자**, 터치 타깃 44px 사수, signature 는 색+형상+라벨 3중 인코딩 배지.
+거부하는 기본값 3개: 흰 카드 균일 나열 · 숫자를 라벨과 같은 크기로 · 제목 없이 리스트로 시작하는 화면.

@@ -30,7 +30,12 @@ interface Props extends RNTextProps {
   weight?: Weight;
   color?: ColorKey;
   align?: 'left' | 'center' | 'right';
+  // 변하는 숫자(카운트·진행률·시각·거리)에 tabular-nums. 자릿수가 바뀌어도 폭이 안 흔들린다.
+  // metric/metricSm variant 는 이미 포함하므로 그 외 variant 에 숫자가 섞일 때만 쓴다.
+  numeric?: boolean;
 }
+
+const TABULAR: TextStyle = { fontVariant: ['tabular-nums'] };
 
 // 디자인 시스템 typography composite + semantic color 일괄 적용.
 // 사용 예:
@@ -45,6 +50,7 @@ export function Text({
   weight,
   color = 'text',
   align,
+  numeric,
   style,
   ...rest
 }: Props) {
@@ -60,6 +66,7 @@ export function Text({
         weightOverride,
         { color: colors[color] },
         align ? { textAlign: align } : null,
+        numeric ? TABULAR : null,
         style,
       ]}
     />

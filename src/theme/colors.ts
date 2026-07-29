@@ -35,6 +35,19 @@ export const colors = {
   borderMuted: palette.slate[100], // 약한 구분선
   focus: palette.blue[500], // 포커스 ring
 
+  // === Control (input·select·checkbox 등 입력 표면) ===
+  // 입력은 inset — 주변 표면보다 어둡다. 이전엔 Input 이 surface(흰색)+border 라
+  // Card 와 채움·테두리·radius 가 전부 같아 '테두리 색으로만' 구분됐다.
+  // 흰 카드 위에서도 slate50 캔버스 위에서도 채움만으로 "여기에 입력" 이 읽히도록
+  // surface 토큰과 분리해 둔다 — 입력만 따로 조정 가능.
+  control: {
+    bg: palette.slate[100],
+    bgDisabled: palette.slate[200],
+    border: palette.slate[200],
+    borderFocus: palette.blue[500],
+    borderError: palette.red[600],
+  },
+
   // === Brand (primary) ===
   primary: palette.blue[600],
   primaryMuted: palette.blue[100], // 약한 tint (active chip 배경)

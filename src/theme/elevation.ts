@@ -32,10 +32,14 @@ const make = (
     },
   }) as Elevation;
 
+// Depth 전략 — 하나만 쓴다.
+//   문서 흐름 안의 표면(Card·목록·폼)  → 테두리. elevation 을 쓰지 않는다.
+//   지도 위에 떠 있는 chrome           → elevation. 실제로 떠 있으니 그림자가 의미를 가진다.
+//     (MapDashboard · MapSearchBar · MapFilterBar · MapLegend · KakaoMapWebView)
+// 'sheet' 는 callsite 0 — 바텀시트 그림자는 gorhom 이 자체 처리하므로 제거했다.
 export const elevation = {
   none: make(0, 0, 0, 0),
   card: make(1, 0.04, 6, 1),
   raised: make(2, 0.08, 12, 3),
-  sheet: make(0, 0.12, 24, 8),
   modal: make(4, 0.18, 32, 16),
 } as const;

@@ -63,6 +63,25 @@ export const typography = {
     fontWeight: fontWeight.regular,
     lineHeight: lineHeight.xs,
   } satisfies TextStyle,
+  // === 계측 (metric) ===
+  // 이 앱의 focal element 는 거의 항상 숫자다 — 진행률·방문 수·경과 시간·거리.
+  // 라벨과 같은 크기로 두면 위계가 사라진다("방문 3/10" 과 "45%" 가 둘 다 12px 이던 문제).
+  // 숫자는 라벨보다 두 단계 위 + tabular-nums 로 자릿수 흔들림 제거.
+  // 짝이 되는 라벨은 caption + textMuted + semibold.
+  metric: {
+    fontFamily: fontFamily.heavy,
+    fontSize: fontSize.xxl,
+    fontWeight: fontWeight.heavy,
+    lineHeight: lineHeight.xxl,
+    fontVariant: ['tabular-nums'],
+  } satisfies TextStyle,
+  metricSm: {
+    fontFamily: fontFamily.bold,
+    fontSize: fontSize.xl,
+    fontWeight: fontWeight.bold,
+    lineHeight: lineHeight.xl,
+    fontVariant: ['tabular-nums'],
+  } satisfies TextStyle,
   // 강조는 Text 컴포넌트의 weight prop 로 일관 적용 — bodyBold/bodySmBold/captionBold
   // 토큰은 정의했었으나 callsite 0 + Variant union 미노출이라 dead. 제거.
 } as const;

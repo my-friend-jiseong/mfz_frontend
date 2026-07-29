@@ -1,11 +1,13 @@
 import { Pressable, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
-import { elevation } from '@/theme/elevation';
 import { opacity } from '@/theme/motion';
 
+// Depth 전략: 문서 흐름 안의 표면은 '테두리' 하나로만 위계를 만든다.
+// 그림자(elevation)는 지도 위에 떠 있는 chrome 전용 — 두 전략을 섞지 않는다.
+// 'elevated' variant 는 callsite 0 인 채로 이 규칙과 어긋나 있어 제거했다.
 type Padding = 'none' | 'sm' | 'md' | 'lg';
-type Variant = 'outline' | 'elevated' | 'flat';
+type Variant = 'outline' | 'flat';
 
 interface Props {
   children: React.ReactNode;
@@ -39,8 +41,6 @@ export function Card({
 
   if (variant === 'outline') {
     base.push({ borderWidth: 1, borderColor: colors.border });
-  } else if (variant === 'elevated') {
-    base.push(elevation.card);
   }
 
   if (!onPress) {
