@@ -1,163 +1,111 @@
 # Design System — 일가요 (mfz_frontend)
 
-> 이 파일은 **기존 `src/theme/*` 를 서술한 것**이다. 새 토큰을 만드는 자리가 아니다.
-> 값이 어긋나면 코드가 진실이고 이 문서가 틀린 것 — `src/theme` 를 고친 뒤 여기를 갱신한다.
-> 마지막 동기화: 2026-07-29
+## 이 파일의 역할
+
+**토큰·컴포넌트 명세는 여기 없다. `docs/reference/design-system.md` 가 단일 진실 출처다.**
+이 파일은 interface-design 스킬이 그 문서를 올바로 적용하기 위한 **어댑터** 3가지만 담는다.
+
+1. RN 번역 — 스킬 본문이 CSS/HTML 전제라 그대로 쓰면 안 되는 부분
+2. 우선순위 규칙 — 스킬과 프로젝트가 다를 때 무엇이 이기는가
+3. 미결 — 스킬 기준으로 아직 결정되지 않은 것
+
+값이 필요하면 `docs/reference/design-system.md` → `src/theme/*` 순으로 본다.
+마지막 동기화: 2026-07-29
 
 ---
 
-## Platform — 읽기 전 필수
+## 1. 우선순위 규칙 (먼저 읽을 것)
 
-**React Native (Expo 54 / RN 0.81), 웹 아님.** interface-design 스킬 본문은 CSS/HTML 전제이므로 다음과 같이 번역해서 적용한다.
+> **문서화된 프로젝트 결정이 스킬을 이긴다. 그 외에는 스킬을 따른다.**
 
-| 스킬이 말하는 것 | 여기서의 실제 |
+"문서화된 결정"은 다음 둘 중 하나에 **이유와 함께** 적혀 있는 것만 인정한다:
+- `docs/reference/design-system.md` 13절 강령
+- `src/theme/*` · `src/components/ui/*` 의 코드 주석 (예: `colors.ts` tripBanner, `Button.tsx` dangerGhost)
+
+코드에 그렇게 되어 있다는 사실만으로는 결정이 아니다 — 관성일 수 있다.
+현재 상태를 결정으로 굳히지 말 것. 판단이 서지 않으면 스킬 쪽.
+
+### 프로젝트가 이기는 것 (근거 있음)
+
+| 규칙 | 근거 |
 |---|---|
-| CSS 변수 (`--foreground`) | `src/theme/colors.ts` 의 semantic 객체 |
-| Tailwind 유틸리티 / className | `StyleSheet.create` + theme 토큰 import |
+| 1 화면 = 1 결정. CTA 둘이면 위계로 답한다 | 강령 1 (= 스킬의 "one focal point", 충돌 아님) |
+| 색만으로 정보 전달 금지 — 색+형상+라벨 3중 인코딩 | 강령 2, KWCAG. **이 앱의 signature** |
+| 데이터 화면은 loading / empty / error 3종 강제 | 강령 3 |
+| 토큰만 쓴다. 없으면 토큰을 추가 | 강령 4 |
+| 표준 transition 200ms 이내 | 강령 5. 스킬의 `<300ms` 안에 들어가므로 충돌 아님 |
+| 빨강 = 파괴적 액션 전용. 진행 중 외근 배너는 blue | `colors.ts` 주석 (UI/UX P1-2) |
+| ghost = 비파괴 / dangerGhost = 파괴 | `Button.tsx` 주석 (UI/UX P1) |
+| Pretendard 4 weight 만. Medium 추가 금지 | 문서 1절, 번들 크기 |
+| `palette` 직접 import 금지, `colors.*` 로만 | 문서 4절 |
+| 알파 합성은 항상 `withAlpha()` | 문서 5.7절 |
+
+### 스킬이 이기는 것 (프로젝트에 결정 기록 없음)
+
+- **Concentric radius** — `outer = inner + padding`. 현재 어디에도 없음. 중첩 카드/버튼에 적용.
+- **숫자 정렬** — 변하는 숫자(카운트·진행률·시각·거리)는 `fontVariant: ['tabular-nums']`. **RN 지원됨**, 현재 사용처 0.
+- **Depth 전략 하나로 통일** — 아래 3절 참조. 지금은 outline 기본 + elevation 5단계가 근거 없이 공존.
+- **Input 은 inset** — 아래 3절 참조.
+- **간격 리듬을 불균등하게** — 그룹 안은 좁게, 그룹 사이는 넓게. 현재 lg(16) 균일.
+- **선보다 여백·톤차** — 위계를 border 로 먼저 만들지 않는다.
+- **60/30/10 배분** — 중립 표면이 대부분, accent 는 10% 내외.
+- **hover/active 색 변형** — 문서 14절에 차후 과제로 올라와 있음. "RN 이라 불가"가 아니다.
+
+---
+
+## 2. RN 번역 (스킬 본문 → 이 코드베이스)
+
+**React Native (Expo 54 / RN 0.81).** 웹이 아니다.
+
+| 스킬 표현 | 여기서의 실제 |
+|---|---|
+| CSS 변수 `--foreground` | `src/theme/colors.ts` semantic 토큰 |
+| Tailwind className | `StyleSheet.create` + theme import |
 | 네이티브 HTML → headless 프리미티브 | `src/components/ui/*` → RN 코어 → 마지막에 직접 구현 |
-| `:hover` | 없음. `Pressable` 의 `pressed` + `opacity.pressed` |
-| `box-shadow` 3중 레이어 | `elevation.ts` (iOS shadow* / Android elevation, web은 elevation 0) |
-| `text-wrap: balance`, `font-smoothing`, `tabular-nums` | 적용 불가 또는 무의미 — 시도하지 말 것 |
-| `cubic-bezier(...)` | `motion.ts` 의 `easing.*` 배열 (reanimated/Animated 호환) |
-| 다크 모드 | **미지원.** 라이트 단일. 다크 분기 코드 추가 금지 |
+| `box-shadow` 3중 레이어 | `elevation.ts` (iOS shadow* / Android elevation / web) |
+| `cubic-bezier(...)` | `motion.ts` `easing.*` 배열 |
+| `font-variant-numeric: tabular-nums` | `fontVariant: ['tabular-nums']` — **지원됨** |
+| `transform: scale(0.97)` on `:active` | `Pressable` + `opacity.pressed` 0.85 (현재 scale 아님) |
+| `:hover` | 기기엔 없음. web 렌더/태블릿용으로 `opacity.hover` 0.92 존재 |
 
-추가 제약:
-- 웹 렌더 확인은 **포트 8081 고정** (카카오 지도 키가 8081만 등록됨).
-- `Alert.alert` 는 web 에서도 `webAlertPatch` 로 동작한다 — web 분기 만들지 말 것.
-- 지도는 `KakaoMapWebView` (WebView + `.web.tsx` 분리). 지도 내부 스타일은 이 시스템 밖.
+**진짜로 RN에 없는 것** (이것만 무시):
+`text-wrap: balance / pretty` · `-webkit-font-smoothing` · CSS 변수 자체 · `transition: all`
 
----
-
-## Direction
-
-**Personality:** Utility & Function — 야외 작업용 도구. 밖에서, 한 손으로, 밝은 햇빛 아래 쓰는 화면이다. 예쁨보다 "지금 어디 가야 하는지"가 0.5초에 읽히는 것이 우선.
-
-**Human:** 가로수·현장 점검 담당자. 이동 중이거나 현장에 서 있고, 5분 전에 한 곳을 방문 완료 처리했고, 5분 뒤에 다음 목적지로 걷는다.
-
-**Core verb:** 다음 목적지를 찾아 방문 결과를 남긴다.
-
-**Foundation:** cool (slate 중립 + blue 브랜드).
-
-**Depth:** **borders-first.** 기본 구분은 1px `colors.border`. 그림자는 *실제로 떠 있는 것* 에만 — 바텀시트, 모달, 지도 위 떠 있는 카드. 일반 리스트 카드는 `variant="outline"` 이 기본이고 `elevated` 는 예외다. 두 전략을 한 화면에서 섞지 않는다.
-
-**Density:** 여유 쪽. 터치 타깃 44px 이상(`Button` md = minHeight 44, `Input` = 48). 데이터 밀도를 위해 이 값을 깎지 않는다 — 장갑 낀 손과 흔들리는 버스가 전제다.
-
-**Signature:** **색+형상+라벨 3중 인코딩 상태 배지.** 방문 상태를 색으로만 말하지 않고 ●▲■◆ 형상과 한글 라벨을 항상 함께 붙인다 (KWCAG). 이 앱을 다른 대시보드와 구분하는 요소이고, 상태를 표시하는 모든 새 UI는 이 규칙을 따른다.
+**환경 제약:**
+- 웹 렌더 확인은 **포트 8081 고정** (카카오 지도 키가 8081만 등록).
+- `Alert.alert` 는 web 에서도 `webAlertPatch` 로 동작 — web 분기 만들지 말 것.
+- 지도(`KakaoMapWebView`)는 WebView 내부라 이 시스템 밖.
+- 시연·시드 데이터 주소는 부산.
 
 ---
 
-## Tokens
+## 3. 미결 — 스킬 기준으로 아직 결정 안 됨
 
-전부 `src/theme/` 에 있다. **화면 코드에서 raw hex / 매직 넘버 금지.**
+아래는 **결정된 규칙이 아니라 열린 항목**이다. 건드리는 화면이 생기면 그때 스킬 쪽으로 정리하되,
+시각 변경이므로 8081 웹 렌더 확인 + 사용자 확인 전에는 release 로 넘기지 않는다.
 
-### Spacing — `spacing.ts`
-base 4px. `xs 4 · sm 8 · md 12 · lg 16 · xl 24 · xxl 32`
-스케일 밖의 값(10, 14, 18…)을 쓰지 않는다.
-
-### Radius — `spacing.ts`
-`sm 6 · md 10 · lg 16 · pill 999`
-입력·버튼·카드 = `md`. 배지·칩 = `pill`. 바텀시트 상단 = `lg`.
-
-### Typography — `typography.ts`
-Font: **Pretendard** (Regular / SemiBold / Bold / ExtraBold 4종만 로드. Medium 없음 — 추가 금지, 번들 4.7MB).
-
-| variant | size / lineHeight | weight |
-|---|---|---|
-| h1 | 28 / 36 | heavy(800) |
-| h2 | 22 / 30 | bold(700) |
-| h3 | 18 / 26 | bold(700) |
-| bodyLg | 18 / 26 | regular |
-| body | 16 / 24 | regular |
-| bodySm | 14 / 20 | regular |
-| caption | 12 / 16 | regular |
-
-위계는 **size + weight + color 세 축을 같이** 쓴다. `<Text variant color weight>` 로만 표현하고 인라인 fontSize 를 새로 만들지 않는다.
-
-### Colors — `colors.ts` (semantic) ← `palette.ts` (raw)
-화면은 `colors.*` 만 import. `palette` 직접 import 금지.
-
-```
-text        slate900   textMuted  slate500   textSubtle slate400
-background  slate50    surface    white      surfaceMuted slate100
-border      slate200   borderMuted slate100  focus      blue500
-primary     blue600    success    green600   danger     red600
-warning     amber600   info       sky600
-```
-- 전경 4단계(text / textMuted / textSubtle / textInverse)를 다 쓴다. 2단계만 쓰면 위계가 납작한 것.
-- 강조색은 **blue 하나**. 두 번째 accent 도입 금지.
-- **빨강 = 파괴적 액션 전용.** 진행 중 외근 배너가 blue 인 이유(`tripBanner`)가 이것 — 색 의미 1:1 유지.
-- `*Muted` 는 tint 배경 전용(배지·칩), 텍스트 색으로 쓰지 않는다.
-
-### Elevation — `elevation.ts`
-`none · card(1/0.04/6) · raised(2/0.08/12) · sheet(0/0.12/24) · modal(4/0.18/32)`
-한 단계씩만 올린다. 카드 위 카드에 `modal` 을 쓰지 않는다.
-
-### Motion — `motion.ts`
-`instant 80 · fast 120 · base 180 · slow 240` — **240ms 상한.** 스킬이 말하는 300~500ms 모달 값은 여기 적용하지 않는다.
-easing: `standard [0.2,0,0,1]` 기본, `decel` 진입, `accel` 퇴장.
-opacity: `pressed 0.85 · disabled 0.4`.
-`transform` / `opacity` 만 애니메이션한다 (RN 에서도 동일 — width/height 는 레이아웃 재계산).
+1. **Depth 전략이 둘로 갈려 있다.** `Card` 기본은 `outline`(1px border)인데 `elevation` 은 5단계가 있다.
+   스킬은 하나를 골라 commit 하라고 한다. 어느 쪽을 고를지 기록이 없음.
+2. **Input 이 주변보다 밝다.** canvas slate50 위에 흰 필드 + border. 스킬은 입력을 inset(더 어둡게)으로 본다.
+   현재는 `Card`(흰 배경 + border)와 `Input` 이 채움·radius 가 같아 **테두리 색으로만 구분**된다.
+   `surfaceMuted`(slate100) 채움이 후보. 폼 전 화면에 걸리는 변경.
+3. **토큰 이름이 도메인을 말하지 않는다.** `slate`/`blue` 는 Tailwind 기본. 스킬 기준 "템플릿 신호".
+   단 `palette.ts` 는 의도적으로 raw scale 이고 semantic 층이 따로 있으므로, 바꾼다면 `colors.ts` 쪽이지
+   palette 가 아니다. 40+ 화면에 flat alias 가 흩어져 있어 별도 작업.
+4. **h1(28/heavy) 사용 화면이 거의 없다.** 강령 1이 "1 화면 = 1 결정"인데 화면별 focal element 가
+   지정된 적이 없음.
+5. **간격이 lg(16) 하나로 균일하다.** 그룹 안/그룹 사이 구분이 없어 리듬이 단조로움.
+6. **Direction 을 사람이 정한 적이 없다.** 아래 4절은 내가 코드에서 추론한 것이지 승인된 방향이 아니다.
 
 ---
 
-## Patterns
+## 4. Direction (추론, 미승인)
 
-새로 만들기 전에 `src/components/ui/index.ts` 를 먼저 본다.
+> 스킬은 작업 전에 domain/color world/signature/rejecting 을 요구한다.
+> 아래는 코드에서 읽어낸 잠정치 — 사용자 확인 전까지 **결정으로 인용하지 말 것**.
 
-### Button — `ui/Button.tsx`
-- variants: `primary`(blue 채움) · `secondary`(흰 배경 + border) · `ghost`(투명, blue 글자) · `destructive`(red 채움) · `dangerGhost`(투명, red 글자)
-- sizes: `sm` minHeight 36 / pad 8·12 / 14px · `md` **44** / 12·16 / 16px · `lg` 52 / 16·24 / 16px
-- radius `md`(10). 텍스트는 항상 bold(700).
-- `loading` 은 `disabled` 와 같이 dim(0.4) 된다 — 탭 안 먹힘 인상 제거.
-- ghost = 비파괴, dangerGhost = 파괴. 이 짝을 깨지 않는다.
-
-### Card — `ui/Card.tsx`
-- variants: `outline`(기본, 1px border) · `elevated`(elevation.card) · `flat`
-- padding: `none · sm 8 · md 12 · lg 16`(기본)
-- 배경 `surface`(white), radius `md`. `onPress` 주면 Pressable + pressed 0.85.
-
-### Badge — `ui/Badge.tsx`  ← **signature**
-- tone: primary/success/warning/danger/info/neutral (fg = 진한 색, bg = `*Muted`)
-- shape: `● ▲ ■ ◆` — 상태 배지에는 **반드시** 함께.
-- 매핑 단일 출처: `theme/statusBadge.ts` (`VISIT_STATUS_BADGE`, `DESTINATION_STATUS_BADGE`). 화면에서 tone/shape 를 직접 고르지 않는다.
-- pill radius, sm 2·8 pad / 12px, md 4·12 / 14px.
-
-### Input — `ui/Input.tsx`
-- minHeight 48, 흰 배경 + 1px border, radius md, 좌우 pad 12.
-- label(14 semibold muted) / error(12 danger) / helper(12 muted) 슬롯 내장.
-- 에러는 border 를 danger 로. placeholder 는 `textSubtle`.
-- 주의: 스킬은 "input 은 주변보다 어둡게" 라고 하지만 여기는 **canvas(slate50) 위 흰 필드** 로 반대다. 이 앱의 규칙을 따른다.
-
-### 그 외 기성품
-`Text · SectionHeader · FilterChip · FilterAccordion · Skeleton · LoadingState · EmptyState · StickyBottomBar · useHideOnScroll`
-도메인: `FieldCard · TripCard · DestinationRow · CurrentDestCard · TripProgressStrip · MapSheetLayout · MapLegend · TripStatusBanner`
-
----
-
-## States
-
-- 인터랙티브: default / pressed(0.85) / disabled(0.4) / loading. **hover·focus ring 은 RN 에서 의미 없음** — 웹 렌더 확인용으로만 존재.
-- 데이터: loading(`Skeleton`/`LoadingState`) / empty(`EmptyState`) / error. 세 개를 다 붙이지 않은 목록 화면은 미완성으로 본다.
-- 터치 타깃 44×44 미만 금지.
-
----
-
-## Decisions
-
-| 결정 | 이유 | 날짜 |
-|---|---|---|
-| borders-first, 그림자는 떠 있는 표면만 | 야외 밝은 화면에서 그림자는 거의 안 보인다. 경계선이 정보를 더 준다 | (기존) |
-| 모션 상한 240ms | 이동 중 반복 조작. 180ms 넘으면 기다린다는 감각 | (기존) |
-| 빨강은 파괴적 액션 전용, 진행 중 외근 배너는 blue | 색 의미를 1:1 로 — 종료 버튼 빨강과 배너 빨강이 겹쳐 의미가 흐려졌었음 | (기존, UI/UX P1-2) |
-| 상태는 색+형상+라벨 3중 인코딩 | KWCAG. 색만으로 정보 전달 금지 | (기존) |
-| Pretendard 4 weight 만 로드 | Medium callsite 0 + 시각 차 미미. 6.3→4.7MB | (기존) |
-| 다크 모드 미지원 | 사용 시간대가 주간 현장. 유지 비용 대비 이득 없음 | (기존) |
-| 데모/시드 데이터는 부산 실주소 | 시연 지역 기준 | (기존) |
-
----
-
-## Open — 아직 결정 안 된 것
-
-1. **토큰 이름이 도메인을 말하지 않는다.** `slate` / `blue` 는 Tailwind 기본값 그대로다. 스킬 기준으로는 "템플릿 신호". 다만 `palette.ts` 는 의도적으로 raw scale 이고 semantic 층(`colors.ts`)이 따로 있으므로 **바꾼다면 semantic 쪽 이름**이지 palette 가 아니다. 지금 건드리지 말 것 — 40+ 화면에 flat alias 가 흩어져 있어 별도 작업으로 다뤄야 한다.
-2. **h1(28/heavy) 이 실제로 쓰이는 화면이 적다.** 화면당 focal point 가 뭔지 화면별로 정해진 적이 없음.
-3. **spacing 리듬이 균일하다.** 대부분 lg(16) 하나로 붙어 있어 "그룹은 좁게, 그룹 사이는 넓게" 가 안 되어 있다. 새 화면부터 적용.
+- **Human:** 가로수·현장 점검 담당자. 이동 중이거나 현장에 서 있음. 5분 전에 한 곳을 방문 완료 처리했고 5분 뒤 다음 목적지로 걷는다.
+- **Core verb:** 다음 목적지를 찾아 방문 결과를 남긴다.
+- **Signature:** 색+형상+라벨 3중 인코딩 상태 배지 (`theme/statusBadge.ts`). 이건 추론이 아니라 문서화된 것 — 상태를 표시하는 새 UI는 전부 이 규칙을 따른다.
+- **Density:** 터치 타깃 44px 이상 (`Button` md=44, `Input`=48). 밀도를 위해 깎지 않는다.
+- **미확정:** personality / color world / 거부할 기본값 3개 — 사람이 정해야 함.
