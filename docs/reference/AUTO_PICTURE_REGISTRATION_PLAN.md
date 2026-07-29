@@ -5,7 +5,8 @@
 >
 > **상태**: 구현 완료 (2026-06-04, `feat/quick-photo`). 아래 §4 의 파일 경로는 구현하며
 > 코드베이스 컨벤션(훅은 컴포넌트와 colocate)에 맞게 일부 조정됨 — 본문에 반영 완료.
-> QA: docs/qa/integration-scenario.md §S11.
+> QA: `docs/qa/integration-scenario.md` §S11 — **해당 문서는 2026-07-29 정리로 제거됐다.**
+> 필요하면 git 이력에서 꺼낸다 (`git log --diff-filter=D -- docs/qa`).
 
 ---
 

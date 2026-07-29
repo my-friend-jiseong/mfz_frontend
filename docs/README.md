@@ -30,9 +30,17 @@
 > 백엔드에 넘길 때는 백로그를 통째로 주지 않고 `handoff-*.md` 전달본을 뽑는다.
 > 전달이 끝나면 `archive/` 로 옮기고, 백로그 항목은 「완료 항목(아카이브)」에 한 줄로 압축한다.
 
-## QA — `qa/`
+## 제거된 디렉터리 (2026-07-29)
 
-| 파일 | 내용 |
+`docs/presentation/` · `docs/qa/` · `docs/report/` 를 정리했다. **git 이력에 남아 있으므로
+필요하면 되살릴 수 있다** — `git log --diff-filter=D -- docs/qa` 로 삭제 커밋을 찾고
+`git show <commit>^:<경로>` 로 꺼낸다.
+
+| 있던 것 | 비고 |
 |---|---|
-| [qa/integration-scenario.md](qa/integration-scenario.md) | 통합 테스트 시나리오 (ERD v2) — "무엇을 어떻게 시도하는가" |
-| [qa/verify-report-wizard.mjs](qa/verify-report-wizard.mjs) | 보고서 생성 마법사 회귀 검증 (Playwright, §S7) — 생성·단계 이동·캡션 가드·폴백, 실행 후 원복 |
+| `qa/integration-scenario.md` · `qa/verify-report-wizard.mjs` | 통합 시나리오·보고서 마법사 회귀 검증(Playwright). 루트 [`qa-runner.mjs`](../qa-runner.mjs) 는 **남아 있다** |
+| `presentation/*.mjs` | 데모 시드·화면 캡처·녹화 스크립트 |
+| `report/*.md` | 주간·결과 보고서 초안 |
+
+> ⚠️ `presentation/screenshots/` (스토어 스크린샷 24장) 는 [`.gitignore:20`](../.gitignore) 대상이라
+> **git 이력에도 없다.** 로컬 백업이 없으면 재캡처해야 한다 — [roadmap/00](roadmap/00_store-release-readiness.md) 「절차·품질」 참조.
