@@ -44,6 +44,9 @@ interface AuthState {
     newPasswordConfirm: string,
   ) => Promise<Result>;
 
+  // backend-backlog §30 — 앱 내 회원 탈퇴. 서버가 실제로 지운 경우에만 로컬을 비운다.
+  deleteAccount: (password: string) => Promise<Result>;
+
   // 내부 — client.ts 가 401 처리 시 호출
   _refreshAccess: () => Promise<string | null>;
 }
@@ -235,22 +238,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         /* ignore */
       }
     }
-    await clearRefreshToken();
-    // 다른 store 데이터 정리 — 다음 사용자가 같은 디바이스에서 로그인 시
-    // hydrate 가 끝나기 전 짧은 윈도우 동안 이전 사용자의 데이터가 노출되던 회로 차단.
-    await useDestinationStore.getState().clearAll();
-    useFieldStore.getState().clearAll();
-    useVisitStore.getState().clearAll();
-    useTripStore.getState().clearAll();
-    useReportStore.getState().clearAll();
-    useProjectStore.getState().clearAll();
-    await useCategoryStore.getState().clearAll();
-    set({
-      user: null,
-      accessToken: null,
-      refreshToken: null,
-      isAuthenticated: false,
-    });
+    await clearLocalSession();
   },
 
   // backend-backlog §15 — 이름 변경. 응답의 user 로 메모리 갱신해 프로필 헤더가 즉시 반영된다.
@@ -279,10 +267,65 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
+  // backend-backlog §30 — 앱 내 회원 탈퇴.
+  // 성공을 낙관하지 않는다: 로컬만 비우고 성공처럼 보이면 사용자는 탈퇴됐다고 믿고 떠나는데
+  // 계정은 서버에 그대로 남는다. 개인정보 측면에서 가장 나쁜 실패 모드라, 서버가 실제로
+  // 지웠다고 답한 경우에만 로컬을 정리한다.
+  deleteAccount: async (password) => {
+    try {
+      await auth.deleteMe({ password });
+    } catch (e) {
+      const status = e instanceof ApiError ? e.status : null;
+      const code = errorCode(e);
+
+      // 이미 지워진 계정 — 서버 상태와 로컬을 맞추는 게 맞다.
+      if (code === 'user_not_found') {
+        await clearLocalSession();
+        return { ok: true };
+      }
+
+      // 라우트 자체가 없음 = 백엔드 미구현(§30 대기). 사용자에게 대체 경로를 준다.
+      if (status === 404 || status === 405 || status === 501) {
+        return {
+          ok: false,
+          code: 'delete_account_unimplemented',
+          error:
+            '아직 앱에서 탈퇴를 처리할 수 없습니다. support@ilgayo.co.kr 로 요청해 주시면 처리해 드립니다.',
+        };
+      }
+
+      return { ok: false, error: describeError(e), code: code ?? undefined };
+    }
+
+    await clearLocalSession();
+    return { ok: true };
+  },
+
   _refreshAccess: async () => {
     return refreshAccessSingleFlight();
   },
 }));
+
+// 로그아웃·회원탈퇴 공통 로컬 정리.
+// 두 경로가 각자 목록을 들고 있으면 한쪽에만 store 가 빠져, 같은 기기에서 다음 사용자가
+// 로그인할 때 hydrate 완료 전까지 이전 사용자 데이터가 노출되는 회로가 생긴다.
+// 정리 대상 목록은 반드시 여기 한 곳에서만 관리한다.
+async function clearLocalSession(): Promise<void> {
+  await clearRefreshToken();
+  await useDestinationStore.getState().clearAll();
+  useFieldStore.getState().clearAll();
+  useVisitStore.getState().clearAll();
+  useTripStore.getState().clearAll();
+  useReportStore.getState().clearAll();
+  useProjectStore.getState().clearAll();
+  await useCategoryStore.getState().clearAll();
+  useAuthStore.setState({
+    user: null,
+    accessToken: null,
+    refreshToken: null,
+    isAuthenticated: false,
+  });
+}
 
 // hydrate single-flight — 루트 레이아웃과 다른 진입점에서 동시에 hydrate 가
 // 호출돼도 refresh 회전이 한 번만 일어나도록.

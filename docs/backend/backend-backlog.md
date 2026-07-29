@@ -320,6 +320,78 @@ reportId · tripId · title · outputFileUrl · overviewMapUrl · fieldReportCou
 
 ---
 
+## 30. 🔴 앱 내 회원 탈퇴 — `DELETE /api/me` 가 없다 (스토어 심사 차단)
+
+Apple App Store 는 **계정을 생성하는 앱에 앱 내 계정 삭제 경로를 요구**한다. 현재는 운영팀
+이메일로 요청받아 수동 처리하는 구조라 심사에서 반려 사유가 되고, 개인정보처리방침이
+말하는 삭제 절차와 실제 서비스가 어긋난다.
+
+### 실측 (2026-07-29, 운영 OpenAPI `https://ilgayo.co.kr/api-docs.json`)
+
+| 경로 | 존재하는 메서드 |
+|---|---|
+| `/api/me` | `get`, `patch` — **`delete` 없음** |
+| `/api/me/password` | `patch` |
+
+사용자 리소스를 지우는 엔드포인트가 전체 스펙에 하나도 없다.
+
+### 요청 (A) — `DELETE /api/me`
+
+```
+DELETE /api/me
+Authorization: Bearer <accessToken>
+Body: { "password": "..." }     ← 재인증을 요구한다면
+```
+
+계약에서 못박아 주면 좋은 것:
+
+1. **재인증 수단** — 비밀번호를 받을지, refresh 토큰을 받을지, 아니면 access 토큰만으로 충분한지.
+   프론트는 일단 `{ password }` 를 싣고 있다(서버가 무시해도 무해).
+2. **삭제 범위** — 회원 기본정보·외근기록·방문기록·업무보고·사진(스토리지 객체 포함)·메모·
+   세션/토큰. 사진은 DB row 만 지우고 MinIO 객체가 남으면 개인정보가 남는 것이다.
+3. **성공 응답 형태** — 204 인지 `{ deleted: true }` 인지. 프론트는 둘 다 받도록 열어 뒀다.
+4. **동일 이메일 재가입 허용 여부** — soft delete 라면 재가입이 `email_already_exists` 로
+   막히는지 확인 필요.
+5. **법령 보관 대상** — 별도 보관한다면 무엇을 얼마나 보관하는지. 화면에 고지 문구를
+   띄워 뒀으므로 실제 정책과 맞춰야 한다.
+
+### 요청 (B) — 위치정보 이용약관 페이지
+
+`§23` 으로 `/terms`·`/privacy` 는 살아났다(2026-07-29 실측 200). 그런데 **위치정보 이용약관은
+페이지 자체가 없다** — `/location-terms`·`/location`·`/terms/location` 모두 404 이고,
+`/terms`·`/privacy` 본문에도 '위치정보' 문구가 없다.
+
+이 앱은 현재 위치를 상시 사용하므로 위치정보 이용약관은 별도로 있어야 한다.
+`GET /location-terms` 로 서빙해 주면 프론트는 상수 한 줄(`LOCATION_TERMS_AVAILABLE`)만
+바꿔 메뉴를 켠다. **없는 동안은 메뉴를 노출하지 않는다** — 커밋 `f079108` 에서 죽은 약관
+링크로 이미 한 번 데였고, 심사 대상 앱에서 404 로 가는 정책 링크는 없느니만 못하다.
+
+### 요청 (C) — 비밀번호 재설정 SMTP (낮음)
+
+`POST /auth/password/reset-request` 는 존재하지만 스펙 설명이 **"(스텁) SMTP·토큰 저장은
+미구현. 항상 `{ ok: true }` 만 반환"** 이다. 그래서 프론트는 배선하지 않고 수동 안내를
+유지한다. 실제로 메일이 나가게 되면 알려 달라 — 그때 로그인 화면 안내를 자동 플로우로 바꾼다.
+
+### 프론트 현황 (선반영 완료 — 서버만 붙으면 동작)
+
+- `auth.deleteMe()` · `authStore.deleteAccount()` · `app/(tabs)/profile/delete-account.tsx` 구현.
+- **미구현 상태를 성공으로 위장하지 않는다**: 404/405/501 이면 로컬 세션을 **지우지 않고**
+  "아직 앱에서 처리할 수 없습니다 → 메일로 요청" 으로 안내한다. 로컬만 비우고 성공처럼
+  보이면 사용자는 탈퇴됐다고 믿고 떠나는데 계정은 서버에 남는다 — 가장 나쁜 실패 모드다.
+- `user_not_found` 만 예외로 '이미 삭제됨' 으로 보고 로컬을 정리한다.
+
+### 우선순위
+
+🔴 **높음 — (A) 는 스토어 출시 차단.** [`docs/roadmap/00_store-release-readiness.md`](../roadmap/00_store-release-readiness.md)
+가 "코드 쪽 차단은 없다" 로 닫혀 있었는데, 그 판단은 계정 삭제 요건을 보지 않은 상태였다.
+(B) 는 심사 리스크, (C) 는 편의.
+
+### 발견 시점
+
+2026-07-29, `docs/REQUIREMENTS_BEFORE_LAUCHING.md` 검토 중 OpenAPI 대조로 확인.
+
+---
+
 ## 🔗 2026-07-26 배치 프론트 연동 — ✅ 종결 (이력)
 
 > 2026-07-26 백엔드 배치([release-2026-07-26-backend-backlog.md](./release-2026-07-26-backend-backlog.md))로
@@ -371,6 +443,14 @@ reportId · tripId · title · outputFileUrl · overviewMapUrl · fieldReportCou
 ---
 
 ## 변경 이력
+
+- **2026-07-29**: **§30 추가(🔴)** — 앱 내 회원 탈퇴에 필요한 `DELETE /api/me` 가 **존재하지
+  않는다**(OpenAPI 실측: `/api/me` 는 `get`·`patch` 뿐, 사용자 삭제 엔드포인트가 스펙 전체에
+  0건). Apple 심사 요건이라 **출시 차단**이다. 같이 확인된 두 건도 묶었다 — ②위치정보 이용약관
+  페이지 부재(`/location-terms` 등 404, `/terms`·`/privacy` 본문에도 '위치정보' 없음),
+  ③`/auth/password/reset-request` 는 스텁(SMTP 미구현, 항상 `{ok:true}`)이라 프론트가
+  배선하지 않고 수동 안내 유지. 프론트는 탈퇴 UI 를 선반영했고, 서버 미구현(404/405/501)일 때
+  **로컬 세션을 지우지 않고 명시적으로 실패**시킨다.
 
 - **2026-07-29**: **§29 추가(🟡)** — `GET /api/reports` 목록 item 에 외근 요약이 없어 그룹 헤더가
   로컬 tripStore 에 의존한다. 실측: `tripId` 는 19/19 채워 오는데 `trip` 객체는 0/19 이고,

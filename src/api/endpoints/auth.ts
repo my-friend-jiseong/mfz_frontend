@@ -43,6 +43,18 @@ export interface ChangePasswordBody {
   newPasswordConfirm: string;
 }
 
+// backend-backlog §30 — 회원 탈퇴. **아직 백엔드에 없다** (2026-07-29 운영 OpenAPI 실측:
+// /api/me 는 get·patch 뿐). 스토어 계층에서 404/405 를 '미구현'으로 구분해 처리하므로
+// 여기서는 계약만 선반영한다.
+// password 를 싣는 건 서버가 재인증을 요구할 가능성이 높아서다 — 서버가 무시해도 무해.
+export interface DeleteMeBody {
+  password: string;
+}
+export interface DeleteMeResponse {
+  deleted?: boolean;
+  message?: string;
+}
+
 export const auth = {
   signup: (body: SignupBody) =>
     request<AuthSession>('/auth/signup', { method: 'POST', body, skipAuth: true }),
@@ -74,4 +86,8 @@ export const auth = {
   // password_confirm_mismatch / password_policy_violation.
   changePassword: (body: ChangePasswordBody) =>
     request<{ updated: boolean }>('/api/me/password', { method: 'PATCH', body }),
+
+  // backend-backlog §30 — 앱 내 회원 탈퇴 (Apple 심사 요건). 백엔드 미구현 상태에선 404.
+  deleteMe: (body: DeleteMeBody) =>
+    request<DeleteMeResponse>('/api/me', { method: 'DELETE', body }),
 };

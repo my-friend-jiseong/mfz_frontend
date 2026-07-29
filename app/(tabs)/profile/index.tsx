@@ -19,12 +19,16 @@ import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
 import { fmtDate } from '@/utils/datetime';
+import {
+  LOCATION_TERMS_AVAILABLE,
+  LOCATION_TERMS_URL,
+  PRIVACY_URL,
+  SUPPORT_EMAIL,
+  TERMS_URL,
+  supportMailto,
+} from '@/utils/contact';
 
 const APP_VERSION = '0.1.0';
-// 운영 도메인(ilgayo.co.kr)으로 선반영 — 이전 ilgayo.kr 은 도메인 자체가 미해석.
-// 정적 페이지 서빙은 backend-backlog §23. 배포되면 이 링크가 그대로 살아난다.
-const TERMS_URL = 'https://ilgayo.co.kr/terms';
-const PRIVACY_URL = 'https://ilgayo.co.kr/privacy';
 
 function initialOf(name: string | undefined): string {
   if (!name) return '?';
@@ -40,13 +44,17 @@ function MenuRow({
   label,
   value,
   onPress,
+  tone = 'default',
 }: {
   icon: IonName;
   label: string;
   value?: string;
   onPress?: () => void;
+  // 'danger' — 되돌릴 수 없는 동작(탈퇴)을 목록 안에서 시각적으로 분리한다.
+  tone?: 'default' | 'danger';
 }) {
   const interactive = !!onPress;
+  const danger = tone === 'danger';
   return (
     <Pressable
       onPress={onPress}
@@ -58,8 +66,13 @@ function MenuRow({
         pressed && interactive && { opacity: opacity.pressed },
       ]}
     >
-      <Ionicons name={icon} size={18} color={colors.textMuted} />
-      <Text variant="bodySm" weight="semibold" style={styles.menuLabel}>
+      <Ionicons name={icon} size={18} color={danger ? colors.danger : colors.textMuted} />
+      <Text
+        variant="bodySm"
+        weight="semibold"
+        color={danger ? 'danger' : undefined}
+        style={styles.menuLabel}
+      >
         {label}
       </Text>
       {value ? (
@@ -129,6 +142,21 @@ export default function Profile() {
       });
   };
 
+  // 문의하기 — 개인정보 열람·수정·삭제, 회원 탈퇴, 일반 문의 창구.
+  // mailto 는 canOpenURL 로 미리 재지 않는다: Android 11+ 는 매니페스트 <queries> 없이는
+  // 메일 앱이 있어도 false 를 돌려줘, 멀쩡한 기기에서 폴백 안내만 뜨게 된다.
+  const handleContact = () => {
+    const url = supportMailto('[일가요] 문의');
+    if (Platform.OS === 'web') {
+      // 새 탭으로 열면 메일 앱이 뜬 뒤 빈 탭이 남는다 — 현재 문서에서 핸들러를 부른다.
+      window.location.href = url;
+      return;
+    }
+    Linking.openURL(url).catch(() => {
+      Alert.alert('문의하기', `메일 앱을 열 수 없습니다.\n\n${SUPPORT_EMAIL} 로 보내주세요.`);
+    });
+  };
+
   return (
     <SafeScreen>
     <View style={styles.container}>
@@ -170,6 +198,15 @@ export default function Profile() {
             label="내 정보 수정"
             onPress={() => router.push('/(tabs)/profile/edit' as never)}
           />
+          <View style={styles.divider} />
+          {/* 스토어 심사 요건 — Apple 은 계정을 만드는 앱에 앱 내 계정 삭제를 요구한다.
+              서버 DELETE /api/me 는 backend-backlog §30 대기. */}
+          <MenuRow
+            icon="person-remove-outline"
+            label="회원 탈퇴"
+            tone="danger"
+            onPress={() => router.push('/(tabs)/profile/delete-account' as never)}
+          />
         </Card>
 
         <Text
@@ -191,6 +228,25 @@ export default function Profile() {
             icon="shield-checkmark-outline"
             label="개인정보 처리방침"
             onPress={() => openExternal(PRIVACY_URL, '개인정보 처리방침')}
+          />
+          {/* 위치정보 이용약관 — 페이지가 실제로 뜰 때만 노출한다(utils/contact.ts 참조).
+              2026-07-29 기준 404 이고, 죽은 정책 링크는 심사에서 없느니만 못하다. */}
+          {LOCATION_TERMS_AVAILABLE ? (
+            <>
+              <View style={styles.divider} />
+              <MenuRow
+                icon="location-outline"
+                label="위치정보 이용약관"
+                onPress={() => openExternal(LOCATION_TERMS_URL, '위치정보 이용약관')}
+              />
+            </>
+          ) : null}
+          <View style={styles.divider} />
+          <MenuRow
+            icon="chatbubble-ellipses-outline"
+            label="문의하기"
+            value={SUPPORT_EMAIL}
+            onPress={handleContact}
           />
           <View style={styles.divider} />
           <MenuRow

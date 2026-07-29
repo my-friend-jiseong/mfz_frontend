@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Text } from '@/components/ui/Text';
 import { SafeScreen } from '@/components/SafeScreen';
+import { SUPPORT_EMAIL } from '@/utils/contact';
 
 interface FieldErrors {
   email?: string;
@@ -176,9 +177,12 @@ export default function Login() {
 
           <Pressable
             onPress={() =>
+              // 서버의 POST /auth/password/reset-request 는 스텁이다 — OpenAPI 설명 원문:
+              // "SMTP·토큰 저장은 미구현, 항상 { ok: true }만 반환". 호출해봐야 메일이 안 가므로
+              // 배선하지 않고 수동 안내를 유지한다. 자동화 요청은 backend-backlog §30.
               Alert.alert(
                 '비밀번호 재설정',
-                '운영자 이메일 support@ilgayo.kr 로 가입 이메일을 알려주시면 임시 비밀번호를 발급해드립니다. (자동 재설정 기능은 준비 중입니다)',
+                `운영자 이메일 ${SUPPORT_EMAIL} 로 가입 이메일을 알려주시면 임시 비밀번호를 발급해드립니다. (자동 재설정 기능은 준비 중입니다)`,
               )
             }
             style={styles.subtleLink}
