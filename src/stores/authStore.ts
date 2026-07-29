@@ -14,6 +14,7 @@ import { useTripStore } from './tripStore';
 import { useReportStore } from './reportStore';
 import { useProjectStore } from './projectStore';
 import { useCategoryStore } from './categoryStore';
+import { SUPPORT_EMAIL } from '@/utils/contact';
 
 type Result<T = void> =
   | { ok: true; value?: T }
@@ -289,8 +290,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         return {
           ok: false,
           code: 'delete_account_unimplemented',
-          error:
-            '아직 앱에서 탈퇴를 처리할 수 없습니다. support@ilgayo.co.kr 로 요청해 주시면 처리해 드립니다.',
+          error: `아직 앱에서 탈퇴를 처리할 수 없습니다. ${SUPPORT_EMAIL} 로 요청해 주시면 처리해 드립니다.`,
         };
       }
 
