@@ -806,9 +806,11 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
     marginBottom: spacing.sm,
   },
+  // 읽기 전용 블록은 채우지 않는다 — Input 이 inset(slate100 채움)으로 바뀐 뒤로
+  // surfaceMuted 채움은 '편집 가능' 신호와 같은 값이다. 이 자리는 작성 모드에선
+  // 실제로 탭 가능한 현장 선택기라 더더욱 구분돼야 한다 (문서 5.3.1).
   readonly: {
-    backgroundColor: colors.surfaceMuted,
-    borderWidth: 0,
+    borderColor: colors.borderMuted,
   },
   fieldPickBtn: {
     flexDirection: 'row',
@@ -869,7 +871,7 @@ const styles = StyleSheet.create({
   pickerSearch: { marginTop: spacing.sm },
   pickerGroupLabel: {
     marginTop: spacing.xs,
-    marginBottom: 2,
+    marginBottom: spacing.xs,
     paddingHorizontal: spacing.xs,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -886,7 +888,7 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
     backgroundColor: colors.primaryMuted,
   },
-  pickerItemMeta: { marginTop: 2 },
+  pickerItemMeta: { marginTop: spacing.xs },
   // 현장 사진 갤러리 그리드 — 3열 썸네일.
   galleryGrid: {
     flexDirection: 'row',

@@ -271,10 +271,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
     paddingBottom: spacing.sm,
+    // 검색창과 필터 사이 간격이 빠져 있어 둘이 붙어 있었다 — 현장·외근 탭 toolbar 와 동일하게.
+    gap: spacing.sm,
     backgroundColor: colors.background,
   },
   list: { padding: spacing.lg, paddingBottom: 120 },
-  group: { marginBottom: spacing.lg },
+  // 그룹 ↔ 그룹은 section tier(xl). 그룹 안(헤더↔카드, 카드↔카드)은 xs/sm 로 붙여
+  // 어디까지가 한 외근인지 눈이 읽게 한다 (간격 리듬, 문서 2.1).
+  group: { marginBottom: spacing.xl },
   tripHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -284,7 +288,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   tripHeaderTextWrap: { flex: 1 },
-  tripHeaderMeta: { marginTop: 2 },
+  tripHeaderMeta: { marginTop: spacing.xs },
   orphanHeader: {
     flexDirection: 'row',
     alignItems: 'center',

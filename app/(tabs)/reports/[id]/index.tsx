@@ -545,7 +545,7 @@ const styles = StyleSheet.create({
   frTitle: { flex: 1 },
   frSlots: { flexDirection: 'row', gap: spacing.sm },
   frSlot: { flex: 1, alignItems: 'center' },
-  frSlotLabel: { marginBottom: 4 },
+  frSlotLabel: { marginBottom: spacing.xs },
   frPhoto: {
     width: '100%',
     aspectRatio: 1,
@@ -559,7 +559,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderStyle: 'dashed',
   },
-  frCaption: { marginTop: 4 },
+  frCaption: { marginTop: spacing.xs },
   downloadBtn: { marginTop: spacing.md },
   // '다시 생성'은 보조 — 폭을 줄여(self) 다운로드 primary 보다 약하게.
   regenBtn: { alignSelf: 'center', marginTop: spacing.xs },
