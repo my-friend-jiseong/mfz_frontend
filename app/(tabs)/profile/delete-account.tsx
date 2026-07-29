@@ -22,8 +22,9 @@ import { colors } from '@/theme/colors';
 import { radius, spacing } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
 
-// docs/REQUIREMENTS_BEFORE_LAUCHING.md §1·§6 — Apple 은 계정을 만드는 앱에 **앱 내 계정 삭제**를
-// 요구한다. 백엔드 DELETE /api/me 는 아직 없어(§30) 이 화면은 선반영이다.
+// docs/REQUIREMENTS_BEFORE_LAUCHING.md §1·§6 — Google Play 는 계정을 만드는 앱에 **계정·데이터
+// 삭제 경로**를 요구한다(출시 대상은 Play 뿐, App Store 는 계획에 없다).
+// 백엔드 DELETE /api/me 는 아직 없어(§30) 이 화면은 선반영이다.
 //
 // 문서의 4단계(안내 → 비밀번호 → 최종 확인 → 완료)를 화면 4개로 쪼개지 않고 한 화면에 둔다.
 // 단계 분리는 이 프로젝트에서 이미 걷어낸 패턴이고, 되돌릴 수 없는 동작의 안전장치는

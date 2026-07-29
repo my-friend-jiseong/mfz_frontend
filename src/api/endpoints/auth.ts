@@ -87,7 +87,7 @@ export const auth = {
   changePassword: (body: ChangePasswordBody) =>
     request<{ updated: boolean }>('/api/me/password', { method: 'PATCH', body }),
 
-  // backend-backlog §30 — 앱 내 회원 탈퇴 (Apple 심사 요건). 백엔드 미구현 상태에선 404.
+  // backend-backlog §30 — 앱 내 회원 탈퇴 (Play 심사 요건). 백엔드 미구현 상태에선 404.
   deleteMe: (body: DeleteMeBody) =>
     request<DeleteMeResponse>('/api/me', { method: 'DELETE', body }),
 };

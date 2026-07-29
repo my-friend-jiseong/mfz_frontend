@@ -199,7 +199,7 @@ export default function Profile() {
             onPress={() => router.push('/(tabs)/profile/edit' as never)}
           />
           <View style={styles.divider} />
-          {/* 스토어 심사 요건 — Apple 은 계정을 만드는 앱에 앱 내 계정 삭제를 요구한다.
+          {/* 스토어 심사 요건 — Play 는 계정을 만드는 앱에 계정·데이터 삭제 경로를 요구한다.
               서버 DELETE /api/me 는 backend-backlog §30 대기. */}
           <MenuRow
             icon="person-remove-outline"
