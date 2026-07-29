@@ -690,8 +690,11 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   fieldGap: { marginTop: spacing.sm },
+  // 읽기 전용 블록은 채우지 않는다. Input 이 inset(slate100 채움)으로 바뀐 뒤로
+  // surfaceMuted 채움은 '편집 가능' 신호와 같은 값이 되어, 폼 안에서 이 주소 블록이
+  // 입력란처럼 보였다. 흰 표면 + 약한 테두리 = 내용, 채워진 것 = 컨트롤.
   readonly: {
-    backgroundColor: colors.surfaceMuted,
+    borderColor: colors.borderMuted,
   },
   readonlyChanged: {
     backgroundColor: colors.primaryMuted,

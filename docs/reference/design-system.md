@@ -160,6 +160,18 @@ Tailwind 호환 raw hue × shade. **화면 코드에서 직접 import 금지** �
 
 > 상태 우선순위: **error > focus > disabled > default**. 테두리 **색만** 바꾼다 — `borderWidth` 를 키우면 폼 전체가 1px 씩 밀린다.
 
+**폼 안에서는 채움이 곧 "편집 가능" 신호다.**
+
+`control.bg` 는 `surfaceMuted` 와 **같은 값(slate.100)** 이다. 그래서 폼 안 읽기 전용 블록에 `surfaceMuted` 를 채우면 입력란과 구별되지 않는다(2026-07-30 `fields/[id]/edit.tsx` 주소 블록에서 실제로 발생).
+
+| 폼 안 요소 | 표현 |
+|---|---|
+| 편집 가능한 입력 | `control.bg` 채움 + `control.border` |
+| 읽기 전용 내용 블록 | `surface`(흰색) + `borderMuted` — **채우지 않는다** |
+| 비활성 입력 | `control.bgDisabled` + opacity 0.7 |
+
+> 폼 **밖**에서 `surfaceMuted` 를 쓰는 건 문제없다 (아이콘 버튼 배경, 진행률 트랙, Skeleton, 지도 chrome 등 — 입력란과 같은 자리에 서지 않는다).
+
 ### 5.4 Brand / Intent (강 + Muted)
 
 | 의미 | 강 | 약 |
@@ -203,7 +215,15 @@ tripBanner = blue.600   # 활성 외근 배너 = brand. 빨강은 파괴적 액�
 
 색 + 형상 + 라벨 3중 인코딩(WCAG/KWCAG). 단일 진실 출처.
 
+형상은 **도메인 안에서만** 색을 보완한다. 같은 화면에 두 도메인의 배지가 나란히 서지 않으므로 도메인 간 형상이 겹쳐도 된다(▲ 는 visit 에선 '거절', field 에선 '진행 중'). 한 도메인 안에서 겹치면 그건 버그다.
+
 ```ts
+FIELD_STATUS_BADGE = {
+  pending:     { tone: 'warning', shape: 'circle'   }, // ● 조치 전
+  in_progress: { tone: 'primary', shape: 'triangle' }, // ▲ 조치 중
+  done:        { tone: 'success', shape: 'square'   }, // ■ 조치 완료
+}
+
 VISIT_STATUS_BADGE = {
   completed:       { tone: 'success', shape: 'square'   }, // ■
   absent:          { tone: 'neutral', shape: 'circle'   }, // ●
@@ -265,7 +285,7 @@ DESTINATION_STATUS_BADGE = {
 | `Text` | `variant` / `weight` / `color` / `align` / `numeric` | 모든 텍스트 진입로 |
 | `Button` | `variant: primary/secondary/ghost/destructive` · `size: sm/md/lg` · `leftIcon` / `rightIcon` · `loading` · `disabled` · `fullWidth` | 1차 액션 |
 | `Badge` | `label` · `tone` · `shape` · `size` | 상태 표시 (3중 인코딩) |
-| `Card` | `padding: none/sm/md/lg` · `variant: outline/flat` · `onPress` | 카드/타일 |
+| `Card` | `padding: none/sm/md/lg` · `variant: outline/flat` · `onPress` · `accessibilityRole`/`accessibilityState` | 카드/타일. 누를 수 있는 카드가 항상 button 은 아니다 — 체크리스트 항목은 `role="checkbox"` + `state.checked` |
 | `Input` | `label` · `error` · `helperText` · `leftSlot` / `rightSlot` (forwardRef) · 내부 focus 상태 | 폼 입력 (inset) |
 | `FilterChip` | `label` · `active` · `activeColor` · `dashed` · `leftIcon` · `disabled` | 선택 가능 chip (`withAlpha(c, 0.13)` 배경) |
 | `FilterAccordion` | `groups: {key, base, value, render}[]` · `hasFilter` · `onResetAll` | 목록 필터 껍데기 — 칩 줄 + 한 번에 하나만 열리는 패널. 함께 export: `FilterPanel` · `FilterOptionRow` · `FilterDateRange`(플랫폼 분기 날짜 범위) · `dateRangeSummary` |
@@ -289,8 +309,9 @@ DESTINATION_STATUS_BADGE = {
 | | `DestinationRow` | 목적지 행, memo + status Badge |
 | `src/components/fields/` | `ManualCoordinateForm` | KR 좌표 직접 입력 (new / edit 공유) |
 | | `FieldFilterBar` | 현장 필터 4그룹 (조치상태·프로젝트·카테고리·방문일) |
+| | `FieldStatusSummary` | 현장 탭 focal — 조치 전 건수(metric) + 3구간 분포 막대. 필터 걸리면 숨김(서버 refresh 로 모집단이 좁혀져 분포가 거짓이 된다) |
 | `src/components/reports/` | `ReportFilterBar` | 보고서 필터 — 작성일 기간 |
-| `src/components/` | `FieldCard` | 현장 카드 (status chip + 주소) |
+| `src/components/` | `FieldCard` | 현장 카드. 위계: 상태(좌측 3dp 레일 + 배지) → 제목 → 주소 → 메타. 레일 색은 `colors.fieldStatus`, 배지는 `FIELD_STATUS_BADGE` |
 | | `TripStatusBanner` | root layout 상단 진행 중 외근 배너 |
 | | `MapSheetLayout` | 지도 + BottomSheet 공통 (snap `['18%','55%','92%']` + uiStore 인덱스 공유 + mount race fix) |
 | | `EmptyState` | icon + title + description + action |
@@ -331,12 +352,12 @@ DESTINATION_STATUS_BADGE = {
 
 ## 14. 미적용 / 차후 과제
 
-**탭별 디자인 개선에서 흡수할 부채** (2026-07-30 실측):
+**탭별 디자인 개선에서 흡수할 부채** (2026-07-30 실측).
+진행: **외근 ✅ · 현장 ✅ · 보고서 ⬜ · 내 정보 ⬜**
 
-- **hand-rolled 표면 37 파일** — `backgroundColor: colors.surface` 를 직접 조합하는 파일이 `<Card>` callsite(27) 보다 많다. 대표: `FieldCard.tsx`. 각 탭 작업 시 그 탭 것부터 `<Card>` 로 흡수 (강령 7).
-- **매직넘버 22곳** — 컴포넌트 안 `gap: 4` / `paddingVertical: 2` 등 (강령 4).
-- **`opacity: 0.x` 직접값 23곳** — `opacity.pressed`(0.85) 대신 0.7 등이 섞여 눌림 피드백이 화면마다 다름.
-- **focal element 미지정** — `h1` callsite 가 로그인 1곳뿐. 탭마다 "이 화면에서 제일 중요한 것" 을 정하고 `metric`/`h1` 을 준다 (강령 1·8).
+- **hand-rolled 표면** — `backgroundColor: colors.surface` 를 직접 조합하는 파일이 `<Card>` callsite 보다 많았다(37 vs 27). 외근(`DestinationRow`)·현장(`FieldCard`) 은 흡수 완료. 남은 탭은 그 탭 작업 때 (강령 7).
+- **매직넘버 / `opacity: 0.x` 직접값** — 외근·현장 범위는 정리 완료. 보고서·내 정보 남음 (강령 4).
+- **focal element 미지정** — 외근 3화면·현장 목록은 지정 완료. 나머지 탭은 미지정.
 - **간격 tier 미적용** — 2.1절 규칙 이전 코드는 callsite 마다 즉흥적. 건드리는 화면부터 정리.
 
 **보류한 것:**

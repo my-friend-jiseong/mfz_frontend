@@ -17,6 +17,7 @@ import { Text } from '@/components/ui/Text';
 import type { Category } from '@/types/entities';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
+import { opacity } from '@/theme/motion';
 
 // 카테고리(분류) 관리 — 추가·이름변경·삭제. 진실원은 서버(/api/categories, 백로그 §25).
 // AsyncStorage 는 오프라인 표시용 캐시라, 서버 실패 시 store 가 화면 변경을 되돌린다.
@@ -229,14 +230,14 @@ const styles = StyleSheet.create({
   addBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: spacing.xs,
     paddingHorizontal: spacing.lg,
     borderRadius: radius.md,
     backgroundColor: colors.primary,
     justifyContent: 'center',
   },
-  disabled: { opacity: 0.5 },
-  pressed: { opacity: 0.7 },
+  disabled: { opacity: opacity.disabled },
+  pressed: { opacity: opacity.pressed },
   list: { padding: spacing.lg, gap: spacing.sm },
   row: {
     flexDirection: 'row',
@@ -261,5 +262,5 @@ const styles = StyleSheet.create({
     fontSize: fontSize.base,
     color: colors.text,
   },
-  iconBtn: { padding: 4 },
+  iconBtn: { padding: spacing.xs },
 });

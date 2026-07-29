@@ -1,4 +1,12 @@
-import { Pressable, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
+import {
+  Pressable,
+  StyleProp,
+  StyleSheet,
+  View,
+  ViewStyle,
+  type AccessibilityRole,
+  type AccessibilityState,
+} from 'react-native';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
@@ -17,6 +25,10 @@ interface Props {
   style?: StyleProp<ViewStyle>;
   // onPress 있을 때 screen reader 에 읽힐 라벨. 미지정 시 children 의 Text 가 자동 합성.
   accessibilityLabel?: string;
+  // 누를 수 있는 카드가 항상 '버튼'인 건 아니다 — 체크리스트 항목은 checkbox 여야
+  // 스크린 리더가 선택 여부를 읽는다. 기본값은 button.
+  accessibilityRole?: AccessibilityRole;
+  accessibilityState?: AccessibilityState;
 }
 
 const PADDING: Record<Padding, number> = {
@@ -33,6 +45,8 @@ export function Card({
   variant = 'outline',
   style,
   accessibilityLabel,
+  accessibilityRole = 'button',
+  accessibilityState,
 }: Props) {
   const base: StyleProp<ViewStyle>[] = [
     styles.base,
@@ -50,8 +64,9 @@ export function Card({
   return (
     <Pressable
       onPress={onPress}
-      accessibilityRole="button"
+      accessibilityRole={accessibilityRole}
       accessibilityLabel={accessibilityLabel}
+      accessibilityState={accessibilityState}
       style={({ pressed }) => [
         ...base,
         pressed && { opacity: opacity.pressed },

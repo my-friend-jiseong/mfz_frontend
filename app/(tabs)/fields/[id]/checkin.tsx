@@ -296,7 +296,7 @@ export default function FieldCheckin() {
                   styles.phaseSlot,
                   uri && styles.phaseSlotFilled,
                   pressed && { opacity: opacity.pressed },
-                  busy && { opacity: 0.5 },
+                  busy && { opacity: opacity.disabled },
                 ]}
               >
                 {uri ? (
@@ -366,7 +366,7 @@ const styles = StyleSheet.create({
   statusChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: spacing.xs,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: radius.pill,

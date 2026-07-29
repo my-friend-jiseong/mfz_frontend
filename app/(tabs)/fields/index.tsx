@@ -10,12 +10,14 @@ import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout, sheetScrollableStyle } from '@/components/MapSheetLayout';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { Text } from '@/components/ui/Text';
 import { StickyBottomBar } from '@/components/ui/StickyBottomBar';
 import { useHideOnScroll } from '@/components/ui/useHideOnScroll';
-import { type FieldStatus } from '@/types/entities';
+import { FIELD_STATUS_VALUES, type FieldStatus } from '@/types/entities';
 import { collectFieldFacets, applyFieldFilters, mergeCategoryNames } from '@/utils/fieldFacets';
 import { useCategoryStore } from '@/stores/categoryStore';
 import { FieldFilterBar } from '@/components/fields/FieldFilterBar';
+import { FieldStatusSummary } from '@/components/fields/FieldStatusSummary';
 import { useQuickPhoto } from '@/components/fields/useQuickPhoto';
 import { QuickPhotoSheet } from '@/components/fields/QuickPhotoSheet';
 import { colors } from '@/theme/colors';
@@ -94,6 +96,17 @@ export default function FieldsList() {
     fromDate !== null ||
     toDate !== null;
 
+  // 상태 분포 — 필터가 걸리면 의미가 없다. status/방문일 필터는 서버 refresh 로
+  // 걸리므로 myFields 자체가 이미 좁혀져 있어, 분포를 그리면 "조치 전 12 / 나머지 0"
+  // 같은 거짓 그림이 나온다. 그래서 아래 렌더에서 무필터일 때만 보여준다.
+  const statusCounts = useMemo(() => {
+    const out = Object.fromEntries(
+      FIELD_STATUS_VALUES.map((s) => [s, 0]),
+    ) as Record<FieldStatus, number>;
+    for (const f of myFields) out[f.status] += 1;
+    return out;
+  }, [myFields]);
+
   // FlatList renderItem — useCallback 으로 stable reference. router 만 deps.
   const renderItem = useCallback(
     ({ item }: { item: import('@/types/entities').Field }) => (
@@ -149,6 +162,16 @@ export default function FieldsList() {
           }}
           hasFilter={hasFilter}
         />
+        {search || hasFilter ? (
+          <View style={styles.summary}>
+            <Ionicons name="search" size={14} color={colors.textMuted} />
+            <Text variant="caption" weight="semibold" color="textMuted" numeric>
+              {search ? '검색 결과' : '필터 결과'} {fields.length}건
+            </Text>
+          </View>
+        ) : (
+          <FieldStatusSummary counts={statusCounts} />
+        )}
       </View>
       <BottomSheetFlatList
         data={fields}
@@ -223,6 +246,12 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
     gap: spacing.sm,
     backgroundColor: colors.background,
+  },
+  summary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.xs,
   },
   list: { padding: spacing.lg, paddingBottom: 120 },
   bottomBarRow: { flexDirection: 'row', gap: spacing.md },

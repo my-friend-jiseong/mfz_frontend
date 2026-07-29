@@ -168,6 +168,13 @@ export default function FieldDetail() {
     ]);
   };
 
+  // 상태 변경 중복 호출 가드. ★ early return **위**에 있어야 한다 —
+  // 아래 `if (!field)` 뒤에 두면 현장이 아직 스토어에 없는 첫 렌더에선 훅이 6개,
+  // loadDetail 이 채운 뒤 렌더에선 7개가 되어 "Rendered more hooks than during the
+  // previous render" 로 화면이 죽는다. URL 직접 진입·콜드스타트에서 재현됐다
+  // (목록에서 눌러 들어가면 이미 하이드레이트돼 있어 안 터진다).
+  const statusBusyRef = useRef(false);
+
   if (!field) {
     return (
       <MapSheetLayout title="현장 상세" onBack={() => safeBack(router)}>
@@ -177,7 +184,6 @@ export default function FieldDetail() {
   }
 
   // 상태 변경 — chip tap 시 3개 상태 중 선택. patchStatus 즉시 호출.
-  const statusBusyRef = useRef(false);
   const applyStatus = async (s: typeof field.status) => {
     if (statusBusyRef.current) return;
     statusBusyRef.current = true;
@@ -325,8 +331,8 @@ export default function FieldDetail() {
           style={({ pressed }) => [
             styles.deleteBtn,
             deleteBlockedReason && styles.deleteBtnBlocked,
-            (deleting) && { opacity: 0.4 },
-            pressed && { opacity: 0.6 },
+            (deleting) && { opacity: opacity.disabled },
+            pressed && { opacity: opacity.pressed },
           ]}
         >
           <Ionicons
@@ -443,10 +449,10 @@ const styles = StyleSheet.create({
   statusTap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: spacing.xs,
     alignSelf: 'flex-start',
     paddingHorizontal: spacing.md,
-    paddingVertical: 6,
+    paddingVertical: spacing.sm,
     borderRadius: radius.pill,
     borderWidth: 1,
   },
@@ -479,7 +485,7 @@ const styles = StyleSheet.create({
   deleteBtn: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.dangerMuted,
@@ -510,7 +516,7 @@ const styles = StyleSheet.create({
   memoDeleteBtn: {
     width: 22,
     height: 22,
-    borderRadius: 11,
+    borderRadius: radius.pill,
     backgroundColor: colors.surfaceMuted,
     alignItems: 'center',
     justifyContent: 'center',

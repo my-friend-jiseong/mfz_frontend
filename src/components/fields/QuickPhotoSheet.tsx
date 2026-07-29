@@ -216,7 +216,7 @@ export function QuickPhotoSheet({
                       style={({ pressed }) => [
                         styles.row,
                         pressed && { opacity: opacity.pressed },
-                        uploading && { opacity: 0.5 },
+                        uploading && { opacity: opacity.disabled },
                       ]}
                     >
                       <View style={styles.rowText}>

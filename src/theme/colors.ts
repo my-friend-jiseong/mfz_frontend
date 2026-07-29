@@ -77,8 +77,11 @@ export const colors = {
 
   // === Domain — field.status ===
   // WCAG 3중 인코딩 (색+형상+라벨) — 색만 정보 전달 금지.
+  // pending 은 amber[500] 이었는데 Badge 의 warning tone(amber[600])과 한 단계 어긋나
+  // 같은 상태가 카드에선 밝고 지도 마커에선 어두웠다. 600 으로 맞춰 하나로 만든다
+  // (야외 조도에서 대비도 함께 올라간다). 형상·라벨 매핑은 statusBadge.ts.
   fieldStatus: {
-    pending: palette.amber[500],
+    pending: palette.amber[600],
     in_progress: palette.blue[600],
     done: palette.green[600],
   },

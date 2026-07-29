@@ -18,6 +18,7 @@ import { Text } from '@/components/ui/Text';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize } from '@/theme/spacing';
 import { withAlpha } from '@/theme/withAlpha';
+import { opacity } from '@/theme/motion';
 
 // 현장 폼에서 카테고리(분류) 다중 선택 — 마스터 집합에서 고르거나 인라인 추가.
 // 값은 카테고리 "이름" 배열(Field.categories 계약 그대로). ProjectPicker UX 복제 + 다중 선택.
@@ -279,14 +280,14 @@ const styles = StyleSheet.create({
   triggerText: { flex: 1 },
   clearBtn: {
     paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
+    paddingVertical: spacing.xs,
     borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.background,
   },
-  disabled: { opacity: 0.5 },
-  pressed: { opacity: 0.85 },
+  disabled: { opacity: opacity.disabled },
+  pressed: { opacity: opacity.pressed },
 
   backdrop: {
     flex: 1,
@@ -313,9 +314,9 @@ const styles = StyleSheet.create({
   manageLink: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: spacing.xs,
     paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
+    paddingVertical: spacing.xs,
     borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: withAlpha(colors.primary, 0.4),
