@@ -26,6 +26,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { fieldDetailLine } from '@/utils/fieldFacets';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
@@ -214,9 +215,10 @@ export default function FieldCheckin() {
           <Text variant="body" weight="semibold" style={styles.headerSub}>
             {field.address}
           </Text>
-          {field.addressDetail ? (
+          {/* 주소가 이미 상세주소로 끝나면 중복이다 (fieldFacets 규칙). */}
+          {fieldDetailLine(field) ? (
             <Text variant="bodySm" color="textMuted" style={styles.headerSubMuted}>
-              {field.addressDetail}
+              {fieldDetailLine(field)}
             </Text>
           ) : null}
         </Card>

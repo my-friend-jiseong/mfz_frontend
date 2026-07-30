@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { GroupLabel } from '@/components/ui/GroupLabel';
+import { fieldDetailLine } from '@/utils/fieldFacets';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useReportStore } from '@/stores/reportStore';
@@ -649,8 +650,8 @@ function FieldReportEditor() {
                       accessibilityRole="button"
                       accessibilityState={{ selected: f.id === fieldId }}
                       accessibilityLabel={
-                        f.addressDetail
-                          ? `${f.address}, ${f.addressDetail}`
+                        fieldDetailLine(f)
+                          ? `${f.address}, ${fieldDetailLine(f)}`
                           : f.address
                       }
                       style={({ pressed }) => [
@@ -666,9 +667,10 @@ function FieldReportEditor() {
                       >
                         {f.address}
                       </Text>
-                      {f.addressDetail ? (
+                      {/* 주소가 이미 상세주소로 끝나면 중복이다 (fieldFacets 규칙). */}
+                      {fieldDetailLine(f) ? (
                         <Text variant="caption" color="textMuted" style={styles.pickerItemMeta}>
-                          {f.addressDetail}
+                          {fieldDetailLine(f)}
                         </Text>
                       ) : null}
                     </Pressable>
@@ -688,8 +690,8 @@ function FieldReportEditor() {
                       accessibilityRole="button"
                       accessibilityState={{ selected: f.id === fieldId }}
                       accessibilityLabel={
-                        f.addressDetail
-                          ? `${f.address}, ${f.addressDetail}`
+                        fieldDetailLine(f)
+                          ? `${f.address}, ${fieldDetailLine(f)}`
                           : f.address
                       }
                       style={({ pressed }) => [
@@ -705,9 +707,10 @@ function FieldReportEditor() {
                       >
                         {f.address}
                       </Text>
-                      {f.addressDetail ? (
+                      {/* 주소가 이미 상세주소로 끝나면 중복이다 (fieldFacets 규칙). */}
+                      {fieldDetailLine(f) ? (
                         <Text variant="caption" color="textMuted" style={styles.pickerItemMeta}>
-                          {f.addressDetail}
+                          {fieldDetailLine(f)}
                         </Text>
                       ) : null}
                     </Pressable>
