@@ -168,6 +168,13 @@
 프론트 타입 [`AddressSearchItem`](../../src/api/endpoints/fields.ts#L162) 은 `buildingName: string | null` 로
 선언돼 있으나 실제 응답엔 그 키가 오지 않는다.
 
+> **2026-07-30 재측정 — 값이 오기 시작했다.** `keyword=하단동` 응답 6건 전부에 `buildingName` **키가
+> 있고**, POI 결과 3건은 값까지 채워 온다(예: `"을숙도"`). 위 2026-07-28 측정("10건 중 0건")과 다르다 —
+> 그 사이 서버가 바뀐 것으로 보인다. **이 항목이 막고 있던 조건이 풀렸을 수 있다.**
+> 다만 "클라이언트 SDK 를 걷어낼 수 있는가" 는 **커버리지 비교가 남았다** — 서버 응답만으로
+> 헤드리스 WebView 브리지와 같은 결과 집합이 나오는지 키워드 몇 개로 대조한 뒤 종결한다.
+> (측정 방법: 로그인 상태에서 `window.fetch` 를 래핑해 `/api/fields/address/search` 응답 본문 캡처)
+
 ### 왜 막히나
 
 - 클라이언트 SDK 는 `place_name` → `buildingName` 으로 매핑한다
@@ -535,6 +542,59 @@ DB 메타데이터(`fileUrl`·`fileSize`·`mimeType`)는 온전한데 **실제 �
 
 ---
 
+## 32. 🟠 주소검색이 **`roadAddress: null`** 을 보낸다 — 타입은 `string`, 프론트가 죽었다
+
+`AddressSearchItem.roadAddress` 는 프론트 타입에서 `string` 이다
+([`fields.ts:163`](../../src/api/endpoints/fields.ts#L163)). 그런데 **동(洞) 단위 결과에는 `null`** 이
+온다. 그 값이 그대로 흘러 `selected.roadAddress.trim()` 에서 **화면이 죽었다**
+(`TypeError: Cannot read properties of null (reading 'trim')`).
+
+하필 터진 자리가 **"주소를 아직 못 받았다" 를 잡으려고 둔 가드**다 — 가드가 자기가 막아야 할
+상황에서 먼저 죽는다.
+
+### 실측 (2026-07-30, 로그인 세션에서 앱이 보낸 호출 · fetch 래핑으로 응답 본문 캡처)
+
+`GET /api/fields/address/search?keyword=하단동` → 200, 6건. **두 가지 shape 가 섞여 온다.**
+
+```json
+// ① 동 단위 결과 — roadAddress 가 null, sido/sigungu 는 채움
+{ "roadAddress": null, "jibunAddress": "부산 사하구 하단동",
+  "buildingName": null, "sido": "부산", "sigungu": "사하구",
+  "lat": 35.1148094646099, "lng": 128.952594462616 }
+
+// ② POI 결과 — roadAddress 채움, sido/sigungu 가 null (§28 에 기록된 그 동작)
+{ "roadAddress": "부산 사하구 하단동", "jibunAddress": "부산 사하구 하단동",
+  "buildingName": "을숙도", "sido": null, "sigungu": null,
+  "lat": 35.106799421508, "lng": 128.942967815378 }
+```
+
+| 필드 | 6건 중 null |
+|---|---|
+| `roadAddress` | **3건** (동 단위 결과 전부) |
+| `sido` / `sigungu` | 3건 (POI 결과 전부 — §28 에 기록됨) |
+| `buildingName` | 3건 (동 단위 결과. POI 는 값이 온다 — 아래 §28 갱신 참고) |
+
+### 요청
+
+1. `roadAddress` 를 **`string | null` 로 스키마에 명시**하거나, 도로명이 없을 때 빈 문자열로 보낸다.
+   어느 쪽이든 좋다 — **타입이 실제와 같기만 하면 된다.**
+2. 같은 응답 안에서 두 shape 가 갈리는 게 의도인지 확인. 의도라면 `kind`(`region` / `poi`) 같은
+   구분자가 있으면 프론트가 표시·검증을 갈라 처리할 수 있다.
+
+### 프론트 선조치 (2026-07-30 배포됨)
+
+- `fieldsApi.addressSearch` 가 **경계에서 정규화**한다(`roadAddress`·`jibunAddress`·`sido`·
+  `sigungu` 를 `?? ''`). 소비처가 2곳(`fields/new`·`fields/[id]/edit`)이라 화면마다 막지 않고
+  경계 한 곳에서 막았다.
+- 두 화면의 빈 주소 가드는 옵셔널 체이닝으로 방어를 남겼다 — 타입이 한 번 거짓말했으면 또 할 수 있다.
+- 즉 **서버가 고쳐지지 않아도 앱은 죽지 않는다.** 이 항목은 contract 정합성 요청이다.
+
+### 발견 시점
+
+2026-07-30, 현장 이름 입력을 실제로 써보려고 '하단동' 을 검색해 첫 결과를 고르고 등록을 누르다가.
+
+---
+
 ## 🔗 2026-07-26 배치 프론트 연동 — ✅ 종결 (이력)
 
 > 2026-07-26 백엔드 배치([release-2026-07-26-backend-backlog.md](./archive/release-2026-07-26-backend-backlog.md))로
@@ -587,6 +647,14 @@ DB 메타데이터(`fileUrl`·`fileSize`·`mimeType`)는 온전한데 **실제 �
 ---
 
 ## 변경 이력
+
+- **2026-07-30**: **§32 추가 — 주소검색 `roadAddress: null`.** 현장 이름 입력을 실제로 써보려고
+  '하단동' 을 검색해 첫 결과를 고르고 등록을 누르니 앱이 죽었다(`null.trim()`). 타입은 `string`
+  인데 **동 단위 결과에는 null** 이 온다. 하필 죽은 자리가 "주소를 아직 못 받았다" 를 잡으려고
+  둔 가드라, 가드가 자기가 막아야 할 상황에서 먼저 죽었다. 프론트는 **경계에서 정규화**해
+  선조치했으므로 이 항목은 contract 정합성 요청이다. 같은 응답 캡처에서 **§28 이 막혀 있던
+  `buildingName` 이 값까지 오기 시작한 것**도 확인됐다(재측정 메모를 §28 에 달았다) —
+  한 번의 응답 실측이 새 항목 하나와 기존 항목 하나를 같이 움직였다.
 
 - **2026-07-30**: **§31 (A) 원인 확정 — 업로드 프로브.** 새 사진을 올린 직후 **같은 디렉터리**에서
   신(200)·구(404) 파일을 대조해, 경로 불일치 가설을 배제하고 **파일 유실(비영속 볼륨)** 로
