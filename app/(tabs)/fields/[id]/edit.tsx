@@ -110,6 +110,37 @@ export default function EditField() {
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  // field 는 진입 시점에 store 에 없을 수 있다 — URL 직접 진입·콜드 스타트에서는 loadDetail 이
+  // 나중에 채운다. `useState` 초기값은 **첫 마운트에서만** 쓰이므로, 그때 비어 있었으면 폼이
+  // 계속 빈 값을 들고 있는다. 그 상태로 '분류' 만 건드리면 PATCH 에 categories: [새 값] 만
+  // 실려 **기존 분류가 조용히 사라지고**, 상태 칩도 실제 값과 다른 것이 선택돼 보인다.
+  // fieldId 당 한 번만 동기화한다 — 저장 후 store 갱신이나 목록 refresh 가 사용자의 편집을
+  // 되돌리면 안 된다.
+  //
+  // ⚠ 이 hook 은 반드시 `if (!field)` 조기 반환보다 **위**에 있어야 한다. 아래로 내리면
+  // 첫 렌더(field 없음)에서 실행되지 않아 field 가 도착한 렌더에서 hook 수가 늘고
+  // "Rendered more hooks than during the previous render" 로 화면이 죽는다.
+  // FieldDetail 에서 같은 원인으로 크래시가 났었고(2026-07-30 오전 수정), 이 파일에
+  // 동기화를 넣으면서 똑같이 반복했다 — 조기 반환 위인지 확인하고 넣는다.
+  const hydratedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!field || hydratedRef.current === fieldId) return;
+    hydratedRef.current = fieldId;
+    const snapshot = {
+      name: field.name ?? '',
+      addressDetail: field.addressDetail ?? '',
+      status: field.status,
+      categories: field.categories ?? [],
+      projectId: field.projectId ?? null,
+    };
+    initialRef.current = snapshot;
+    setName(snapshot.name);
+    setAddressDetail(snapshot.addressDetail);
+    setStatus(snapshot.status);
+    setCategories(snapshot.categories);
+    setProjectId(snapshot.projectId);
+  }, [field, fieldId]);
+
   const clearFieldErr = (k: keyof FieldErrors) =>
     setFieldErrors((p) => ({ ...p, [k]: undefined }));
 
@@ -257,32 +288,6 @@ export default function EditField() {
       </View>
     );
   }
-
-  // field 는 진입 시점에 store 에 없을 수 있다 — URL 직접 진입·콜드 스타트에서는 loadDetail 이
-  // 나중에 채운다. `useState` 초기값은 **첫 마운트에서만** 쓰이므로, 그때 비어 있었으면 폼이
-  // 계속 빈 값을 들고 있는다(`if (!field)` 조기 반환은 아래 231 행 — 상태 hook 보다 뒤다).
-  // 그 상태로 '분류' 만 건드리면 PATCH 에 categories: [새 값] 만 실려 **기존 분류가 조용히
-  // 사라지고**, 상태 칩도 실제 값과 다른 것이 선택돼 보인다.
-  // fieldId 당 한 번만 동기화한다 — 저장 후 store 갱신이나 목록 refresh 가 사용자의 편집을
-  // 되돌리면 안 된다.
-  const hydratedRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!field || hydratedRef.current === fieldId) return;
-    hydratedRef.current = fieldId;
-    const snapshot = {
-      name: field.name ?? '',
-      addressDetail: field.addressDetail ?? '',
-      status: field.status,
-      categories: field.categories ?? [],
-      projectId: field.projectId ?? null,
-    };
-    initialRef.current = snapshot;
-    setName(snapshot.name);
-    setAddressDetail(snapshot.addressDetail);
-    setStatus(snapshot.status);
-    setCategories(snapshot.categories);
-    setProjectId(snapshot.projectId);
-  }, [field, fieldId]);
 
   const nameTrim = name.trim();
   const detailTrim = addressDetail.trim();
