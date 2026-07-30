@@ -5,7 +5,6 @@ import {
   Keyboard,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   View,
@@ -39,7 +38,6 @@ import { Button } from '@/components/ui/Button';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
-import { opacity } from '@/theme/motion';
 import { FilterChip } from '@/components/ui/FilterChip';
 import { SafeScreen } from '@/components/SafeScreen';
 
@@ -477,13 +475,12 @@ export default function NewField() {
             const key = `${r.roadAddress}|${r.jibunAddress}|${idx}`;
             const sub = [r.sido, r.sigungu].filter(Boolean).join(' ');
             return (
-              <Pressable
+              <Card
                 key={key}
                 onPress={() => handleSelectItem(r)}
-                style={({ pressed }) => [
-                  styles.addrItem,
-                  pressed && { opacity: opacity.pressed },
-                ]}
+                padding="md"
+                style={styles.addrItem}
+                accessibilityLabel={`${r.roadAddress || r.jibunAddress} 선택`}
               >
                 <Text variant="body" weight="semibold">
                   {r.roadAddress || r.jibunAddress}
@@ -498,7 +495,7 @@ export default function NewField() {
                   {sub ? `${sub} · ` : ''}
                   {r.lat.toFixed(4)}, {r.lng.toFixed(4)}
                 </Text>
-              </Pressable>
+              </Card>
             );
           })}
         </View>
@@ -647,23 +644,17 @@ const styles = StyleSheet.create({
   warnBody: { marginTop: spacing.xs },
   retryBtn: { marginTop: spacing.sm, alignSelf: 'flex-start' },
   resultList: { marginTop: spacing.md },
-  addrItem: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    marginBottom: spacing.xs,
-  },
+  // 표면은 Card 가 준다 (강령 7) — 목록 간격만 남긴다.
+  addrItem: { marginBottom: spacing.xs },
   addrJibun: { marginTop: 2 },
   addrCoord: { marginTop: 2 },
   manualLink: { marginTop: spacing.md, alignSelf: 'flex-start' },
   locateBtn: { marginTop: spacing.sm, alignSelf: 'flex-start' },
+  // 이미 <Card> 다 — Card 가 surface + border + radius 를 주므로 배경을 다시 덮지 않는다.
   photoBox: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    backgroundColor: colors.surface,
     marginBottom: spacing.md,
   },
   photoThumb: {

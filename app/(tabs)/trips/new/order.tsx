@@ -155,7 +155,7 @@ export default function NewTripOrder() {
     item: OrderedField;
     index: number;
   }) => (
-    <View style={styles.row}>
+    <Card padding="md" style={styles.row}>
       <View style={styles.orderBadge}>
         <Text variant="bodySm" weight="bold" color="onPrimary">
           {index + 1}
@@ -229,7 +229,7 @@ export default function NewTripOrder() {
           <Ionicons name="close" size={16} color={colors.danger} />
         </Pressable>
       </View>
-    </View>
+    </Card>
   );
 
   return (
@@ -334,14 +334,11 @@ const styles = StyleSheet.create({
     borderColor: colors.success,
   },
   list: { paddingHorizontal: spacing.lg, paddingBottom: listBottomInset },
+  // 표면은 Card 가 준다 (강령 7). 누를 수 없는 행이라 onPress 는 없다 —
+  // DestinationRow(누를 수 있는 목적지 행)와 같은 모양이 되도록 padding 도 md 로 맞춘다.
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
     marginBottom: spacing.sm,
     gap: spacing.md,
   },
