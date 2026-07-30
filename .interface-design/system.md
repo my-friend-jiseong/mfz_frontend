@@ -94,10 +94,13 @@
    탭별 작업에서 스크린샷 기준으로 확인.
 2. **press 피드백이 opacity 뿐.** 스킬은 `scale(0.97)` 을 본다. `Pressable` + reanimated 로 가능.
    전역 변경이라 `Button`·`Card`·`FieldCard` 를 한 번에 바꿔야 함.
-3. **hover/active 색 변형·다크 모드** — 문서 14절 차후 과제. 야외 앱이라 다크 모드는 우선순위 낮음
-   (햇빛 아래에선 밝은 화면이 읽힌다) — 다만 "불가"가 아니라 "안 함"이라는 이유가 아직 SSOT 에 없음.
+3. **hover/active 색 변형** — 문서 14절 차후 과제. Play 전용 앱이라 hover 가 필요한 자리가 없어
+   `opacity.hover` 토큰은 제거했다(§14 감사). 도입하려면 그때 이유와 함께 되살린다.
+   ~~다크 모드~~ → **닫혔다**: SSOT 의 '거부하는 기본값' 4번에 "불가가 아니라 Direction 상 안 함"
+   이유까지 들어갔다.
 
-> 2026-07-30 에 닫힌 것: Depth 전략 · Input inset · 토큰 이름 · focal element · 간격 리듬 · Direction.
+> 2026-07-30 에 닫힌 것: Depth 전략 · Input inset · 토큰 이름 · focal element · 간격 리듬 · Direction
+> · 다크 모드(안 함).
 > 전부 `docs/reference/design-system.md` 에 이유와 함께 들어갔다.
 
 ---

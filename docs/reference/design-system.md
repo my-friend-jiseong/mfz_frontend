@@ -22,6 +22,11 @@
 1. **흰 카드 균일 나열** → 상태가 먼저 읽히는 목록. 카드 크기·간격을 균일하게 두지 않는다.
 2. **숫자를 라벨과 같은 크기로** → `metric` / `metricSm` variant (3절). 라벨보다 두 단계 위.
 3. **제목 없이 리스트로 시작하는 화면** → 화면마다 focal element 를 지정한다(강령 1).
+4. **다크 모드** → **하지 않는다.** "플랫폼상 불가" 가 아니라 **Direction 상 안 한다**: 사용자는
+   주광 아래 현장에 서 있고, 그 조건에서는 밝은 배경 + 진한 글자가 읽힌다. 어두운 화면은
+   실내 기준의 기본값이다. (2026-07-30 확정 — `.interface-design/system.md` §3 이 "'불가'가
+   아니라 '안 함'이라는 이유가 SSOT 에 없다" 고 남겨둔 항목을 여기로 옮겨 닫았다. 코드에도
+   다크 모드 분기는 없다 — `useColorScheme` callsite 0.)
 
 ---
 
@@ -274,7 +279,7 @@ DESTINATION_STATUS_BADGE = {
 |---|---|---|
 | **duration** | instant / fast / base / slow | 80 / 120 / 180 / 240 ms |
 | **easing** | standard / emphasized / decel / accel | cubic-bezier 4 종 |
-| **opacity** | pressed / disabled / **disabledField** / hover | 0.85 / 0.4 / **0.7** / 0.92 |
+| **opacity** | pressed / disabled / disabledField | 0.85 / 0.4 / 0.7 |
 
 > "200ms 넘으면 사용자가 기다린다." 표준 transition 은 base(180) 이내.
 >
@@ -292,7 +297,7 @@ DESTINATION_STATUS_BADGE = {
 | `Text` | `variant` / `weight` / `color` / `align` / `numeric` | 모든 텍스트 진입로 |
 | `Button` | `variant: primary/secondary/ghost/destructive` · `size: sm/md/lg` · `leftIcon` / `rightIcon` · `loading` · `disabled` · `fullWidth` | 1차 액션 |
 | `Badge` | `label` · `tone` · `shape` · `size` | 상태 표시 (3중 인코딩) |
-| `Card` | `padding: none/sm/md/lg` · `variant: outline/flat` · `onPress` · `accessibilityRole`/`accessibilityState` | 카드/타일. 누를 수 있는 카드가 항상 button 은 아니다 — 체크리스트 항목은 `role="checkbox"` + `state.checked` |
+| `Card` | `padding: none/sm/md/lg` · `onPress` · `accessibilityRole`/`accessibilityState` | 카드/타일. 표면은 항상 `surface + border + radius.md` — `variant` prop 은 없앴다(감사에서 callsite 0 확인, 7절). 누를 수 있는 카드가 항상 button 은 아니다 — 체크리스트 항목은 `role="checkbox"` + `state.checked` |
 | `Input` | `label` · `error` · `helperText` · `leftSlot` / `rightSlot` (forwardRef) · 내부 focus 상태 | 폼 입력 (inset) |
 | `FilterChip` | `label` · `active` · `activeColor` · `dashed` · `leftIcon` · `disabled` | 선택 가능 chip (`withAlpha(c, 0.13)` 배경) |
 | `FilterAccordion` | `groups: {key, base, value, render}[]` · `hasFilter` · `onResetAll` | 목록 필터 껍데기 — 칩 줄 + 한 번에 하나만 열리는 패널. 함께 export: `FilterPanel` · `FilterOptionRow` · `FilterDateRange`(플랫폼 분기 날짜 범위) · `dateRangeSummary` |
@@ -302,6 +307,9 @@ DESTINATION_STATUS_BADGE = {
 | `Skeleton` | `width` · `height` · `rounded` | 로딩 placeholder (reanimated shimmer) |
 | `StickyBottomBar` | `children` (+ `useSafeAreaInsets`) | 화면 하단 sticky CTA, home indicator 회피 |
 | `EmptyState` | `title` · `description` · `icon` · `action` | 빈 상태 (`src/components/EmptyState.tsx`) |
+
+> `src/components/ui/` 에는 컴포넌트가 아닌 것도 하나 있다 — `useHideOnScroll` (스크롤 방향에
+> 따라 상단 chrome 숨김). 위 표는 컴포넌트만 다루므로 여기 한 줄로 남긴다.
 
 ---
 
@@ -318,11 +326,27 @@ DESTINATION_STATUS_BADGE = {
 | `src/components/fields/` | `ManualCoordinateForm` | KR 좌표 직접 입력 (new / edit 공유) |
 | | `FieldFilterBar` | 현장 필터 4그룹 (조치상태·프로젝트·카테고리·방문일) |
 | | `FieldStatusSummary` | 현장 탭 focal — 조치 전 건수(metric) + 3구간 분포 막대. 필터 걸리면 숨김(서버 refresh 로 모집단이 좁혀져 분포가 거짓이 된다) |
+| | `ReviewVisitCard` | 외근 종료 리뷰의 방문 카드 — checkin 화면과 같은 chip 패턴(3중 인코딩) |
+| | `AddDestinationModal` | 진행 중 외근에 목적지 단건 추가 (RN `Modal` 카드) |
+| | `CategoryMultiPicker` | 카테고리 다중 선택 — `ProjectPicker` UX 복제 |
+| | `QuickPhotoSheet` | Quick Photo 확인/폴백 시트 — `AddDestinationModal` 의 Modal 카드 패턴 재사용 |
+| | `FieldPinMap`(+`.web`) | 현장 폼의 핀 지도 — 명령형 핸들로 핀 이동 + 역지오코딩 |
 | `src/components/reports/` | `ReportFilterBar` | 보고서 필터 — 작성일 기간 |
 | `src/components/` | `FieldCard` | 현장 카드. 위계: 상태(좌측 3dp 레일 + 배지) → 제목 → 주소 → 메타. 레일 색은 `colors.fieldStatus`, 배지는 `FIELD_STATUS_BADGE` |
 | | `TripStatusBanner` | root layout 상단 진행 중 외근 배너 |
 | | `MapSheetLayout` | 지도 + BottomSheet 공통 (snap `['18%','55%','92%']` + uiStore 인덱스 공유 + mount race fix) |
 | | `EmptyState` | icon + title + description + action |
+| | `SafeScreen` | 비-map 화면 safe area wrapper (루트에서 SafeAreaView 제거 후 각 화면이 두름) |
+| | `MapDashboard` · `MapSearchBar` · `MapFilterBar` · `MapLegend` | 지도 위 부유 chrome — **elevation 을 쓰는 유일한 자리**(7절) |
+| | `KakaoMapWebView`(+`.web`) | 지도 본체. 웹은 SDK 직접 주입, 네이티브는 WebView |
+| | `ProjectPicker` | 현장 폼의 프로젝트 선택 + 인라인 생성 |
+| | `SessionGuardModal` · `WebChoiceModal` | 세션 만료 안내 / 3+ 선택지 모달(web `Alert` 가 OK·Cancel 로 뭉개는 자리) |
+| | `AttachmentPreview` | 사진 그리드 (음성 메모는 ERD v2 에서 폐기) |
+
+> 이 표는 **디자인 결정이 걸린 것**만 담는다. 2026-07-30 감사 전까지 `src/components/` 15 개 중
+> 4 개만 적혀 있어, 없는 컴포넌트를 다시 만들 위험이 있었다(강령 7 이 기대는 게 이 표의
+> 완전성이다). 새 컴포넌트를 만들면 여기 한 줄을 같이 추가한다. 훅·플랫폼 분기 파일
+> (`useQuickPhoto` · `useKakaoPlaceSearch` · `quickPhotoHandoff`)은 로직이라 제외.
 
 ---
 
@@ -333,6 +357,12 @@ DESTINATION_STATUS_BADGE = {
 | `src/utils/datetime.ts` | `fmtDate` · `fmtTime` · `fmtDateTime` · `fmtDuration` (undefined / Invalid Date 안전) |
 | `src/utils/addressSearch.ts` | 카카오 Geocoder: `KR_LAT` / `KR_LNG` / `SEARCH_DEBOUNCE_MS` / `MIN_KEYWORD_LEN` / `itemToSelected` / `isInKorea` |
 | `src/theme/withAlpha.ts` | `withAlpha(hex, alpha)` → `#RRGGBBAA` |
+| `src/utils/fieldFacets.ts` | `fieldTitle` / **`fieldSubtitle`** / **`fieldDetailLine`** — 현장 제목·부제 규칙의 단일 출처. 부제는 "제목이 아직 안 보여준 나머지 주소" 다(중복 제거 규칙은 그 파일 주석) · `applyFieldFilters` / `collectFieldFacets` / `mergeCategoryNames` |
+
+> 위 표도 §10 과 같은 기준 — **화면 표시 규칙이 걸린 유틸만** 담는다. `src/utils/` 의 나머지
+> 14 개(`geolocation` · `routeOptimize` · `captureView` · `media` · `postTripFlow` ·
+> `backNavigation` · `nearestField` · `groupSameLocationMarkers` · `kakaoMap` · `password` ·
+> `contact` · `sentry` · `webAlertPatch`)는 동작 로직이라 이 문서의 관심사가 아니다.
 
 > 지오코딩은 **카카오 Geocoder 전용**. Daum 우편번호 사용 금지.
 
@@ -384,7 +414,10 @@ DESTINATION_STATUS_BADGE = {
 > (이 화면의 '외근 정보 미로드' 그룹이 그 증거). 틀릴 수 있는 숫자를 크게 두느니 두지 않는다.
 > 화면마다 metric 행을 하나씩 얹는 건 그 자체가 '아무도 결정하지 않았다' 는 신호다.
 
-- **hand-rolled 표면** — `backgroundColor: colors.surface` 를 직접 조합하는 파일이 `<Card>` callsite 보다 많았다(37 vs 27). 외근(`DestinationRow`)·현장(`FieldCard`)·내 정보(`delete-account` 경고 박스) 흡수 완료. 4 탭 밖(보조 컴포넌트)은 아래 '기존' 목록 (강령 7).
+- **hand-rolled 표면** (강령 7) — 외근(`DestinationRow`)·현장(`FieldCard`)·내 정보(`delete-account` 경고 박스) 흡수 완료. **2026-07-30 재측정: 27 파일이 `backgroundColor: colors.surface` 를 직접 조합, `<Card>` 는 19 파일 30 곳.** 이전 문장의 "37 vs 27" 은 *파일 수* 와 *callsite 수* 를 비교한 잘못된 대조였다 — 같은 단위로 다시 셌다. 남은 곳은 아래가 전부이고, 그중 `ui/Card`·`ui/Button`·`ui/FilterChip`·`KakaoMapWebView`·`MapSheetLayout` 은 **표면을 직접 정의하는 게 맞는 자리**라 대상이 아니다:
+  - 화면: `(auth)/signup` · `fields/categories` · `fields/new` · `fields/[id]/checkin` · `reports/new` · `reports/[id]/field-report` · `trips/navigate` · `trips/new/order` · `trips/[id]`
+  - 컴포넌트: `AttachmentPreview` · `CategoryMultiPicker` · `QuickPhotoSheet` · `ProjectPicker` · `SessionGuardModal` · `AddDestinationModal` · `ReviewVisitCard` · `MapDashboard` · `MapFilterBar` · `MapLegend` · `MapSearchBar` · `FilterAccordion`
+- **`Card` 의 `variant` prop 이 통째로 dead 였다 → 제거** (2026-07-30 감사). `elevated` 는 앞서 callsite 0 으로 지웠는데, 남은 `outline`/`flat` 도 **어디서도 넘기지 않아** 모든 Card 가 기본값으로만 렌더되고 있었다(`grep` 으로 Card 에 `variant=` 를 넘기는 곳 0 확인). 값이 하나뿐인 prop 은 선택지처럼 보이면서 아무것도 선택하지 않는다. 테두리가 `styles.base` 로 내려갔다.
 - **매직넘버 / `opacity: 0.x` 직접값** — 4 탭 + 그 도메인 컴포넌트 정리 완료 (강령 4). 처음엔 "완료" 로만 적었는데 **리뷰에서 거짓임이 드러나** 아래를 추가로 고쳤다(2026-07-30). 완료 표시는 다음 회차가 그 자리를 건너뛰게 만들므로, 남은 것은 남았다고 적는다.
   - `paddingBottom: 120` 이 5 화면(`fields/index`·`reports/index`·`trips/index`·`trips/new/order`·`trips/new/select`)에 흩어져 있었다 → `listBottomInset` 토큰. **반복되는 매직넘버는 없는 토큰이다.**
   - `borderRadius: 14`(`trips/new/order`·`ReviewVisitCard`) · `11`(`TripStatusBanner`) → `radius.pill`. 전부 정원이고, `DestinationRow` 에서 이미 고친 것과 같은 패턴인데 나머지를 빠뜨렸던 것.
@@ -402,11 +435,22 @@ DESTINATION_STATUS_BADGE = {
 
 **기존:**
 
-- 보조 컴포넌트(`MapFilterBar` · `ProjectPicker` · `WebChoiceModal` · `SessionGuardModal` · `KakaoMapWebView` · `AttachmentPreview`) — RN `Text` 직접 사용으로 Pretendard 미적용 잔존. 다음 사이클 후보.
+- ~~보조 컴포넌트(`MapFilterBar` · `ProjectPicker` · `WebChoiceModal` · `SessionGuardModal` · `KakaoMapWebView` · `AttachmentPreview`) — RN `Text` 직접 사용으로 Pretendard 미적용 잔존.~~ → **유령 부채였다** (2026-07-30 감사). 여섯 개 전부 `ui/Text` 를 쓴다. RN `Text` 를 직접 쓰는 파일은 `ui/Button`·`ui/Input` 둘뿐이고 **둘 다 styles 에 `fontFamily` 를 명시**한다(`Input.input` 의 `fontFamily.regular` 포함). 즉 Pretendard 미적용 자리는 없다. 덤으로 `Text.tsx` 주석의 "기존 RN Text 직접 사용은 그대로 동작 (Pretendard defaultProps 적용)" 도 거짓이었다 — 그 monkey-patch 는 `app/_layout.tsx` 에서 이미 제거됐다. 주석도 함께 고쳤다.
 - ~~`SectionLabel` 컴포넌트 추출 — 12+ 화면에서 반복되는 패턴.~~ → 실측하니 `caption+bold+textMuted` 조합 21 곳(12 파일)은 **두 개의 다른 패턴**이었다: ① 카드 위 눈썹 라벨(uppercase + tier margin — 내 정보 3 화면, `field-report` picker 그룹) ② 지도 부유물 안 위젯 제목(margin 없음, uppercase 아님 — `MapLegend`·`MapFilterBar`). ①만 `ui/GroupLabel` 로 뽑았고(내 정보 3 화면 적용, 그중 한 곳은 `marginTop` 이 lg 로 어긋나 있었다) ②는 흡수하지 않는다. `field-report` 는 다음에 그 화면 건드릴 때.
 - `MenuRow` 의 `ui/` 승격 — 2번째 callsite 등장 시. (2026-07-30 확인: `chevron-forward` 4 파일은 모두 목록 항목/배너로, 같은 패턴 아님)
 - `Text` 의 style array per-render perf — 저성능 Android 대비.
 - **`Card` 의 a11y prop 이 non-pressable 분기에서 조용히 버려진다** (2026-07-30 리뷰). `accessibilityLabel`/`Role`/`State` 를 받지만 `onPress` 가 없으면 `<View>` 로 렌더하며 셋 다 무시한다. 지금 callsite 는 전부 `onPress` 가 있어 증상은 없다(`DestinationRow.onPress` 는 required). 안 눌리는 카드에 라벨을 붙이는 순간 함정이 된다.
 - **알 수 없는 `field.status` 가 분포에서 조용히 누락** (2026-07-30 리뷰). `fields/index` 의 `out[f.status] += 1` 은 `FIELD_STATUS_VALUES` 밖의 값을 받으면 그 현장을 어느 칸에도 세지 않는다. 크래시는 없다(합산이 알려진 키만 순회) — 대신 막대 합이 목록 개수와 달라진다.
-- hover/active 상태 색 변형, 다크 모드, 차트·태그 카테고리 hue.
+- hover/active 상태 색 변형, 다크 모드, 차트·태그 카테고리 hue. (2026-07-30 확인: 다크 모드 코드는 실제로 없다 — `StatusBar style="dark"` 는 내용 색이라 무관. `opacity.hover` 토큰은 callsite 0 이어서 제거했다 — 미결인 결정을 토큰만 먼저 두면 '이미 정해졌다' 로 읽힌다.)
+
+---
+
+**§14 전수 감사 (2026-07-30).** 하루에 이 문서가 세 번 틀렸다 — 완료 주장 과장 1건, 유령 부채
+1건, 반쪽 가드 1건. 그래서 모든 항목을 코드로 대조했다. 결과: **완료로 적힌 것 중 1건이 거짓,
+부채로 적힌 것 중 1건이 유령, 표 2 개가 불완전, dead 코드 2 건**(`Card.variant` · `opacity.hover`).
+
+문서가 코드보다 앞서거나 뒤처지는 두 방향 모두 같은 값의 손해를 낸다 — 앞서면 다음 회차가
+남은 일을 건너뛰고, 뒤처지면 없는 일을 좇거나 이미 있는 컴포넌트를 다시 만든다. 그래서
+**이 문서에 수치·목록·"완료" 를 쓸 때는 측정한 명령과 날짜를 함께 남긴다.** "37 vs 27" 처럼
+단위가 다른 수를 나란히 적은 게 첫 사고였다.
 - `useReportDetail` 패턴을 `fieldStore` / `visitStore` 로 확장.

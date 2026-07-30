@@ -43,8 +43,13 @@ const TABULAR: TextStyle = { fontVariant: ['tabular-nums'] };
 //   <Text variant="body" color="textMuted">본문</Text>
 //   <Text variant="caption" weight="bold">강조 캡션</Text>
 //
-// 기존 RN Text 직접 사용은 그대로 동작 (Pretendard defaultProps 적용),
 // 이 컴포넌트는 위계 변경 시 1 곳만 수정하면 되는 자리.
+//
+// **RN `Text` 를 직접 쓰면 Pretendard 가 안 붙는다.** 예전엔 `Text.defaultProps` monkey-patch
+// 로 전역 적용됐지만 React 19 deprecation 위험 때문에 제거됐다(`app/_layout.tsx` 주석) —
+// 그런데 이 주석만 "그대로 동작" 이라고 남아 있었다(2026-07-30 §14 감사에서 발견).
+// 현재 RN Text 직접 사용은 `ui/Button`·`ui/Input` 둘뿐이고, 둘 다 styles 에 fontFamily 를
+// 명시한다. 새로 RN Text 를 쓸 일이 있으면 fontFamily 를 직접 넣어야 한다.
 export function Text({
   variant = 'body',
   weight,
