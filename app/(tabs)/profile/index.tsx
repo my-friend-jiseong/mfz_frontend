@@ -18,7 +18,6 @@ import { GroupLabel } from '@/components/ui/GroupLabel';
 import { SafeScreen } from '@/components/SafeScreen';
 import { colors } from '@/theme/colors';
 import { radius, spacing } from '@/theme/spacing';
-import { opacity } from '@/theme/motion';
 import { fmtDate } from '@/utils/datetime';
 import {
   LOCATION_TERMS_AVAILABLE,
@@ -70,9 +69,11 @@ function MenuRow({
       disabled={!interactive}
       accessibilityRole={interactive ? 'button' : 'text'}
       accessibilityLabel={value ? `${label}: ${value}` : label}
+      // Card 와 같은 이유로 opacity 가 아니라 표면 값을 바꾼다 — 이 행은 흰 카드 안에
+      // 있어서 opacity 0.85 로는 1/255 밖에 안 움직였다(colors.surfacePressed 주석).
       style={({ pressed }) => [
         styles.menuRow,
-        pressed && interactive && { opacity: opacity.pressed },
+        pressed && interactive && { backgroundColor: colors.surfacePressed },
       ]}
     >
       <Ionicons name={icon} size={MENU_ICON} color={colors.textMuted} />

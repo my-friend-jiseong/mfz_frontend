@@ -9,7 +9,6 @@ import {
 } from 'react-native';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
-import { opacity } from '@/theme/motion';
 
 // Depth 전략: 문서 흐름 안의 표면은 '테두리' 하나로만 위계를 만든다.
 // 그림자(elevation)는 지도 위에 떠 있는 chrome 전용 — 두 전략을 섞지 않는다.
@@ -64,9 +63,14 @@ export function Card({
       accessibilityRole={accessibilityRole}
       accessibilityLabel={accessibilityLabel}
       accessibilityState={accessibilityState}
+      // 누름 피드백은 opacity 가 아니라 **표면 값**을 바꾼다 — 흰 카드 위에서 opacity 0.85 는
+      // 1/255 밖에 안 움직여 사실상 피드백이 없었다(colors.surfacePressed 주석에 계산).
+      // scale(0.97) 을 쓰지 않는 이유는 14절 — 값 변경으로 충분하고 reanimated 비용이 없다.
+      // style 을 마지막에 두는 건 의도다: 선택된 카드(primaryMuted)는 이미 강한 상태라
+      // 누름 색이 그걸 덮지 않는다.
       style={({ pressed }) => [
         ...base,
-        pressed && { opacity: opacity.pressed },
+        pressed && { backgroundColor: colors.surfacePressed },
         style,
       ]}
     >

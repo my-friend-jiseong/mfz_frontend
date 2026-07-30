@@ -27,6 +27,11 @@ export const colors = {
   background: palette.slate[50], // canvas — 화면 root
   surface: palette.white, // 카드·input 등 표면
   surfaceMuted: palette.slate[100], // 약한 분리 영역 (readonly 등)
+  // 누르는 순간의 표면. **opacity 로는 안 된다** — 흰 카드(#fff)를 slate50 캔버스 위에서
+  // 0.85 로 깔면 합성 결과가 (254,254,255) 로 채널당 1/255 변한다(2026-07-30 계산).
+  // 즉 목록의 모든 카드가 press 피드백이 없는 상태였다. 값을 직접 바꿔야 보인다.
+  // surfaceMuted 와 같은 값이지만 역할이 다르다 — 이건 **누르는 동안만** 쓰는 전이 상태다.
+  surfacePressed: palette.slate[100],
   overlay: 'rgba(15, 23, 42, 0.45)', // modal dim
   shadow: palette.slate[900], // 그림자 색 (alpha 는 elevation 에서)
 
