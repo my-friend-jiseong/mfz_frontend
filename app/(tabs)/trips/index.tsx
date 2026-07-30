@@ -21,7 +21,7 @@ import { Input } from '@/components/ui/Input';
 import { StickyBottomBar } from '@/components/ui/StickyBottomBar';
 import { useHideOnScroll } from '@/components/ui/useHideOnScroll';
 import { colors } from '@/theme/colors';
-import { spacing } from '@/theme/spacing';
+import { listBottomInset, spacing } from '@/theme/spacing';
 import {
   durationMinutes,
   fmtDate,
@@ -326,7 +326,7 @@ export default function TripsList() {
                 {/* 세 열은 크기를 같게 둔다. 한 열만 h3(18) 로 낮췄더니 컬럼 높이가
                     46 vs 50 이 되어 flex-end 정렬에서 이 열의 라벨만 4px 내려앉았다(실측).
                     위계는 색으로 충분하다 — 건수는 primary, 시간은 textMuted. */}
-                <Text variant="metricSm" color="textMuted" numeric>
+                <Text variant="metricSm" color="textMuted">
                   {fmtMinutes(weekStats.minutes)}
                 </Text>
               </View>
@@ -417,7 +417,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xs,
   },
   statCol: { gap: spacing.xs },
-  list: { padding: spacing.lg, paddingBottom: 120 },
+  list: { padding: spacing.lg, paddingBottom: listBottomInset },
   // 날짜 그룹 구분선. 첫 그룹이 목록 맨 위에 붙지 않도록 상단 여백을 조금 더 준다.
   groupHeader: {
     paddingTop: spacing.sm,

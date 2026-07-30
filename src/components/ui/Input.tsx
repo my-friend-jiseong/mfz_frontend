@@ -11,6 +11,7 @@ import {
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize, fontWeight } from '@/theme/spacing';
 import { fontFamily } from '@/theme/typography';
+import { opacity } from '@/theme/motion';
 
 interface Props extends TextInputProps {
   label?: string;
@@ -114,7 +115,8 @@ const styles = StyleSheet.create({
   fieldError: { borderColor: colors.control.borderError },
   fieldDisabled: {
     backgroundColor: colors.control.bgDisabled,
-    opacity: 0.7,
+    // opacity.disabled(0.4)가 아니다 — 값을 계속 읽어야 하는 표면이다(motion.ts 주석).
+    opacity: opacity.disabledField,
   },
   input: {
     flex: 1,

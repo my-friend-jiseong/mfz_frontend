@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { safeBack } from '@/utils/backNavigation';
 import { colors } from '@/theme/colors';
-import { spacing, radius } from '@/theme/spacing';
+import { listBottomInset, radius, spacing } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
 import { FilterChip } from '@/components/ui/FilterChip';
 import { StickyBottomBar } from '@/components/ui/StickyBottomBar';
@@ -333,5 +333,5 @@ const styles = StyleSheet.create({
     maxWidth: 200,
   },
   selectedChipLabel: { flexShrink: 1 },
-  list: { paddingHorizontal: spacing.lg, paddingBottom: 120 },
+  list: { paddingHorizontal: spacing.lg, paddingBottom: listBottomInset },
 });

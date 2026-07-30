@@ -343,7 +343,7 @@ const styles = StyleSheet.create({
   orderBadge: {
     width: 28,
     height: 28,
-    borderRadius: 14,
+    borderRadius: radius.pill,
     backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',

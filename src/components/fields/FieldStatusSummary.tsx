@@ -28,7 +28,7 @@ export function FieldStatusSummary({ counts }: Props) {
           <Text variant="caption" weight="semibold" color="textMuted">
             {FIELD_STATUS_LABEL.pending}
           </Text>
-          <Text variant="metric" color="warning" numeric>
+          <Text variant="metric" color="warning">
             {counts.pending}
           </Text>
         </View>

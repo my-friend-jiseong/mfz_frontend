@@ -21,7 +21,7 @@ import { FieldStatusSummary } from '@/components/fields/FieldStatusSummary';
 import { useQuickPhoto } from '@/components/fields/useQuickPhoto';
 import { QuickPhotoSheet } from '@/components/fields/QuickPhotoSheet';
 import { colors } from '@/theme/colors';
-import { spacing } from '@/theme/spacing';
+import { listBottomInset, spacing } from '@/theme/spacing';
 
 export default function FieldsList() {
   const router = useRouter();
@@ -253,7 +253,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     paddingHorizontal: spacing.xs,
   },
-  list: { padding: spacing.lg, paddingBottom: 120 },
+  list: { padding: spacing.lg, paddingBottom: listBottomInset },
   bottomBarRow: { flexDirection: 'row', gap: spacing.md },
   bottomBarMain: { flex: 1 },
 });

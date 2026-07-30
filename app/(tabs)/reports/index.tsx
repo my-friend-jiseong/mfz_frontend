@@ -18,7 +18,7 @@ import { Input } from '@/components/ui/Input';
 import { StickyBottomBar } from '@/components/ui/StickyBottomBar';
 import { useHideOnScroll } from '@/components/ui/useHideOnScroll';
 import { colors } from '@/theme/colors';
-import { spacing } from '@/theme/spacing';
+import { listBottomInset, spacing } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
 import { fmtDate, fmtTime } from '@/utils/datetime';
 import type { Report, Trip } from '@/types/entities';
@@ -275,7 +275,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     backgroundColor: colors.background,
   },
-  list: { padding: spacing.lg, paddingBottom: 120 },
+  list: { padding: spacing.lg, paddingBottom: listBottomInset },
   // 그룹 ↔ 그룹은 section tier(xl). 그룹 안(헤더↔카드, 카드↔카드)은 xs/sm 로 붙여
   // 어디까지가 한 외근인지 눈이 읽게 한다 (간격 리듬, 문서 2.1).
   group: { marginBottom: spacing.xl },

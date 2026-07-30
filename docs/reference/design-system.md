@@ -54,8 +54,10 @@ fontFamily = {
 | **fontSize** | xs / sm / base / lg / xl / xxl | 12 / 14 / 16 / 18 / 22 / 28 |
 | **fontWeight** | regular / medium / semibold / bold / heavy | 400 / 500 / 600 / 700 / 800 |
 | **lineHeight** | xs / sm / base / lg / xl / xxl | 16 / 20 / 24 / 26 / 30 / 36 |
+| **listBottomInset** | (단일 값) | 120 — 목록 콘텐츠 하단. tier 가 아니라 '무엇을 피하는가'(탭바 + 부유 chrome)로 정해진다 |
 
 > `fontSize: 18` 처럼 매직넘버를 직접 쓰지 않는다. 토큰에 없는 값이면 토큰을 추가한다.
+> **같은 값이 여러 화면에 반복되면 그건 매직넘버가 아니라 없는 토큰이다** — `listBottomInset` 이 그렇게 생겼다(5 화면에 `120`).
 
 ### 2.1 간격 tier — 어떤 토큰을 쓸지 정하는 규칙
 
@@ -272,9 +274,14 @@ DESTINATION_STATUS_BADGE = {
 |---|---|---|
 | **duration** | instant / fast / base / slow | 80 / 120 / 180 / 240 ms |
 | **easing** | standard / emphasized / decel / accel | cubic-bezier 4 종 |
-| **opacity** | pressed / disabled / hover | 0.85 / 0.4 / 0.92 |
+| **opacity** | pressed / disabled / **disabledField** / hover | 0.85 / 0.4 / **0.7** / 0.92 |
 
 > "200ms 넘으면 사용자가 기다린다." 표준 transition 은 base(180) 이내.
+>
+> `disabled`(0.4) vs `disabledField`(0.7) — 비활성 표현이 두 값인 건 결정이다. 0.4 는 '못 누른다'를
+> 확실히 말하지만 글자를 못 읽게 만들어 **라벨을 다시 읽을 필요 없는 것**(버튼·아이콘)에만 쓴다.
+> 입력란·읽기 전용 필드는 비활성이어도 값을 읽어야 하므로 `disabledField`. 저장 중에 방금 쓴
+> 내용이 사라지듯 흐려지면 안 된다.
 
 ---
 
@@ -378,7 +385,13 @@ DESTINATION_STATUS_BADGE = {
 > 화면마다 metric 행을 하나씩 얹는 건 그 자체가 '아무도 결정하지 않았다' 는 신호다.
 
 - **hand-rolled 표면** — `backgroundColor: colors.surface` 를 직접 조합하는 파일이 `<Card>` callsite 보다 많았다(37 vs 27). 외근(`DestinationRow`)·현장(`FieldCard`)·내 정보(`delete-account` 경고 박스) 흡수 완료. 4 탭 밖(보조 컴포넌트)은 아래 '기존' 목록 (강령 7).
-- **매직넘버 / `opacity: 0.x` 직접값** — 4 탭 모두 정리 완료 (강령 4).
+- **매직넘버 / `opacity: 0.x` 직접값** — 4 탭 + 그 도메인 컴포넌트 정리 완료 (강령 4). 처음엔 "완료" 로만 적었는데 **리뷰에서 거짓임이 드러나** 아래를 추가로 고쳤다(2026-07-30). 완료 표시는 다음 회차가 그 자리를 건너뛰게 만들므로, 남은 것은 남았다고 적는다.
+  - `paddingBottom: 120` 이 5 화면(`fields/index`·`reports/index`·`trips/index`·`trips/new/order`·`trips/new/select`)에 흩어져 있었다 → `listBottomInset` 토큰. **반복되는 매직넘버는 없는 토큰이다.**
+  - `borderRadius: 14`(`trips/new/order`·`ReviewVisitCard`) · `11`(`TripStatusBanner`) → `radius.pill`. 전부 정원이고, `DestinationRow` 에서 이미 고친 것과 같은 패턴인데 나머지를 빠뜨렸던 것.
+  - `opacity: 0.6`(`trips/navigate` 뒤로가기) → `opacity.pressed`. 누름 피드백은 앱 전체가 한 값이어야 한다.
+  - `Input` 의 `opacity: 0.7` → `opacity.disabledField` 신설. `opacity.disabled`(0.4)와 **다른 값이 맞다** — 입력란은 비활성이어도 값을 읽어야 한다. 우연이 아니라 결정임을 토큰 이름과 주석으로 남겼다.
+  - **남은 것**: `trips/active` 의 `paddingBottom: 240`(시트 래퍼 높이 때문 — 그 파일 ★ 주석에 실측 근거, 계산이 달라 토큰으로 묶지 않는다), 그리고 지도 chrome·보조 컴포넌트의 `borderRadius` 리터럴 8 곳(`MapFilterBar` 3 · `KakaoMapWebView` 2 · `MapDashboard` · `EmptyState` · `AttachmentPreview` · `FilterAccordion`) — 아래 '기존' 목록과 같은 사이클에서.
+- **`numeric` prop 중복** — `metric`/`metricSm` variant 는 이미 tabular-nums 를 포함한다(3.1절·`Text.tsx` 주석). 그런데 `trips/index`·`FieldStatusSummary` 가 거기에 `numeric` 을 또 붙여, "여긴 필요하고 저긴 아니다" 로 읽혔다 → 제거. 동작 차이는 없지만 규칙을 흐리는 건 규칙을 어기는 것과 같다.
 - **focal element 미지정** — 4 탭 모두 지정 완료. 보고서·내 정보는 **숫자 focal 을 두지 않는다는 결정**이 지정이다(위 인용 2 개).
 - **간격 tier 미적용** — 2.1절 규칙 이전 코드는 callsite 마다 즉흥적. 4 탭은 정리 완료, 나머지는 건드리는 화면부터.
 - **터치 타깃 값이 44 와 48 로 섞여 있다** (2026-07-30 실측, 6 callsite): `Input` 48 · profile 목록 행 48 · `CurrentDestCard.skipBtn` 44 · `trips/active.headerAction` 44 · `Button` size 36/44/52. iOS 44pt / Android 48dp 둘 다 근거가 있어 어느 쪽도 틀리진 않지만, 같은 목적에 두 값이 눈대중으로 섞인 상태다. 토큰(`touchTarget`)으로 모을지는 미결.
@@ -393,5 +406,7 @@ DESTINATION_STATUS_BADGE = {
 - ~~`SectionLabel` 컴포넌트 추출 — 12+ 화면에서 반복되는 패턴.~~ → 실측하니 `caption+bold+textMuted` 조합 21 곳(12 파일)은 **두 개의 다른 패턴**이었다: ① 카드 위 눈썹 라벨(uppercase + tier margin — 내 정보 3 화면, `field-report` picker 그룹) ② 지도 부유물 안 위젯 제목(margin 없음, uppercase 아님 — `MapLegend`·`MapFilterBar`). ①만 `ui/GroupLabel` 로 뽑았고(내 정보 3 화면 적용, 그중 한 곳은 `marginTop` 이 lg 로 어긋나 있었다) ②는 흡수하지 않는다. `field-report` 는 다음에 그 화면 건드릴 때.
 - `MenuRow` 의 `ui/` 승격 — 2번째 callsite 등장 시. (2026-07-30 확인: `chevron-forward` 4 파일은 모두 목록 항목/배너로, 같은 패턴 아님)
 - `Text` 의 style array per-render perf — 저성능 Android 대비.
+- **`Card` 의 a11y prop 이 non-pressable 분기에서 조용히 버려진다** (2026-07-30 리뷰). `accessibilityLabel`/`Role`/`State` 를 받지만 `onPress` 가 없으면 `<View>` 로 렌더하며 셋 다 무시한다. 지금 callsite 는 전부 `onPress` 가 있어 증상은 없다(`DestinationRow.onPress` 는 required). 안 눌리는 카드에 라벨을 붙이는 순간 함정이 된다.
+- **알 수 없는 `field.status` 가 분포에서 조용히 누락** (2026-07-30 리뷰). `fields/index` 의 `out[f.status] += 1` 은 `FIELD_STATUS_VALUES` 밖의 값을 받으면 그 현장을 어느 칸에도 세지 않는다. 크래시는 없다(합산이 알려진 키만 순회) — 대신 막대 합이 목록 개수와 달라진다.
 - hover/active 상태 색 변형, 다크 모드, 차트·태그 카테고리 hue.
 - `useReportDetail` 패턴을 `fieldStore` / `visitStore` 로 확장.

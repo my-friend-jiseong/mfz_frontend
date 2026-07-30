@@ -71,7 +71,7 @@ export default function TripNavigate() {
           hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel="뒤로 가기"
-          style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.6 }]}
+          style={({ pressed }) => [styles.backBtn, pressed && { opacity: opacity.pressed }]}
         >
           <Ionicons name="chevron-back" size={22} color={colors.text} />
         </Pressable>

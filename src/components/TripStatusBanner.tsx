@@ -7,7 +7,7 @@ import { useTripStore } from '@/stores/tripStore';
 import { useDestinationStore } from '@/stores/destinationStore';
 import { Text } from '@/components/ui/Text';
 import { colors } from '@/theme/colors';
-import { spacing } from '@/theme/spacing';
+import { radius, spacing } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
 
 function formatElapsed(startIso: string) {
@@ -94,7 +94,7 @@ const styles = StyleSheet.create({
   iconWrap: {
     width: 22,
     height: 22,
-    borderRadius: 11,
+    borderRadius: radius.pill,
     backgroundColor: colors.onPrimary,
     alignItems: 'center',
     justifyContent: 'center',

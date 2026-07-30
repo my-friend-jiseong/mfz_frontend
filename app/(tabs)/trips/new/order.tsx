@@ -16,7 +16,7 @@ import { StickyBottomBar } from '@/components/ui/StickyBottomBar';
 import { nearestNeighborOrder } from '@/utils/routeOptimize';
 import { safeBack } from '@/utils/backNavigation';
 import { colors } from '@/theme/colors';
-import { spacing, radius } from '@/theme/spacing';
+import { listBottomInset, radius, spacing } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
 
 interface OrderedField {
@@ -333,7 +333,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.successMuted,
     borderColor: colors.success,
   },
-  list: { paddingHorizontal: spacing.lg, paddingBottom: 120 },
+  list: { paddingHorizontal: spacing.lg, paddingBottom: listBottomInset },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -348,7 +348,7 @@ const styles = StyleSheet.create({
   orderBadge: {
     width: 28,
     height: 28,
-    borderRadius: 14,
+    borderRadius: radius.pill,
     backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
