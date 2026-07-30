@@ -62,12 +62,34 @@ function confirmRationale(): Promise<boolean> {
   return pending;
 }
 
+// 자동화·테스트용 임시 스위치 (2026-07-30).
+// web 자동화에서는 위치 안내 confirm(webAlertPatch → window.confirm)과 브라우저 권한 팝업이
+// **모달**로 떠서, 그동안 확장이 이벤트를 못 받아 "렌더러가 멈춘 것" 처럼 보인다.
+// 이 플래그를 켜면 위치 요청 자체를 건너뛴다 — `null` 반환은 이미 정상 경로다(아래 주석).
+//
+// 기본값은 '끄지 않음'. **이 상수를 코드로 바꾸지 않는다** — 추적되지 않는 `.env.local` 에
+// `EXPO_PUBLIC_DISABLE_GEOLOCATION=1` 을 넣어서만 켠다(env 는 번들 시점에 인라인되므로
+// dev 서버 재시작 필요). 조용히 꺼져 있는 스위치는 함정이라 __DEV__ 에서 한 번 경고한다.
+const GEOLOCATION_DISABLED =
+  process.env.EXPO_PUBLIC_DISABLE_GEOLOCATION === '1';
+let disabledWarned = false;
+
 // 권한 거부·오류는 silent (null 반환) — 지도는 기본 중심으로 fallback.
 // 한 번만 호출하기를 가정 — 캐싱은 호출 측에서 useState/useEffect 로.
 // high: Quick Photo 처럼 수십 m 단위 판정이 필요한 곳만 (Balanced 는 ~100m 오차).
 export async function requestUserLocation(opts?: {
   high?: boolean;
 }): Promise<LatLng | null> {
+  if (GEOLOCATION_DISABLED) {
+    if (__DEV__ && !disabledWarned) {
+      disabledWarned = true;
+      console.warn(
+        '[geolocation] EXPO_PUBLIC_DISABLE_GEOLOCATION=1 — 위치 요청을 건너뜁니다. ' +
+          '자동화/테스트용 임시 스위치이므로 실제 동작 검증 전에 .env.local 에서 지우세요.',
+      );
+    }
+    return null;
+  }
   try {
     const current = await Location.getForegroundPermissionsAsync();
 
