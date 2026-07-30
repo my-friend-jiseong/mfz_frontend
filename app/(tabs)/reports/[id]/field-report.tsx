@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { Text } from '@/components/ui/Text';
+import { GroupLabel } from '@/components/ui/GroupLabel';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useReportStore } from '@/stores/reportStore';
@@ -634,14 +635,9 @@ function FieldReportEditor() {
               ) : (
                 <>
                   {pickerGroups.trip.length > 0 ? (
-                    <Text
-                      variant="caption"
-                      weight="bold"
-                      color="textMuted"
-                      style={styles.pickerGroupLabel}
-                    >
+                    <GroupLabel style={styles.pickerGroupLabel}>
                       이 외근에 방문한 현장
-                    </Text>
+                    </GroupLabel>
                   ) : null}
                   {pickerGroups.trip.map((f) => (
                     <Pressable
@@ -678,14 +674,9 @@ function FieldReportEditor() {
                     </Pressable>
                   ))}
                   {pickerGroups.others.length > 0 ? (
-                    <Text
-                      variant="caption"
-                      weight="bold"
-                      color="textMuted"
-                      style={styles.pickerGroupLabel}
-                    >
+                    <GroupLabel style={styles.pickerGroupLabel}>
                       다른 현장
-                    </Text>
+                    </GroupLabel>
                   ) : null}
                   {pickerGroups.others.map((f) => (
                     <Pressable
@@ -869,13 +860,9 @@ const styles = StyleSheet.create({
   pickerListContent: { gap: spacing.xs, paddingVertical: spacing.xs },
   pickerEmpty: { paddingVertical: spacing.md },
   pickerSearch: { marginTop: spacing.sm },
-  pickerGroupLabel: {
-    marginTop: spacing.xs,
-    marginBottom: spacing.xs,
-    paddingHorizontal: spacing.xs,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
+  // GroupLabel 의 기본 리듬은 '그룹 ↔ 그룹'(xl) — 화면 섹션용이다. 여기는 모달 안의
+  // 촘촘한 목록이라 위아래를 xs 로 좁힌다 (GroupLabel 주석의 '리듬이 다른 자리' 케이스).
+  pickerGroupLabel: { marginTop: spacing.xs, marginBottom: spacing.xs },
   pickerItem: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
