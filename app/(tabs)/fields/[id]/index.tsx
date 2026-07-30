@@ -285,32 +285,35 @@ export default function FieldDetail() {
         </View>
       ) : null}
 
-      <View style={styles.navRow}>
+      {/* 삭제는 여기 두지 않는다 — 되돌릴 수 없는 동작은 '수정' 안의 위험 구역 하나로 모은다.
+          외근은 이미 같은 이동을 했다(trips/[id]/edit 주석: "상세 제목행의 빨강 휴지통에서 이동").
+          차단 정책(방문 기록 있으면 거부)도 그쪽에 같은 내용으로 있어 경로가 중복이었다.
+
+          길찾기·수정은 동급 액션이라 한 줄 2분할 — CurrentDestCard 가 같은 이유로 이미 쓰는
+          배치다("이동 중 가장 자주 누르는 길찾기가 가장 작게 눌려 있던 셈"). 이 화면도 같은
+          역전이 있었다: 현장 동선의 행동(길찾기)이 size="sm" 작은 버튼이고 관리 행동(수정)이
+          전폭이라, 큰 쪽이 덜 쓰는 동작이었다. 순서는 실사용대로 찾아간다 → 고친다. */}
+      <View style={styles.actionRow}>
         <Button
           onPress={() =>
             void openKakaoRouteTo(field.address, field.latitude, field.longitude)
           }
           variant="secondary"
-          size="sm"
           leftIcon="navigate"
+          style={styles.actionBtn}
         >
           길찾기
         </Button>
-      </View>
-
-      {/* 삭제는 여기 두지 않는다 — 되돌릴 수 없는 동작은 '수정' 안의 위험 구역 하나로 모은다.
-          외근은 이미 같은 이동을 했다(trips/[id]/edit 주석: "상세 제목행의 빨강 휴지통에서 이동").
-          차단 정책(방문 기록 있으면 거부)도 그쪽에 같은 내용으로 있어 경로가 중복이었다. */}
-      <View style={styles.actionRow}>
         <Button
           onPress={() => router.push(`/(tabs)/fields/${field.id}/edit` as never)}
           variant="secondary"
-          fullWidth
           leftIcon="create-outline"
+          style={styles.actionBtn}
         >
           수정
         </Button>
       </View>
+
       <GroupLabel>메모 ({directTextMemos.length})</GroupLabel>
       <View style={styles.memoInputRow}>
         <Input
@@ -431,18 +434,12 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     marginTop: spacing.xs,
   },
-  navRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: spacing.md,
-    alignSelf: 'flex-start',
-  },
   actionRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     gap: spacing.sm,
     marginTop: spacing.md,
   },
+  actionBtn: { flex: 1 },
   memoInputRow: {
     flexDirection: 'row',
     gap: spacing.sm,
