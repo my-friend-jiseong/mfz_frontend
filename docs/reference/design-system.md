@@ -248,6 +248,14 @@ DESTINATION_STATUS_BADGE = {
 }
 ```
 
+**형상 → 글리프 매핑은 `Badge` 가 소유한다** — `BADGE_SHAPE_GLYPH`(`● ▲ ■ ◆`)를 export 하므로,
+배지가 아닌 컨트롤도 이 맵을 통해 같은 글리프를 쓴다.
+
+> 이 규칙이 두 번 깨졌다(둘 다 2026-07-30 발견·수정). `FieldCard` 가 `●▲■` 맵과 withAlpha 칩을
+> 손으로 갖고 있었고, `fields/[id]/checkin` 도 `VISIT_SHAPE` 라는 자기 맵을 갖고 있었다.
+> **두 번 다 값은 정확히 같았다** — 같아서 괜찮은 게 아니라 달라질 수 있어서 합친다.
+> 상태 UI 를 새로 만들 때는 `*_STATUS_BADGE` → `BADGE_SHAPE_GLYPH` 두 단계를 거친다.
+
 ---
 
 ## 7. Elevation (`src/theme/elevation.ts`)
@@ -309,6 +317,7 @@ DESTINATION_STATUS_BADGE = {
 | `FilterChip` | `label` · `active` · `activeColor` · `dashed` · `leftIcon` · `disabled` | 선택 가능 chip (`withAlpha(c, 0.13)` 배경) |
 | `FilterAccordion` | `groups: {key, base, value, render}[]` · `hasFilter` · `onResetAll` | 목록 필터 껍데기 — 칩 줄 + 한 번에 하나만 열리는 패널. 함께 export: `FilterPanel` · `FilterOptionRow` · `FilterDateRange`(플랫폼 분기 날짜 범위) · `dateRangeSummary` |
 | `SectionHeader` | `title` · `description` · `action` | 섹션 구분 — h3 제목 + 설명 + 액션 (무게 있는 머리) |
+| `FieldLabel` | `children` · `counter` · `trailing` · `style` | 폼 컨트롤 위 라벨 줄. 오른쪽에 글자수(`counter`)나 임의 요소(`trailing`, 되돌리기 버튼 등). 기본 `marginTop: md`, 굵기 semibold |
 | `GroupLabel` | `children` · `style` | 카드 한 덩어리 위의 눈썹 라벨 — caption+bold+muted+uppercase. 기본 `marginTop: xl`(그룹↔그룹), 영역 경계(xxl)·화면 첫 줄(0)은 `style` 로 덮는다. `SectionHeader` 와 다른 층이다 |
 | `LoadingState` | `label` · `inline` | 로딩 표시 |
 | `Skeleton` | `width` · `height` · `rounded` | 로딩 placeholder (reanimated shimmer) |
@@ -399,6 +408,9 @@ DESTINATION_STATUS_BADGE = {
 
 **탭별 디자인 개선에서 흡수할 부채** (2026-07-30 실측).
 진행: **외근 ✅ · 현장 ✅ · 보고서 ✅ · 내 정보 ✅** (4 탭 1 회차 완료)
+서브 화면 1 회차: `trips/visit` ✅ · `reports/[id]/edit` ✅ · `trips/[id]/edit` ✅ · `fields/categories` ✅ · `fields/[id]/checkin` ✅
+(렌더 확인은 `categories`·`reports/[id]/edit`·`fields/[id]/edit`·`trips/[id]/edit` 까지. `checkin` 폼과 `trips/visit` 은
+진행 중 외근·방문 데이터가 필요한데 웹 바텀시트가 간헐적으로 안 떠서 못 봤다 — 아래 '기존' 목록 참고)
 
 > **내 정보 탭 — 위험의 무게를 뒤집었다 (2026-07-30).** 이 화면의 focal 은 숫자가 아니라
 > **정체성**(이름)이다. 이전엔 아바타 이니셜 36px 이 화면에서 가장 큰 글자였는데 그 글자는
@@ -422,7 +434,7 @@ DESTINATION_STATUS_BADGE = {
 > 화면마다 metric 행을 하나씩 얹는 건 그 자체가 '아무도 결정하지 않았다' 는 신호다.
 
 - **hand-rolled 표면** (강령 7) — 외근(`DestinationRow`)·현장(`FieldCard`)·내 정보(`delete-account` 경고 박스) 흡수 완료. **2026-07-30 재측정: 27 파일이 `backgroundColor: colors.surface` 를 직접 조합, `<Card>` 는 19 파일 30 곳.** 이전 문장의 "37 vs 27" 은 *파일 수* 와 *callsite 수* 를 비교한 잘못된 대조였다 — 같은 단위로 다시 셌다. 남은 곳은 아래가 전부이고, 그중 `ui/Card`·`ui/Button`·`ui/FilterChip`·`KakaoMapWebView`·`MapSheetLayout` 은 **표면을 직접 정의하는 게 맞는 자리**라 대상이 아니다:
-  - 화면: `(auth)/signup` · `fields/categories` · `fields/new` · `fields/[id]/checkin` · `reports/new` · `reports/[id]/field-report` · `trips/navigate` · `trips/new/order` · `trips/[id]`
+  - 화면: `(auth)/signup` · ~~`fields/categories`~~(흡수) · `fields/new` · `fields/[id]/checkin` · `reports/new` · `reports/[id]/field-report` · `trips/navigate` · ~~`trips/new/order`~~(흡수) · `trips/[id]`
   - 컴포넌트: `AttachmentPreview` · `CategoryMultiPicker` · `QuickPhotoSheet` · `ProjectPicker` · `SessionGuardModal` · `AddDestinationModal` · `ReviewVisitCard` · `MapDashboard` · `MapFilterBar` · `MapLegend` · `MapSearchBar` · `FilterAccordion`
   - **분류해보니 대부분 Card 대상이 아니었다** (2026-07-30). 표면을 직접 그리는 게 맞는 것: chip·pill(`checkin` 2 · `navigate` · `categories`), 원형 배지(`trips/[id]` skippedOrderBadge), dashed placeholder(`checkin`), 모달 껍데기(4 곳), 입력란(5 곳 — 위 항목에서 `control` 토큰으로 정리). **실제 `<Card>` 후보는 3 곳**: `fields/new` 의 `addrItem`(검색 결과 행)·`photoBox`, `trips/new/order` 의 `row`(`DestinationRow` 와 같은 목적지 행). 지도 화면이라 렌더 확인이 되는 날 흡수한다.
   - **모달 껍데기 배경이 갈려 있다** (측정: `background` 3 — `AddDestinationModal`·`QuickPhotoSheet`·`WebChoiceModal` / `surface` 2 — `reports/new`·`SessionGuardModal`). 둘 다 내부적으로는 정합하다: 흰 카드 행을 담는 모달은 캔버스(`background`)여야 행이 떠 보이고, 내부가 텍스트·버튼뿐이면 흰 시트(`surface`)가 자연스럽다. `reports/new` 의 `modalItem` 은 배경 없이 테두리만 쓰므로 흰 시트 위에서도 읽힌다. **어느 쪽도 틀리지 않아 통일하지 않는다** — 한쪽만 눈대중으로 맞추면 그게 회귀다.
@@ -436,6 +448,14 @@ DESTINATION_STATUS_BADGE = {
 - **`numeric` prop 중복** — `metric`/`metricSm` variant 는 이미 tabular-nums 를 포함한다(3.1절·`Text.tsx` 주석). 그런데 `trips/index`·`FieldStatusSummary` 가 거기에 `numeric` 을 또 붙여, "여긴 필요하고 저긴 아니다" 로 읽혔다 → 제거. 동작 차이는 없지만 규칙을 흐리는 건 규칙을 어기는 것과 같다.
 - **focal element 미지정** — 4 탭 모두 지정 완료. 보고서·내 정보는 **숫자 focal 을 두지 않는다는 결정**이 지정이다(위 인용 2 개).
 - **간격 tier 미적용** — 2.1절 규칙 이전 코드는 callsite 마다 즉흥적. 4 탭은 정리 완료, 나머지는 건드리는 화면부터.
+- **서브 화면 디자인 패스 (2026-07-30, 2단계).** 탭 루트 4개를 끝낸 뒤, **한 번도 검토하지 않은 서브 화면**을 훑었다(`trips/visit` · `reports/[id]/edit` · `trips/[id]/edit` · `fields/categories` · `fields/[id]/checkin`). `reports/generate` 는 19줄짜리 redirect 라 UI 가 없어 대상에서 뺐다.
+  - **폼 라벨 줄이 세 화면에서 표류**하고 있었다 — 같은 5 줄(라벨 + 글자수)인데 `marginTop` 이 `md`(fields/[id]/edit) / `lg`(reports/[id]/edit) / `xl`(trips/[id]/edit) 로 셋 다 달랐고, 굵기도 semibold 7 곳 vs bold 1 곳. `ui/FieldLabel` 로 모아 8 곳 적용. `GroupLabel` 때와 같은 종류의 표류다.
+  - 그중 둘은 그 줄이 **화면 첫 요소**인데 `marginTop` 이 붙어 scroll padding 위에 더해지고 있었다 — `profile/edit` 에서 고친 자리와 같은 패턴이 **하루에 세 번** 나왔다.
+  - `checkin` 이 `●▲■◆` 글리프 맵을 자체로 갖고 있었다(6절 인용 참고).
+  - **터치 타깃**: `categories` 아이콘 버튼 26px(일부는 hitSlop 6 으로 38px, '편집 취소'·'이름 저장' 은 없음), `FilterChip` 24px. 둘 다 `Button size="sm"` 과 같은 방법(보이는 크기 유지 + `hitSlop`)으로 44 를 채웠다. **`checkin` 의 방문 결과 칩은 `FilterChip` 으로 합치지 않는다** — 필터가 아니라 주 컨트롤이라 `paddingVertical` 이 한 단계 크고, 합치면 터치 타깃이 오히려 줄어든다.
+  - `categories` 의 '추가' 는 손으로 짠 primary 버튼이었고(→ `Button`), 목록 행은 손으로 짠 표면이었다(→ `Card`). **앞선 21 곳 분류에서 이 행을 'chip' 으로 잘못 넣었던 것을 정정한다.**
+  - `trips/visit`: 상태 배지가 자기 줄을 통째로 차지하던 것을 제목 행으로 접고(`FieldCard` 와 같은 이유), 제목·배지·시각·사유가 전부 `sm` 한 값이던 간격을 tier 로 갈랐다.
+- **미결 — 폼 라벨이 두 층이다** (2026-07-30 에 내가 만든 문제). `GroupLabel`(caption + uppercase 눈썹, 카드 한 덩어리 위)과 `FieldLabel`(bodySm, 컨트롤에 직접 붙는 라벨)이 둘 다 "컨트롤 위 라벨" 이다. 지금은 **쓰이는 자리로만** 갈린다 — 내 정보 탭·picker 그룹은 전자, 폼 필드는 후자. 하나로 합칠지, 아니면 "카드 그룹 = 눈썹 / 필드 = 본문 라벨" 을 규칙으로 굳힐지 정해야 한다. **정하기 전까지는 새 화면에서 둘 중 하나를 고르는 근거가 없다.**
 - **60/30/10 을 실측했다 (2026-07-30).** accent(파랑)가 뷰포트에서 차지하는 면적을 DOM 으로 쟀다(배경색은 clip 된 사각형 면적, 전경 텍스트·아이콘은 박스 면적 × 0.18 로 글자 커버리지 근사):
   - 읽는 화면: `보고서` 목록 **0.17%** · `내 정보` **1.1%**(56px 아바타가 거의 전부) · `현장 등록` 상단 **0.54%**
   - **최대치는 primary CTA 가 화면에 보일 때 7.6%** (`현장 등록` 하단 — 전폭 버튼 하나가 24,828px²)
@@ -459,6 +479,7 @@ DESTINATION_STATUS_BADGE = {
 - `Text` 의 style array per-render perf — 저성능 Android 대비.
 - **`Card` 의 a11y prop 이 non-pressable 분기에서 조용히 버려진다** (2026-07-30 리뷰). `accessibilityLabel`/`Role`/`State` 를 받지만 `onPress` 가 없으면 `<View>` 로 렌더하며 셋 다 무시한다. 지금 callsite 는 전부 `onPress` 가 있어 증상은 없다(`DestinationRow.onPress` 는 required). 안 눌리는 카드에 라벨을 붙이는 순간 함정이 된다.
 - **알 수 없는 `field.status` 가 분포에서 조용히 누락** (2026-07-30 리뷰). `fields/index` 의 `out[f.status] += 1` 은 `FIELD_STATUS_VALUES` 밖의 값을 받으면 그 현장을 어느 칸에도 세지 않는다. 크래시는 없다(합산이 알려진 키만 순회) — 대신 막대 합이 목록 개수와 달라진다.
+- **웹 바텀시트가 간헐적으로 마운트되지 않는다** (2026-07-30, 원인 미상). `MapSheetLayout` 의 루트 `onLayout` 이 한 번도 발화하지 않아 `containerHeight` 가 `null` 로 남고, "측정 전에는 시트를 렌더하지 않는다" 게이트가 영원히 닫힌다 → **외근·현장·보고서 세 탭의 목록이 통째로 사라지고 지도·탭바만 남는다.** 계측으로 확인한 건 이 메커니즘까지다. 브라우저 창이 화면 아래로 잘렸을 때 재현됐지만, **창이 정상인 상태에서도 같은 세션 안에 다시 발생**해 트리거를 특정하지 못했다. 웹 전용 관측이고 실기기(Expo Go)에서는 확인하지 않았다 — **거기서도 나는지가 우선순위를 가른다.** 게이트에 타임아웃 폴백을 넣는 것은 시도했다가 되돌렸다: 그 게이트에는 "마운트 후 snapPoints 가 교체되면 시트가 peek 으로 떨어진다(목록→상세→뒤로 5/5 재현)" 는 실측 근거가 있어, 늦게 도착한 측정으로 그 버그를 되살리는 거래가 된다.
 - hover/active 상태 색 변형, 다크 모드, 차트·태그 카테고리 hue. (2026-07-30 확인: 다크 모드 코드는 실제로 없다 — `StatusBar style="dark"` 는 내용 색이라 무관. `opacity.hover` 토큰은 callsite 0 이어서 제거했다 — 미결인 결정을 토큰만 먼저 두면 '이미 정해졌다' 로 읽힌다.)
 
 ---
