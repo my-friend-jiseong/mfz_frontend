@@ -2,7 +2,10 @@ import React from 'react';
 import { Pressable, StyleSheet, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/theme/colors';
-import { spacing, radius, fontSize, fontWeight } from '@/theme/spacing';
+import { fontSize, fontWeight, radius, spacing, touchTarget } from '@/theme/spacing';
+
+// 칩 실제 높이 ≈ paddingVertical(xs) × 2 + caption line-height ≈ 24.
+const CHIP_HIT_SLOP = (touchTarget.control - 24) / 2;
 import { fontFamily } from '@/theme/typography';
 import { opacity } from '@/theme/motion';
 import { withAlpha } from '@/theme/withAlpha';
@@ -34,6 +37,9 @@ export function FilterChip({
     <Pressable
       onPress={onPress}
       disabled={disabled}
+      // 칩은 필터용이라 작게 두는 게 맞다(paddingVertical xs → 높이 ~24). 대신 터치 영역은
+      // Direction 의 44 를 채운다 — Button sm 과 같은 방법(보이는 크기는 그대로).
+      hitSlop={CHIP_HIT_SLOP}
       accessibilityRole="button"
       accessibilityState={{ selected: active, disabled: !!disabled }}
       style={({ pressed }) => [
@@ -77,7 +83,7 @@ const styles = StyleSheet.create({
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: spacing.xs,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
     borderRadius: radius.pill,

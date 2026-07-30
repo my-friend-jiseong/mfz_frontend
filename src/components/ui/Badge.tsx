@@ -31,7 +31,10 @@ const TONE: Record<BadgeTone, { fg: string; bg: string }> = {
   neutral: { fg: colors.textMuted, bg: colors.neutralMuted },
 };
 
-const SHAPE: Record<BadgeShape, string> = {
+// 형상 글리프의 단일 출처. `checkin` 이 같은 맵을 따로 갖고 있어(●▲■◆) 3중 인코딩 규칙의
+// 두 번째 구현이 됐던 적이 있다 — FieldCard 에서 걷어낸 것과 같은 종류다. export 해서
+// 배지가 아닌 컨트롤(방문 결과 칩 등)도 이 맵을 쓰게 한다.
+export const BADGE_SHAPE_GLYPH: Record<BadgeShape, string> = {
   circle: '●',
   triangle: '▲',
   square: '■',
@@ -62,7 +65,7 @@ export function Badge({
     >
       {shape ? (
         <Text style={[styles.shape, { color: t.fg, fontSize: fs }]}>
-          {SHAPE[shape]}
+          {BADGE_SHAPE_GLYPH[shape]}
         </Text>
       ) : null}
       <Text

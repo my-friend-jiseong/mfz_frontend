@@ -10,6 +10,9 @@ import {
   View,
 } from 'react-native';
 import { Text } from '@/components/ui/Text';
+import { BADGE_SHAPE_GLYPH } from '@/components/ui/Badge';
+import { FieldLabel } from '@/components/ui/FieldLabel';
+import { VISIT_STATUS_BADGE } from '@/theme/statusBadge';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFieldStore } from '@/stores/fieldStore';
@@ -30,6 +33,9 @@ import { fieldDetailLine } from '@/utils/fieldFacets';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
+
+// 사진 슬롯 하단 라벨이 차지하는 높이 — 미리보기 이미지를 그만큼 띄운다.
+const PHASE_LABEL_HEIGHT = 22;
 import { withAlpha } from '@/theme/withAlpha';
 import { SafeScreen } from '@/components/SafeScreen';
 
@@ -37,15 +43,6 @@ import { SafeScreen } from '@/components/SafeScreen';
 // 현장(field) 상세에서 관리.
 
 // visit status → 색·형상 매핑 (3중 인코딩).
-const VISIT_SHAPE: Record<VisitStatus, string> = {
-  completed: '■',
-  absent: '●',
-  refused: '▲',
-  unknown_address: '◆',
-  revisit_needed: '◆',
-  other: '◆',
-};
-
 export default function FieldCheckin() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const fieldId = id ?? '';
@@ -223,9 +220,7 @@ export default function FieldCheckin() {
           ) : null}
         </Card>
 
-        <Text variant="bodySm" weight="bold" color="textMuted" style={styles.sectionTitle}>
-          방문 결과 상태
-        </Text>
+        <FieldLabel>방문 결과 상태</FieldLabel>
         <View style={styles.statusGrid}>
           {VISIT_STATUS_VALUES.map((s) => {
             const active = status === s;
@@ -249,7 +244,7 @@ export default function FieldCheckin() {
                     active ? { color: c } : { color: colors.textSubtle },
                   ]}
                 >
-                  {VISIT_SHAPE[s]}
+                  {BADGE_SHAPE_GLYPH[VISIT_STATUS_BADGE[s].shape]}
                 </Text>
                 <Text
                   variant="bodySm"
@@ -279,9 +274,7 @@ export default function FieldCheckin() {
           />
         ) : null}
 
-        <Text variant="bodySm" weight="bold" color="textMuted" style={styles.sectionTitle}>
-          작업 사진 (선택 — 보고서에 활용)
-        </Text>
+        <FieldLabel>작업 사진 (선택 — 보고서에 활용)</FieldLabel>
         <View style={styles.phaseRow}>
           {(['before', 'during', 'after'] as const).map((phase) => {
             const label = phase === 'before' ? '작업 전' : phase === 'during' ? '작업 중' : '작업 후';
@@ -344,9 +337,11 @@ export default function FieldCheckin() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   scroll: { padding: spacing.xl, paddingBottom: spacing.xxl * 2 },
+  // 테두리를 지우고 배경만 깔면 문서 흐름의 depth 전략(테두리)에서 이 박스만 빠진다 —
+  // delete-account 경고 박스와 같은 이유로 같은 계열 테두리를 남긴다(7절).
   header: {
     backgroundColor: colors.primaryMuted,
-    borderWidth: 0,
+    borderColor: colors.primary,
     marginBottom: spacing.lg,
   },
   headerTitleRow: {
@@ -355,11 +350,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   headerSub: { marginTop: spacing.xs },
-  headerSubMuted: { marginTop: 2 },
-  sectionTitle: {
-    marginTop: spacing.sm,
-    marginBottom: spacing.sm,
-  },
+  headerSubMuted: { marginTop: spacing.xs },
   statusGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -402,7 +393,8 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    bottom: 22,
+    // 슬롯 하단 라벨('작업 전' 등) 높이만큼 비워 미리보기가 글자를 덮지 않게 한다.
+    bottom: PHASE_LABEL_HEIGHT,
     width: '100%',
     height: undefined,
   },

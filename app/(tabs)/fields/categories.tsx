@@ -14,11 +14,17 @@ import { useAuthStore } from '@/stores/authStore';
 import { collectFieldFacets } from '@/utils/fieldFacets';
 import { EmptyState } from '@/components/EmptyState';
 import { Text } from '@/components/ui/Text';
+import { Card } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
 import type { Category } from '@/types/entities';
 import { colors } from '@/theme/colors';
 import { fontFamily } from '@/theme/typography';
-import { spacing, radius, fontSize } from '@/theme/spacing';
+import { spacing, radius, fontSize, touchTarget } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
+
+// 아이콘 버튼(18px 아이콘 + padding xs = 26px)이 Direction 의 '터치 타깃 44 이상' 에 못 미친다.
+// 보이는 크기를 키우면 목록 행이 통째로 두꺼워지므로 hitSlop 으로 채운다 — Button sm 과 같은 방법.
+const ICON_HIT_SLOP = (touchTarget.control - 26) / 2;
 
 // 카테고리(분류) 관리 — 추가·이름변경·삭제. 진실원은 서버(/api/categories, 백로그 §25).
 // AsyncStorage 는 오프라인 표시용 캐시라, 서버 실패 시 store 가 화면 변경을 되돌린다.
@@ -97,7 +103,7 @@ export default function CategoriesManage() {
   const renderItem = ({ item }: { item: Category }) => {
     const editing = editingId === item.id;
     return (
-      <View style={styles.row}>
+      <Card padding="md" style={styles.row}>
         {editing ? (
           <>
             <TextInput
@@ -113,6 +119,7 @@ export default function CategoriesManage() {
               onPress={() => void saveEdit()}
               accessibilityRole="button"
               accessibilityLabel="이름 저장"
+              hitSlop={ICON_HIT_SLOP}
               style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
             >
               <Ionicons name="checkmark" size={20} color={colors.primary} />
@@ -124,6 +131,7 @@ export default function CategoriesManage() {
               }}
               accessibilityRole="button"
               accessibilityLabel="편집 취소"
+              hitSlop={ICON_HIT_SLOP}
               style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
             >
               <Ionicons name="close" size={20} color={colors.textMuted} />
@@ -139,7 +147,7 @@ export default function CategoriesManage() {
               onPress={() => startEdit(item)}
               accessibilityRole="button"
               accessibilityLabel={`${item.name} 이름 변경`}
-              hitSlop={6}
+              hitSlop={ICON_HIT_SLOP}
               style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
             >
               <Ionicons name="pencil" size={18} color={colors.textMuted} />
@@ -148,14 +156,14 @@ export default function CategoriesManage() {
               onPress={() => confirmDelete(item)}
               accessibilityRole="button"
               accessibilityLabel={`${item.name} 삭제`}
-              hitSlop={6}
+              hitSlop={ICON_HIT_SLOP}
               style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
             >
               <Ionicons name="trash-outline" size={18} color={colors.danger} />
             </Pressable>
           </>
         )}
-      </View>
+      </Card>
     );
   };
 
@@ -172,23 +180,16 @@ export default function CategoriesManage() {
           onSubmitEditing={() => void handleAdd()}
           returnKeyType="done"
         />
-        <Pressable
+        {/* 손으로 짠 primary 버튼이었다 — 색·아이콘·비활성·누름을 전부 직접 조합하고 있었고
+            터치 높이도 입력란에 딸려 갔다. Button 이 그걸 다 갖고 있다 (강령 7). */}
+        <Button
           onPress={() => void handleAdd()}
           disabled={busy || !newName.trim()}
-          accessibilityRole="button"
           accessibilityLabel="카테고리 추가"
-          accessibilityState={{ disabled: busy || !newName.trim() }}
-          style={({ pressed }) => [
-            styles.addBtn,
-            (busy || !newName.trim()) && styles.disabled,
-            pressed && styles.pressed,
-          ]}
+          leftIcon="add"
         >
-          <Ionicons name="add" size={18} color={colors.onPrimary} />
-          <Text variant="bodySm" weight="bold" color="onPrimary">
-            추가
-          </Text>
-        </Pressable>
+          추가
+        </Button>
       </View>
 
       <FlatList
@@ -230,29 +231,10 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.regular,
     color: colors.text,
   },
-  addBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.lg,
-    borderRadius: radius.md,
-    backgroundColor: colors.primary,
-    justifyContent: 'center',
-  },
-  disabled: { opacity: opacity.disabled },
   pressed: { opacity: opacity.pressed },
   list: { padding: spacing.lg, gap: spacing.sm },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
+  // 표면은 Card 가 준다 (강령 7) — 행 배치만 남긴다.
+  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   name: { flex: 1 },
   // 입력 표면은 control 토큰 (5.3.1) — 주변 카드보다 어두운 inset.
   // 인라인 편집 중이라 테두리는 focus 색을 그대로 쓴다.
@@ -269,5 +251,7 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.regular,
     color: colors.text,
   },
+  // 18px 아이콘 + padding xs = 26px 로 Direction 의 '터치 타깃 44 이상' 을 못 맞춘다.
+  // 보이는 크기는 두고 hitSlop 으로 채운다(Button sm 과 같은 방법) — 아래 ICON_HIT_SLOP.
   iconBtn: { padding: spacing.xs },
 });
