@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useProjectStore } from '@/stores/projectStore';
 import { Text } from '@/components/ui/Text';
 import { colors } from '@/theme/colors';
+import { fontFamily } from '@/theme/typography';
 import { spacing, radius, fontSize } from '@/theme/spacing';
 import { withAlpha } from '@/theme/withAlpha';
 
@@ -297,15 +298,18 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   createRow: { flexDirection: 'row', gap: spacing.sm },
+  // 입력 표면은 control 토큰 (5.3.1) — ui/Input 과 같은 inset 채움.
   createInput: {
     flex: 1,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.control.bg,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.control.border,
     borderRadius: radius.md,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     fontSize: fontSize.sm,
+    // RN TextInput 은 폰트를 상속하지 않는다 — 명시 없으면 시스템 폰트로 렌더된다.
+    fontFamily: fontFamily.regular,
     color: colors.text,
   },
   createBtn: {

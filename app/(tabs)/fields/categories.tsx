@@ -16,6 +16,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { Text } from '@/components/ui/Text';
 import type { Category } from '@/types/entities';
 import { colors } from '@/theme/colors';
+import { fontFamily } from '@/theme/typography';
 import { spacing, radius, fontSize } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
 
@@ -218,13 +219,15 @@ const styles = StyleSheet.create({
   },
   addInput: {
     flex: 1,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.control.bg,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.control.border,
     borderRadius: radius.md,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     fontSize: fontSize.base,
+    // RN TextInput 은 폰트를 상속하지 않는다 — 명시 없으면 시스템 폰트로 렌더된다.
+    fontFamily: fontFamily.regular,
     color: colors.text,
   },
   addBtn: {
@@ -251,15 +254,19 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   name: { flex: 1 },
+  // 입력 표면은 control 토큰 (5.3.1) — 주변 카드보다 어두운 inset.
+  // 인라인 편집 중이라 테두리는 focus 색을 그대로 쓴다.
   editInput: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.control.bg,
     borderWidth: 1,
-    borderColor: colors.primary,
+    borderColor: colors.control.borderFocus,
     borderRadius: radius.sm,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     fontSize: fontSize.base,
+    // RN TextInput 은 폰트를 상속하지 않는다 — 명시 없으면 시스템 폰트로 렌더된다.
+    fontFamily: fontFamily.regular,
     color: colors.text,
   },
   iconBtn: { padding: spacing.xs },

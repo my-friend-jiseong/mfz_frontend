@@ -11,7 +11,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/Text';
 import { colors } from '@/theme/colors';
-import { spacing, radius } from '@/theme/spacing';
+import { spacing, radius, fontSize } from '@/theme/spacing';
+import { fontFamily } from '@/theme/typography';
 import { elevation } from '@/theme/elevation';
 import { applyFieldFilters, fieldSubtitle, fieldTitle } from '@/utils/fieldFacets';
 import { useKakaoPlaceSearch } from '@/components/fields/useKakaoPlaceSearch';
@@ -287,8 +288,11 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    fontSize: 14,
+    // RN TextInput 은 폰트를 상속하지 않는다 — 명시 없으면 시스템 폰트로 렌더된다.
+    fontFamily: fontFamily.regular,
+    fontSize: fontSize.sm,
     color: colors.text,
+    // 부유 검색창이 표면을 이미 그리므로 여기선 채움·테두리를 두지 않는다 (control 토큰 예외).
     padding: 0,
   },
   results: {
