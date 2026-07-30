@@ -14,6 +14,7 @@ import { Text } from '@/components/ui/Text';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/EmptyState';
+import { fieldDetailLine } from '@/utils/fieldFacets';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
@@ -143,8 +144,8 @@ export function AddDestinationModal({
                   onPress={() => handlePick(f.id)}
                   accessibilityRole="button"
                   accessibilityLabel={
-                    f.addressDetail
-                      ? `${f.address} 추가, ${f.addressDetail}`
+                    fieldDetailLine(f)
+                      ? `${f.address} 추가, ${fieldDetailLine(f)}`
                       : `${f.address} 추가`
                   }
                   style={({ pressed }) => [
@@ -156,14 +157,14 @@ export function AddDestinationModal({
                     <Text variant="body" weight="semibold" numberOfLines={1}>
                       {f.address}
                     </Text>
-                    {f.addressDetail ? (
+                    {fieldDetailLine(f) ? (
                       <Text
                         variant="caption"
                         color="textMuted"
                         numberOfLines={1}
                         style={styles.rowDetail}
                       >
-                        {f.addressDetail}
+                        {fieldDetailLine(f)}
                       </Text>
                     ) : null}
                   </View>

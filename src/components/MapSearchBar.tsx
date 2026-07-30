@@ -13,7 +13,7 @@ import { Text } from '@/components/ui/Text';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { elevation } from '@/theme/elevation';
-import { applyFieldFilters } from '@/utils/fieldFacets';
+import { applyFieldFilters, fieldSubtitle, fieldTitle } from '@/utils/fieldFacets';
 import { useKakaoPlaceSearch } from '@/components/fields/useKakaoPlaceSearch';
 import { SEARCH_DEBOUNCE_MS, MIN_KEYWORD_LEN } from '@/utils/addressSearch';
 import type { Field } from '@/types/entities';
@@ -166,8 +166,11 @@ export function MapSearchBar({ fields, onSelectField, onSelectPlace }: Props) {
                       </Text>
                     ) : null}
                     {fieldResults.map((f, i) => {
+                      const title = fieldTitle(f);
+                      // 첫 줄이 이미 보여준 주소를 둘째 줄에 다시 쓰지 않는다
+                      // (앱 등록 현장은 name === address 라 '연산동 / 연산동' 이 됐다).
                       const secondary =
-                        f.addressDetail ||
+                        fieldSubtitle(f, title) ||
                         f.projectName ||
                         f.categories?.join(' · ') ||
                         '';
@@ -181,7 +184,7 @@ export function MapSearchBar({ fields, onSelectField, onSelectPlace }: Props) {
                             pressed && styles.itemPressed,
                           ]}
                           accessibilityRole="button"
-                          accessibilityLabel={`현장 ${f.name || f.address}`}
+                          accessibilityLabel={`현장 ${title}`}
                         >
                           <Ionicons
                             name="location-outline"
@@ -191,7 +194,7 @@ export function MapSearchBar({ fields, onSelectField, onSelectPlace }: Props) {
                           />
                           <View style={styles.itemText}>
                             <Text variant="bodySm" numberOfLines={1}>
-                              {f.name || f.address}
+                              {title}
                             </Text>
                             {secondary ? (
                               <Text variant="caption" color="textMuted" numberOfLines={1}>

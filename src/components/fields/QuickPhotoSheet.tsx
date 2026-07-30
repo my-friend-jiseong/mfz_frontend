@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/EmptyState';
 import { formatDistanceM, QUICK_PHOTO_MAX_DISTANCE_M } from '@/utils/nearestField';
+import { fieldDetailLine } from '@/utils/fieldFacets';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
@@ -146,14 +147,14 @@ export function QuickPhotoSheet({
                         >
                           {c.field.address}
                         </Text>
-                        {c.field.addressDetail ? (
+                        {fieldDetailLine(c.field) ? (
                           <Text
                             variant="caption"
                             color="textMuted"
                             numberOfLines={1}
                             style={styles.rowDetail}
                           >
-                            {c.field.addressDetail}
+                            {fieldDetailLine(c.field)}
                           </Text>
                         ) : null}
                       </View>
@@ -223,14 +224,14 @@ export function QuickPhotoSheet({
                         <Text variant="body" weight="semibold" numberOfLines={1}>
                           {f.address}
                         </Text>
-                        {f.addressDetail ? (
+                        {fieldDetailLine(f) ? (
                           <Text
                             variant="caption"
                             color="textMuted"
                             numberOfLines={1}
                             style={styles.rowDetail}
                           >
-                            {f.addressDetail}
+                            {fieldDetailLine(f)}
                           </Text>
                         ) : null}
                       </View>

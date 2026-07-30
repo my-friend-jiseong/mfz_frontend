@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
 import { FIELD_STATUS_LABEL, type Field } from '@/types/entities';
-import { fieldTitle } from '@/utils/fieldFacets';
+import { fieldSubtitle, fieldTitle } from '@/utils/fieldFacets';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 import { FIELD_STATUS_BADGE } from '@/theme/statusBadge';
@@ -33,14 +33,11 @@ export function FieldCard({ field, onPress, selected, showCheckbox }: Props) {
   const badge = FIELD_STATUS_BADGE[field.status];
   const hasMeta =
     !!field.projectName || (field.categories && field.categories.length > 0);
-  // 제목 = name||address. name 이 제목으로 올라가면 address 는 부제로 내려 정보 유지.
+  // 제목 = name||address, 부제 = 제목이 이미 보여준 것을 뺀 나머지 주소.
+  // 중복 제거 규칙은 fieldFacets 의 단일 출처에 있다 — 같은 주소를 그리는 다른 목록
+  // (QuickPhotoSheet · AddDestinationModal)도 같은 함수를 쓴다.
   const title = fieldTitle(field);
-  const rawSubtitle = field.name?.trim()
-    ? [field.address, field.addressDetail].filter(Boolean).join(' ')
-    : field.addressDetail;
-  // name 을 주소와 똑같이 저장한 현장이 실제로 있다 — 그대로 두면 카드에 같은 줄이
-  // 두 번 찍힌다. 부제가 제목과 같으면 그리지 않는다.
-  const subtitle = rawSubtitle?.trim() === title.trim() ? undefined : rawSubtitle;
+  const subtitle = fieldSubtitle(field, title);
 
   const content = (
     <>
