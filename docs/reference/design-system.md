@@ -289,7 +289,8 @@ DESTINATION_STATUS_BADGE = {
 | `Input` | `label` · `error` · `helperText` · `leftSlot` / `rightSlot` (forwardRef) · 내부 focus 상태 | 폼 입력 (inset) |
 | `FilterChip` | `label` · `active` · `activeColor` · `dashed` · `leftIcon` · `disabled` | 선택 가능 chip (`withAlpha(c, 0.13)` 배경) |
 | `FilterAccordion` | `groups: {key, base, value, render}[]` · `hasFilter` · `onResetAll` | 목록 필터 껍데기 — 칩 줄 + 한 번에 하나만 열리는 패널. 함께 export: `FilterPanel` · `FilterOptionRow` · `FilterDateRange`(플랫폼 분기 날짜 범위) · `dateRangeSummary` |
-| `SectionHeader` | `title` · `description` · `action` | 섹션 구분 |
+| `SectionHeader` | `title` · `description` · `action` | 섹션 구분 — h3 제목 + 설명 + 액션 (무게 있는 머리) |
+| `GroupLabel` | `children` · `style` | 카드 한 덩어리 위의 눈썹 라벨 — caption+bold+muted+uppercase. 기본 `marginTop: xl`(그룹↔그룹), 영역 경계(xxl)·화면 첫 줄(0)은 `style` 로 덮는다. `SectionHeader` 와 다른 층이다 |
 | `LoadingState` | `label` · `inline` | 로딩 표시 |
 | `Skeleton` | `width` · `height` · `rounded` | 로딩 placeholder (reanimated shimmer) |
 | `StickyBottomBar` | `children` (+ `useSafeAreaInsets`) | 화면 하단 sticky CTA, home indicator 회피 |
@@ -353,7 +354,22 @@ DESTINATION_STATUS_BADGE = {
 ## 14. 미적용 / 차후 과제
 
 **탭별 디자인 개선에서 흡수할 부채** (2026-07-30 실측).
-진행: **외근 ✅ · 현장 ✅ · 보고서 ✅ · 내 정보 ⬜**
+진행: **외근 ✅ · 현장 ✅ · 보고서 ✅ · 내 정보 ✅** (4 탭 1 회차 완료)
+
+> **내 정보 탭 — 위험의 무게를 뒤집었다 (2026-07-30).** 이 화면의 focal 은 숫자가 아니라
+> **정체성**(이름)이다. 이전엔 아바타 이니셜 36px 이 화면에서 가장 큰 글자였는데 그 글자는
+> 바로 아래 이름의 첫 글자라 정보량이 0 이다 — 가장 큰 것이 아무 말도 안 하면 위계가 없다.
+> 아바타 80→56, 이니셜은 스케일 안(h2)으로, 이름 h2→h1.
+>
+> 더 큰 문제는 **빨강을 되돌릴 수 있는 동작이 쓰고 있었다**는 것. 로그아웃(다시 로그인하면
+> 끝)이 solid `destructive` 전폭 버튼이고, 되돌릴 수 없는 회원 탈퇴는 '계정' 카드 안 한 줄로
+> 색만 빨간 상태였다. `Button.tsx` 의 '빨강 = 파괴' 규칙, `fields`/`trips` edit 의 '위험 구역'
+> 패턴(구분선 + `dangerGhost`)이 이미 있는데 이 화면만 빠져 있었다. 로그아웃 → `secondary`,
+> 탈퇴 → 하단 위험 구역. 스토어 심사(Play)가 요구하는 삭제 경로라 화면 밖으로 숨기지는 않는다.
+> `docs/일가요 서비스 운영 현황 확인 질문지.md` §탈퇴 메뉴 위치의 "계정 섹션 하단" 은 구현
+> 이전의 제안이고 이유가 붙어 있지 않아, 이유가 문서화된 위험 구역 패턴을 따랐다.
+>
+> 이메일이 아바타 아래와 '계정' 카드 첫 행에 **같은 값으로 두 번** 있었다 — 카드 행 제거.
 
 > **보고서 탭에는 숫자 focal 을 두지 않기로 했다 (2026-07-30).** 이 목록의 조직 단위는
 > 이미 '외근 그룹' 이라 구조 자체가 focal 이다. 가장 쓸모 있어 보였던 지표는 "보고서
@@ -361,10 +377,11 @@ DESTINATION_STATUS_BADGE = {
 > (이 화면의 '외근 정보 미로드' 그룹이 그 증거). 틀릴 수 있는 숫자를 크게 두느니 두지 않는다.
 > 화면마다 metric 행을 하나씩 얹는 건 그 자체가 '아무도 결정하지 않았다' 는 신호다.
 
-- **hand-rolled 표면** — `backgroundColor: colors.surface` 를 직접 조합하는 파일이 `<Card>` callsite 보다 많았다(37 vs 27). 외근(`DestinationRow`)·현장(`FieldCard`) 은 흡수 완료. 남은 탭은 그 탭 작업 때 (강령 7).
-- **매직넘버 / `opacity: 0.x` 직접값** — 외근·현장 범위는 정리 완료. 보고서·내 정보 남음 (강령 4).
-- **focal element 미지정** — 외근 3화면·현장 목록은 지정 완료. 나머지 탭은 미지정.
-- **간격 tier 미적용** — 2.1절 규칙 이전 코드는 callsite 마다 즉흥적. 건드리는 화면부터 정리.
+- **hand-rolled 표면** — `backgroundColor: colors.surface` 를 직접 조합하는 파일이 `<Card>` callsite 보다 많았다(37 vs 27). 외근(`DestinationRow`)·현장(`FieldCard`)·내 정보(`delete-account` 경고 박스) 흡수 완료. 4 탭 밖(보조 컴포넌트)은 아래 '기존' 목록 (강령 7).
+- **매직넘버 / `opacity: 0.x` 직접값** — 4 탭 모두 정리 완료 (강령 4).
+- **focal element 미지정** — 4 탭 모두 지정 완료. 보고서·내 정보는 **숫자 focal 을 두지 않는다는 결정**이 지정이다(위 인용 2 개).
+- **간격 tier 미적용** — 2.1절 규칙 이전 코드는 callsite 마다 즉흥적. 4 탭은 정리 완료, 나머지는 건드리는 화면부터.
+- **터치 타깃 값이 44 와 48 로 섞여 있다** (2026-07-30 실측, 6 callsite): `Input` 48 · profile 목록 행 48 · `CurrentDestCard.skipBtn` 44 · `trips/active.headerAction` 44 · `Button` size 36/44/52. iOS 44pt / Android 48dp 둘 다 근거가 있어 어느 쪽도 틀리진 않지만, 같은 목적에 두 값이 눈대중으로 섞인 상태다. 토큰(`touchTarget`)으로 모을지는 미결.
 
 **보류한 것:**
 
@@ -373,8 +390,8 @@ DESTINATION_STATUS_BADGE = {
 **기존:**
 
 - 보조 컴포넌트(`MapFilterBar` · `ProjectPicker` · `WebChoiceModal` · `SessionGuardModal` · `KakaoMapWebView` · `AttachmentPreview`) — RN `Text` 직접 사용으로 Pretendard 미적용 잔존. 다음 사이클 후보.
-- `SectionLabel` 컴포넌트 추출 — 12+ 화면에서 반복되는 패턴.
-- `MenuRow` 의 `ui/` 승격 — 2번째 callsite 등장 시.
+- ~~`SectionLabel` 컴포넌트 추출 — 12+ 화면에서 반복되는 패턴.~~ → 실측하니 `caption+bold+textMuted` 조합 21 곳(12 파일)은 **두 개의 다른 패턴**이었다: ① 카드 위 눈썹 라벨(uppercase + tier margin — 내 정보 3 화면, `field-report` picker 그룹) ② 지도 부유물 안 위젯 제목(margin 없음, uppercase 아님 — `MapLegend`·`MapFilterBar`). ①만 `ui/GroupLabel` 로 뽑았고(내 정보 3 화면 적용, 그중 한 곳은 `marginTop` 이 lg 로 어긋나 있었다) ②는 흡수하지 않는다. `field-report` 는 다음에 그 화면 건드릴 때.
+- `MenuRow` 의 `ui/` 승격 — 2번째 callsite 등장 시. (2026-07-30 확인: `chevron-forward` 4 파일은 모두 목록 항목/배너로, 같은 패턴 아님)
 - `Text` 의 style array per-render perf — 저성능 Android 대비.
 - hover/active 상태 색 변형, 다크 모드, 차트·태그 카테고리 hue.
 - `useReportDetail` 패턴을 `fieldStore` / `visitStore` 로 확장.

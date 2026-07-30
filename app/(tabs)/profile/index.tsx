@@ -14,9 +14,10 @@ import { useAuthStore } from '@/stores/authStore';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
+import { GroupLabel } from '@/components/ui/GroupLabel';
 import { SafeScreen } from '@/components/SafeScreen';
 import { colors } from '@/theme/colors';
-import { spacing } from '@/theme/spacing';
+import { radius, spacing } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
 import { fmtDate } from '@/utils/datetime';
 import {
@@ -30,6 +31,16 @@ import {
 
 const APP_VERSION = '0.1.0';
 
+// 이 화면의 focal 은 숫자가 아니라 **정체성**이다 — "지금 어느 계정으로 들어와 있나".
+// 이전엔 아바타 이니셜(36px)이 화면에서 가장 큰 글자였는데, 그 글자는 바로 아래 이름의
+// 첫 글자라 정보량이 0 이다. 가장 큰 것이 아무것도 말하지 않으면 위계가 없는 것과 같다.
+// 아바타는 이름을 받치는 자리로 내리고(56), 이니셜은 타입 스케일 안(h2)으로 들여놨다.
+const AVATAR_SIZE = 56;
+
+// MenuRow 아이콘 크기 — divider 들여쓰기 계산이 이 값에 걸려 있어 상수로 묶는다.
+// (이전엔 Ionicons size={18} 과 divider 의 `+ 18` 이 따로 적혀 있어 한쪽만 바꾸면 어긋났다.)
+const MENU_ICON = 18;
+
 function initialOf(name: string | undefined): string {
   if (!name) return '?';
   const trimmed = name.trim();
@@ -39,22 +50,20 @@ function initialOf(name: string | undefined): string {
 
 type IonName = React.ComponentProps<typeof Ionicons>['name'];
 
+// 파괴적 동작을 위한 tone='danger' 는 없다 — 되돌릴 수 없는 것은 목록 안에서 색만 바꾸는
+// 대신 하단 '위험 구역' 으로 내보낸다(아래 dangerZone 주석).
 function MenuRow({
   icon,
   label,
   value,
   onPress,
-  tone = 'default',
 }: {
   icon: IonName;
   label: string;
   value?: string;
   onPress?: () => void;
-  // 'danger' — 되돌릴 수 없는 동작(탈퇴)을 목록 안에서 시각적으로 분리한다.
-  tone?: 'default' | 'danger';
 }) {
   const interactive = !!onPress;
-  const danger = tone === 'danger';
   return (
     <Pressable
       onPress={onPress}
@@ -66,13 +75,8 @@ function MenuRow({
         pressed && interactive && { opacity: opacity.pressed },
       ]}
     >
-      <Ionicons name={icon} size={18} color={danger ? colors.danger : colors.textMuted} />
-      <Text
-        variant="bodySm"
-        weight="semibold"
-        color={danger ? 'danger' : undefined}
-        style={styles.menuLabel}
-      >
+      <Ionicons name={icon} size={MENU_ICON} color={colors.textMuted} />
+      <Text variant="bodySm" weight="semibold" style={styles.menuLabel}>
         {label}
       </Text>
       {value ? (
@@ -161,31 +165,25 @@ export default function Profile() {
     <SafeScreen>
     <View style={styles.container}>
       <ScrollView ref={scrollRef} contentContainerStyle={styles.scroll}>
-        <View style={styles.avatarBox}>
+        <View style={styles.identity}>
           <View style={styles.avatar}>
-            <Text weight="heavy" color="onPrimary" style={styles.avatarText}>
+            <Text variant="h2" color="onPrimary">
               {initialOf(user?.name)}
             </Text>
           </View>
-          <Text variant="h2" weight="heavy" align="center" style={styles.name}>
+          <Text variant="h1" align="center" style={styles.name}>
             {user?.name ?? '-'}
           </Text>
+          {/* 이메일은 여기 한 곳에만 둔다 — 이전엔 이 줄과 '계정' 카드 첫 행이 같은 값을
+              100px 간격으로 두 번 보여줬다. */}
           <Text variant="bodySm" color="textMuted" align="center">
             {user?.email ?? '-'}
           </Text>
         </View>
 
-        <Text
-          variant="caption"
-          weight="bold"
-          color="textMuted"
-          style={styles.sectionTitle}
-        >
-          계정
-        </Text>
+        {/* 정체성 블록 ↔ 메뉴는 영역 경계라 xxl. 아래 섹션들끼리는 GroupLabel 기본값(xl). */}
+        <GroupLabel style={styles.firstGroup}>계정</GroupLabel>
         <Card padding="none" style={styles.sectionCard}>
-          <MenuRow icon="mail-outline" label="이메일" value={user?.email ?? '-'} />
-          <View style={styles.divider} />
           <MenuRow
             icon="calendar-outline"
             label="가입일"
@@ -198,25 +196,9 @@ export default function Profile() {
             label="내 정보 수정"
             onPress={() => router.push('/(tabs)/profile/edit' as never)}
           />
-          <View style={styles.divider} />
-          {/* 스토어 심사 요건 — Play 는 계정을 만드는 앱에 계정·데이터 삭제 경로를 요구한다.
-              서버 DELETE /api/me 는 backend-backlog §30 대기. */}
-          <MenuRow
-            icon="person-remove-outline"
-            label="회원 탈퇴"
-            tone="danger"
-            onPress={() => router.push('/(tabs)/profile/delete-account' as never)}
-          />
         </Card>
 
-        <Text
-          variant="caption"
-          weight="bold"
-          color="textMuted"
-          style={styles.sectionTitle}
-        >
-          정책·정보
-        </Text>
+        <GroupLabel>정책·정보</GroupLabel>
         <Card padding="none" style={styles.sectionCard}>
           <MenuRow
             icon="document-text-outline"
@@ -256,16 +238,35 @@ export default function Profile() {
           />
         </Card>
 
+        {/* 로그아웃은 파괴적이지 않다 — 다시 로그인하면 끝이다. 이전엔 solid destructive(빨강
+            채움)라 화면에서 가장 강한 신호를 되돌릴 수 있는 동작이 쓰고 있었고, 정작 되돌릴 수
+            없는 탈퇴는 목록 안 한 줄이었다. Button.tsx 의 '빨강 = 파괴' 규칙과도 어긋난다. */}
         <Button
           onPress={handleLogout}
           loading={loggingOut}
-          variant="destructive"
+          variant="secondary"
           fullWidth
           leftIcon="log-out-outline"
           style={styles.logout}
         >
           로그아웃
         </Button>
+
+        {/* 위험 구역 — 파괴적 동작은 일상 동선과 분리(구분선) + 낮은 비중(dangerGhost).
+            fields/trips edit 화면과 동일한 패턴. 스토어 심사 요건(Play)이 요구하는
+            계정·데이터 삭제 경로이므로 화면 밖으로 숨기지는 않는다.
+            서버 DELETE /api/me 는 backend-backlog §30 대기. */}
+        <View style={styles.dangerZone}>
+          <Button
+            onPress={() => router.push('/(tabs)/profile/delete-account' as never)}
+            variant="dangerGhost"
+            size="sm"
+            fullWidth
+            leftIcon="person-remove-outline"
+          >
+            회원 탈퇴
+          </Button>
+        </View>
       </ScrollView>
     </View>
     </SafeScreen>
@@ -275,29 +276,19 @@ export default function Profile() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   scroll: { padding: spacing.xl, paddingBottom: spacing.xxl },
-  avatarBox: {
-    alignItems: 'center',
-    paddingVertical: spacing.xl,
-    gap: spacing.sm,
-  },
+  // paddingVertical 을 뺐다 — scroll 의 padding xl 이 이미 위 여백이고, 아래는 '계정'
+  // 라벨의 marginTop 이 담당한다. 겹치면 48px 짜리 빈 띠가 생긴다.
+  identity: { alignItems: 'center', gap: spacing.xs },
   avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: AVATAR_SIZE,
+    height: AVATAR_SIZE,
+    borderRadius: radius.pill,
     backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // 매직 넘버 36 — typography scale 밖. avatar 1 곳 전용.
-  avatarText: { fontSize: 36 },
   name: { marginTop: spacing.sm },
-  sectionTitle: {
-    marginTop: spacing.xl,
-    marginBottom: spacing.sm,
-    paddingHorizontal: spacing.xs,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
+  firstGroup: { marginTop: spacing.xxl },
   sectionCard: { gap: 0 },
   menuRow: {
     flexDirection: 'row',
@@ -311,7 +302,14 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: colors.borderMuted,
-    marginLeft: spacing.lg + 18 + spacing.md, // icon + gap 만큼 왼쪽 들여쓰기
+    // 라벨 왼쪽 끝에 맞춘다 — 카드 패딩 + 아이콘 + gap.
+    marginLeft: spacing.lg + MENU_ICON + spacing.md,
   },
   logout: { marginTop: spacing.xl },
+  dangerZone: {
+    marginTop: spacing.xxl,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderMuted,
+  },
 });

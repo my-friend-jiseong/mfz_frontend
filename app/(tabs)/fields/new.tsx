@@ -644,7 +644,7 @@ const styles = StyleSheet.create({
     borderColor: colors.warning,
     marginTop: spacing.sm,
   },
-  warnBody: { marginTop: 4 },
+  warnBody: { marginTop: spacing.xs },
   retryBtn: { marginTop: spacing.sm, alignSelf: 'flex-start' },
   resultList: { marginTop: spacing.md },
   addrItem: {

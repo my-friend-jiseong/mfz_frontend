@@ -6,13 +6,13 @@ import {
   ScrollView,
   StyleSheet,
   TextInput,
-  View,
 } from 'react-native';
 import { useAuthStore } from '@/stores/authStore';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
+import { GroupLabel } from '@/components/ui/GroupLabel';
 import { SafeScreen } from '@/components/SafeScreen';
 import { checkPasswordPolicy, PASSWORD_HINT } from '@/utils/password';
 import { colors } from '@/theme/colors';
@@ -115,9 +115,8 @@ export default function ProfileEdit() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-          <Text variant="caption" weight="bold" color="textMuted" style={styles.sectionTitle}>
-            이름
-          </Text>
+          {/* 화면 첫 줄 — scroll 의 padding xl 위에 marginTop 을 더하지 않는다. */}
+          <GroupLabel style={styles.firstGroup}>이름</GroupLabel>
           <Card style={styles.card}>
             {/* 섹션 제목이 이미 '이름' 이라 Input 라벨은 중복 — 스크린리더용 라벨만 남긴다. */}
             <Input
@@ -144,9 +143,7 @@ export default function ProfileEdit() {
             </Button>
           </Card>
 
-          <Text variant="caption" weight="bold" color="textMuted" style={styles.sectionTitle}>
-            비밀번호
-          </Text>
+          <GroupLabel>비밀번호</GroupLabel>
           <Card style={styles.card}>
             <Input
               label="현재 비밀번호"
@@ -215,13 +212,7 @@ export default function ProfileEdit() {
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: colors.background },
   scroll: { padding: spacing.xl, paddingBottom: spacing.xxl },
-  sectionTitle: {
-    marginTop: spacing.lg,
-    marginBottom: spacing.sm,
-    paddingHorizontal: spacing.xs,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
+  firstGroup: { marginTop: 0 },
   card: { gap: spacing.md },
   note: { marginTop: spacing.xl, paddingHorizontal: spacing.xs },
 });

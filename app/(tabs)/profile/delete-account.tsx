@@ -16,10 +16,11 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
+import { GroupLabel } from '@/components/ui/GroupLabel';
 import { SafeScreen } from '@/components/SafeScreen';
 import { SUPPORT_EMAIL, supportMailto } from '@/utils/contact';
 import { colors } from '@/theme/colors';
-import { radius, spacing } from '@/theme/spacing';
+import { spacing } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
 
 // docs/REQUIREMENTS_BEFORE_LAUNCHING.md §1·§6 — Google Play 는 계정을 만드는 앱에 **계정·데이터
@@ -111,17 +112,20 @@ export default function DeleteAccount() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-          <View style={styles.warnBox}>
-            <Ionicons name="alert-circle" size={22} color={colors.danger} />
-            <Text variant="bodySm" weight="semibold" color="danger" style={styles.warnText}>
-              탈퇴하면 아래 정보가 삭제되며 복구할 수 없습니다.
-            </Text>
-          </View>
+          {/* 경고 박스는 손으로 짠 표면이 아니라 Card 에 tone 만 얹는다 — fields new/edit 의
+              warnBox 와 같은 패턴(muted 배경 + 같은 계열 테두리). 테두리 없이 배경만 깔면
+              문서 흐름의 depth 전략(테두리)에서 이 박스만 빠진다. */}
+          <Card padding="md" style={styles.warnBox}>
+            <View style={styles.warnRow}>
+              <Ionicons name="alert-circle" size={22} color={colors.danger} />
+              <Text variant="bodySm" weight="semibold" color="danger" style={styles.warnText}>
+                탈퇴하면 아래 정보가 삭제되며 복구할 수 없습니다.
+              </Text>
+            </View>
+          </Card>
 
-          <Text variant="caption" weight="bold" color="textMuted" style={styles.sectionTitle}>
-            삭제되는 정보
-          </Text>
-          <Card style={styles.card}>
+          <GroupLabel>삭제되는 정보</GroupLabel>
+          <Card style={styles.itemsCard}>
             {DELETED_ITEMS.map((item) => (
               <View key={item} style={styles.itemRow}>
                 <Ionicons name="close-circle-outline" size={16} color={colors.danger} />
@@ -135,9 +139,7 @@ export default function DeleteAccount() {
             </Text>
           </Card>
 
-          <Text variant="caption" weight="bold" color="textMuted" style={styles.sectionTitle}>
-            본인 확인
-          </Text>
+          <GroupLabel>본인 확인</GroupLabel>
           <Card style={styles.card}>
             <Input
               label="비밀번호"
@@ -198,25 +200,18 @@ const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: colors.background },
   scroll: { padding: spacing.xl, paddingBottom: spacing.xxl },
   warnBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-    padding: spacing.md,
-    borderRadius: radius.md,
     backgroundColor: colors.dangerMuted,
+    borderColor: colors.danger,
   },
+  warnRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
   warnText: { flex: 1 },
-  sectionTitle: {
-    marginTop: spacing.xl,
-    marginBottom: spacing.sm,
-    paddingHorizontal: spacing.xs,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
+  // 같은 성질의 항목 7 줄은 '한 덩어리 안의 줄'(sm)이다. md 로 벌리면 7 개가 각각
+  // 독립 블록처럼 보여 목록으로 읽히지 않는다. 대신 성질이 다른 법령 주석은 md 로 뗀다.
+  itemsCard: { gap: spacing.sm },
   card: { gap: spacing.md },
   itemRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   itemText: { flex: 1 },
-  legalNote: { marginTop: spacing.xs },
+  legalNote: { marginTop: spacing.md },
   agreeRow: {
     flexDirection: 'row',
     alignItems: 'center',
