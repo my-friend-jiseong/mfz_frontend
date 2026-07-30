@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
+import { fieldDetailLine } from '@/utils/fieldFacets';
 import { colors } from '@/theme/colors';
 import { spacing, touchTarget } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
@@ -107,7 +108,10 @@ export function CurrentDestCard({
       ) : (
         <Text variant="h3">{address}</Text>
       )}
-      {addressDetail ? <Text variant="bodySm">{addressDetail}</Text> : null}
+      {/* 주소가 이미 상세주소로 끝나면 중복이다 (fieldFacets 규칙). */}
+      {fieldDetailLine({ address, addressDetail }) ? (
+        <Text variant="bodySm">{fieldDetailLine({ address, addressDetail })}</Text>
+      ) : null}
 
       <View style={styles.mainRow}>
         <Button

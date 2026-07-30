@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { Badge, type BadgeShape, type BadgeTone } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
+import { fieldDetailLine } from '@/utils/fieldFacets';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 
@@ -52,9 +53,10 @@ export const DestinationRow = memo(function DestinationRow({
         <Text variant="body" weight="semibold">
           {address}
         </Text>
-        {addressDetail ? (
+        {/* 주소가 이미 상세주소로 끝나면 같은 말을 두 번 찍지 않는다 (fieldFacets 규칙). */}
+        {fieldDetailLine({ address, addressDetail }) ? (
           <Text variant="caption" color="textMuted" style={styles.detail}>
-            {addressDetail}
+            {fieldDetailLine({ address, addressDetail })}
           </Text>
         ) : null}
       </View>

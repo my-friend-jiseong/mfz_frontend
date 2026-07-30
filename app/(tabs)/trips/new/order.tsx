@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/Button';
 import { StickyBottomBar } from '@/components/ui/StickyBottomBar';
 import { nearestNeighborOrder } from '@/utils/routeOptimize';
 import { safeBack } from '@/utils/backNavigation';
+import { fieldDetailLine } from '@/utils/fieldFacets';
 import { colors } from '@/theme/colors';
 import { listBottomInset, radius, spacing } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
@@ -165,9 +166,10 @@ export default function NewTripOrder() {
         <Text variant="body" weight="semibold">
           {item.address}
         </Text>
-        {item.addressDetail ? (
+        {/* 주소가 이미 상세주소로 끝나면 중복이다 (fieldFacets 규칙). */}
+        {fieldDetailLine(item) ? (
           <Text variant="bodySm" color="textMuted" style={styles.detail}>
-            {item.addressDetail}
+            {fieldDetailLine(item)}
           </Text>
         ) : null}
         {optimized && item.distanceFromPrevKm !== undefined ? (

@@ -17,6 +17,7 @@ import {
 import { useVisitStore } from '@/stores/visitStore';
 import { useFieldStore } from '@/stores/fieldStore';
 import { pickPhoto, promptPhotoSource } from '@/utils/media';
+import { fieldDetailLine } from '@/utils/fieldFacets';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
@@ -180,9 +181,10 @@ export function ReviewVisitCard({
           <Text variant="body" weight="semibold" numberOfLines={1}>
             {fieldAddress}
           </Text>
-          {fieldAddressDetail ? (
+          {/* 주소가 이미 상세주소로 끝나면 중복이다 (fieldFacets 규칙). */}
+          {fieldDetailLine({ address: fieldAddress, addressDetail: fieldAddressDetail }) ? (
             <Text variant="caption" color="textMuted" numberOfLines={1}>
-              {fieldAddressDetail}
+              {fieldDetailLine({ address: fieldAddress, addressDetail: fieldAddressDetail })}
             </Text>
           ) : null}
           {visit.status === 'other' && savedReasonTrim ? (

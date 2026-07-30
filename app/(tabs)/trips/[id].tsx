@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/Button';
 import { StickyBottomBar } from '@/components/ui/StickyBottomBar';
 import { ReviewVisitCard } from '@/components/trips/ReviewVisitCard';
 import { safeBack } from '@/utils/backNavigation';
+import { fieldDetailLine } from '@/utils/fieldFacets';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
@@ -321,9 +322,10 @@ export default function TripDetail() {
                           <Text variant="body" weight="semibold" numberOfLines={1}>
                             {field?.address ?? '알 수 없는 현장'}
                           </Text>
-                          {field?.addressDetail ? (
+                          {/* 주소가 이미 상세주소로 끝나면 중복이다 (fieldFacets 규칙). */}
+                          {field && fieldDetailLine(field) ? (
                             <Text variant="caption" color="textMuted" numberOfLines={1}>
-                              {field.addressDetail}
+                              {fieldDetailLine(field)}
                             </Text>
                           ) : null}
                         </View>

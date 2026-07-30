@@ -51,9 +51,13 @@ export function fieldSubtitle(
 
 // 주소 줄과 상세주소 줄을 **따로** 그리는 목록용(QuickPhotoSheet · AddDestinationModal).
 // 주소가 이미 상세주소로 끝나면 둘째 줄은 같은 말이다 — 위 ① 과 같은 규칙.
-export function fieldDetailLine(
-  f: Pick<Field, 'address' | 'addressDetail'>,
-): string | undefined {
+// 파라미터를 Field 로 좁히지 않는다 — 외근 화면들은 주소·상세주소를 **개별 prop** 으로 받고
+// (`DestinationRow` · `CurrentDestCard` · `ReviewVisitCard`) 그쪽 타입은 optional 이다.
+// 방어적으로 동작하는 게 이 함수의 일이라 null/undefined 를 그대로 받는다.
+export function fieldDetailLine(f: {
+  address?: string | null;
+  addressDetail?: string | null;
+}): string | undefined {
   const address = f.address?.trim() ?? '';
   const detail = f.addressDetail?.trim() ?? '';
   if (!detail || endsWithToken(address, detail)) return undefined;
