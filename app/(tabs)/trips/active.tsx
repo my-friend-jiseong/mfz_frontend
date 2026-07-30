@@ -26,7 +26,7 @@ import { trips as tripsApi, localizeError, ROUTE_MAX_WAYPOINTS } from '@/api';
 import { VISIT_STATUS_LABEL } from '@/types/entities';
 import { nearestNeighborOrder } from '@/utils/routeOptimize';
 import { safeBack } from '@/utils/backNavigation';
-import { spacing } from '@/theme/spacing';
+import { spacing, touchTarget } from '@/theme/spacing';
 import type { Destination } from '@/types/entities';
 
 // ----- backend-backlog §22 헬퍼 -----
@@ -684,7 +684,7 @@ const styles = StyleSheet.create({
   // 간격 리듬 — 진행률·현재 목적지는 한 덩어리(md), 목적지 목록과 종료 버튼은 다른
   // 그룹이라 xl 로 벌린다. 전부 lg 로 균일하면 무엇이 한 덩어리인지 눈이 못 읽는다.
   footer: { marginTop: spacing.xl },
-  headerAction: { minHeight: 44, justifyContent: 'center' },
+  headerAction: { minHeight: touchTarget.control, justifyContent: 'center' },
   header: { paddingTop: spacing.md, gap: spacing.md },
   sectionTitleRow: {
     flexDirection: 'row',

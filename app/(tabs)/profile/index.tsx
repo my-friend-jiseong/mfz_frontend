@@ -17,7 +17,7 @@ import { Text } from '@/components/ui/Text';
 import { GroupLabel } from '@/components/ui/GroupLabel';
 import { SafeScreen } from '@/components/SafeScreen';
 import { colors } from '@/theme/colors';
-import { radius, spacing } from '@/theme/spacing';
+import { radius, spacing, touchTarget } from '@/theme/spacing';
 import { fmtDate } from '@/utils/datetime';
 import {
   LOCATION_TERMS_AVAILABLE,
@@ -297,7 +297,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
-    minHeight: 48,
+    minHeight: touchTarget.row,
   },
   menuLabel: { flex: 1 },
   divider: {

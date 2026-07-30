@@ -9,7 +9,7 @@ import {
   ViewStyle,
 } from 'react-native';
 import { colors } from '@/theme/colors';
-import { spacing, radius, fontSize, fontWeight } from '@/theme/spacing';
+import { spacing, radius, fontSize, fontWeight, touchTarget } from '@/theme/spacing';
 import { fontFamily } from '@/theme/typography';
 import { opacity } from '@/theme/motion';
 
@@ -109,7 +109,7 @@ const styles = StyleSheet.create({
     borderColor: colors.control.border,
     borderRadius: radius.md,
     paddingHorizontal: spacing.md,
-    minHeight: 48,
+    minHeight: touchTarget.row,
   },
   fieldFocused: { borderColor: colors.control.borderFocus },
   fieldError: { borderColor: colors.control.borderError },

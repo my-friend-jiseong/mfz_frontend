@@ -4,7 +4,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
 import { colors } from '@/theme/colors';
-import { spacing } from '@/theme/spacing';
+import { spacing, touchTarget } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
 
 interface Props {
@@ -160,7 +160,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   // 최소 44dp 타깃 — size="sm"(높이 36) 이라 부족한 만큼 세로 여백으로 채운다.
-  skipBtn: { minHeight: 44, justifyContent: 'center' },
+  skipBtn: { minHeight: touchTarget.control, justifyContent: 'center' },
   mainRow: {
     flexDirection: 'row',
     gap: spacing.sm,

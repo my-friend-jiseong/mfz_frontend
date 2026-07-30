@@ -20,7 +20,7 @@ import { GroupLabel } from '@/components/ui/GroupLabel';
 import { SafeScreen } from '@/components/SafeScreen';
 import { SUPPORT_EMAIL, supportMailto } from '@/utils/contact';
 import { colors } from '@/theme/colors';
-import { spacing } from '@/theme/spacing';
+import { spacing, touchTarget } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
 
 // docs/REQUIREMENTS_BEFORE_LAUNCHING.md §1·§6 — Google Play 는 계정을 만드는 앱에 **계정·데이터
@@ -218,7 +218,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginTop: spacing.lg,
     paddingHorizontal: spacing.xs,
-    minHeight: 48,
+    minHeight: touchTarget.row,
   },
   agreeText: { flex: 1 },
   submit: { marginTop: spacing.lg },
