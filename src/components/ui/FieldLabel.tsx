@@ -15,8 +15,10 @@ import { spacing } from '@/theme/spacing';
 // 굵기는 semibold — 앱의 다수파다(`fields/new` 3곳 · `fields/[id]/edit` 3곳 ·
 // `trips/[id]/edit` 1곳이 semibold, `reports/[id]/edit` 하나만 bold 였다).
 //
-// `GroupLabel`(caption+bold+muted+**uppercase** 눈썹)과는 다른 층이다 — 이건 컨트롤에
-// 직접 붙는 라벨이라 본문 크기(bodySm)를 쓴다. 둘을 하나로 합칠지는 14절 미결.
+// `GroupLabel`(눈썹)과 합치지 않는다 — **애초에 다른 문제를 푼다**(문서 9.1 확정).
+// 눈썹은 화면을 구획으로 나누는 표지고, 이건 바로 아래 컨트롤이 무엇을 받는지 말한다.
+// 고르는 기준은 크기가 아니라 **무엇 위에 얹는가**: 카드·섹션 위면 GroupLabel, 컨트롤
+// 하나 위면 FieldLabel.
 export function FieldLabel({
   children,
   counter,

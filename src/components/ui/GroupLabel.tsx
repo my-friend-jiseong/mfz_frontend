@@ -12,6 +12,9 @@ import { spacing } from '@/theme/spacing';
 //
 // 지도 부유물 안의 위젯 제목(MapLegend·MapFilterBar)은 같은 Text 조합이지만 margin 이
 // 없고 uppercase 도 아니다 — 다른 패턴이라 여기로 흡수하지 않는다.
+//
+// 컨트롤 하나에 직접 붙는 라벨(입력·picker·칩 줄)은 이게 아니라 `FieldLabel` 이다 —
+// 고르는 기준은 **무엇 위에 얹는가**(문서 9.1 확정). 크기 차이는 위계가 아니라 역할 차이다.
 export function GroupLabel({
   children,
   style,
