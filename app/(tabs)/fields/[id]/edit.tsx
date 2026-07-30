@@ -309,8 +309,8 @@ export default function EditField() {
     // 현 위치 플로우에서 역지오코딩이 아직 주소를 못 채운 경우 — 빈 주소 PATCH 차단.
     if (
       newAddress &&
-      !newAddress.roadAddress.trim() &&
-      !newAddress.jibunAddress.trim()
+      !newAddress.roadAddress?.trim() &&
+      !newAddress.jibunAddress?.trim()
     ) {
       errs.address =
         '아직 주소를 확인하지 못했어요. 지도의 핀을 살짝 옮겨 주소를 다시 받아오거나, 주소를 검색해주세요.';

@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/Button';
 import { VISIT_STATUS_BADGE } from '@/theme/statusBadge';
 import { fmtDateTime } from '@/utils/datetime';
 import { Input } from '@/components/ui/Input';
+import { fieldSubtitle, fieldTitle } from '@/utils/fieldFacets';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
@@ -226,6 +227,10 @@ export default function FieldDetail() {
     ]);
   };
 
+  // 목록 카드와 동일한 규칙 — fieldTitle(name || address) + fieldSubtitle(제목이 안 보여준 나머지).
+  const title = fieldTitle(field);
+  const subtitle = fieldSubtitle(field, title);
+
   const statusFg = colors.fieldStatus[field.status];
 
   const renderVisit = ({ item }: { item: Visit }) => {
@@ -275,11 +280,16 @@ export default function FieldDetail() {
         </Text>
       </Pressable>
 
+      {/* 제목은 목록 카드와 같은 셀렉터를 쓴다 — 이름을 붙였는데 상세에서 안 보이면
+          "저장이 안 됐나" 로 읽힌다(2026-07-30: 이름 입력을 넣고 실제로 그 상태였다).
+          제목이 이름이면 주소는 그 아래로, 제목이 곧 주소면 한 번만 보여준다. */}
       <Text variant="h3" style={styles.addr}>
-        {field.address}
+        {title}
       </Text>
-      {field.addressDetail ? (
-        <Text variant="body">{field.addressDetail}</Text>
+      {subtitle ? (
+        <Text variant="body" color="textMuted">
+          {subtitle}
+        </Text>
       ) : null}
       {field.projectName ? (
         <View style={styles.metaRow}>

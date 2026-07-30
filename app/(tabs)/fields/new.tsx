@@ -290,7 +290,9 @@ export default function NewField() {
   const handleCreate = async () => {
     if (!user || !selected) return;
     // 역지오코딩이 아직(또는 끝내) 주소를 못 채운 경우 — 빈 주소 등록 차단.
-    if (!selected.roadAddress.trim() && !selected.jibunAddress.trim()) {
+    // 옵셔널 체이닝은 방어다 — API 경계에서 정규화하지만, 이 가드의 목적 자체가
+    // '주소가 아직 없다' 를 잡는 것이라 여기서 죽으면 안 된다.
+    if (!selected.roadAddress?.trim() && !selected.jibunAddress?.trim()) {
       Alert.alert(
         '주소 확인 필요',
         '아직 주소를 확인하지 못했어요. 지도의 핀을 살짝 옮겨 주소를 다시 받아오거나, 주소를 검색해주세요.',

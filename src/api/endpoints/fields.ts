@@ -234,10 +234,26 @@ export const fields = {
   remove: (fieldId: string) =>
     request<null>(`/api/fields/${fieldId}`, { method: 'DELETE' }),
 
-  addressSearch: (keyword: string) =>
-    request<AddressSearchResponse>('/api/fields/address/search', {
-      query: { keyword },
-    }),
+  // 경계에서 정규화한다 — 백엔드가 **지번만 있는 주소에 `roadAddress: null`** 을 보낸다.
+  // 타입은 `string` 이라고 말하지만 2026-07-30 실측에서 null 이 왔고, 그대로 흘려보내면
+  // `selected.roadAddress.trim()` 에서 현장 등록·수정 화면이 그냥 죽었다(TypeError).
+  // 여기서 한 번 막아 아래 계층이 타입을 믿을 수 있게 한다. 서버 수정 요청은 백로그 §32.
+  addressSearch: async (keyword: string) => {
+    const res = await request<AddressSearchResponse>(
+      '/api/fields/address/search',
+      { query: { keyword } },
+    );
+    return {
+      ...res,
+      items: (res.items ?? []).map((it) => ({
+        ...it,
+        roadAddress: it.roadAddress ?? '',
+        jibunAddress: it.jibunAddress ?? '',
+        sido: it.sido ?? '',
+        sigungu: it.sigungu ?? '',
+      })),
+    };
+  },
 
   addTextMemo: (fieldId: string, text: string) =>
     request<FieldMemoResponse>(`/api/fields/${fieldId}/memos`, {
