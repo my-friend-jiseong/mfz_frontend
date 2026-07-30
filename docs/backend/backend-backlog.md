@@ -433,6 +433,87 @@ cron·스케줄러·`setInterval`·retention/cleanup/purge 코드 0건. 코드�
 
 ---
 
+## 31. 🔴 업로드된 파일이 전부 404 — 사진·Word 를 다시 받을 수 없다
+
+DB 메타데이터(`fileUrl`·`fileSize`·`mimeType`)는 온전한데 **실제 파일이 하나도 응답되지 않는다.**
+현장 사진·보고서 전·중·후 사진·생성된 Word 가 앱 전 화면에서 깨진다. 업로드는 성공하고
+기록도 남는데 다시 볼 수 없는 상태다.
+
+### 실측 (2026-07-30, 운영 `https://ilgayo.co.kr`, 더미계정)
+
+**응답 본문이 두 갈래로 갈리는 게 핵심이다** — 같은 404 라도 원인이 다르다.
+
+| 경로 | status | Content-Type | 본문 | 해석 |
+|---|---|---|---|---|
+| `/storage/fields/…jpg` | 404 | `application/json` | `{"code":"not_found","message":"리소스를 찾을 수 없습니다"}` | **라우트는 살아 있다** — `mountFileStorageRoute` 의 `existsSync(target)` 실패 분기 |
+| `/storage/reports/…jpg` | 404 | `application/json` | 동일 | 동일 |
+| `/output/report-….docx` | 404 | `text/html` (171B) | Express 기본 `Cannot GET` | **라우트 자체가 없다** |
+| `/zzz-nonexistent` (대조군) | 404 | `text/html` | 동일 | — |
+| `/api/me` (대조군) | 401 | `application/json` | `auth_header_missing` | 서버 정상 |
+
+경로 변형(`/api/storage/…`·`/files/…`·`/uploads/…`)도 전부 404. 브라우저 `<img>` 로드·페이지 내
+`fetch`·`curl` 세 경로 모두 동일하다.
+
+### (A) `/storage/*` — 라우트는 정상, 파일이 디스크에 없다
+
+- **대상**: 더미계정에서 확인 가능한 **23개 전부** (현장 직접 첨부 10 + 보고서 슬롯 13),
+  업로드 시점 **2026-06-21 ~ 07-27**. 오래된 것도 3일 전 것도 똑같이 없다.
+- **DB 메타는 온전**: 예) `fileSize: 12439`, `mimeType: "image/jpeg"`, `fileUrl` 정상 형식.
+- **파생 사실 — 운영은 지금 `disk` 드라이버로 돌고 있다**: JSON `not_found` 가 온다는 건
+  `mountFileStorageRoute` 가 실제로 마운트됐다는 뜻인데, 그 함수는 `driver !== "disk"` 면
+  **no-op** 이다. 즉 **§10 에서 도입한 s3/minio 는 운영에 적용돼 있지 않다** (아카이브 §10 의
+  "MinIO/S3 ✅" 기술과 운영 실태가 어긋난다).
+- **유력 원인**: storage 루트가 **컨테이너 재생성 때 사라지는 경로**에 있다. 배포마다
+  디스크가 초기화되면 DB 행만 남고 파일은 전부 증발하는데, 관측이 정확히 그 모양이다.
+
+**요청**
+
+1. **확인** — 운영 `FILE_STORAGE_ROOT` 의 실제 경로와, 그 경로가 `docker-compose` 의
+   named volume / bind mount 로 **컨테이너 수명과 분리돼 있는지**.
+2. **조치 (택1)**
+   - ① `disk` 유지 + **영속 볼륨 마운트**
+   - ② §10 의 **s3/minio 로 실제 전환**. 이때 `S3_PUBLIC_BASE_URL`(또는 `MINIO_PUBLIC_BASE_URL`)을
+     **반드시 절대 URL 로** 설정할 것 — 상대 기본값(`/storage`)으로 두면 `mountFileStorageRoute`
+     가 no-op 이 되어 **지금과 똑같이 전부 404** 가 된다. 이 함수는 `base` 가 `http(s)://` 로
+     시작하면 라우트를 아예 안 건다.
+3. **유실 레코드 처리 회신** — 파일 없는 `field_photos`·`field_reports.*PhotoUrl` 행을
+   정리할지 남길지. 남긴다면 프론트가 404 를 빈 칸이 아니라 "이미지 없음"으로 그린다.
+
+**미확인 1건 (백엔드에서 30초면 갈린다)**: 지금 **새로 업로드한 사진이 즉시 읽히는가.**
+200 이면 볼륨·보존 문제(과거 파일만 유실), 404 면 쓰기 경로와 읽기 경로의 불일치다.
+프론트에서 돌리려다 세션 만료로 못 돌렸다.
+
+### (B) `/output/*.docx` — 서빙 라우트가 없다
+
+- `GET /api/reports` 가 `outputFileUrl: "/output/report-1783495887837.docx"` 를 내려주는데
+  이 경로는 **Express 기본 404(HTML)** 다 — 어떤 라우트도 잡지 않는다.
+- 더미계정 보고서 19건 중 **4건이 `outputFileUrl` 을 갖고 있고 전부 받을 수 없다.**
+- `mountFileStorageRoute` 는 scope 를 `visits|fields|reports` 로 제한하므로 `/output` 은
+  애초에 이 라우트의 대상이 아니다.
+
+**요청**: `/output` 정적 서빙을 추가하거나, **Word 결과물을 파일 스토리지(`scope=reports`)로
+옮기고 `outputFileUrl` 을 `/storage/reports/…` 로 통일**. 후자면 (A) 조치와 한 번에 끝나고
+경로가 두 갈래로 갈리지 않는다. PDF export(`§19`)의 `url`·`downloadUrl` 도 같은 기준인지 확인 요망.
+
+### 우선순위
+
+🔴 **높음.** 제품 핵심(현장 전·중·후 사진)이 **재조회 불가**다. 기록은 남는데 증빙이 사라지는
+형태라, 실사용 관점에서는 기능이 없는 것과 같다. 기말 발표 시연에서 사진 표시·Word 다운로드를
+라이브로 보여줄 계획이면 그대로 실패한다(녹화 영상 시연이면 발표 자체는 무사).
+
+### 프론트 현황
+
+- **프론트 버그가 아니다** — URL 절대화(`src/api/config.ts:toAbsoluteFileUrl`)는 정상 동작하고,
+  절대화된 URL 을 서버가 404 로 돌려준다.
+- **선조치 후보 (미착수)**: 이미지 404 시 플레이스홀더·안내 문구. 지금은 빈 칸으로 보인다.
+  (A)-3 회신에 따라 문구가 갈려서 대기 중.
+
+### 발견 시점
+
+2026-07-30, 발표자료용 실증 규모 집계 중 사진 URL 을 훑다가 확인.
+
+---
+
 ## 🔗 2026-07-26 배치 프론트 연동 — ✅ 종결 (이력)
 
 > 2026-07-26 백엔드 배치([release-2026-07-26-backend-backlog.md](./archive/release-2026-07-26-backend-backlog.md))로
@@ -485,6 +566,14 @@ cron·스케줄러·`setInterval`·retention/cleanup/purge 코드 0건. 코드�
 ---
 
 ## 변경 이력
+
+- **2026-07-30**: **§31 추가 — 업로드 파일 전량 404.** 발표자료용 집계 중 사진 URL 을 훑다가
+  확인했다. 처음엔 "파일 서빙 라우트가 죽었다" 로 봤는데, **404 본문 형태가 두 갈래로 갈리는
+  것**을 보고 원인이 하나가 아님을 알았다 — `/storage` 는 JSON `not_found`(라우트 살아있음 =
+  파일이 없음), `/output` 은 Express 기본 HTML(라우트 없음). 이 구분이 조치를 가른다.
+  같은 관측에서 **운영이 아직 `disk` 드라이버로 돈다**는 사실도 파생됐다(`mountFileStorageRoute`
+  는 disk 가 아니면 no-op 이므로 JSON 응답 자체가 증거) — 아카이브 §10 의 "MinIO/S3 ✅" 는
+  코드 병합 기준이지 운영 반영 기준이 아니었다.
 
 - **2026-07-29**: **문서 정리** — 종결된 전달본·백엔드 결과보고서 4건을 [`archive/`](./archive/) 로
   이동(`backend-handoff.md`, `release-2026-06-*`, `release-2026-06-19-*`, `release-2026-07-26-*`).
