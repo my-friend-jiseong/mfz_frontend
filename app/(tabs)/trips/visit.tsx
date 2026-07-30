@@ -81,10 +81,13 @@ export default function VisitDetail() {
   return (
     <MapSheetLayout title="방문 상세" onBack={() => safeBack(router)} initialIndex={2}>
       <ScrollView contentContainerStyle={styles.scroll}>
-        <Text variant="h2" weight="heavy">
-          {siteName ?? '현장 방문'}
-        </Text>
-        <View style={styles.badgeRow}>
+        {/* 이 화면에서 답해야 할 것은 "이 방문이 어떻게 됐나" 다 — 상태를 제목과 같은 줄에
+            둬서 함께 읽히게 한다. 배지가 자기 줄을 통째로 차지하던 것을 접었다
+            (FieldCard 에서 이미 같은 이유로 고친 패턴). */}
+        <View style={styles.titleRow}>
+          <Text variant="h2" weight="heavy" style={styles.title}>
+            {siteName ?? '현장 방문'}
+          </Text>
           <Badge
             label={VISIT_STATUS_LABEL[status]}
             tone={badge.tone}
@@ -92,7 +95,7 @@ export default function VisitDetail() {
             size="md"
           />
         </View>
-        <Text variant="bodySm" color="textMuted" style={styles.meta}>
+        <Text variant="bodySm" color="textMuted" numeric>
           방문 시각: {fmtDateTime(data.visitedAt)}
         </Text>
 
@@ -119,9 +122,17 @@ export default function VisitDetail() {
 }
 
 const styles = StyleSheet.create({
-  scroll: { padding: spacing.lg, paddingBottom: spacing.xxl },
-  badgeRow: { marginTop: spacing.sm, flexDirection: 'row' },
-  meta: { marginTop: spacing.sm },
-  reason: { marginTop: spacing.sm },
-  toField: { marginTop: spacing.lg },
+  // 간격 리듬 — 이전엔 제목·배지·시각·사유가 전부 sm 한 값이라 무엇이 한 덩어리인지
+  // 눈이 읽지 못했다(2.1절). 제목+상태+시각은 한 덩어리(sm), 성격이 다른 사유는 md,
+  // 그룹 밖인 이동 버튼은 xl.
+  scroll: { padding: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.sm },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  title: { flex: 1 },
+  reason: { marginTop: spacing.md },
+  toField: { marginTop: spacing.xl },
 });

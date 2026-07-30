@@ -34,6 +34,7 @@ import { getQuickPhoto } from '@/components/fields/quickPhotoHandoff';
 import { useKakaoPlaceSearch } from '@/components/fields/useKakaoPlaceSearch';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
+import { FieldLabel } from '@/components/ui/FieldLabel';
 import { Button } from '@/components/ui/Button';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { colors } from '@/theme/colors';
@@ -587,14 +588,10 @@ export default function NewField() {
           </>
         ) : null}
 
-        <Text variant="bodySm" weight="semibold" color="textMuted" style={styles.label}>
-          프로젝트 (선택)
-        </Text>
+        <FieldLabel>프로젝트 (선택)</FieldLabel>
         <ProjectPicker value={projectId} onChange={setProjectId} />
 
-        <Text variant="bodySm" weight="semibold" color="textMuted" style={styles.label}>
-          분류 (선택)
-        </Text>
+        <FieldLabel>분류 (선택)</FieldLabel>
         <CategoryMultiPicker
           value={categories}
           onChange={setCategories}
@@ -609,9 +606,7 @@ export default function NewField() {
           containerStyle={styles.fieldGap}
         />
 
-        <Text variant="bodySm" weight="semibold" color="textMuted" style={styles.label}>
-          상태
-        </Text>
+        <FieldLabel>상태</FieldLabel>
         <View style={styles.statusRow}>
           {FIELD_STATUS_VALUES.map((s) => (
             <FilterChip
@@ -645,10 +640,6 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   scroll: { padding: spacing.xl, paddingBottom: spacing.xxl * 2 },
   title: { marginBottom: spacing.lg },
-  label: {
-    marginTop: spacing.md,
-    marginBottom: spacing.xs,
-  },
   fieldGap: { marginTop: spacing.md },
   hint: { marginTop: spacing.sm },
   loadingRow: { marginTop: spacing.sm },

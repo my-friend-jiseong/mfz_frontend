@@ -14,6 +14,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { safeBack } from '@/utils/backNavigation';
 import { EmptyState } from '@/components/EmptyState';
 import { Input } from '@/components/ui/Input';
+import { FieldLabel } from '@/components/ui/FieldLabel';
 import { Button } from '@/components/ui/Button';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { SafeScreen } from '@/components/SafeScreen';
@@ -172,14 +173,10 @@ export default function EditReport() {
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.labelRow}>
-          <Text variant="bodySm" weight="bold" color="textMuted">
-            제목 *
-          </Text>
-          <Text variant="caption" weight="semibold" color="textMuted">
-            {title.length} / {TITLE_MAX}
-          </Text>
-        </View>
+        {/* 화면 첫 줄 — scroll 의 padding xl 위에 marginTop 을 더하지 않는다. */}
+        <FieldLabel counter={`${title.length} / ${TITLE_MAX}`} style={styles.firstLabel}>
+          제목 *
+        </FieldLabel>
         <Input
           value={title}
           onChangeText={(v) => {
@@ -222,13 +219,7 @@ export default function EditReport() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   scroll: { padding: spacing.xl, paddingBottom: spacing.xxl },
-  labelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: spacing.lg,
-    marginBottom: spacing.sm,
-  },
+  firstLabel: { marginTop: 0 },
   error: { marginTop: spacing.md },
   submit: { marginTop: spacing.xl },
 });

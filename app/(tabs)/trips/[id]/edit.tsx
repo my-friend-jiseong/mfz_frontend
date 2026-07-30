@@ -14,6 +14,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { SafeScreen } from '@/components/SafeScreen';
 import { Text } from '@/components/ui/Text';
 import { Input } from '@/components/ui/Input';
+import { FieldLabel } from '@/components/ui/FieldLabel';
 import { Button } from '@/components/ui/Button';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
@@ -169,14 +170,7 @@ export default function EditTrip() {
             {fmtDate(trip.startedAt)} 시작
           </Text>
 
-          <View style={styles.labelRow}>
-            <Text variant="bodySm" weight="semibold" color="textMuted">
-              제목
-            </Text>
-            <Text variant="caption" weight="semibold" color="textMuted">
-              {title.length} / {TITLE_MAX}
-            </Text>
-          </View>
+          <FieldLabel counter={`${title.length} / ${TITLE_MAX}`}>제목</FieldLabel>
           <Input
             value={title}
             onChangeText={(v) => {
@@ -237,13 +231,6 @@ const styles = StyleSheet.create({
   scroll: { padding: spacing.xl, paddingBottom: spacing.xxl * 2 },
   center: { flex: 1, justifyContent: 'center' },
   sub: { marginTop: spacing.xs },
-  labelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: spacing.xl,
-    marginBottom: spacing.xs,
-  },
   error: { marginTop: spacing.md },
   submit: { marginTop: spacing.xl },
   dangerZone: {

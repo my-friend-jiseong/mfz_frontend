@@ -38,6 +38,7 @@ import { ProjectPicker } from '@/components/ProjectPicker';
 import { CategoryMultiPicker } from '@/components/fields/CategoryMultiPicker';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
+import { FieldLabel } from '@/components/ui/FieldLabel';
 import { Button } from '@/components/ui/Button';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { colors } from '@/theme/colors';
@@ -576,20 +577,23 @@ export default function EditField() {
           </Button>
         ) : null}
 
-        <View style={styles.labelRow}>
-          <Text variant="bodySm" weight="semibold" color="textMuted" style={styles.label}>주소</Text>
-          {newAddress ? (
-            <Button
-              onPress={handleRevertAddress}
-              disabled={submitting}
-              variant="ghost"
-              size="sm"
-              leftIcon="arrow-undo"
-            >
-              되돌리기
-            </Button>
-          ) : null}
-        </View>
+        <FieldLabel
+          trailing={
+            newAddress ? (
+              <Button
+                onPress={handleRevertAddress}
+                disabled={submitting}
+                variant="ghost"
+                size="sm"
+                leftIcon="arrow-undo"
+              >
+                되돌리기
+              </Button>
+            ) : null
+          }
+        >
+          주소
+        </FieldLabel>
         <Card
           padding="md"
           style={[styles.readonly, newAddress ? styles.readonlyChanged : undefined]}
@@ -640,12 +644,7 @@ export default function EditField() {
         {/* 이름 — 비우면 주소가 제목이 된다(fieldTitle 이 name || address).
             이 입력이 없던 동안 앱으로 만든 현장은 전부 제목이 주소였고, 목록 카드에서
             제목과 부제가 같은 주소를 반복했다. */}
-        <View style={styles.labelRow}>
-          <Text variant="bodySm" weight="semibold" color="textMuted" style={styles.label}>이름 (선택)</Text>
-          <Text variant="caption" weight="semibold" color="textMuted">
-            {name.length} / {NAME_MAX}
-          </Text>
-        </View>
+        <FieldLabel counter={`${name.length} / ${NAME_MAX}`}>이름 (선택)</FieldLabel>
         <Input
           value={name}
           onChangeText={setName}
@@ -655,7 +654,7 @@ export default function EditField() {
           helperText="비워두면 주소가 현장 이름이 됩니다"
         />
 
-        <Text variant="bodySm" weight="semibold" color="textMuted" style={styles.label}>프로젝트 (선택)</Text>
+        <FieldLabel>프로젝트 (선택)</FieldLabel>
         <ProjectPicker
           value={projectId}
           onChange={setProjectId}
@@ -663,19 +662,14 @@ export default function EditField() {
           disabled={submitting}
         />
 
-        <Text variant="bodySm" weight="semibold" color="textMuted" style={styles.label}>분류 (선택)</Text>
+        <FieldLabel>분류 (선택)</FieldLabel>
         <CategoryMultiPicker
           value={categories}
           onChange={setCategories}
           disabled={submitting}
         />
 
-        <View style={styles.labelRow}>
-          <Text variant="bodySm" weight="semibold" color="textMuted" style={styles.label}>상세 주소</Text>
-          <Text variant="caption" weight="semibold" color="textMuted">
-            {addressDetail.length} / {DETAIL_MAX}
-          </Text>
-        </View>
+        <FieldLabel counter={`${addressDetail.length} / ${DETAIL_MAX}`}>상세 주소</FieldLabel>
         <Input
           value={addressDetail}
           onChangeText={(v) => {
@@ -688,7 +682,7 @@ export default function EditField() {
           error={fieldErrors.detailAddress}
         />
 
-        <Text variant="bodySm" weight="semibold" color="textMuted" style={styles.label}>상태</Text>
+        <FieldLabel>상태</FieldLabel>
         <View style={styles.statusRow}>
           {FIELD_STATUS_VALUES.map((s) => (
             <FilterChip
@@ -748,18 +742,6 @@ export default function EditField() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   scroll: { padding: spacing.xl, paddingBottom: spacing.xxl * 2 },
-  labelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: spacing.md,
-    marginBottom: spacing.xs,
-    gap: spacing.sm,
-  },
-  label: {
-    marginTop: spacing.md,
-    marginBottom: spacing.xs,
-  },
   fieldGap: { marginTop: spacing.sm },
   // 읽기 전용 블록은 채우지 않는다. Input 이 inset(slate100 채움)으로 바뀐 뒤로
   // surfaceMuted 채움은 '편집 가능' 신호와 같은 값이 되어, 폼 안에서 이 주소 블록이
