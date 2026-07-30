@@ -126,6 +126,10 @@ export default function NewField() {
   const [mapBusy, setMapBusy] = useState(false);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [categories, setCategories] = useState<string[]>([]);
+  // 이름 — 선택. 비우면 주소를 이름으로 보낸다(백엔드 name 은 필수).
+  // 이 입력이 없던 동안 앱으로 만든 현장은 전부 name === 주소였고, 목록 카드에서
+  // 제목과 부제가 같은 주소를 반복했다.
+  const [name, setName] = useState('');
   const [detail, setDetail] = useState('');
   const [status, setStatus] = useState<FieldStatus>('pending');
   const [submitting, setSubmitting] = useState(false);
@@ -294,7 +298,9 @@ export default function NewField() {
       return;
     }
     const baseBody = {
-      name: selected.display,
+      // 비워두면 주소가 제목이 된다 — fieldTitle 이 name || address 이므로 결과는 같지만,
+      // 백엔드 name 은 필수라 무언가는 보내야 한다.
+      name: name.trim() || selected.display,
       status,
       // 산지 등 도로명 미부여 지점의 역지오코딩은 지번만 올 수 있음 — ManualCoordinateForm 과 동일 fallback.
       roadAddress: selected.roadAddress || selected.jibunAddress,
@@ -565,6 +571,16 @@ export default function NewField() {
                   return next;
                 })
               }
+            />
+            <Input
+              label="이름 (선택)"
+              value={name}
+              onChangeText={setName}
+              editable={!submitting}
+              maxLength={100}
+              placeholder={selected.display}
+              helperText="비워두면 주소가 현장 이름이 됩니다"
+              containerStyle={styles.fieldGap}
             />
           </>
         ) : null}

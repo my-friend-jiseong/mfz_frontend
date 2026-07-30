@@ -47,6 +47,8 @@ import { FilterChip } from '@/components/ui/FilterChip';
 import { SafeScreen } from '@/components/SafeScreen';
 
 const DETAIL_MAX = 100;
+// 백엔드 name maxLength 는 스키마에 안 적혀 있다 — 프로필 이름(100)과 같은 값으로 맞춘다.
+const NAME_MAX = 100;
 
 // 카테고리 배열 동일성 키 — 순서 무관 비교(변경 감지·PATCH 판정용).
 const catKey = (a: readonly string[]) => JSON.stringify([...a].sort()); //');
@@ -83,15 +85,23 @@ export default function EditField() {
   // Hooks must be called unconditionally — early return 후로 옮기지 않고 옵셔널 처리.
   const initial = useMemo(
     () => ({
+      name: field?.name ?? '',
       addressDetail: field?.addressDetail ?? '',
       status: field?.status ?? ('pending' as FieldStatus),
       categories: field?.categories ?? [],
       projectId: field?.projectId ?? null,
     }),
-    [field?.addressDetail, field?.status, field?.categories, field?.projectId],
+    [
+      field?.name,
+      field?.addressDetail,
+      field?.status,
+      field?.categories,
+      field?.projectId,
+    ],
   );
   const initialRef = useRef(initial);
 
+  const [name, setName] = useState(initial.name);
   const [addressDetail, setAddressDetail] = useState(initial.addressDetail);
   const [status, setStatus] = useState<FieldStatus>(initial.status);
   const [categories, setCategories] = useState<string[]>(initial.categories);
@@ -248,10 +258,38 @@ export default function EditField() {
     );
   }
 
+  // field 는 진입 시점에 store 에 없을 수 있다 — URL 직접 진입·콜드 스타트에서는 loadDetail 이
+  // 나중에 채운다. `useState` 초기값은 **첫 마운트에서만** 쓰이므로, 그때 비어 있었으면 폼이
+  // 계속 빈 값을 들고 있는다(`if (!field)` 조기 반환은 아래 231 행 — 상태 hook 보다 뒤다).
+  // 그 상태로 '분류' 만 건드리면 PATCH 에 categories: [새 값] 만 실려 **기존 분류가 조용히
+  // 사라지고**, 상태 칩도 실제 값과 다른 것이 선택돼 보인다.
+  // fieldId 당 한 번만 동기화한다 — 저장 후 store 갱신이나 목록 refresh 가 사용자의 편집을
+  // 되돌리면 안 된다.
+  const hydratedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!field || hydratedRef.current === fieldId) return;
+    hydratedRef.current = fieldId;
+    const snapshot = {
+      name: field.name ?? '',
+      addressDetail: field.addressDetail ?? '',
+      status: field.status,
+      categories: field.categories ?? [],
+      projectId: field.projectId ?? null,
+    };
+    initialRef.current = snapshot;
+    setName(snapshot.name);
+    setAddressDetail(snapshot.addressDetail);
+    setStatus(snapshot.status);
+    setCategories(snapshot.categories);
+    setProjectId(snapshot.projectId);
+  }, [field, fieldId]);
+
+  const nameTrim = name.trim();
   const detailTrim = addressDetail.trim();
   const categoriesChanged =
     catKey(categories) !== catKey(initialRef.current.categories);
   const hasChanges =
+    nameTrim !== initialRef.current.name.trim() ||
     detailTrim !== initialRef.current.addressDetail.trim() ||
     status !== initialRef.current.status ||
     categoriesChanged ||
@@ -278,13 +316,23 @@ export default function EditField() {
     setSubmitting(true);
 
     // 변경된 항목만 호출 — 빈 PATCH 방지.
+    const nameChanged = nameTrim !== initialRef.current.name.trim();
     const detailChanged = detailTrim !== initialRef.current.addressDetail.trim();
     const statusChanged = status !== initialRef.current.status;
     const projectIdChanged = projectId !== initialRef.current.projectId;
     const addressChanged = newAddress !== null;
 
-    if (detailChanged || categoriesChanged || projectIdChanged || addressChanged) {
+    if (
+      nameChanged ||
+      detailChanged ||
+      categoriesChanged ||
+      projectIdChanged ||
+      addressChanged
+    ) {
       const body: UpdateFieldBody = {};
+      // 이름을 비우면 주소가 제목이 된다(fieldTitle 이 name || address) — 백엔드 name 은
+      // optional 이라 빈 문자열을 그대로 보낸다.
+      if (nameChanged) body.name = nameTrim;
       if (detailChanged) body.detailAddress = detailTrim;
       if (categoriesChanged) body.categories = categories;
       if (projectIdChanged) body.projectId = projectId;
@@ -582,6 +630,24 @@ export default function EditField() {
             });
             if (fieldErrors.address) clearFieldErr('address');
           }}
+        />
+
+        {/* 이름 — 비우면 주소가 제목이 된다(fieldTitle 이 name || address).
+            이 입력이 없던 동안 앱으로 만든 현장은 전부 제목이 주소였고, 목록 카드에서
+            제목과 부제가 같은 주소를 반복했다. */}
+        <View style={styles.labelRow}>
+          <Text variant="bodySm" weight="semibold" color="textMuted" style={styles.label}>이름 (선택)</Text>
+          <Text variant="caption" weight="semibold" color="textMuted">
+            {name.length} / {NAME_MAX}
+          </Text>
+        </View>
+        <Input
+          value={name}
+          onChangeText={setName}
+          editable={!submitting}
+          maxLength={NAME_MAX}
+          placeholder={field.address}
+          helperText="비워두면 주소가 현장 이름이 됩니다"
         />
 
         <Text variant="bodySm" weight="semibold" color="textMuted" style={styles.label}>프로젝트 (선택)</Text>
