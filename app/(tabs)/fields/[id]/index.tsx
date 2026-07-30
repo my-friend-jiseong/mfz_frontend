@@ -14,14 +14,18 @@ import { pickPhoto, promptPhotoSource } from '@/utils/media';
 import { openKakaoRouteTo } from '@/utils/kakaoMap';
 import { PhotoGrid } from '@/components/AttachmentPreview';
 import { Card } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
+import { Badge, BADGE_SHAPE_GLYPH } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { VISIT_STATUS_BADGE } from '@/theme/statusBadge';
+import { FIELD_STATUS_BADGE, VISIT_STATUS_BADGE } from '@/theme/statusBadge';
 import { fmtDateTime } from '@/utils/datetime';
 import { Input } from '@/components/ui/Input';
+import { GroupLabel } from '@/components/ui/GroupLabel';
 import { fieldSubtitle, fieldTitle } from '@/utils/fieldFacets';
 import { colors } from '@/theme/colors';
-import { spacing, radius } from '@/theme/spacing';
+import { spacing, radius, touchTarget } from '@/theme/spacing';
+
+// 메모 삭제 버튼은 22px — 목록이 두꺼워지지 않게 크기는 두고 터치 영역만 44 로 채운다.
+const MEMO_DELETE_HIT_SLOP = (touchTarget.control - 22) / 2;
 import { opacity } from '@/theme/motion';
 import { withAlpha } from '@/theme/withAlpha';
 import {
@@ -45,10 +49,8 @@ export default function FieldDetail() {
   const addFieldPhoto = useFieldStore((s) => s.addPhoto);
   const removeTextMemo = useFieldStore((s) => s.removeTextMemo);
   const removePhoto = useFieldStore((s) => s.removePhoto);
-  const removeField = useFieldStore((s) => s.remove);
   const patchFieldStatus = useFieldStore((s) => s.patchStatus);
   const allVisits = useVisitStore((s) => s.visits);
-  const [deleting, setDeleting] = useState(false);
 
   // 진입 시 detail 페치 (directAttachments 채우기)
   useEffect(() => {
@@ -135,39 +137,6 @@ export default function FieldDetail() {
         .sort((a, b) => b.visitedAt.localeCompare(a.visitedAt)),
     [allVisits, fieldId],
   );
-
-  // 삭제 사전 조건 — 방문 이력이 있으면 백엔드가 거부. 사유를 동선 진입 전에 노출해
-  // "확인 → 사실은 안 됨" anti-pattern 차단. edit.tsx 와 동일 정책, UI 만 detail 헤더로 끌어옴.
-  const deleteBlockedReason =
-    visits.length > 0
-      ? `방문 기록 ${visits.length}건이 있어 삭제할 수 없습니다.`
-      : null;
-  const handleDelete = () => {
-    if (deleting) return;
-    if (deleteBlockedReason) {
-      Alert.alert('삭제할 수 없습니다', `${deleteBlockedReason}\n\n방문 기록을 정리하거나 상태를 '조치 완료' 로 변경해주세요.`);
-      return;
-    }
-    Alert.alert('현장 삭제', '이 현장을 삭제할까요? 메모·사진도 함께 정리됩니다.', [
-      { text: '취소', style: 'cancel' },
-      {
-        text: '삭제',
-        style: 'destructive',
-        onPress: async () => {
-          setDeleting(true);
-          const r = await removeField(fieldId);
-          setDeleting(false);
-          if (r.ok) {
-            router.replace('/(tabs)/fields' as never);
-          } else if ('needsConfirm' in r) {
-            Alert.alert('삭제할 수 없습니다', r.message);
-          } else {
-            Alert.alert('삭제 실패', r.error);
-          }
-        },
-      },
-    ]);
-  };
 
   // 상태 변경 중복 호출 가드. ★ early return **위**에 있어야 한다 —
   // 아래 `if (!field)` 뒤에 두면 현장이 아직 스토어에 없는 첫 렌더에선 훅이 6개,
@@ -270,7 +239,15 @@ export default function FieldDetail() {
           pressed && { opacity: opacity.pressed },
         ]}
       >
-        <Text variant="caption" weight="bold" style={{ color: statusFg }}>
+        {/* 형상 — 목록 카드와 같은 단일 출처를 거친다(6절). 이 칩은 색+라벨뿐이라
+            같은 상태가 목록에선 ●, 상세에선 형상 없이 보이고 있었다(강령 2). */}
+        <Text variant="bodySm" style={{ color: statusFg }}>
+          {BADGE_SHAPE_GLYPH[FIELD_STATUS_BADGE[field.status].shape]}
+        </Text>
+        {/* 이 화면의 focal 은 상태다. 그런데 caption(12)이라 화면에서 가장 작은 축이었고
+            제목(h3 18)보다 작았다 — 가장 중요한 것이 가장 작으면 위계가 없다. bodySm 로 올린다.
+            '변경' 은 보조라 caption 을 유지해 한 칩 안에서도 위계가 남게 한다. */}
+        <Text variant="bodySm" weight="bold" style={{ color: statusFg }}>
           {FIELD_STATUS_LABEL[field.status]}
         </Text>
         <View style={styles.statusDivider} />
@@ -287,7 +264,7 @@ export default function FieldDetail() {
         {title}
       </Text>
       {subtitle ? (
-        <Text variant="body" color="textMuted">
+        <Text variant="body" color="textMuted" style={styles.subtitle}>
           {subtitle}
         </Text>
       ) : null}
@@ -321,46 +298,20 @@ export default function FieldDetail() {
         </Button>
       </View>
 
+      {/* 삭제는 여기 두지 않는다 — 되돌릴 수 없는 동작은 '수정' 안의 위험 구역 하나로 모은다.
+          외근은 이미 같은 이동을 했다(trips/[id]/edit 주석: "상세 제목행의 빨강 휴지통에서 이동").
+          차단 정책(방문 기록 있으면 거부)도 그쪽에 같은 내용으로 있어 경로가 중복이었다. */}
       <View style={styles.actionRow}>
         <Button
           onPress={() => router.push(`/(tabs)/fields/${field.id}/edit` as never)}
           variant="secondary"
           fullWidth
           leftIcon="create-outline"
-          style={styles.actionPrimary}
         >
           수정
         </Button>
-        <Pressable
-          onPress={handleDelete}
-          disabled={deleting}
-          accessibilityRole="button"
-          accessibilityLabel="현장 삭제"
-          accessibilityHint={deleteBlockedReason ?? undefined}
-          hitSlop={8}
-          style={({ pressed }) => [
-            styles.deleteBtn,
-            deleteBlockedReason && styles.deleteBtnBlocked,
-            (deleting) && { opacity: opacity.disabled },
-            pressed && { opacity: opacity.pressed },
-          ]}
-        >
-          <Ionicons
-            name="trash-outline"
-            size={20}
-            color={deleteBlockedReason ? colors.textMuted : colors.danger}
-          />
-        </Pressable>
       </View>
-      {deleteBlockedReason ? (
-        <Text variant="caption" color="textMuted" style={styles.deleteHint}>
-          {deleteBlockedReason}
-        </Text>
-      ) : null}
-
-      <Text variant="bodySm" weight="bold" color="textMuted" style={styles.sectionTitle}>
-        메모 ({directTextMemos.length})
-      </Text>
+      <GroupLabel>메모 ({directTextMemos.length})</GroupLabel>
       <View style={styles.memoInputRow}>
         <Input
           value={memoInput}
@@ -382,7 +333,7 @@ export default function FieldDetail() {
       {directTextMemos.length > 0 ? (
         <View style={styles.memoList}>
           {directTextMemos.map((m) => (
-            <Card key={m.id} padding="md" style={styles.memoItem}>
+            <Card key={m.id} padding="md">
               <View style={styles.memoHead}>
                 <Text variant="bodySm" style={styles.memoText}>
                   {m.text}
@@ -391,7 +342,7 @@ export default function FieldDetail() {
                   onPress={() => handleRemoveMemo(m.id)}
                   accessibilityRole="button"
                   accessibilityLabel="메모 삭제"
-                  hitSlop={8}
+                  hitSlop={MEMO_DELETE_HIT_SLOP}
                   style={({ pressed }) => [
                     styles.memoDeleteBtn,
                     pressed && { opacity: opacity.pressed },
@@ -422,9 +373,7 @@ export default function FieldDetail() {
 
       <PhotoGrid photos={directPhotos} onDelete={handleRemovePhoto} />
 
-      <Text variant="bodySm" weight="bold" color="textMuted" style={styles.sectionTitle}>
-        방문 이력 ({visits.length})
-      </Text>
+      <GroupLabel>방문 이력 ({visits.length})</GroupLabel>
     </View>
   );
 
@@ -450,11 +399,13 @@ export default function FieldDetail() {
 }
 
 const styles = StyleSheet.create({
+  // 간격을 gap 과 marginTop 으로 이중 관리하고 있었다 — gap(xs) 위에 각 요소가 marginTop 을
+  // 덧칠해 실제 간격이 4·6·12·16·20 처럼 tier 밖 값이 됐다(2.1절). gap 을 걷고 요소마다
+  // '무엇과 무엇 사이인가' 로 토큰을 준다: 정체성 블록 안은 xs, 블록 사이는 md.
   summary: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
     paddingBottom: spacing.md,
-    gap: spacing.xs,
   },
   statusTap: {
     flexDirection: 'row',
@@ -467,22 +418,23 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   statusDivider: {
+    // 1px hairline — 높이는 caption 글자 높이에 맞춘 값이다. 좌우 여백은 칩의 gap(xs)이 준다.
     width: 1,
     height: 10,
     backgroundColor: colors.borderMuted,
-    marginHorizontal: 2,
   },
-  addr: { marginTop: spacing.sm },
+  addr: { marginTop: spacing.md },
+  subtitle: { marginTop: spacing.xs },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    marginTop: 2,
+    marginTop: spacing.xs,
   },
   navRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: spacing.sm,
+    marginTop: spacing.md,
     alignSelf: 'flex-start',
   },
   actionRow: {
@@ -491,23 +443,6 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginTop: spacing.md,
   },
-  actionPrimary: { flex: 1 },
-  deleteBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.dangerMuted,
-    borderWidth: 1,
-    borderColor: colors.danger,
-  },
-  deleteBtnBlocked: {
-    backgroundColor: colors.surfaceMuted,
-    borderColor: colors.borderMuted,
-  },
-  deleteHint: { marginTop: spacing.xs },
-  sectionTitle: { marginTop: spacing.lg },
   memoInputRow: {
     flexDirection: 'row',
     gap: spacing.sm,
@@ -516,7 +451,6 @@ const styles = StyleSheet.create({
   },
   memoInputWrap: { flex: 1 },
   memoList: { marginTop: spacing.sm, gap: spacing.xs },
-  memoItem: {},
   memoHead: {
     flexDirection: 'row',
     alignItems: 'flex-start',
