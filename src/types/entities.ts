@@ -44,7 +44,14 @@ export interface Trip {
   // 비어있을 때(다른 디바이스·세션) 트립 상세 카운트 라인이 "0곳/0건" 으로 빠지는
   // 회로를 server-truth 로 메우는 경로. backlog §11 destinations 영속화가 들어오면
   // 단일 진실값으로 격상.
+  //
+  // **두 카운트는 세는 대상이 다르다** (§26, 2026-07-29 백엔드 배포로 확정):
+  //   siteCount        — 실제로 들른 서로 다른 현장 수 (distinct visit.fieldId)
+  //   destinationCount — 계획 목적지 수 (trip_destinations 행 수)
+  // 진행률 "방문 N / 계획 M곳" 의 분모는 **destinationCount** 다. siteCount 를 분모로 쓰면
+  // 정의상 `siteCount ≤ visitCount` 라 분모가 항상 분자 이하가 되어 표기가 무너진다.
   siteCount?: number;
+  destinationCount?: number;
   visitCount?: number;
 }
 

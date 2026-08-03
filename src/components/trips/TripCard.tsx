@@ -16,7 +16,7 @@ interface Props {
   // 이 외근의 방문 건수. 로컬 visitStore 우선, 없으면 list API 의 visitCount 폴백 —
   // 계산 주체는 목록 화면(회로 주석은 trips/index.tsx 참고).
   visitCount: number;
-  // 계획 현장 수(Trip.siteCount). 없으면 null → 진행률 바 대신 방문 건수만 노출.
+  // 계획 목적지 수(Trip.destinationCount). 없으면 null → 진행률 바 대신 방문 건수만 노출.
   plannedCount: number | null;
   hasReport: boolean;
   // 콜백은 trip.id 를 받는다 — 목록이 useCallback 으로 한 번만 만들어 넘길 수 있어야
@@ -50,11 +50,15 @@ export const TripCard = memo(function TripCard({
   // (trips/index.tsx 가 activeTripId 있으면 active 화면으로 통째 redirect).
   const ended = !!trip.endedAt;
 
-  // 분모가 방문 수보다 작으면 그 값은 믿을 수 없다 — 목록은 destinations 가 없어 서버
-  // Trip.siteCount 에 의존하는데, 실측상 이 값이 실제 계획 수와 어긋나는 외근이 있다
-  // (상세 화면은 destinations.length 로 3 인데 siteCount 는 1 로 내려온 케이스 확인).
-  // 그때 "방문 3 / 계획 1곳" 같은 말이 안 되는 문구가 나오므로, 분모를 버리고
-  // "방문 N건" 으로 폴백한다. 0 나눗셈·"5/0곳" 도 같은 가드에 걸린다.
+  // 분모가 방문 수보다 작으면 그 값은 믿을 수 없다 — "방문 3 / 계획 1곳" 같은 말이 안 되는
+  // 문구가 나오므로 분모를 버리고 "방문 N건" 으로 폴백한다. 0 나눗셈·"5/0곳" 도 같은 가드다.
+  //
+  // ⚠️ 이 가드는 원래 **틀린 필드를 읽고 있어서** 사실상 항상 발동했다(2026-08-03 정정).
+  // 목록엔 destinations 가 없어 서버 카운트에 의존하는데, 그동안 `siteCount` 를 계획 수로
+  // 읽었다. 그건 실제로 **들른** 현장 수(distinct visit.fieldId)라 정의상 방문 수 이하 —
+  // 즉 분모가 항상 분자 이하여서 진행률 바가 한 번도 그려지지 않았다. 계획 수는 §26 으로
+  // 신설된 `destinationCount` 다. 가드 자체는 남긴다 — 구 백엔드 응답·미계획 외근에 여전히
+  // 필요하고, 이제는 '항상' 이 아니라 '진짜 이상할 때만' 발동한다.
   const planned =
     plannedCount != null && plannedCount > 0 && plannedCount >= visitCount
       ? plannedCount

@@ -351,7 +351,7 @@ export default function TripsList() {
               trip={item.trip}
               title={tripTitle(item.trip)}
               visitCount={visitsOf(item.trip)}
-              plannedCount={item.trip.siteCount ?? null}
+              plannedCount={item.trip.destinationCount ?? null}
               hasReport={reportedTripIds.has(item.trip.id)}
               onPress={openTrip}
               onFocusMap={focusMap}

@@ -78,9 +78,18 @@ export interface TripListItem {
   startedAt: string;
   endedAt: string | null;
   title?: string;
-  durationHHMM: string;
+  // ⚠️ 백엔드는 `durationMinutes`(정수, 분)를 준다 — OpenAPI 설명에 "HH:MM 포맷팅은 클라이언트
+  // 책임" 이라고 명시돼 있다(2026-08-03 실측). `durationHHMM: string` 은 존재하지 않는 필드였다.
+  // 소비처가 0곳이라 화면에 사고는 없었지만, 쓰는 순간 undefined 가 나오는 함정이라 정정한다.
+  // (목록 화면은 startedAt/endedAt 으로 utils/datetime.durationMinutes 를 직접 계산한다.)
+  durationMinutes?: number;
   visitCount: number;
+  // 실제로 **들른** 서로 다른 현장 수 (distinct visit.fieldId). 계획 수가 아니다 — §26.
+  // 정의상 항상 `siteCount ≤ visitCount` 이므로 진행률의 분모로 쓰면 안 된다.
   siteCount: number;
+  // 계획 목적지 수 (trip_destinations 행 수) — §26 으로 신설, 2026-07-29 배포 확인.
+  // `plannedSiteCount` 는 같은 값의 별칭이라 둘 중 하나만 읽는다.
+  destinationCount?: number;
   // ERD v2: 'active' | 'ended'. lifecycleStatus·abnormalTag 는 v2 존속 불확실 — optional (§8).
   status: string;
   lifecycleStatus?: string;
@@ -113,7 +122,8 @@ export interface TripDetailResponse {
   startedAt: string;
   endedAt: string | null;
   title?: string;
-  durationHHMM: string;
+  // 목록과 같은 정정 — 상세도 `durationMinutes`(분) 다. TripListItem 주석 참고.
+  durationMinutes?: number;
   visitCount: number;
   approximateDistanceKm?: number;
   status: string;

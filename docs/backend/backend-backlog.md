@@ -15,134 +15,17 @@
 
 ---
 
-## 26. 🟡 `GET /api/trips/list` — 목록에 **계획 목적지 수**가 없다 (`siteCount` 는 방문 현장 수)
+## 28. 🟢 주소검색 `buildingName` — **백엔드 완료.** 남은 건 프론트의 커버리지 대조뿐
 
-외근 목록 카드가 "방문 N / 계획 M곳"을 보여줘야 하는데, 목록 API 에는 목적지 배열이 없어
-`siteCount` 를 계획 수(M)로 쓴다. 그런데 이 값이 상세의 `destinations[]` 길이와 어긋난다.
-
-### 현황
-
-**운영 OpenAPI(2026-07-28 조회)**: `siteCount` 는 스펙 전체에서 **단 1회**, 설명 없이
-`{"siteCount": {"type": "integer"}}` 로만 등장한다(`/api/trips/list` items). 무엇을 세는지
-정의가 없어 프론트가 "계획 현장 수"로 해석한 것이 맞는지 확인 불가.
-
-**관측(웹, 더미계정)** — 같은 외근을 목록 카드와 상세(`GET /trips/:id` → `destinations[]`)로 대조:
-
-| 외근 | 계획 목적지(상세) | `siteCount`(목록) |
-|---|---|---|
-| 결과저장후 재진입 | 2 | **1** |
-| 진행중 화면 검증 | 3 | **0 또는 null** |
-
-방문 수와 상관관계가 있어 보이나(방문 1 → 1, 방문 0 → 0) 규칙을 단정할 수는 없었다.
-
-### ✅ 의미 확정 (2026-07-28, 백엔드 `docs/db-schema.md`)
-
-§12-A dump 의 「API에서만 존재하는 파생 값」이 답을 담고 있었다:
-
-> `TripListItem.siteCount` = **해당 trip visits 의 `DISTINCT field_id` 개수**
-
-즉 **실제로 들른 현장 수**이고, 계획 목적지 수가 아니다. 관측치(방문 1 → 1, 방문 0 → 0)와 정확히 맞는다.
-프론트가 "계획 수"로 해석한 것이 오해였다. **버그가 아니라 미문서화 문제였다.**
-
-정의상 `siteCount ≤ visitCount` 이므로, 프론트의 기존 가드(`분모 < 방문 수면 신뢰 불가`)는
-사실상 항상 발동한다 → 목록 카드는 계속 "방문 N건" 폴백으로 남는다.
-
-### 남은 요청 (범위 축소)
-
-1. **OpenAPI 에 description 추가** — 지금 `{"siteCount": {"type": "integer"}}` 로 설명이 없다.
-   이 항목이 생긴 근본 원인이 그것이고, dump 를 안 봤으면 또 오해했을 것이다. (필수)
-2. 목록 items 에 **계획 목적지 수**(`plannedSiteCount` 또는 `destinationCount`) 추가. (선호)
-   목록에서 "계획 대비 얼마나 돌았는지"를 읽으려면 계획 수가 필요한데, 목록 API 에는
-   `destinations[]` 가 없어 상세를 열지 않으면 알 수 없다.
-
-### 프론트 현황 (선조치 완료 — 차단 아님)
-
-분모가 방문 수보다 작으면 신뢰할 수 없다고 보고 **계획 표기를 버리고 "방문 N건"으로 폴백**한다
-(커밋 `b9daf9f`). 그전엔 `방문 3 / 계획 1곳` 같은 말이 안 되는 문구가 카드에 노출됐다.
-의미가 확정된 지금 보면 **이 가드는 우연히 옳게 동작하고 있었다** — `siteCount` 는 계획 수가
-아니므로 분모로 쓰면 안 되는 값이었다. 위 2번(계획 수 필드)이 오면 그때 진행률 바가 살아난다.
-
-### 우선순위
-
-🟡 낮음~중간 — 폴백이 있어 차단은 아니지만, 목록에서 **진행률 바가 사라진 카드**가 생겨
-"이 외근이 계획 대비 얼마나 돌았는지"를 목록에서 못 읽는다. 상세에는 `destinations[]` 진실값이
-있으므로 목록에도 그 길이를 실어주기만 하면 된다.
-
-### 발견 시점
-
-2026-07-27 외근 탭 UI/UX 사이클 E2E 중. 상세는 `계획 3`, 목록 카드는 `계획 1` 로 표시되는
-모순을 발견 → 프론트 가드 선반영. 2026-07-28 운영 OpenAPI 대조로 "스펙에 정의 없음" 확인.
-
-### 관련 코드
-
-- 프론트 타입 [`src/types/entities.ts`](../../src/types/entities.ts) `Trip.siteCount?`
-  (§11 당시 destinations 부재의 1차 회피로 도입된 필드)
-- 프론트 표시·가드 [`src/components/trips/TripCard.tsx`](../../src/components/trips/TripCard.tsx) `planned`
-- 상세 쪽 진실값 [`app/(tabs)/trips/[id].tsx`](../../app/(tabs)/trips/[id].tsx) `totalDest` (= `destinations.length`)
-- 관련 항목: §11(destinations 영속화, ✅)
-
----
-
-## 27. 🟠 §9 visit phase — 붙인 리소스가 프론트 경로와 다름 (배포됐지만 동작 불가)
-
-§9(visit 단계 모델)는 백엔드가 2026-07-26 에 배포했지만, **프론트에서는 절대 발화하지 않는다.**
-붙인 자리가 프론트가 쓰는 자리와 다르다.
-
-### 실측 (운영 OpenAPI, 2026-07-28)
-
-| 엔드포인트 | `phase` | 프론트가 호출하나 |
-|---|---|---|
-| `POST /api/fields/{fieldId}/photos` | **없음** (`file`+`caption` 뿐) | **예** — 체크인 화면의 단계 슬롯이 여기로 올린다 |
-| `POST /api/visits/{visitId}/photos` | 있음 (`before\|during\|after`) | **아니오** — 프론트에 호출 0건 |
-
-- 프론트는 체크인(`app/(tabs)/fields/[id]/checkin.tsx`)에서 작업 전/중/후 3슬롯을 이미 제공하고
-  `fieldStore.addPhoto(fieldId, file, { phase })` 로 **phase 를 실어 보내고 있다.** 그런데 그 엔드포인트가
-  phase 를 받지 않으므로 서버에서 조용히 버려진다.
-- 그래서 `POST /reports/from-trip/:tripId` 의 phase→슬롯 자동 매핑도 매칭할 데이터가 없어 발화하지 않는다.
-  §9 의 실제 목적(보고서마다 사진을 다시 분류하는 번거로움 제거)이 달성되지 않은 상태.
-- 결과보고서가 "trip timeline / visit 상세에 `phaseProgress` 포함" 이라 했으나 **OpenAPI 전체에서 0건**.
-  `GET /api/trips/{tripId}` 의 timeline 항목 스키마에도 없다.
-
-### 왜 프론트가 visit 쪽으로 옮기면 안 되나
-
-**visit 첨부를 돌려주는 GET 이 스펙에 하나도 없다.** `GET /api/trips/{tripId}/visits/{visitId}` 는
-응답 스키마 자체가 비어 있고, trip 상세 timeline 에도 첨부가 없다. 지금 프론트가 사진을 visit 으로
-옮기면 **찍은 사진을 앱에서 다시 볼 수 없게 된다** — 현장 상세 갤러리에서 사라지고 대체 조회 경로도 없다.
-자동 매핑을 얻는 대가로 가시성을 잃는 거래라 채택하지 않았다.
-
-또한 ERD v2 이후 이 앱의 사진은 **현장(field) 자산**이다(체크인 화면 주석: "체크인은 방문 기록만 생성,
-첨부는 현장에서 관리"). visit 첨부로 옮기는 건 데이터 모델 결정을 되돌리는 일이라 §12(ERD) 선행이 필요하다.
-
-### 요청 — 셋 중 하나
-
-1. **`POST /api/fields/{fieldId}/photos` 에 `phase` 추가** (**선호**).
-   프론트가 이미 보내고 있어 **백엔드 배포 즉시 동작**한다. 프론트 변경 0.
-   응답 `FieldPhotoAttachment` 에도 echo 하면 보고서 편집기 prefill 까지 살아난다
-   (`FieldPhotoItem.phase?` 는 이미 optional 로 선반영돼 있음).
-2. visit 첨부 조회 GET 신설 — `GET /api/visits/{visitId}/photos` 또는 trip 상세 timeline 에 첨부 포함.
-   그래야 프론트가 visit 쪽으로 옮겨도 사진이 사라지지 않는다. (1번보다 프론트 작업이 큼)
-3. `phaseProgress` 를 실제로 응답에 싣고 OpenAPI 에 반영. 현재 스펙 0건이라 프론트가 신뢰할 근거가 없다.
-
-### 우선순위
-
-🟠 중상 — 배포는 됐는데 **사용자에게 도달하는 효과가 0** 이다. 1번이면 백엔드 한 줄 수준이고
-프론트는 손댈 게 없다.
-
-### 발견 시점
-
-2026-07-28, 2026-07-26 배치 프론트 연동 사이클 착수 시 운영 OpenAPI 대조 중.
-
-### 관련 코드
-
-- 프론트 업로드 [`src/api/endpoints/fields.ts:254`](../../src/api/endpoints/fields.ts#L254) `addPhoto(..., opts.phase)`
-- 프론트 UI [`app/(tabs)/fields/[id]/checkin.tsx`](../../app/\(tabs\)/fields/\[id\]/checkin.tsx) 단계 슬롯 3개
-- 프론트 타입 [`src/api/endpoints/fields.ts:51`](../../src/api/endpoints/fields.ts#L51) `AttachmentPhase`
-- 임시 대안 [`app/(tabs)/reports/[id]/field-report.tsx`](../../app/\(tabs\)/reports/\[id\]/field-report.tsx) `pickFromField` (현장 갤러리에서 수동 선택)
-- 관련 항목: §9(✅ 배포, 그러나 미도달) · §12(ERD — 사진 소유 리소스 결정)
-
----
-
-## 28. 🟠 주소검색 응답에 **장소명(`buildingName`)** 이 없다 — 클라이언트 SDK 를 못 걷어냄
+> **✅ 백엔드 종결 (2026-08-03 운영 OpenAPI 확인).** `AddressSearchItem.buildingName` 이
+> 스펙에 정식으로 있고 설명까지 붙었다 — *"키워드(장소) 검색: Kakao `place_name`.
+> 주소 검색: `road_address.building_name`(없으면 null)."* 요청한 그대로다.
+> **이 항목에 백엔드가 할 일은 더 없다.**
+>
+> 남은 건 프론트 판단 하나 — **서버 응답만으로 클라이언트 카카오 JS SDK 를 걷어낼 수 있는가.**
+> 키워드 몇 개로 서버 결과 집합과 헤드리스 WebView 브리지 결과를 대조해야 하는데,
+> `/api/fields/address/search` 는 인증이 필요해 **로그인 세션에서만** 측정할 수 있다.
+> 그때까지 아래 원문은 착수 근거로 남겨둔다.
 
 §3 으로 백엔드가 `address.json` + `keyword.json` 병합을 배포해 **장소명으로 검색은 된다**.
 그런데 **응답이 장소명을 담아 오지 않아**, 프론트는 여전히 클라이언트 카카오 JS SDK 키워드검색
@@ -283,7 +166,33 @@ reportId · tripId · title · outputFileUrl · overviewMapUrl · fieldReportCou
 
 ---
 
-## 30. 🔴 앱 내 회원 탈퇴 — `DELETE /api/me` 가 없다 (스토어 심사 차단)
+## 30. 🟠 스토어 출시 요건 묶음 (A~E) — **A·C 배포 완료, B 가 남은 차단점**
+
+> **진행 상황 (2026-08-03 운영 OpenAPI·정적 페이지 실측)**
+>
+> | | 항목 | 백엔드 | 프론트 |
+> |---|---|---|---|
+> | **A** | `DELETE /api/me` 회원 탈퇴 | ✅ 배포됨 (`/api/me` = get·patch·**delete**) | ✅ 선반영이 그대로 맞았다 — 변경 0 |
+> | **B** | 위치정보 이용약관 + 약관 본문 교체 | ❌ **`/location-terms` 여전히 404**, `/terms`·`/privacy` 는 아직 시행일 `2026-06-18` 구 초안 | ✅ 올바르게 차단 중 (`LOCATION_TERMS_AVAILABLE=false`) |
+> | **C** | 약관 동의 **버전** 이력 | ✅ 배포됨 — `GET /api/me` 의 `legal{agreed,current,needsReaccept}`, `POST /api/me/legal/accept` | ◑ 계약 계층만 (타입·엔드포인트). **재동의 배너는 의도적으로 미배선** — 아래 참조 |
+> | **D** | 보관기간 30일 | 결정: 배치 대신 문서 수정 | — |
+> | **E** | 비밀번호 재설정 SMTP | 스텁 유지 | — |
+>
+> **A 는 닫혔다.** Play 심사 차단이던 계정 삭제 경로가 서버까지 살아 있다.
+> 남은 앱 밖 삭제 URL 필요 여부는 코드가 아니라 **Play Console 데이터 안전 양식** 확인 건이다.
+>
+> ⚠️ **C 의 부작용 — 지금 `needsReaccept` 는 전 사용자에게 `true` 다.** 서버 현행 버전은
+> `2026-08-03` 인데 프론트는 **실제로 서빙 중인 본문의 시행일**(`2026-06-18`)만 보내기 때문이다.
+> 프론트 규칙이 옳고(사용자는 배포되지 않은 문서에 동의할 수 없다), 불일치의 원인은 **B** 다.
+> 그래서 재동의 배너를 붙이지 않았다 — 지금 붙이면 전원에게 뜨고, 눌러도 **읽을 새 본문이 없다.**
+> B 가 배포되면 `utils/contact.ts` 의 `LEGAL_DOCS` 한 곳을 올리는 것으로 버전·메뉴·배너가 함께 풀린다.
+>
+> ❓ **백엔드에 확인 필요 (1건):** signup 의 `agreedTerms` 가 **버전값을 검증**하는가?
+> `POST /api/me/legal/accept` 에는 `terms_version_invalid`(400) 가 문서화돼 있는데 signup 400 은
+> 일반 "입력 검증 실패" 뿐이라 판정이 안 됐다(프로브는 `password_confirm_mismatch` 가 먼저 걸렸고,
+> 확정하려면 실계정 생성이 필요해 멈췄다). **검증한다면 구 버전 `2026-06-18` 을 보내는 현재
+> 프론트에서 신규 가입이 전부 실패한다.** 답이 "검증한다" 면 B 배포 전까지 프론트가
+> `agreedTerms` 를 빼야 하므로, 우선순위가 높다.
 
 **출시 대상은 Google Play 뿐이다** (App Store 는 계획에 없음 — 2026-07-29 확인).
 Play 는 계정 생성을 허용하는 앱에 **계정·데이터 삭제 경로를 요구**하며, 데이터 안전 양식
@@ -595,6 +504,56 @@ DB 메타데이터(`fileUrl`·`fileSize`·`mimeType`)는 온전한데 **실제 �
 
 ---
 
+## 33. 🔴 **운영 TLS 인증서가 만료됐다 — 앱이 서버에 붙지 못한다** (진행 중 장애)
+
+`https://ilgayo.co.kr` 의 인증서가 **2026-08-03 06:39:15 (KST) 에 만료**됐다. Let's Encrypt
+자동 갱신이 실패한 상태다.
+
+### 실측 (2026-08-03 19:57 KST)
+
+```
+Subject:  CN=ilgayo.co.kr
+Issuer:   CN=E8, O=Let's Encrypt, C=US
+NotBefore: 2026-05-05 06:39:16
+NotAfter:  2026-08-03 06:39:15   ← 약 13시간 전 만료
+```
+
+| 확인 | 결과 |
+|---|---|
+| `curl https://ilgayo.co.kr/api-docs.json` | **실패** — `SEC_E_CERT_EXPIRED` (schannel) |
+| `curl -k` (검증 우회) | 200 — **서버·애플리케이션 자체는 정상 가동 중** |
+
+즉 서비스가 죽은 게 아니라 **TLS 신뢰만 끊겼다.**
+
+### 영향
+
+- **앱은 우회 수단이 없다.** RN/Expo 의 fetch 는 OS 트러스트 스토어를 쓰고, 프로덕션 빌드에
+  인증서 검증 예외를 넣는 선택지는 없다(넣어서도 안 된다). 로그인부터 모든 API 호출이 실패한다.
+- Play Console 이 심사 중 정책 링크(`/terms`·`/privacy`)를 열어보면 브라우저 경고를 만난다 —
+  **§30-B 심사와 직접 부딪친다.**
+- 웹 검증 환경(자동화 포함)도 같은 이유로 막힌다.
+
+### 요청
+
+1. 서버에서 `certbot renew` 상태 확인 — 갱신 실패 원인이 대개 ①80 포트 webroot/HTTP-01
+   챌린지가 리버스 프록시에 막힘, ②`certbot.timer` 미동작, ③디스크 풀 셋 중 하나다.
+2. 갱신 후 웹서버 **reload** (갱신만 하고 리로드를 빼먹으면 만료 인증서를 계속 서빙한다).
+3. **재발 방지가 본론이다** — 이번엔 90일 만기를 그냥 넘겼다. 갱신 타이머 동작 확인 +
+   만료 임박 알림(cron 한 줄이면 된다)을 걸어두는 편이 낫다.
+
+### 우선순위
+
+🔴 **최상 — 전면 장애.** 다른 모든 백로그 항목보다 앞선다. 배포된 기능이 몇 개든
+앱이 서버에 닿지 못하면 의미가 없다.
+
+### 발견 시점
+
+2026-08-03, `release-2026-07-29-store-release.md` 의 프론트 반영 여부를 운영 OpenAPI 로
+대조하려다 `curl` 이 TLS 단계에서 죽어서. **기능 확인을 하러 갔다가 장애를 먼저 만났다** —
+정기적인 운영 헬스체크가 없다는 뜻이기도 하다.
+
+---
+
 ## 🔗 2026-07-26 배치 프론트 연동 — ✅ 종결 (이력)
 
 > 2026-07-26 백엔드 배치([release-2026-07-26-backend-backlog.md](./archive/release-2026-07-26-backend-backlog.md))로
@@ -642,11 +601,33 @@ DB 메타데이터(`fileUrl`·`fileSize`·`mimeType`)는 온전한데 **실제 �
 - **§22 ✅ 인앱 경로 — 카카오모빌리티 자동차 경로 프록시(2단계)** (release 2026-07-26) — `POST /api/trips/:tripId/route` `{origin, destination, waypoints?}` → `{distance(m), duration(s), vertexes[{lat,lng}]}`. 카카오모빌리티 `v1/directions`·`v1/waypoints/directions`. 커밋 `386a195`. 1단계(직선 폴리라인·순번 마커)는 프론트 완료(외근 탭 사이클). **잔여: 실도로 vertexes 렌더 + `nearestNeighborOrder` 직선 ETA 대체 — 프론트.**
 - **§23 ✅ 처리방침·약관 정적 페이지 호스팅** (release 2026-06) — `GET /privacy`·`/terms` 200(Play Console 링크 해소). ⚠️ 잔여(코드 아님): 서빙 본문은 **초안** — 법적 문구 팀 작성·교체 필요.
 - **§24 ✅ `POST /trips/:tripId/destinations` 진행 중 단건 추가** (release 2026-06-19) — `{fieldId, order?}`→Destination, 멱등·active-only(`409 already_ended_trip`). `destinationStore.add` 낙관적 temp→fire-and-forget. 커밋 `5e5844b`. probe 6/6 PASS.
+- **§26 ✅ 외근 목록에 계획 목적지 수 `destinationCount`** (release 2026-07-29, 프론트 연동 2026-08-03) — 요청 2건 모두 반영: `siteCount` 에 설명이 붙었고(= 방문한 distinct 현장 수), `destinationCount`/`plannedSiteCount`(별칭) 가 신설됐다. 프론트는 `TripListItem.destinationCount?` → `Trip.destinationCount?` → `TripCard.plannedCount` 로 배선. ⚠️ **이 항목은 겉보기보다 컸다** — 목록 카드의 진행률 바가 그동안 **한 번도 그려지지 않고 있었다.** 분모로 쓰던 `siteCount` 가 정의상 항상 `≤ visitCount` 라 "분모가 방문 수보다 작으면 신뢰 불가" 가드가 100% 발동했기 때문이다. 가드는 유지(구 백엔드·미계획 외근). 같은 실측에서 `durationHHMM: string` 이 **존재하지 않는 필드**임도 드러나 `durationMinutes?: number` 로 정정(소비처 0곳이라 무증상이었다).
+- **§27 ✅ 현장 사진 엔드포인트에 `phase` 추가 — 프론트 변경 0 으로 발화** (release 2026-07-29) — 요청 3안 중 **1번안 채택**: `POST /api/fields/{fieldId}/photos` multipart 에 `phase?`(`before|during|after`), 응답에 `phaseProgress`(+`done`) 와 `photo.phase` echo, `POST /reports/from-trip/:tripId` 이 **field_photos** phase 로 슬롯 매핑. 프론트는 이미 `addPhoto(..., { phase })` 로 보내고 있었으므로 **배포 즉시 동작**했다(코드 변경 없음, 주석만 정정). 잔여: 배포 **이전**에 올린 사진은 `phase: null` 이라 계속 수동 선택(`pickFromField`)이 필요하다 — 소급 백필은 요청하지 않는다(어느 슬롯이었는지 서버가 알 수 없다). `phaseProgress` 는 프론트 미사용(체크인 화면이 슬롯별 사진 유무로 이미 그린다).
 - **§25 ✅ 사용자 커스텀 카테고리 마스터 `categories` CRUD** (release 2026-07-26) — `GET/POST /api/categories`, `PATCH/DELETE /api/categories/:categoryId`, user 스코프 `(user_id, name)` UQ. 에러 `category_name_required`(400)·`category_name_taken`(409)·`category_not_found`(404). `Field.categories: string[]`/`field_categories` **계약 무변경**. 커밋 `8cc8e12`. **프론트 잔여**: `categoryStore` 가 아직 AsyncStorage 진실원(`TODO(backend)`). 후속(별도 결정): `field_categories`→`category_id` FK / rename cascade.
 
 ---
 
 ## 변경 이력
+
+- **2026-08-03**: **§33 추가 — 운영 TLS 인증서 만료(전면 장애).** 2026-07-29 백엔드 결과보고서의
+  프론트 반영 여부를 운영 OpenAPI 로 대조하려다 `curl` 이 TLS 단계에서 죽어 발견했다.
+  **기능 확인을 하러 갔다가 장애를 먼저 만난 셈**이라, 정기 운영 헬스체크의 부재도 함께 드러났다.
+
+- **2026-08-03**: **2026-07-29 배치 대조 — §26·§27 종결, §28 백엔드 종결, §30 A·C 배포 확인.**
+  받은 결과보고서를 곧이 믿지 않고 운영 OpenAPI·정적 페이지를 직접 읽어 대조했고, 그 덕에
+  보고서만 봤으면 못 봤을 것 두 가지가 나왔다.
+  ① **§26 은 문서 항목이 아니라 실제로 죽어 있던 기능이었다** — 목록 카드 진행률 바가 한 번도
+  그려지지 않고 있었다(분모 `siteCount ≤ visitCount` 라 가드 100% 발동). 필드 하나 바꾸니 살아났다.
+  ② 같은 대조에서 `durationHHMM` 이 **스펙에 존재하지 않는 필드**임이 드러났다 — 소비처가 0곳이라
+  무증상이었지만 쓰는 순간 `undefined` 가 나오는 함정이라 `durationMinutes?: number` 로 정정했다.
+  반대로 **§27 은 프론트가 손댈 게 없었다** — 요청한 1번안이 채택돼 배포 즉시 동작했고 주석만 낡아
+  있었다. "반영했나" 의 답이 항목마다 달랐다는 게 이번 대조의 요지다.
+
+- **2026-08-03**: **§30-C 재동의 배너 — 의도적 미배선 결정.** 계약 계층(`ApiUser.legal`,
+  `auth.acceptLegalTerms`)만 붙이고 UI 는 붙이지 않았다. 지금 `needsReaccept` 가 **전 사용자 true**
+  인데(서버 현행 `2026-08-03` vs 프론트가 보내는 실서빙 시행일 `2026-06-18`), 그건 프론트 버그가
+  아니라 **§30-B 미배포의 그림자**다. 배너를 지금 붙이면 전원에게 뜨고 눌러도 읽을 새 본문이 없다.
+  **B 가 원인인 증상을 C 의 UI 로 덮지 않는다.**
 
 - **2026-07-30**: **§32 추가 — 주소검색 `roadAddress: null`.** 현장 이름 입력을 실제로 써보려고
   '하단동' 을 검색해 첫 결과를 고르고 등록을 누르니 앱이 죽었다(`null.trim()`). 타입은 `string`

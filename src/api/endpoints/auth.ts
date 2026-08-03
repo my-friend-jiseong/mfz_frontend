@@ -2,12 +2,29 @@ import { request } from '../client';
 
 // 백엔드 실응답 shape (smoke test 캡처: docs/_swagger_responses.md §1)
 
+// backend-backlog §30-C — 약관 동의 버전 이력 (append-only `legal_consents`).
+// `agreed` 는 문서별 **최신** 동의 버전(미동의면 null), `current` 는 서버가 현행으로 보는 버전,
+// `needsReaccept` 는 둘의 불일치.
+//
+// ⚠️ 지금은 `needsReaccept` 가 **모든 사용자에게 true** 다. 서버 현행은 `2026-08-03` 인데
+// 프론트는 `utils/contact.ts` 규칙에 따라 **실제 서빙 중인 본문의 시행일**(`2026-06-18`)만
+// 보내기 때문이다 — 그 규칙이 옳고(사용자는 배포되지 않은 문서에 동의할 수 없다), 불일치의
+// 원인은 §30-B(약관 본문 미교체)다. 그래서 재동의 배너는 **아직 붙이지 않는다**:
+// 지금 붙이면 전원에게 뜨고, 눌러도 사용자가 읽을 새 본문이 없다.
+export interface LegalConsentState {
+  agreed: Partial<Record<'service' | 'privacy' | 'location', string | null>>;
+  current: Partial<Record<'service' | 'privacy' | 'location', string>>;
+  needsReaccept: boolean;
+}
+
 export interface ApiUser {
   id: string;
   email: string;
   name: string;
   role: string; // 본 서비스는 단일 Actor — 분기에 사용하지 않음
   createdAt: string;
+  // §30-C — GET /api/me 만 실어준다 (login/signup 세션 응답의 user 에는 없다).
+  legal?: LegalConsentState;
 }
 
 export interface AuthSession {
@@ -47,10 +64,13 @@ export interface ChangePasswordBody {
   newPasswordConfirm: string;
 }
 
-// backend-backlog §30 — 회원 탈퇴. **아직 백엔드에 없다** (2026-07-29 운영 OpenAPI 실측:
-// /api/me 는 get·patch 뿐). 스토어 계층에서 404/405 를 '미구현'으로 구분해 처리하므로
-// 여기서는 계약만 선반영한다.
-// password 를 싣는 건 서버가 재인증을 요구할 가능성이 높아서다 — 서버가 무시해도 무해.
+// backend-backlog §30-A — 회원 탈퇴 (Play 심사 요건).
+// **배포 완료** (2026-08-03 운영 OpenAPI 재확인: `/api/me` 는 get·patch·**delete**).
+// 선반영해 둔 계약이 그대로 맞았다 — password 재인증, 성공 200 `{ deleted: true }`,
+// 불일치 400 `current_password_invalid`, 이미 삭제 404 `user_not_found`.
+// 삭제 범위는 외근·방문·보고서·메모·카테고리·현장·스토리지 + 전 세션 무효(진행 중 외근 포함),
+// soft delete + 이메일 익명화라 **동일 이메일 재가입이 허용**된다.
+// (스토어의 404/405 '미구현' 분기는 구 서버를 향한 앱이 남아 있을 수 있어 남겨둔다.)
 export interface DeleteMeBody {
   password: string;
 }
@@ -91,7 +111,19 @@ export const auth = {
   changePassword: (body: ChangePasswordBody) =>
     request<{ updated: boolean }>('/api/me/password', { method: 'PATCH', body }),
 
-  // backend-backlog §30 — 앱 내 회원 탈퇴 (Play 심사 요건). 백엔드 미구현 상태에선 404.
+  // backend-backlog §30-A — 앱 내 회원 탈퇴 (Play 심사 요건). 2026-07-29 배포됨.
   deleteMe: (body: DeleteMeBody) =>
     request<DeleteMeResponse>('/api/me', { method: 'DELETE', body }),
+
+  // backend-backlog §30-C — 재동의 기록. 이력은 append 라 같은 버전을 다시 보내도 행이 쌓인다
+  // (덮어쓰기가 아니다) — 화면에서 **중복 호출을 막는 건 프론트 책임**이다.
+  // 호출부는 §30-B(새 약관 본문 배포) 이후에 붙인다. 그 전까지 배선하면 사용자가 읽을 수 없는
+  // 문서에 동의시키게 된다 — LegalConsentState 주석의 이유와 같다.
+  acceptLegalTerms: (body: {
+    agreedTerms: Partial<Record<'service' | 'privacy' | 'location', string>>;
+  }) =>
+    request<{ legal: LegalConsentState }>('/api/me/legal/accept', {
+      method: 'POST',
+      body,
+    }),
 };

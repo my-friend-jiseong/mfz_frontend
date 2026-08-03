@@ -85,6 +85,9 @@ export const useTripStore = create<TripState>((set, get) => ({
         status: t.endedAt ? 'ended' : 'active',
         title: t.title,
         siteCount: t.siteCount,
+        // §26 — 계획 목적지 수. 구 백엔드는 이 키가 없어 undefined 로 남고, 그때 카드가
+        // 진행률 대신 "방문 N건" 으로 폴백한다(TripCard 가드).
+        destinationCount: t.destinationCount,
         visitCount: t.visitCount,
       }));
       set({ trips: items });

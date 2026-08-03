@@ -45,9 +45,11 @@ export interface FieldListResponse {
 // ERD v2: memos(텍스트) + field_photos(사진) 만. 음성 제거, caption·좌표·visit 연결 없음.
 // 응답 형태가 v2 에서 단순화될 수 있어 미디어 필드는 방어적 optional (§8).
 //
-// phase: backend-backlog §9 visit 단계 모델 — 응답에 phase 가 포함되면
+// phase: backend-backlog §9·§27 단계 모델 — 응답에 phase 가 포함되면
 // 보고서 편집기가 자동으로 슬롯 prefill (decision §4 / 2026-05-31).
-// §9 머지 전엔 undefined 만 옴 → 모든 슬롯이 빈 상태로 시작 (회로 정상).
+// §27 배포(2026-07-29) 전에 올린 사진은 phase 가 null 로 남는다 → 그 사진들은 계속 빈 슬롯으로
+// 시작하고 수동 선택(pickFromField)으로 채운다. optional 인 이유가 이제 '미구현' 이 아니라
+// '과거 데이터' 라는 뜻이다.
 export type AttachmentPhase = 'before' | 'during' | 'after';
 export interface FieldDirectAttachment {
   id: string;
@@ -261,8 +263,12 @@ export const fields = {
       body: { text },
     }),
 
-  // opts.phase: backend-backlog §9 visit 단계. 백엔드 미지원 동안엔 silently 무시되지만
-  // 프론트 source 가 phase 를 보내야 머지 직후 보고서 prefill 이 살아남.
+  // opts.phase: backend-backlog §9·§27 단계 모델(조치 전/중/후).
+  // **2026-07-29 배포로 살아났다** — 그동안 서버가 이 파트를 버리고 있었고(§27: phase 가 붙은
+  // 곳은 visit 사진이었는데 프론트는 현장 사진을 쓴다), 그래서 보고서 슬롯 자동 prefill 이
+  // 발화하지 않았다. 요청한 1번안(현장 사진 엔드포인트에 phase 추가)이 채택돼 **프론트 변경 0
+  // 으로 동작**한다. 응답에 `phaseProgress`('before'|'during'|'after'|'done') 도 함께 오지만
+  // 아직 읽지 않는다 — 체크인 화면은 슬롯별 사진 유무로 진행 상태를 이미 그린다.
   // 파일 파트 직렬화 플랫폼 분기는 appendUploadFile(media) 단일 출처.
   addPhoto: async (
     fieldId: string,
