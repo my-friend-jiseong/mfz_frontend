@@ -50,23 +50,76 @@ NotAfter:  2026-08-03 06:39:15   ← 약 13시간 전 만료
 - Play 심사가 정책 링크(`/terms`·`/privacy`)를 열면 브라우저 경고를 만난다 — **항목 3 과 직접 부딪친다.**
 - 프론트 웹 검증 환경도 같은 이유로 막혀 있다(아래 「프론트 현황」).
 
+### ✅ 원인 확정 (서버 SSH 진단 완료 — 추측이 아니다)
+
+**"갱신이 실패했다" 가 아니라, 이 인증서는 애초에 자동 갱신될 수 없는 방식으로 발급됐다.**
+
+`/etc/letsencrypt/renewal/ilgayo.co.kr.conf` 가 답이다:
+
+```
+pref_challs = dns-01,
+authenticator = manual
+```
+
+certbot 은 `--manual` 로 발급된 인증서를 **`--manual-auth-hook` 없이는 비대화식으로 갱신하지
+않는다** — 사람 입력이 필요하므로 매번 건너뛴다.
+
+| 확인 | 결과 | 의미 |
+|---|---|---|
+| `certbot.timer` | enabled·active, **9시간 전 실행됨** | 타이머는 정상. 여기가 문제가 아니다 |
+| `live/fullchain.pem` | → `archive/…/fullchain**1**.pem` | **2세대가 없다.** 5/4 이후 갱신 성공 0회 |
+| `live/` mtime | `May 4 22:37` | 그날 이후 갱신된 적 없음 |
+| 디스크 | 10% | 무관 |
+
+**타이머는 90일 내내 돌면서 매번 조용히 건너뛰었다. 만료는 사고가 아니라 예정된 결과였다.**
+
+### 왜 manual/DNS-01 이었나 — 되돌릴 수 없는 제약이 있다
+
+**80 포트가 외부에 열려 있지 않다.** 외부에서 `59.21.223.137:80` 은 connection refused 이고,
+`mfz-nginx` 컨테이너는 호스트 **28080** → 컨테이너 80 으로 매핑돼 있다. HTTP-01 은 80 포트를
+요구하므로 **처음부터 쓸 수 없었고**, 그래서 DNS-01 수동 발급을 택한 것으로 보인다. nginx conf 에도
+`.well-known/acme-challenge` location 이 없다(전부 백엔드로 프록시).
+
+### ⚠️ 갱신만으로는 부족하다 — 컨테이너 reload 가 필요하다
+
+TLS 종단은 호스트 nginx(둘 다 `inactive`)가 아니라 **Docker 컨테이너 `mfz-nginx`** 이고,
+`/etc/letsencrypt` 를 **read-only 마운트**해 기동 시점에 인증서를 읽는다(4일째 가동 중).
+호스트에서 갱신해도 **컨테이너를 reload 하지 않으면 만료본을 계속 서빙한다.**
+
 ### 요청
 
-1. **갱신 상태 확인** — `sudo certbot certificates` / `sudo systemctl status certbot.timer`
-2. **갱신 + 웹서버 리로드**
-   ```bash
-   sudo certbot renew --dry-run     # 먼저 원인 확인
-   sudo certbot renew
-   sudo systemctl reload nginx      # 갱신만 하고 리로드를 빼면 만료본을 계속 서빙한다
-   ```
-3. **원인 규명** — 90일 만기를 그냥 넘겼다는 건 타이머가 안 돌았거나 챌린지가 실패해 왔다는 뜻이다.
-   흔한 순서: ① HTTP-01 챌린지(`/.well-known/acme-challenge`)가 리버스 프록시·앱 라우터에 먹힘,
-   ② `certbot.timer` 비활성, ③ 디스크 풀.
-4. **재발 방지** — 만료 임박 알림. cron 한 줄이면 된다:
-   ```bash
-   0 9 * * * openssl s_client -connect ilgayo.co.kr:443 -servername ilgayo.co.kr </dev/null 2>/dev/null \
-     | openssl x509 -noout -checkend 1209600 || echo "ilgayo.co.kr 인증서 14일 내 만료"
-   ```
+**① 즉시 복구** — 대화식이다(DNS TXT 추가 필요). 서버 접근·DNS 패널 권한이 있는 사람이 해야 한다.
+
+```bash
+sudo certbot certonly --manual --preferred-challenges dns \
+  -d ilgayo.co.kr -d www.ilgayo.co.kr
+# 안내되는 TXT 레코드를 가비아 DNS 관리에 추가 → 전파 대기 → Enter
+docker exec mfz-nginx nginx -s reload      # ★ 빼면 만료본을 계속 서빙한다
+```
+
+**② 재발 방지 — 이게 본론이다.** ① 만 하면 11월에 똑같이 만료된다.
+DNS 는 **가비아**(`ns.gabia.co.kr`)이고 서버에 certbot DNS 플러그인은 없다.
+
+| 안 | 방법 | 평가 |
+|---|---|---|
+| **A** | 네임서버를 **Cloudflare** 로 옮기고 `certbot-dns-cloudflare` (등록기관은 가비아 유지) | **권장** — 완전 자동, 무료, 공식 플러그인. 80 포트 제약과 무관 |
+| B | 가비아 DNS API 를 호출하는 `--manual-auth-hook` 자작 | 공식 플러그인이 없어 직접 짜야 하고 API 변경에 취약 |
+| C | 80 포트 개방 + webroot HTTP-01 | 공유기·ISP 정책에 막힐 수 있고 nginx location 추가도 필요 |
+
+어느 안이든 **deploy hook 을 반드시 건다**: `--deploy-hook "docker exec mfz-nginx nginx -s reload"`
+
+**③ 만료 임박 알림** — 이번 장애의 진짜 교훈은 **90일 동안 아무도 몰랐다**는 것이다.
+
+```bash
+0 9 * * * openssl s_client -connect ilgayo.co.kr:443 -servername ilgayo.co.kr </dev/null 2>/dev/null \
+  | openssl x509 -noout -checkend 1209600 || echo "ilgayo.co.kr 인증서 14일 내 만료"
+```
+
+### 덤 — `mfz-studio` 컨테이너가 크래시 루프 중
+
+같은 진단에서 발견. `Restarting (1)` 이 초 단위 반복이고 로그는 `prisma studio` **사용법 도움말**만
+출력한다 — 인자 없이 기동돼 즉시 종료되는 상태다. 장애와 무관하고 급하지 않지만 4일째 초당
+재시작 중이라 로그·CPU 를 계속 먹는다. 안 쓰는 컨테이너면 내리는 게 낫다.
 
 ### 발견 경위 (같이 남길 것)
 

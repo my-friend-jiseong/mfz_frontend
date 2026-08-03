@@ -533,13 +533,82 @@ NotAfter:  2026-08-03 06:39:15   ← 약 13시간 전 만료
   **§30-B 심사와 직접 부딪친다.**
 - 웹 검증 환경(자동화 포함)도 같은 이유로 막힌다.
 
+### ✅ 원인 확정 (2026-08-03, 서버 SSH 진단)
+
+**"갱신이 실패했다" 가 아니다 — 이 인증서는 애초에 자동 갱신될 수 없는 방식으로 발급됐다.**
+
+`/etc/letsencrypt/renewal/ilgayo.co.kr.conf`:
+
+```
+pref_challs = dns-01,
+authenticator = manual
+```
+
+certbot 은 **`--manual` 로 발급된 인증서를 `--manual-auth-hook` 없이는 비대화식으로 갱신하지
+않는다**(사람 입력이 필요하므로 건너뛴다). 그래서:
+
+| 확인 | 결과 | 의미 |
+|---|---|---|
+| `certbot.timer` | **enabled·active, 9시간 전 실행** | 타이머는 정상이었다 — 문제는 여기가 아니다 |
+| `live/fullchain.pem` 심볼릭 링크 | → `archive/…/fullchain**1**.pem` | **2세대가 존재하지 않는다.** 5/4 발급 이후 갱신 성공 0회 |
+| `live/` 디렉터리 mtime | `May 4 22:37` | 그날 이후 손대지 않았다 |
+| 디스크 | 10% 사용 | 무관 |
+
+**즉 타이머는 90일 내내 돌면서 매번 조용히 건너뛰었다.** 만료는 사고가 아니라 예정된 결과였다.
+
+### 왜 manual/DNS-01 이었나 — 되돌릴 수 없는 제약
+
+**80 포트가 외부에 열려 있지 않다.** 외부에서 `59.21.223.137:80` 은 connection refused 이고,
+`mfz-nginx` 컨테이너는 호스트 **28080** → 컨테이너 80 으로 매핑돼 있다. HTTP-01 챌린지는
+80 포트를 요구하므로 **처음부터 불가능**했고, 그래서 DNS-01 수동 발급을 택한 것으로 보인다.
+nginx conf 에도 `.well-known/acme-challenge` location 이 없다(전부 백엔드로 프록시).
+
+### ⚠️ 갱신만으로는 부족하다 — 컨테이너 reload 가 필요하다
+
+TLS 종단은 호스트 nginx 가 아니라 **Docker 컨테이너 `mfz-nginx`**(`nginx:latest`, 4일째 가동)이고,
+`/etc/letsencrypt` 를 **read-only 로 마운트**해 기동 시점에 인증서를 읽는다. 호스트에서 갱신해도
+**컨테이너가 reload 되지 않으면 만료본을 계속 서빙한다.** 다음번 갱신을 자동화하더라도 이 한 줄이
+빠지면 같은 장애가 재현된다.
+
 ### 요청
 
-1. 서버에서 `certbot renew` 상태 확인 — 갱신 실패 원인이 대개 ①80 포트 webroot/HTTP-01
-   챌린지가 리버스 프록시에 막힘, ②`certbot.timer` 미동작, ③디스크 풀 셋 중 하나다.
-2. 갱신 후 웹서버 **reload** (갱신만 하고 리로드를 빼먹으면 만료 인증서를 계속 서빙한다).
-3. **재발 방지가 본론이다** — 이번엔 90일 만기를 그냥 넘겼다. 갱신 타이머 동작 확인 +
-   만료 임박 알림(cron 한 줄이면 된다)을 걸어두는 편이 낫다.
+**① 즉시 복구** (대화식 — DNS TXT 레코드 추가가 필요해 사람이 해야 한다)
+
+```bash
+sudo certbot certonly --manual --preferred-challenges dns \
+  -d ilgayo.co.kr -d www.ilgayo.co.kr
+# 안내되는 TXT 레코드를 가비아 DNS 관리에 추가 → 전파 대기 → Enter
+docker exec mfz-nginx nginx -s reload      # ★ 이걸 빼면 만료본을 계속 서빙한다
+```
+
+**② 재발 방지 — 이게 본론이다.** ① 만 하면 11월에 똑같이 만료된다.
+도메인 DNS 는 **가비아**(`ns.gabia.co.kr`)이고 서버에 certbot DNS 플러그인은 설치돼 있지 않다.
+
+| 안 | 방법 | 평가 |
+|---|---|---|
+| **A** | 네임서버를 **Cloudflare** 로 옮기고 `certbot-dns-cloudflare` 사용 (등록기관은 가비아 유지) | **권장.** 완전 자동화, 무료, 플러그인이 공식이다. 80 포트 제약과 무관 |
+| B | 가비아 DNS API 를 호출하는 `--manual-auth-hook` 스크립트 자작 | 공식 플러그인이 없어 직접 짜야 하고, API 스펙 변경에 취약 |
+| C | 80 포트를 열고 webroot HTTP-01 로 전환 | 공유기·ISP 정책에 막힐 수 있다. nginx 에 `.well-known` location 추가도 필요 |
+
+어느 안이든 **deploy hook 을 반드시 건다**:
+
+```bash
+--deploy-hook "docker exec mfz-nginx nginx -s reload"
+```
+
+**③ 만료 임박 알림** — 이번 장애의 진짜 교훈은 *90일 동안 아무도 몰랐다* 는 것이다.
+cron 한 줄이면 된다:
+
+```bash
+0 9 * * * openssl s_client -connect ilgayo.co.kr:443 -servername ilgayo.co.kr </dev/null 2>/dev/null \
+  | openssl x509 -noout -checkend 1209600 || echo "ilgayo.co.kr 인증서 14일 내 만료"
+```
+
+### 덤 — `mfz-studio` 컨테이너가 크래시 루프 중
+
+같은 진단에서 발견. `Restarting (1)` 이 초 단위로 반복되고, 로그는 `prisma studio` **사용법
+도움말**만 출력한다 — 인자 없이 기동돼 즉시 종료되는 상태다. 장애와는 무관하고 급하지 않지만,
+4일째 초당 재시작 중이라 로그·CPU 를 계속 먹는다. 안 쓰는 컨테이너면 내리는 게 낫다.
 
 ### 우선순위
 
