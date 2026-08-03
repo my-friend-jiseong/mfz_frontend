@@ -3,7 +3,7 @@
 > 프론트에서 발견·합의한 백엔드 작업 항목을 누적. 사이클 시작 시점에 우선순위
 > 정해 작업으로 빼는 방식. 본 문서가 **활성 큐의 1차 소스**이고, 백엔드에 실제로
 > 넘길 때는 `handoff-*.md` 전달본을 따로 뽑는다 (현행:
-> [`handoff-2026-07-29-store-release.md`](./handoff-2026-07-29-store-release.md)).
+> [`handoff-2026-08-03-tls-and-verification.md`](./handoff-2026-08-03-tls-and-verification.md)).
 > 종결된 전달본·백엔드 결과보고서는 [`archive/`](./archive/) 로 옮긴다.
 >
 > **응답 contract 표준**: 모든 4xx/5xx 는 Phase 7 단일 shape `{ code, message, fields?, details? }`.
