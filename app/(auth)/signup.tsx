@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '@/stores/authStore';
 import { safeBack } from '@/utils/backNavigation';
+import { LEGAL_DOCS, LOCATION_TERMS_AVAILABLE, TERMS_URL } from '@/utils/contact';
 import { checkPasswordPolicy, PASSWORD_HINT } from '@/utils/password';
 import { colors } from '@/theme/colors';
 import { radius, spacing } from '@/theme/spacing';
@@ -31,13 +32,14 @@ interface FieldErrors {
 }
 
 // 필수 약관 — 모두 동의해야 가입 가능. 각 라벨은 사용자 화면 표시, url 은 외부 페이지.
-// 운영 도메인은 ilgayo.co.kr — 이전 ilgayo.kr 은 DNS 자체가 미해석이라 링크 3개가 전부
-// 열리지 않았다(2026-07-29 확인). 프로필 화면은 먼저 고쳐져 있었고 가입 화면만 누락.
-// location: 위치정보 전용 페이지가 아직 없어 /terms 를 공유 — 별도 페이지는 backend-backlog §23.
+// URL 은 profile/index.tsx 와 같은 단일 출처(utils/contact.ts LEGAL_DOCS)에서 가져온다 —
+// 예전엔 여기 따로 하드코딩돼 있어 backend-backlog §30-B(위치정보 약관 페이지) 배포 시
+// signup.tsx 도 손으로 같이 고쳐야 했다. 이제 LEGAL_DOCS.location.effectiveDate 만 올리면
+// 여기 URL 도 자동으로 /location-terms 로 바뀐다.
 const REQUIRED_TERMS = [
-  { key: 'service', label: '이용약관', url: 'https://ilgayo.co.kr/terms' },
-  { key: 'privacy', label: '개인정보 처리방침', url: 'https://ilgayo.co.kr/privacy' },
-  { key: 'location', label: '위치정보 이용약관', url: 'https://ilgayo.co.kr/terms' },
+  { key: 'service', label: '이용약관', url: LEGAL_DOCS.service.url },
+  { key: 'privacy', label: '개인정보 처리방침', url: LEGAL_DOCS.privacy.url },
+  { key: 'location', label: '위치정보 이용약관', url: LOCATION_TERMS_AVAILABLE ? LEGAL_DOCS.location.url : TERMS_URL },
 ] as const;
 type TermKey = (typeof REQUIRED_TERMS)[number]['key'];
 
