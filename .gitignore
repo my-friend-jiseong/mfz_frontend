@@ -11,6 +11,11 @@ yarn-error.*
 .env
 .env.local
 
+# 서명 키·자격증명 — 절대 커밋 금지
+*.jks
+*.keystore
+credentials.json
+
 # Claude Code 로컬 상태 — 스킬/커맨드만 버전 관리, 나머지는 무시
 .claude/*
 !.claude/skills/
