@@ -278,5 +278,13 @@ export const useTripStore = create<TripState>((set, get) => ({
       .sort((a, b) => b.startedAt.localeCompare(a.startedAt)),
 
   // 로그아웃 시 호출.
-  clearAll: () => set({ trips: [], activeTripId: null, busy: false, detailStatus: {} }),
+  clearAll: () =>
+    set({
+      trips: [],
+      listStatus: 'idle',
+      listError: null,
+      activeTripId: null,
+      busy: false,
+      detailStatus: {},
+    }),
 }));

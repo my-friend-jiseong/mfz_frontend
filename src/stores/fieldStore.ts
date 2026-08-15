@@ -124,6 +124,10 @@ export const useFieldStore = create<FieldState>((set, get) => ({
       // 삼키지 않는다 — __DEV__ 로그만 두면 릴리스에서 실패가 완전히 무음이 되고,
       // fields 가 [] 로 남아 화면은 EmptyState('담당 현장이 없습니다')를 띄운다.
       // 사용자는 서버 오류를 '배정 없음' 으로 오독한다 (강령 3: loading/empty/error 강제).
+      //
+      // 상태로 올리되 dev 로그는 남긴다 — 이 경로엔 Sentry 가 붙어 있지 않아 로그를 빼면
+      // 개발 중 원인(스택)을 볼 데가 없다. UI 로는 localizeError 문구만 간다.
+      if (__DEV__) console.error('[fieldStore.refresh] failed', e);
       set({ listStatus: 'error', listError: localizeError(e) });
     }
   },
@@ -359,7 +363,14 @@ export const useFieldStore = create<FieldState>((set, get) => ({
   },
 
   // 로그아웃 시 호출 — 다음 사용자가 같은 디바이스에서 로그인 시 잔존 차단.
-  clearAll: () => set({ fields: [], directAttachments: {}, busy: false }),
+  clearAll: () =>
+    set({
+      fields: [],
+      listStatus: 'idle',
+      listError: null,
+      directAttachments: {},
+      busy: false,
+    }),
 
   getById: (id) => get().fields.find((f) => f.id === id),
 

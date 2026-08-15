@@ -43,23 +43,25 @@ export default function FieldsList() {
   // 첫 진입은 즉시 페치, 이후 필터 변경은 300ms debounce.
   // status·방문일은 서버 refresh 로 재조회, project·category 는 아래 클라 필터로 처리.
   const fetchedOnceRef = useRef(false);
+  // 재시도(ErrorState)도 같은 파라미터로 다시 쏴야 한다 — 맨 refresh() 를 부르면
+  // status·방문일 필터가 빠진 전체 목록이 실려와 필터칩이 거짓말을 한다.
+  const fetchFields = useCallback(() => {
+    void refresh({
+      status: status ?? undefined,
+      ...(fromDate || toDate
+        ? { fromDate: fromDate ?? undefined, toDate: toDate ?? undefined }
+        : { visitDateScope: 'all' }),
+    });
+  }, [refresh, status, fromDate, toDate]);
   useEffect(() => {
-    const fire = () => {
-      void refresh({
-        status: status ?? undefined,
-        ...(fromDate || toDate
-          ? { fromDate: fromDate ?? undefined, toDate: toDate ?? undefined }
-          : { visitDateScope: 'all' }),
-      });
-    };
     if (!fetchedOnceRef.current) {
       fetchedOnceRef.current = true;
-      fire();
+      fetchFields();
       return;
     }
-    const handle = setTimeout(fire, 300);
+    const handle = setTimeout(fetchFields, 300);
     return () => clearTimeout(handle);
-  }, [refresh, status, fromDate, toDate]);
+  }, [fetchFields]);
 
   // 카테고리 마스터 로드 — 필터 후보에 아직 현장에 안 붙은 카테고리도 노출.
   useEffect(() => {
@@ -187,11 +189,17 @@ export default function FieldsList() {
         {...({ onScroll } as object)}
         // 목록이 비어 보이는 이유가 셋(로딩 중·조회 실패·진짜 없음)이라 셋을 갈라 렌더한다.
         // 실패를 EmptyState 로 보여주면 사용자가 '배정 없음' 으로 오독한다 (강령 3).
+        //
+        // 단 loading/error 는 **받아둔 데이터가 아예 없을 때만** 이긴다. 스토어가 실패해도
+        // fields 를 비우지 않으므로, 데이터가 있는 채로 status 만 'error' 인 상태가 생긴다
+        // (다른 탭이 hydrate 를 다시 돌리다 실패하는 경우 등). 그때 검색 결과가 0건이면
+        // "검색 결과가 없습니다" 가 맞는데 ErrorState 가 덮어써 버린다 — 그래서 데이터
+        // 유무로 먼저 가른다.
         ListEmptyComponent={
-          listStatus === 'loading' ? (
-            <LoadingState label="현장을 불러오는 중" />
-          ) : listStatus === 'error' ? (
-            <ErrorState message={listError} onRetry={() => void refresh()} />
+          allFields.length === 0 && listStatus === 'loading' ? (
+            <LoadingState label="현장을 불러오는 중" inline />
+          ) : allFields.length === 0 && listStatus === 'error' ? (
+            <ErrorState message={listError} onRetry={fetchFields} />
           ) : (
             <EmptyState
               icon={search || hasFilter ? 'search-outline' : 'location-outline'}

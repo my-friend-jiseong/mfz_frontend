@@ -16,10 +16,11 @@ interface Props {
   // localizeError(e) 결과. NetworkError / ApiError 가 이미 한국어로 구분되어 들어온다.
   message?: string | null;
   onRetry?: () => void;
-  retrying?: boolean;
 }
 
-export function ErrorState({ message, onRetry, retrying = false }: Props) {
+// 재시도 중 스피너 prop 은 두지 않는다 — 재시도하면 listStatus 가 'loading' 으로 바뀌어
+// 이 컴포넌트 자체가 LoadingState 로 교체되므로, 버튼이 busy 를 보여줄 틈이 없다.
+export function ErrorState({ message, onRetry }: Props) {
   return (
     <View style={styles.container}>
       <View style={styles.iconWrap}>
@@ -33,7 +34,7 @@ export function ErrorState({ message, onRetry, retrying = false }: Props) {
       </Text>
       {onRetry ? (
         <View style={styles.action}>
-          <Button onPress={onRetry} variant="secondary" leftIcon="refresh" loading={retrying}>
+          <Button onPress={onRetry} variant="secondary" leftIcon="refresh">
             다시 시도
           </Button>
         </View>

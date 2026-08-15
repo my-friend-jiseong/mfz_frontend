@@ -231,10 +231,14 @@ export default function ReportsIndex() {
         // gorhom 은 onScroll 을 public 타입에서 제외하지만 런타임엔 useScrollHandler 로 전달함.
         {...({ onScroll } as object)}
         // 로딩 중·조회 실패·진짜 없음 셋을 갈라 렌더한다 (강령 3).
+        // loading/error 는 받아둔 데이터가 없을 때만 이긴다 — 이 스토어의 hydrate 는
+        // 외근 탭 포커스마다 돌아서(trips/index) 오프라인 한 번이면 listStatus 가 'error'
+        // 로 눌어붙는다. 그 상태로 기간 필터가 0건이면 "조건에 맞는 보고서가 없습니다" 가
+        // 맞는데 ErrorState 가 덮어쓴다.
         ListEmptyComponent={
-          listStatus === 'loading' ? (
-            <LoadingState label="보고서를 불러오는 중" />
-          ) : listStatus === 'error' ? (
+          allReports.length === 0 && listStatus === 'loading' ? (
+            <LoadingState label="보고서를 불러오는 중" inline />
+          ) : allReports.length === 0 && listStatus === 'error' ? (
             <ErrorState message={listError} onRetry={() => void refresh()} />
           ) : (
             <EmptyState

@@ -74,7 +74,7 @@ export default function TripsList() {
   const activeTripId = useTripStore((s) => s.activeTripId);
   const listStatus = useTripStore((s) => s.listStatus);
   const listError = useTripStore((s) => s.listError);
-  const refreshList = useTripStore((s) => s.refreshList);
+  const hydrateTrips = useTripStore((s) => s.hydrate);
   const allVisits = useVisitStore((s) => s.visits);
   const allReports = useReportStore((s) => s.reports);
 
@@ -370,11 +370,15 @@ export default function TripsList() {
         // gorhom 은 onScroll 을 public 타입에서 제외하지만 런타임엔 useScrollHandler 로 전달함.
         {...({ onScroll } as object)}
         // 로딩 중·조회 실패·진짜 없음 셋을 갈라 렌더한다 (강령 3).
+        // loading/error 는 받아둔 데이터가 없을 때만 이긴다 (필터는 전부 클라이언트라
+        // 0건이 곧 실패는 아니다). 재시도는 refreshList 가 아니라 hydrate — 부팅이
+        // 오프라인이면 refreshActive 도 함께 실패해 activeTripId 가 null 로 남는데,
+        // 목록만 되살리면 진행 중 외근이 있는데도 '외근 시작' CTA 가 그대로 뜬다.
         ListEmptyComponent={
-          listStatus === 'loading' ? (
-            <LoadingState label="외근을 불러오는 중" />
-          ) : listStatus === 'error' ? (
-            <ErrorState message={listError} onRetry={() => void refreshList()} />
+          allTrips.length === 0 && listStatus === 'loading' ? (
+            <LoadingState label="외근을 불러오는 중" inline />
+          ) : allTrips.length === 0 && listStatus === 'error' ? (
+            <ErrorState message={listError} onRetry={() => void hydrateTrips()} />
           ) : (
             <EmptyState
               icon={query || hasFilter ? 'search-outline' : 'briefcase-outline'}

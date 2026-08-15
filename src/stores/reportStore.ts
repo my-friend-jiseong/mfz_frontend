@@ -428,7 +428,14 @@ export const useReportStore = create<ReportState>((set, get) => ({
 
   // 로그아웃 시 호출.
   clearAll: () =>
-    set({ reports: [], detailCache: {}, detailStatus: {}, busy: false }),
+    set({
+      reports: [],
+      listStatus: 'idle',
+      listError: null,
+      detailCache: {},
+      detailStatus: {},
+      busy: false,
+    }),
 
   getById: (id) => get().reports.find((r) => r.id === id) ?? get().detailCache[id],
 }));
