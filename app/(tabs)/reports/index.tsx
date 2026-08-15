@@ -215,7 +215,10 @@ export default function ReportsIndex() {
                   <Text variant="body" weight="bold" numberOfLines={2} style={styles.reportTitle}>
                     {r.title}
                   </Text>
-                  {r.updatedAt ? (
+                  {/* updatedAt 존재만 보면 배지가 모든 카드에 붙는다 — 백엔드가 생성
+                      시각에도 updated_at 을 채우기 때문. 전부에 붙는 배지는 신호가 아니라
+                      배경이라 3중 인코딩 어휘만 소모한다. 실제로 바뀐 것만 표시한다. */}
+                  {r.updatedAt && r.updatedAt !== r.createdAt ? (
                     <Badge label="수정됨" tone="primary" />
                   ) : null}
                 </View>

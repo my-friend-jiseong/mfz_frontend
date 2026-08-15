@@ -81,7 +81,12 @@ function MenuRow({
         {label}
       </Text>
       {value ? (
-        <Text variant="bodySm" color="textMuted">
+        <Text
+          variant="bodySm"
+          color="textMuted"
+          numberOfLines={1}
+          style={styles.menuValue}
+        >
           {value}
         </Text>
       ) : null}
@@ -299,7 +304,11 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     minHeight: touchTarget.row,
   },
-  menuLabel: { flex: 1 },
+  // 라벨은 줄바꿈시키지 않는다 — value 에 폭 제한이 없던 동안 긴 이메일
+  // (문의하기 행)이 라벨을 최소폭까지 밀어 "문의 / 하기" 로 깨졌다.
+  // 라벨이 먼저 제 폭을 갖고, 남는 폭을 value 가 쓰다가 넘치면 value 가 줄인다.
+  menuLabel: { flexGrow: 1, flexShrink: 0 },
+  menuValue: { flexShrink: 1 },
   divider: {
     height: 1,
     backgroundColor: colors.borderMuted,
