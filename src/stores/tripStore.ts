@@ -25,6 +25,9 @@ type RemoveResult =
 
 interface TripState {
   trips: Trip[];
+  // 목록 조회 상태 — empty 와 error 를 화면에서 갈라내기 위한 것 (강령 3).
+  listStatus: 'idle' | 'loading' | 'ready' | 'error';
+  listError: string | null;
   activeTripId: string | null;
   busy: boolean;
   // tripId 별 detail fetch 진행 상태 (G10 altitude) — reportStore.detailStatus 와 동일 패턴.
@@ -54,6 +57,8 @@ const describeError = localizeError;
 
 export const useTripStore = create<TripState>((set, get) => ({
   trips: [],
+  listStatus: 'idle',
+  listError: null,
   activeTripId: null,
   busy: false,
   detailStatus: {},
@@ -73,6 +78,7 @@ export const useTripStore = create<TripState>((set, get) => ({
   },
 
   refreshList: async () => {
+    set({ listStatus: 'loading', listError: null });
     try {
       const res = await tripsApi.list({ limit: 50 });
       const userId = currentUserId();
@@ -90,9 +96,11 @@ export const useTripStore = create<TripState>((set, get) => ({
         destinationCount: t.destinationCount,
         visitCount: t.visitCount,
       }));
-      set({ trips: items });
-    } catch {
-      // ignore
+      set({ trips: items, listStatus: 'ready', listError: null });
+    } catch (e) {
+      // 삼키지 않는다 — 실패를 무시하면 trips 가 [] 로 남아 EmptyState 가 뜨고,
+      // 사용자는 서버 오류를 '외근 없음' 으로 오독한다 (강령 3).
+      set({ listStatus: 'error', listError: localizeError(e) });
     }
   },
 

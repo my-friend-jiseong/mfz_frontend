@@ -9,6 +9,7 @@ import { useVisitStore } from '@/stores/visitStore';
 import { useDestinationStore } from '@/stores/destinationStore';
 import { useReportStore } from '@/stores/reportStore';
 import { EmptyState } from '@/components/EmptyState';
+import { ErrorState } from '@/components/ErrorState';
 import { MapSheetLayout, sheetScrollableStyle } from '@/components/MapSheetLayout';
 import { TripCard } from '@/components/trips/TripCard';
 import {
@@ -19,6 +20,7 @@ import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
 import { Input } from '@/components/ui/Input';
 import { StickyBottomBar } from '@/components/ui/StickyBottomBar';
+import { LoadingState } from '@/components/ui/LoadingState';
 import { useHideOnScroll } from '@/components/ui/useHideOnScroll';
 import { colors } from '@/theme/colors';
 import { listBottomInset, spacing } from '@/theme/spacing';
@@ -70,6 +72,9 @@ export default function TripsList() {
   const userId = useAuthStore((s) => s.user?.id);
   const allTrips = useTripStore((s) => s.trips);
   const activeTripId = useTripStore((s) => s.activeTripId);
+  const listStatus = useTripStore((s) => s.listStatus);
+  const listError = useTripStore((s) => s.listError);
+  const refreshList = useTripStore((s) => s.refreshList);
   const allVisits = useVisitStore((s) => s.visits);
   const allReports = useReportStore((s) => s.reports);
 
@@ -364,18 +369,25 @@ export default function TripsList() {
         contentContainerStyle={styles.list}
         // gorhom 은 onScroll 을 public 타입에서 제외하지만 런타임엔 useScrollHandler 로 전달함.
         {...({ onScroll } as object)}
+        // 로딩 중·조회 실패·진짜 없음 셋을 갈라 렌더한다 (강령 3).
         ListEmptyComponent={
-          <EmptyState
-            icon={query || hasFilter ? 'search-outline' : 'briefcase-outline'}
-            title={
-              query || hasFilter ? '조건에 맞는 외근이 없습니다' : '외근 기록이 없습니다'
-            }
-            description={
-              query || hasFilter
-                ? '검색어나 필터를 바꿔보세요'
-                : '아래 버튼을 눌러 첫 외근을 시작하세요'
-            }
-          />
+          listStatus === 'loading' ? (
+            <LoadingState label="외근을 불러오는 중" />
+          ) : listStatus === 'error' ? (
+            <ErrorState message={listError} onRetry={() => void refreshList()} />
+          ) : (
+            <EmptyState
+              icon={query || hasFilter ? 'search-outline' : 'briefcase-outline'}
+              title={
+                query || hasFilter ? '조건에 맞는 외근이 없습니다' : '외근 기록이 없습니다'
+              }
+              description={
+                query || hasFilter
+                  ? '검색어나 필터를 바꿔보세요'
+                  : '아래 버튼을 눌러 첫 외근을 시작하세요'
+              }
+            />
+          )
         }
       />
       <StickyBottomBar visible={visible}>

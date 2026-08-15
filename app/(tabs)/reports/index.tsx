@@ -10,12 +10,14 @@ import { useAuthStore } from '@/stores/authStore';
 import { useTripStore } from '@/stores/tripStore';
 import { useVisitStore } from '@/stores/visitStore';
 import { EmptyState } from '@/components/EmptyState';
+import { ErrorState } from '@/components/ErrorState';
 import { MapSheetLayout, sheetScrollableStyle } from '@/components/MapSheetLayout';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Input';
 import { StickyBottomBar } from '@/components/ui/StickyBottomBar';
+import { LoadingState } from '@/components/ui/LoadingState';
 import { useHideOnScroll } from '@/components/ui/useHideOnScroll';
 import { colors } from '@/theme/colors';
 import { listBottomInset, spacing } from '@/theme/spacing';
@@ -42,6 +44,8 @@ export default function ReportsIndex() {
   const userId = useAuthStore((s) => s.user?.id);
   const allReports = useReportStore((s) => s.reports);
   const refresh = useReportStore((s) => s.refresh);
+  const listStatus = useReportStore((s) => s.listStatus);
+  const listError = useReportStore((s) => s.listError);
   const allTrips = useTripStore((s) => s.trips);
   const visitsByTrip = useVisitStore((s) => s.byTrip);
 
@@ -226,30 +230,37 @@ export default function ReportsIndex() {
         contentContainerStyle={styles.list}
         // gorhom 은 onScroll 을 public 타입에서 제외하지만 런타임엔 useScrollHandler 로 전달함.
         {...({ onScroll } as object)}
+        // 로딩 중·조회 실패·진짜 없음 셋을 갈라 렌더한다 (강령 3).
         ListEmptyComponent={
-          <EmptyState
-            icon={search || hasFilter ? 'search-outline' : 'document-text-outline'}
-            title={
-              search || hasFilter
-                ? '조건에 맞는 보고서가 없습니다'
-                : '작성된 보고서가 없습니다'
-            }
-            description={
-              search || hasFilter
-                ? '검색어나 기간을 바꿔보세요'
-                : '아래 버튼으로 첫 보고서를 작성하세요'
-            }
-            action={
-              !search && !hasFilter ? (
-                <Button
-                  onPress={() => router.push('/(tabs)/reports/new' as never)}
-                  leftIcon="document-text"
-                >
-                  보고서 작성
-                </Button>
-              ) : undefined
-            }
-          />
+          listStatus === 'loading' ? (
+            <LoadingState label="보고서를 불러오는 중" />
+          ) : listStatus === 'error' ? (
+            <ErrorState message={listError} onRetry={() => void refresh()} />
+          ) : (
+            <EmptyState
+              icon={search || hasFilter ? 'search-outline' : 'document-text-outline'}
+              title={
+                search || hasFilter
+                  ? '조건에 맞는 보고서가 없습니다'
+                  : '작성된 보고서가 없습니다'
+              }
+              description={
+                search || hasFilter
+                  ? '검색어나 기간을 바꿔보세요'
+                  : '아래 버튼으로 첫 보고서를 작성하세요'
+              }
+              action={
+                !search && !hasFilter ? (
+                  <Button
+                    onPress={() => router.push('/(tabs)/reports/new' as never)}
+                    leftIcon="document-text"
+                  >
+                    보고서 작성
+                  </Button>
+                ) : undefined
+              }
+            />
+          )
         }
       />
       <StickyBottomBar visible={visible}>

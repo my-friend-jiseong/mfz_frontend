@@ -7,11 +7,13 @@ import { useFieldStore } from '@/stores/fieldStore';
 import { useAuthStore } from '@/stores/authStore';
 import { FieldCard } from '@/components/FieldCard';
 import { EmptyState } from '@/components/EmptyState';
+import { ErrorState } from '@/components/ErrorState';
 import { MapSheetLayout, sheetScrollableStyle } from '@/components/MapSheetLayout';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
 import { StickyBottomBar } from '@/components/ui/StickyBottomBar';
+import { LoadingState } from '@/components/ui/LoadingState';
 import { useHideOnScroll } from '@/components/ui/useHideOnScroll';
 import { FIELD_STATUS_VALUES, type FieldStatus } from '@/types/entities';
 import { collectFieldFacets, applyFieldFilters, mergeCategoryNames } from '@/utils/fieldFacets';
@@ -28,6 +30,8 @@ export default function FieldsList() {
   const userId = useAuthStore((s) => s.user?.id);
   const allFields = useFieldStore((s) => s.fields);
   const refresh = useFieldStore((s) => s.refresh);
+  const listStatus = useFieldStore((s) => s.listStatus);
+  const listError = useFieldStore((s) => s.listError);
 
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<FieldStatus | null>(null);
@@ -181,28 +185,36 @@ export default function FieldsList() {
         contentContainerStyle={styles.list}
         // gorhom 은 onScroll 을 public 타입에서 제외하지만 런타임엔 useScrollHandler 로 전달함.
         {...({ onScroll } as object)}
+        // 목록이 비어 보이는 이유가 셋(로딩 중·조회 실패·진짜 없음)이라 셋을 갈라 렌더한다.
+        // 실패를 EmptyState 로 보여주면 사용자가 '배정 없음' 으로 오독한다 (강령 3).
         ListEmptyComponent={
-          <EmptyState
-            icon={search || hasFilter ? 'search-outline' : 'location-outline'}
-            title={
-              search || hasFilter ? '검색 결과가 없습니다' : '담당 현장이 없습니다'
-            }
-            description={
-              search || hasFilter
-                ? '검색어 또는 필터를 조정해보세요'
-                : '아래 버튼으로 첫 현장을 등록하세요'
-            }
-            action={
-              !search && !hasFilter ? (
-                <Button
-                  onPress={() => router.push('/(tabs)/fields/new' as never)}
-                  leftIcon="add-circle"
-                >
-                  새 현장 등록
-                </Button>
-              ) : undefined
-            }
-          />
+          listStatus === 'loading' ? (
+            <LoadingState label="현장을 불러오는 중" />
+          ) : listStatus === 'error' ? (
+            <ErrorState message={listError} onRetry={() => void refresh()} />
+          ) : (
+            <EmptyState
+              icon={search || hasFilter ? 'search-outline' : 'location-outline'}
+              title={
+                search || hasFilter ? '검색 결과가 없습니다' : '담당 현장이 없습니다'
+              }
+              description={
+                search || hasFilter
+                  ? '검색어 또는 필터를 조정해보세요'
+                  : '아래 버튼으로 첫 현장을 등록하세요'
+              }
+              action={
+                !search && !hasFilter ? (
+                  <Button
+                    onPress={() => router.push('/(tabs)/fields/new' as never)}
+                    leftIcon="add-circle"
+                  >
+                    새 현장 등록
+                  </Button>
+                ) : undefined
+              }
+            />
+          )
         }
       />
       <StickyBottomBar visible={visible}>

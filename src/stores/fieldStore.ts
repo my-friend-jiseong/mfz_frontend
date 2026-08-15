@@ -29,6 +29,9 @@ type DeleteResult =
 
 interface FieldState {
   fields: Field[];
+  // 목록 조회 상태 — empty 와 error 를 화면에서 갈라내기 위한 것 (강령 3).
+  listStatus: 'idle' | 'loading' | 'ready' | 'error';
+  listError: string | null;
   // 현장별 직접 첨부 캐시 (메모/사진 — ERD v2: field 전용)
   directAttachments: Record<string, FieldDirectAttachment[]>;
   busy: boolean;
@@ -100,6 +103,8 @@ function photoToAttachment(p: {
 
 export const useFieldStore = create<FieldState>((set, get) => ({
   fields: [],
+  listStatus: 'idle',
+  listError: null,
   directAttachments: {},
   busy: false,
 
@@ -108,14 +113,18 @@ export const useFieldStore = create<FieldState>((set, get) => ({
   },
 
   refresh: async (params) => {
+    set({ listStatus: 'loading', listError: null });
     try {
       // v2 검증: visitDateScope 미지정 시 목록이 빈다 — 항상 기본 'all' 보장.
       // listMineAll: 페이지 순회 — 기본 limit(1페이지)만 받으면 21번째+ 현장이
       // 목록·지도·현장 선택에서 통째로 사라진다 (2026-06-05 기기 검증 버그).
       const items = await fieldsApi.listMineAll({ visitDateScope: 'all', ...params });
-      set({ fields: items.map(listItemToField) });
+      set({ fields: items.map(listItemToField), listStatus: 'ready', listError: null });
     } catch (e) {
-      if (__DEV__) console.error('[fieldStore.refresh] failed', e);
+      // 삼키지 않는다 — __DEV__ 로그만 두면 릴리스에서 실패가 완전히 무음이 되고,
+      // fields 가 [] 로 남아 화면은 EmptyState('담당 현장이 없습니다')를 띄운다.
+      // 사용자는 서버 오류를 '배정 없음' 으로 오독한다 (강령 3: loading/empty/error 강제).
+      set({ listStatus: 'error', listError: localizeError(e) });
     }
   },
 

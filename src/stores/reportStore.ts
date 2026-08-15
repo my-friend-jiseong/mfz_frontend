@@ -37,6 +37,10 @@ type GenericResult =
 interface ReportState {
   // 목록 표시용 (list 응답)
   reports: Report[];
+  // 목록 조회 상태 — empty 와 error 를 화면에서 갈라내기 위한 것 (강령 3).
+  // detailStatus 가 상세에서 하는 역할을 목록에서 한다.
+  listStatus: 'idle' | 'loading' | 'ready' | 'error';
+  listError: string | null;
   // 상세 화면 진입 시 채워지는 캐시 (fieldReports 포함)
   detailCache: Record<string, Report>;
   // id 별 detail fetch 진행 상태 — 화면이 not-found EmptyState 와 LoadingState 를
@@ -121,6 +125,8 @@ function detailToReport(d: ReportDetailResponse): Report {
 
 export const useReportStore = create<ReportState>((set, get) => ({
   reports: [],
+  listStatus: 'idle',
+  listError: null,
   detailCache: {},
   detailStatus: {},
   busy: false,
@@ -130,13 +136,16 @@ export const useReportStore = create<ReportState>((set, get) => ({
   },
 
   refresh: async (params) => {
+    set({ listStatus: 'loading', listError: null });
     try {
       const res = await reportsApi.list(params);
       const userId = useAuthStore.getState().user?.id ?? '';
       const items = res.items.map((it) => listItemToReport(it, userId));
-      set({ reports: items });
-    } catch {
-      // ignore
+      set({ reports: items, listStatus: 'ready', listError: null });
+    } catch (e) {
+      // 삼키지 않는다 — 실패를 무시하면 reports 가 [] 로 남아 EmptyState 가 뜨고,
+      // 사용자는 서버 오류를 '보고서 없음' 으로 오독한다 (강령 3).
+      set({ listStatus: 'error', listError: localizeError(e) });
     }
   },
 
