@@ -178,7 +178,7 @@ Tailwind 호환 raw hue × shade. **화면 코드에서 직접 import 금지** �
 | 읽기 전용 내용 블록 | `surface`(흰색) + `borderMuted` — **채우지 않는다** |
 | 비활성 입력 | `control.bgDisabled` + opacity 0.7 |
 
-> 폼 **밖**에서 `surfaceMuted` 를 쓰는 건 문제없다 (아이콘 버튼 배경, 진행률 트랙, Skeleton, 지도 chrome 등 — 입력란과 같은 자리에 서지 않는다).
+> 폼 **밖**에서 `surfaceMuted` 를 쓰는 건 문제없다 (아이콘 버튼 배경, 진행률 트랙, 지도 chrome 등 — 입력란과 같은 자리에 서지 않는다).
 
 ### 5.4 Brand / Intent (강 + Muted)
 
@@ -316,11 +316,9 @@ DESTINATION_STATUS_BADGE = {
 | `Input` | `label` · `error` · `helperText` · `leftSlot` / `rightSlot` (forwardRef) · 내부 focus 상태 | 폼 입력 (inset) |
 | `FilterChip` | `label` · `active` · `activeColor` · `dashed` · `leftIcon` · `disabled` | 선택 가능 chip (`withAlpha(c, 0.13)` 배경) |
 | `FilterAccordion` | `groups: {key, base, value, render}[]` · `hasFilter` · `onResetAll` | 목록 필터 껍데기 — 칩 줄 + 한 번에 하나만 열리는 패널. 함께 export: `FilterPanel` · `FilterOptionRow` · `FilterDateRange`(플랫폼 분기 날짜 범위) · `dateRangeSummary` |
-| `SectionHeader` | `title` · `description` · `action` | 섹션 구분 — h3 제목 + 설명 + 액션 (무게 있는 머리) |
 | `FieldLabel` | `children` · `counter` · `trailing` · `style` | 폼 컨트롤 위 라벨 줄. 오른쪽에 글자수(`counter`)나 임의 요소(`trailing`, 되돌리기 버튼 등). 기본 `marginTop: md`, 굵기 semibold |
-| `GroupLabel` | `children` · `style` | 카드 한 덩어리 위의 눈썹 라벨 — caption+bold+muted+uppercase. 기본 `marginTop: xl`(그룹↔그룹), 영역 경계(xxl)·화면 첫 줄(0)은 `style` 로 덮는다. `SectionHeader` 와 다른 층이다 |
+| `GroupLabel` | `children` · `style` | 카드 한 덩어리 위의 눈썹 라벨 — caption+bold+muted+uppercase. 기본 `marginTop: xl`(그룹↔그룹), 영역 경계(xxl)·화면 첫 줄(0)은 `style` 로 덮는다. `FieldLabel` 과 다른 층이다 — 아래 9.1 |
 | `LoadingState` | `label` · `inline` | 로딩 표시 |
-| `Skeleton` | `width` · `height` · `rounded` | 로딩 placeholder (reanimated shimmer) |
 | `StickyBottomBar` | `children` (+ `useSafeAreaInsets`) | 화면 하단 sticky CTA, home indicator 회피 |
 | `EmptyState` | `title` · `description` · `icon` · `action` | 빈 상태 (`src/components/EmptyState.tsx`) |
 
@@ -329,13 +327,12 @@ DESTINATION_STATUS_BADGE = {
 
 ### 9.1 라벨 두 층 — 무엇을 고를지 (2026-07-30 확정)
 
-라벨 컴포넌트가 셋이다. **"무엇 위에 얹는가" 로 정해진다** — 크기나 취향으로 고르지 않는다.
+라벨 컴포넌트가 둘이다. **"무엇 위에 얹는가" 로 정해진다** — 크기나 취향으로 고르지 않는다.
 
 | 무엇 위에 | 컴포넌트 | 모양 |
 |---|---|---|
 | **카드 한 덩어리·섹션** | `GroupLabel` | caption(12) + bold + muted + **uppercase** + letterSpacing, `marginTop: xl` |
 | **컨트롤 하나**(입력·picker·칩 줄) | `FieldLabel` | bodySm(14) + semibold + muted, `marginTop: md`, 오른쪽에 글자수·버튼 슬롯 |
-| **화면 안 큰 구획**(제목 + 설명 + 액션) | `SectionHeader` | h3 + description + action |
 
 둘을 하나로 합치지 않는 이유: **애초에 다른 문제를 푼다.** 눈썹(`GroupLabel`)은 화면을 구획으로
 나누는 표지라 본문보다 작고 대문자로 떠 있어야 덩어리 경계가 읽힌다. 필드 라벨(`FieldLabel`)은

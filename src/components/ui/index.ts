@@ -6,6 +6,4 @@ export { Text } from './Text';
 export { FilterChip } from './FilterChip';
 export { StickyBottomBar } from './StickyBottomBar';
 export { useHideOnScroll } from './useHideOnScroll';
-export { SectionHeader } from './SectionHeader';
 export { LoadingState } from './LoadingState';
-export { Skeleton } from './Skeleton';
