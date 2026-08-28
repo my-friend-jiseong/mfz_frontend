@@ -509,3 +509,23 @@ DESTINATION_STATUS_BADGE = {
 **이 문서에 수치·목록·"완료" 를 쓸 때는 측정한 명령과 날짜를 함께 남긴다.** "37 vs 27" 처럼
 단위가 다른 수를 나란히 적은 게 첫 사고였다.
 - `useReportDetail` 패턴을 `fieldStore` / `visitStore` 로 확장.
+
+---
+
+## 15. Figma 라이브러리 (2026-08-28)
+
+파일 `일가요` → `DesignSystem` 페이지(`3:4`). **코드가 원본이고 Figma 가 사본이다.**
+
+| 섹션 | 내용 | 대응 |
+|---|---|---|
+| 색상표 | Primitives 79 · Semantic 41 | §4 · §5 |
+| 간격·반경 | spacing · touch-target · radius | §2 |
+| 그림자 | elevation 3 단계 | §7 |
+| 타이포그래피 | 텍스트 스타일 | §3 |
+| 컴포넌트 | `ui/` 프리미티브 9 개 · 배리언트 65 | §9 |
+
+- **변수 150 개** — Primitives / Color / Spacing / Typography 4 컬렉션. 문서 스와치까지 전부 바인딩돼 토큰을 고치면 따라 움직인다.
+- **텍스트 스타일 23 개** — 9 개는 `typography.ts` 키와 1:1. 코드는 굵기를 `<Text weight>` prop 으로 받지만 Figma 엔 그 축이 없어, 컴포넌트가 실제로 쓰는 조합만 `body-bold` · `bodySm-semibold` · `caption-bold` · `groupLabel` 등으로 추가했다. 문서 가구는 `docs/*` 로 분리.
+- **폰트** — 플러그인 런타임에 로컬 폰트가 없어 `fontName` 을 직접 못 쓴다. `font-family/base`(STRING, `FONT_FAMILY` 스코프) 변수를 텍스트 스타일에 바인딩해 Pretendard 를 지정한다. **폰트 교체는 이 변수 값 하나만 바꾼다.**
+- **설명은 한 줄만** — 컴포넌트 description·캔버스 주석에 근거를 옮겨 적지 않는다. 근거는 이 문서와 코드 주석에 있다.
+- 아이콘은 아직 자리표시자다. Ionicons 를 컴포넌트로 들이면 `INSTANCE_SWAP` 으로 바꾼다.
