@@ -106,7 +106,9 @@ easing(cubic-bezier)은 변수 타입이 없다 — 곡선으로만 그린다.
 
 ## 6. 파일 좌표
 
-`fileKey` `MlfpDS0wOeN90iNl5JCPWp` · 페이지 `DesignSystem` `3:4`
+`fileKey` `MlfpDS0wOeN90iNl5JCPWp` · 페이지 `DesignSystem` `3:4` · `UI` `0:1`
+
+**화면은 `UI` 페이지에 넣는다.** 사용자가 만든 `N_화면이름` 섹션(`0_회원가입` `3:3`)이 기준이다 — 폭 390, 높이는 스크롤 전체, 뷰포트 844 는 `docs/caption` 한 줄로 적는다. 없는 아이콘은 TTF 에서 추출해 먼저 채운다.
 
 | 섹션 | id | 컴포넌트 세트 | id |
 |---|---|---|---|

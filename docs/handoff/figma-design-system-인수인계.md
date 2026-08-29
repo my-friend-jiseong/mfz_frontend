@@ -73,11 +73,11 @@ EmptyState `101:3` · ErrorState `101:11`
 - **변수 170개 / 6 컬렉션** — Primitives `16:2`(79) · Color `16:3`(41) · Spacing `16:4`(13) ·
   Typography `16:5`(18) · Motion `89:4`(7) · Map `93:2`(12).
   `ALL_SCOPES` 0건, code syntax 누락 0건.
-- **텍스트 스타일 24개** — 코드 대응 9(`h1 h2 h3 bodyLg body bodySm caption metric metricSm`)
+- **텍스트 스타일 25개** — 코드 대응 9(`h1 h2 h3 bodyLg body bodySm caption metric metricSm`)
   \+ 굵기 조합 6(`body-bold body-semibold bodySm-bold bodySm-semibold caption-semibold caption-bold`)
   \+ `groupLabel` + 문서 가구 8(`docs/*`).
   ※ `body-semibold` 는 EmptyState/ErrorState 제목용으로 이번에 추가됐다.
-- **아이콘 63개** — `icon/<name>`, 24×24, `node_modules` 의 `Ionicons.ttf` 에서 윤곽선 직접 추출.
+- **아이콘 67개** — `icon/<name>`, 24×24, `node_modules` 의 `Ionicons.ttf` 에서 윤곽선 직접 추출.
 - **폰트** — 전 텍스트 Pretendard. 스타일은 전부 `font-family/base`(`VariableID:58:2`) 바인딩.
 
 ---
@@ -129,16 +129,26 @@ return JSON.stringify(s.absoluteBoundingBox);
 ③ `font-family/base`(`VariableID:58:2`)로 복구하고 `restoreFailed: []` 를 확인한다.
 face 이름은 공백 없이 (`SemiBold`). 중간에 실패하면 복구를 반드시 돌릴 것 — 안 돌리면 파일 전체 폰트가 42dot Sans 로 남는다.
 
-#### (a) 화면 프레임
+#### (a) 화면 프레임 — 진행 중 (1/28)
 
-라우트 파일 34개 / 실제 화면 28개(`app/`). **권장 순서**:
+**자리는 `UI` 페이지(`0:1`)다.** 사용자가 `0_회원가입`(`3:3`) 섹션을 만들어뒀다 —
+탭 루트부터가 아니라 **`N_화면이름` 번호 순서**가 사용자의 규칙이므로 그걸 따른다.
+프레임 폭 390, 높이는 스크롤 전체(뷰포트 844 는 `docs/caption` 한 줄로 표기).
 
-1. 탭 루트 4개 — `trips`(외근) · `fields`(현장) · `reports`(보고서) · `profile/index`(내 정보)
-2. 지도 홈 `(tabs)/index` — `MapSheetLayout` 스냅(`['18%','55%','92%']`)이 얽혀 있어 정지 프레임 3장이 필요하다
-3. 서브 화면 — `trips/visit` · `reports/[id]/edit` · `trips/[id]/edit` · `fields/categories` · `fields/[id]/checkin`
+- ✅ `0_회원가입` — `app/(auth)/signup.tsx`. 프레임 `114:3`, 390×852.
+  Input 4 · termsBox · Button(primary lg + ghost sm) 인스턴스 조립, 간격·반경은 전부 변수 바인딩.
+- 다음: `1_로그인`(`app/(auth)/login.tsx`) 부터 번호 순으로.
+
+나머지 화면(라우트 34개 / 실제 화면 28개)에서 참고할 것:
+
+- 지도 홈 `(tabs)/index` — `MapSheetLayout` 스냅(`['18%','55%','92%']`)이 얽혀 있어 정지 프레임 3장이 필요하다
+- 서브 화면 — `trips/visit` · `reports/[id]/edit` · `trips/[id]/edit` · `fields/categories` · `fields/[id]/checkin`
 
 화면별 디자인 결정은 이미 `docs/reference/design-system.md` **§14(미적용 / 차후 과제)** 의 탭·서브 화면 패스 기록에 적혀 있다. 새로 판단하지 말고 그걸 근거로 옮긴다.
 `reports/generate` 는 19줄짜리 redirect 라 UI 가 없다 — 대상에서 뺀다.
+
+**빠진 아이콘은 먼저 채운다.** 회원가입에서 `eye-outline` · `eye-off-outline` · `checkbox` · `square-outline` 4개가 없어
+`Ionicons.ttf` 에서 추출해 넣었다(아이콘 63 → 67, 그리드는 알파벳 순으로 재정렬). 스크립트는 §5·스킬 §4 참조.
 
 #### (b) 도메인 컴포넌트
 
