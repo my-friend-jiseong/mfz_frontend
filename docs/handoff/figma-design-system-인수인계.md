@@ -12,7 +12,7 @@
 
 RN 앱(`src/theme/`, `src/components/`)을 역설계해 Figma 파일 `일가요` 의 `DesignSystem` 페이지에
 토큰·타이포·아이콘·컴포넌트 라이브러리를 만들었고 팀 라이브러리로 게시했다.
-지금은 **`UI` 페이지에 화면 프레임을 옮기는 단계**(3/28)다. 남은 것은 §4.4.
+지금은 **`UI` 페이지에 화면 프레임을 옮기는 단계**(4/28)다. 남은 것은 §4.4.
 
 **대원칙: 코드가 원본이고 Figma 가 사본이다.** 값이 어긋나면 `src/theme/` 이 이긴다.
 근거 문서는 `docs/reference/design-system.md`, 특히 §15.
@@ -94,6 +94,7 @@ EmptyState `101:3` · ErrorState `101:11`
 | `1_로그인` | `124:75` | `124:77` · 390×567 | 빈 폼(첫 진입) | `app/(auth)/login.tsx` |
 | | | `128:91` · 390×587 | invalid_credentials | 같은 파일 `handleLogin()` |
 | `2_내정보` | `136:137` | `136:139` · 390×767 | 기본 | `app/(tabs)/profile/index.tsx` |
+| `3_카테고리` | `150:183` | `150:185` · 390×844 | 목록 + 인라인 편집 1행 | `app/(tabs)/fields/categories.tsx` |
 
 오류 프레임은 `validate()` 가 만드는 조합을 그대로 그렸다 — 필드 4개 `state=error` +
 약관 오류 caption. **`globalError` 는 넣지 않았다**: 검증 실패면 서버를 호출하기 전에 return 하므로
@@ -141,9 +142,9 @@ return JSON.stringify(s.absoluteBoundingBox);
 **3차 게시(확인됨, 2026-08-29)** — 오류 상태 화면 작업의 폰트 사이클 변경 37건. 다음 세션이 열어
 `게시…` → `변경되지 않음 (115)` + `게시` 버튼 비활성 확인. 정상 완료.
 
-**4차·5차 게시(확인됨, 2026-08-29)** — `1_로그인`·`2_내정보` 폰트 사이클 변경(스타일·컴포넌트, **내용 변화 없음**).
-둘 다 게시 후 `변경되지 않음 (115)` 확인. (`게시 중` 토스트는 수 분 남지만 다이얼로그 상태가 정답.)
-5차는 게시 다이얼로그에서 **`MenuRow` 를 체크 해제**하고 게시했다 — 로컬 유지, `변경 사항 (1/1)` 로 남아 있으면 정상.
+**4~6차 게시(2026-08-29)** — `1_로그인`·`2_내정보`·`3_카테고리` 폰트 사이클 변경(스타일·컴포넌트, **내용 변화 없음**).
+`변경되지 않음 (115)` 확인. (`게시 중` 토스트는 수 분 남지만 다이얼로그 상태가 정답.)
+5차부터 게시 다이얼로그에서 **`MenuRow` 를 체크 해제**하고 게시한다 — 로컬 유지, `변경 사항 (1/1)` 로 남아 있으면 정상.
 
 **게시 요령**: 에셋 패널 → 라이브러리 아이콘 → `게시…`. `라이브러리 게시 중` 토스트는 수 분 남는다 —
 다시 열어 `변경되지 않음 (N)` 이면 끝. 이 변경분은 재게시해도 결과가 같아 위험 없음.
@@ -169,7 +170,7 @@ face 이름은 공백 없이 (`SemiBold`). 중간에 실패하면 복구를 반�
 INSTANCE_SWAP 과 얽히면 벡터가 6×11 로 뭉개진다(실제로 당함). 색은 인스턴스 프레임 `.fills` 가 아니라
 내부 VECTOR 의 `.fills` 를 `text/*` 로 바인딩(프레임에 칠하면 회색 박스가 생긴다).
 
-#### (a) 화면 프레임 — 진행 중 (3/28)
+#### (a) 화면 프레임 — 진행 중 (4/28)
 
 **자리는 `UI` 페이지(`0:1`)다.** 사용자가 `0_회원가입`(`3:3`) 섹션을 만들어뒀다 —
 탭 루트부터가 아니라 **`N_화면이름` 번호 순서**가 사용자의 규칙이므로 그걸 따른다.
@@ -184,8 +185,10 @@ INSTANCE_SWAP 과 얽히면 벡터가 6×11 로 뭉개진다(실제로 당함). 
   identity(avatar 56 circle + h1 이름 + email) · GroupLabel + 카드 표면(수동, bg/surface+border/default+radius/md) 2개 ·
   **`MenuRow` 로컬 컴포넌트**(`143:151`, 섹션 안 프레임 아래 배치 — §14 "2번째 callsite 시 승격") · Button(secondary +leftIcon, dangerGhost +leftIcon).
   카드 slot(`Content` SLOT)은 plugin API 로 채우기 어려워 표면을 수동으로 그렸다.
-- 다음: `3_` 번호 순으로. 탭 화면부터면 `(tabs)` = trips → fields → reports (profile 은 완료).
-  지도 홈(trips/index)은 스냅 3프레임 + KakaoMapWebView 표현이 얽혀 별도 세션 권장.
+- ✅ `3_카테고리` — `app/(tabs)/fields/categories.tsx`. 섹션 `150:183`. 프레임 `150:185` 390×844(지도 아님, 전체 화면).
+  addBox(수동 `control/*` 입력 + `추가` primary +add icon, borderBottom) · 카드 행 4개(pricetag + 이름 + pencil + trash, 1행은 인라인 편집 = `control/border-focus`).
+- **탭 루트 4개는 전부 `MapSheetLayout`**(trips·fields·reports 목록 + reports 도) — 스냅 3프레임 필요, 별도 세션. profile·categories 처럼 지도 없는 화면부터 훑는 게 빠르다.
+- 다음: `4_` — `profile/edit` · `fields/new` · `reports/new` · `reports/[id]/edit` · `trips/[id]/edit` · `fields/[id]/checkin` 등 폼·서브 화면.
 
 나머지 화면(라우트 34개 / 실제 화면 28개)에서 참고할 것:
 
