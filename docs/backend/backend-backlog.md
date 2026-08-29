@@ -504,125 +504,22 @@ DB 메타데이터(`fileUrl`·`fileSize`·`mimeType`)는 온전한데 **실제 �
 
 ---
 
-## 33. 🔴 **운영 TLS 인증서가 만료됐다 — 앱이 서버에 붙지 못한다** (진행 중 장애)
+## 34. 🟡 §33(TLS 만료) 재발 방지가 됐는지 미확인 — 다음 만료 2026-11-02 전 재점검
 
-`https://ilgayo.co.kr` 의 인증서가 **2026-08-03 06:39:15 (KST) 에 만료**됐다. Let's Encrypt
-자동 갱신이 실패한 상태다.
+**즉시 장애는 해소를 실측 확인했다(2026-08-29):** `curl https://ilgayo.co.kr/api-docs.json` 200,
+인증서 `notBefore=2026-08-04` · `notAfter=2026-11-02` · `issuer=Let's Encrypt YE1`(§33 당시
+`E8` 과 다른 세대 — 새로 발급된 것). §33 은 아카이브로 이관한다.
 
-### 실측 (2026-08-03 19:57 KST)
-
-```
-Subject:  CN=ilgayo.co.kr
-Issuer:   CN=E8, O=Let's Encrypt, C=US
-NotBefore: 2026-05-05 06:39:16
-NotAfter:  2026-08-03 06:39:15   ← 약 13시간 전 만료
-```
-
-| 확인 | 결과 |
-|---|---|
-| `curl https://ilgayo.co.kr/api-docs.json` | **실패** — `SEC_E_CERT_EXPIRED` (schannel) |
-| `curl -k` (검증 우회) | 200 — **서버·애플리케이션 자체는 정상 가동 중** |
-
-즉 서비스가 죽은 게 아니라 **TLS 신뢰만 끊겼다.**
-
-### 영향
-
-- **앱은 우회 수단이 없다.** RN/Expo 의 fetch 는 OS 트러스트 스토어를 쓰고, 프로덕션 빌드에
-  인증서 검증 예외를 넣는 선택지는 없다(넣어서도 안 된다). 로그인부터 모든 API 호출이 실패한다.
-- Play Console 이 심사 중 정책 링크(`/terms`·`/privacy`)를 열어보면 브라우저 경고를 만난다 —
-  **§30-B 심사와 직접 부딪친다.**
-- 웹 검증 환경(자동화 포함)도 같은 이유로 막힌다.
-
-> **📄 인프라 담당 전달본**: [`docs/infra/2026-08-03-tls-expiry-incident.md`](../infra/2026-08-03-tls-expiry-incident.md)
-> — 조치 명령·체크리스트·서버 환경까지 담은 자립형 문서. **전달할 때는 그쪽을 보낸다.**
-
-### ✅ 원인 확정 (2026-08-03, 서버 SSH 진단)
-
-**"갱신이 실패했다" 가 아니다 — 이 인증서는 애초에 자동 갱신될 수 없는 방식으로 발급됐다.**
-
-`/etc/letsencrypt/renewal/ilgayo.co.kr.conf`:
-
-```
-pref_challs = dns-01,
-authenticator = manual
-```
-
-certbot 은 **`--manual` 로 발급된 인증서를 `--manual-auth-hook` 없이는 비대화식으로 갱신하지
-않는다**(사람 입력이 필요하므로 건너뛴다). 그래서:
-
-| 확인 | 결과 | 의미 |
-|---|---|---|
-| `certbot.timer` | **enabled·active, 9시간 전 실행** | 타이머는 정상이었다 — 문제는 여기가 아니다 |
-| `live/fullchain.pem` 심볼릭 링크 | → `archive/…/fullchain**1**.pem` | **2세대가 존재하지 않는다.** 5/4 발급 이후 갱신 성공 0회 |
-| `live/` 디렉터리 mtime | `May 4 22:37` | 그날 이후 손대지 않았다 |
-| 디스크 | 10% 사용 | 무관 |
-
-**즉 타이머는 90일 내내 돌면서 매번 조용히 건너뛰었다.** 만료는 사고가 아니라 예정된 결과였다.
-
-### 왜 manual/DNS-01 이었나 — 되돌릴 수 없는 제약
-
-**80 포트가 외부에 열려 있지 않다.** 외부에서 `59.21.223.137:80` 은 connection refused 이고,
-`mfz-nginx` 컨테이너는 호스트 **28080** → 컨테이너 80 으로 매핑돼 있다. HTTP-01 챌린지는
-80 포트를 요구하므로 **처음부터 불가능**했고, 그래서 DNS-01 수동 발급을 택한 것으로 보인다.
-nginx conf 에도 `.well-known/acme-challenge` location 이 없다(전부 백엔드로 프록시).
-
-### ⚠️ 갱신만으로는 부족하다 — 컨테이너 reload 가 필요하다
-
-TLS 종단은 호스트 nginx 가 아니라 **Docker 컨테이너 `mfz-nginx`**(`nginx:latest`, 4일째 가동)이고,
-`/etc/letsencrypt` 를 **read-only 로 마운트**해 기동 시점에 인증서를 읽는다. 호스트에서 갱신해도
-**컨테이너가 reload 되지 않으면 만료본을 계속 서빙한다.** 다음번 갱신을 자동화하더라도 이 한 줄이
-빠지면 같은 장애가 재현된다.
-
-### 요청
-
-**① 즉시 복구** (대화식 — DNS TXT 레코드 추가가 필요해 사람이 해야 한다)
-
-```bash
-sudo certbot certonly --manual --preferred-challenges dns \
-  -d ilgayo.co.kr -d www.ilgayo.co.kr
-# 안내되는 TXT 레코드를 가비아 DNS 관리에 추가 → 전파 대기 → Enter
-docker exec mfz-nginx nginx -s reload      # ★ 이걸 빼면 만료본을 계속 서빙한다
-```
-
-**② 재발 방지 — 이게 본론이다.** ① 만 하면 11월에 똑같이 만료된다.
-도메인 DNS 는 **가비아**(`ns.gabia.co.kr`)이고 서버에 certbot DNS 플러그인은 설치돼 있지 않다.
-
-| 안 | 방법 | 평가 |
-|---|---|---|
-| **A** | 네임서버를 **Cloudflare** 로 옮기고 `certbot-dns-cloudflare` 사용 (등록기관은 가비아 유지) | **권장.** 완전 자동화, 무료, 플러그인이 공식이다. 80 포트 제약과 무관 |
-| B | 가비아 DNS API 를 호출하는 `--manual-auth-hook` 스크립트 자작 | 공식 플러그인이 없어 직접 짜야 하고, API 스펙 변경에 취약 |
-| C | 80 포트를 열고 webroot HTTP-01 로 전환 | 공유기·ISP 정책에 막힐 수 있다. nginx 에 `.well-known` location 추가도 필요 |
-
-어느 안이든 **deploy hook 을 반드시 건다**:
-
-```bash
---deploy-hook "docker exec mfz-nginx nginx -s reload"
-```
-
-**③ 만료 임박 알림** — 이번 장애의 진짜 교훈은 *90일 동안 아무도 몰랐다* 는 것이다.
-cron 한 줄이면 된다:
-
-```bash
-0 9 * * * openssl s_client -connect ilgayo.co.kr:443 -servername ilgayo.co.kr </dev/null 2>/dev/null \
-  | openssl x509 -noout -checkend 1209600 || echo "ilgayo.co.kr 인증서 14일 내 만료"
-```
-
-### 덤 — `mfz-studio` 컨테이너가 크래시 루프 중
-
-같은 진단에서 발견. `Restarting (1)` 이 초 단위로 반복되고, 로그는 `prisma studio` **사용법
-도움말**만 출력한다 — 인자 없이 기동돼 즉시 종료되는 상태다. 장애와는 무관하고 급하지 않지만,
-4일째 초당 재시작 중이라 로그·CPU 를 계속 먹는다. 안 쓰는 컨테이너면 내리는 게 낫다.
+**미확인 — 재발 방지(§33 의 "② 재발 방지" 안 A: Cloudflare 네임서버 이전 + `certbot-dns-cloudflare`
++ deploy-hook)가 실제로 적용됐는지는 서버 SSH 없이 밖에서 볼 수 없다.** 발급 세대가 바뀐 것만으론
+수동 재발급인지 자동화 도입인지 구분이 안 된다. **11/2 만료 전, 늦어도 10월 중** 같은 방식으로
+재확인하거나 백엔드에 직접 물어야 한다 — 확인 안 하면 §33 이 그대로 재현된다.
 
 ### 우선순위
-
-🔴 **최상 — 전면 장애.** 다른 모든 백로그 항목보다 앞선다. 배포된 기능이 몇 개든
-앱이 서버에 닿지 못하면 의미가 없다.
+🟡 — 지금 당장 장애는 아니지만, 확인을 건너뛰면 11월에 §33 이 토씨 하나 안 틀리고 재현된다.
 
 ### 발견 시점
-
-2026-08-03, `release-2026-07-29-store-release.md` 의 프론트 반영 여부를 운영 OpenAPI 로
-대조하려다 `curl` 이 TLS 단계에서 죽어서. **기능 확인을 하러 갔다가 장애를 먼저 만났다** —
-정기적인 운영 헬스체크가 없다는 뜻이기도 하다.
+2026-08-29, 프론트 세션 중 운영 헬스 체크 겸 §33 상태를 실측하다가.
 
 ---
 
@@ -676,11 +573,16 @@ cron 한 줄이면 된다:
 - **§26 ✅ 외근 목록에 계획 목적지 수 `destinationCount`** (release 2026-07-29, 프론트 연동 2026-08-03) — 요청 2건 모두 반영: `siteCount` 에 설명이 붙었고(= 방문한 distinct 현장 수), `destinationCount`/`plannedSiteCount`(별칭) 가 신설됐다. 프론트는 `TripListItem.destinationCount?` → `Trip.destinationCount?` → `TripCard.plannedCount` 로 배선. ⚠️ **이 항목은 겉보기보다 컸다** — 목록 카드의 진행률 바가 그동안 **한 번도 그려지지 않고 있었다.** 분모로 쓰던 `siteCount` 가 정의상 항상 `≤ visitCount` 라 "분모가 방문 수보다 작으면 신뢰 불가" 가드가 100% 발동했기 때문이다. 가드는 유지(구 백엔드·미계획 외근). 같은 실측에서 `durationHHMM: string` 이 **존재하지 않는 필드**임도 드러나 `durationMinutes?: number` 로 정정(소비처 0곳이라 무증상이었다).
 - **§27 ✅ 현장 사진 엔드포인트에 `phase` 추가 — 프론트 변경 0 으로 발화** (release 2026-07-29) — 요청 3안 중 **1번안 채택**: `POST /api/fields/{fieldId}/photos` multipart 에 `phase?`(`before|during|after`), 응답에 `phaseProgress`(+`done`) 와 `photo.phase` echo, `POST /reports/from-trip/:tripId` 이 **field_photos** phase 로 슬롯 매핑. 프론트는 이미 `addPhoto(..., { phase })` 로 보내고 있었으므로 **배포 즉시 동작**했다(코드 변경 없음, 주석만 정정). 잔여: 배포 **이전**에 올린 사진은 `phase: null` 이라 계속 수동 선택(`pickFromField`)이 필요하다 — 소급 백필은 요청하지 않는다(어느 슬롯이었는지 서버가 알 수 없다). `phaseProgress` 는 프론트 미사용(체크인 화면이 슬롯별 사진 유무로 이미 그린다).
 - **§25 ✅ 사용자 커스텀 카테고리 마스터 `categories` CRUD** (release 2026-07-26) — `GET/POST /api/categories`, `PATCH/DELETE /api/categories/:categoryId`, user 스코프 `(user_id, name)` UQ. 에러 `category_name_required`(400)·`category_name_taken`(409)·`category_not_found`(404). `Field.categories: string[]`/`field_categories` **계약 무변경**. 커밋 `8cc8e12`. **프론트 잔여**: `categoryStore` 가 아직 AsyncStorage 진실원(`TODO(backend)`). 후속(별도 결정): `field_categories`→`category_id` FK / rename cascade.
+- **§33 ✅ 운영 TLS 인증서 만료 — 복구 확인** (장애 2026-08-03, 복구 실측 2026-08-29) — 원인: `--manual`/DNS-01 로 발급된 인증서라 `manual-auth-hook` 없이는 비대화식 자동갱신이 불가능했음(certbot.timer 는 90일 내내 정상 실행되며 매번 조용히 건너뜀). 상세·재발 방지안(Cloudflare DNS-01 자동화 등)은 `docs/infra/2026-08-03-tls-expiry-incident.md`. 덤: 같은 진단에서 `mfz-studio` 컨테이너 크래시 루프 발견(장애 무관, 급하지 않음, 미확인 상태로 방치돼 있을 수 있음). **재발 방지 적용 여부는 미확인 → §34.**
 
 ---
 
 ## 변경 이력
 
+- **2026-08-29**: **§33 종결 확인 + §34 신설.** 운영 헬스 체크 겸 `curl`·`openssl s_client` 로
+  실측 — TLS 정상(200), 인증서 `2026-08-04` 발급 `2026-11-02` 만료(§33 당시와 다른 세대,
+  즉 그 사이 재발급됨). 즉시 장애는 해소됐지만 **재발 방지 자동화가 실제로 걸렸는지는 서버
+  SSH 없이 확인 불가** — 다음 만료(11/2) 전 재확인 필요해 §34 로 남겨뒀다. §33 은 아카이브로.
 - **2026-08-29**: **§5 재개 — 카카오 라우팅 API 결과보고서(2026-08-18) 반영.** 백엔드가
   `docs/roadmap/06_kakao-routing-api-report.md` 제안대로 `/api/trips/optimize-preview`
   (경로가 예전 `/navigation/optimize-preview` 에서 바뀜) 와 `/api/trips/:tripId/route`(다중
