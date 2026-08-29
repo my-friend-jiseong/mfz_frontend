@@ -321,6 +321,7 @@ DESTINATION_STATUS_BADGE = {
 | `LoadingState` | `label` · `inline` | 로딩 표시 |
 | `StickyBottomBar` | `children` (+ `useSafeAreaInsets`) | 화면 하단 sticky CTA, home indicator 회피 |
 | `EmptyState` | `title` · `description` · `icon` · `action` | 빈 상태 (`src/components/EmptyState.tsx`) |
+| `ErrorState` | `message` · `onRetry` | 조회 실패 (`src/components/ErrorState.tsx`). `EmptyState` 와 같은 화면으로 처리하지 않는다 — 실패를 empty 로 렌더하면 '데이터 없음' 으로 오독된다 |
 
 > `src/components/ui/` 에는 컴포넌트가 아닌 것도 하나 있다 — `useHideOnScroll` (스크롤 방향에
 > 따라 상단 chrome 숨김). 위 표는 컴포넌트만 다루므로 여기 한 줄로 남긴다.
@@ -368,6 +369,7 @@ DESTINATION_STATUS_BADGE = {
 | | `TripStatusBanner` | root layout 상단 진행 중 외근 배너 |
 | | `MapSheetLayout` | 지도 + BottomSheet 공통 (snap `['18%','55%','92%']` + uiStore 인덱스 공유 + mount race fix) |
 | | `EmptyState` | icon + title + description + action |
+| | `ErrorState` | 조회 실패 + 재시도. 색은 danger 를 쓰지 않고 형상+라벨+액션으로 구분 |
 | | `SafeScreen` | 비-map 화면 safe area wrapper (루트에서 SafeAreaView 제거 후 각 화면이 두름) |
 | | `MapDashboard` · `MapSearchBar` · `MapFilterBar` · `MapLegend` | 지도 위 부유 chrome — **elevation 을 쓰는 유일한 자리**(7절) |
 | | `KakaoMapWebView`(+`.web`) | 지도 본체. 웹은 SDK 직접 주입, 네이티브는 WebView |
