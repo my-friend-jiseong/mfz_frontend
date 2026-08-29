@@ -50,6 +50,11 @@ function routeKeyOf(pts: readonly { lat: number; lng: number }[]): string {
   return pts.map((p) => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`).join('|');
 }
 
+// 서버 응답이 요청한 목적지 수와 안 맞을 때 내부적으로 던지는 마커. localizeError 는
+// plain Error 를 message 그대로 돌려주므로, 이 값이 그대로 사용자 Alert 에 노출되지
+// 않게 catch 쪽에서 별도로 걸러 한국어 문구로 바꾼다.
+const ORDER_MISMATCH_MARKER = 'optimized_order_mismatch';
+
 /**
  * 실도로 경로 요청. 실패(503 kakao_provider_unavailable 등)는 null 로 삼킨다 —
  * 호출 측은 직선 폴리라인·직선 ETA 로 폴백하면 되고, 지도는 계속 쓸모 있으므로
@@ -409,7 +414,9 @@ export default function ActiveTrip() {
         .map((o) => fieldToDest.get(o.fieldId))
         .filter((id): id is string => typeof id === 'string');
       if (orderedDestIds.length !== pendingFields.length) {
-        throw new Error('optimized_order_mismatch');
+        // 마커 문자열 — localizeError 는 plain Error 를 message 그대로 돌려주므로
+        // catch 쪽에서 이 값을 걸러 한국어 문구로 바꾼다(아래).
+        throw new Error(ORDER_MISMATCH_MARKER);
       }
       await applyOptimizedOrder(orderedDestIds, res.summary);
     } catch (e) {
@@ -428,7 +435,10 @@ export default function ActiveTrip() {
           algorithm: 'nearest_neighbor',
           totalDistanceKm: Math.round(totalDistanceKm * 100) / 100,
           totalEtaMinutes,
-          offlineReason: localizeError(e),
+          offlineReason:
+            e instanceof Error && e.message === ORDER_MISMATCH_MARKER
+              ? '서버 응답이 요청한 목적지 수와 달랐습니다'
+              : localizeError(e),
         },
       );
     } finally {

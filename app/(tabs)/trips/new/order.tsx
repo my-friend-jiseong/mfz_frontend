@@ -60,12 +60,14 @@ export default function NewTripOrder() {
   const [title, setTitle] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [optimized, setOptimized] = useState(false);
+  const [optimizing, setOptimizing] = useState(false);
 
   // 동선 최적화 — 백엔드 optimize-preview 우선(backend-backlog §5, 2026-08-18 결과보고서로 재개),
   // 실패 시 클라이언트 nearest-neighbor 폴백. tripId 없는 사전 단계라 optimize-preview 를 쓴다
   // (외근 시작 후 전용인 /navigation/optimize 는 여기서 호출 불가). 출발지는 list[0] 좌표
   // (현재 위치 권한 없이 동작).
   const handleOptimize = async () => {
+    if (optimizing) return; // 연타로 겹쳐 뜬 요청 결과가 뒤섞이는 걸 막는다.
     if (list.length < 2) {
       Alert.alert('최적 순서 추천', '최소 2개 이상의 현장이 필요합니다.');
       return;
@@ -78,6 +80,7 @@ export default function NewTripOrder() {
       );
     }
     const start = { lat: list[0].lat, lng: list[0].lng };
+    setOptimizing(true);
     let ordered: OrderedField[];
     let totalKm: number;
     let totalEta: number;
@@ -99,6 +102,11 @@ export default function NewTripOrder() {
           etaMinutes: o.etaMinutes,
         });
       }
+      // 응답이 요청한 현장 수와 다르면(누락·중복) 결과를 신뢰하지 않는다 — 조용히
+      // 현장이 사라진 채로 외근을 시작하는 것보다 클라이언트 폴백이 낫다.
+      if (mapped.length !== list.length) {
+        throw new Error('optimize_preview_mismatch');
+      }
       ordered = mapped;
       totalKm = res.summary.totalDistanceKm;
       totalEta = res.summary.totalEtaMinutes;
@@ -108,6 +116,8 @@ export default function NewTripOrder() {
       totalKm = ordered.reduce((a, x) => a + (x.distanceFromPrevKm ?? 0), 0);
       totalEta = ordered.reduce((a, x) => a + (x.etaMinutes ?? 0), 0);
       algorithm = 'nearest_neighbor';
+    } finally {
+      setOptimizing(false);
     }
     setList(ordered);
     setOptimized(true);
@@ -291,6 +301,7 @@ export default function NewTripOrder() {
           onPress={() => void handleOptimize()}
           variant="secondary"
           size="sm"
+          loading={optimizing}
           leftIcon={optimized ? 'checkmark-circle' : 'sparkles'}
           style={[styles.optimizeBtn, optimized && styles.optimizeBtnActive]}
         >
