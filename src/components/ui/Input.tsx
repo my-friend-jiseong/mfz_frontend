@@ -120,6 +120,7 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
+    minWidth: 0,
     paddingVertical: spacing.md,
     fontFamily: fontFamily.regular,
     fontSize: fontSize.base,
