@@ -523,15 +523,16 @@ DESTINATION_STATUS_BADGE = {
 | 색상표 | Primitives 79 · Semantic 41 | §4 · §5 |
 | 간격·반경 | spacing · touch-target · radius | §2 |
 | 그림자 | elevation 3 단계 | §7 |
-| 타이포그래피 | 텍스트 스타일 23 개 | §3 |
+| 타이포그래피 | 텍스트 스타일 24 개 | §3 |
 | 모션 | duration 4 · easing 4 · opacity 3 | §8 |
 | 상태 배지 | visit · field · destination 3중 인코딩 | §6 |
 | 지도 척도 | heatmap gradient · choropleth 5 구간 | `heatScale.ts` · `choroplethScale.ts` |
 | 아이콘 | Ionicons 63 개 | — |
-| 컴포넌트 | `ui/` 프리미티브 9 개 · 배리언트 65 | §9 |
+| 컴포넌트 | `ui/` 프리미티브 14 개 · 배리언트 69 | §9 |
 
 - **변수 170 개** — Primitives / Color / Spacing / Typography / Motion / Map 6 컬렉션. `ALL_SCOPES` 0 건, code syntax 누락 0 건.
-- **텍스트 스타일 23 개** — 9 개는 `typography.ts` 키와 1:1. 코드는 굵기를 `<Text weight>` prop 으로 받지만 Figma 엔 그 축이 없어, 컴포넌트가 실제로 쓰는 조합만 `body-bold` · `bodySm-semibold` · `caption-bold` · `groupLabel` 등으로 추가했다. 문서 가구는 `docs/*` 로 분리.
+- **컴포넌트 14 개** — 세트 9(Button · Badge · Card · FilterChip · Input · LoadingState · FilterOptionRow · FilterHead · FilterAccordion) + 단일 5(GroupLabel · FieldLabel · StickyBottomBar · EmptyState · ErrorState).
+- **텍스트 스타일 24 개** — 9 개는 `typography.ts` 키와 1:1. 코드는 굵기를 `<Text weight>` prop 으로 받지만 Figma 엔 그 축이 없어, 컴포넌트가 실제로 쓰는 조합만 `body-bold` · `bodySm-semibold` · `caption-bold` · `groupLabel` 등으로 추가했다. 문서 가구는 `docs/*` 로 분리.
 - **폰트** — 플러그인 런타임에 로컬 폰트가 없어 `fontName` 을 직접 못 쓴다. `font-family/base`(STRING, `FONT_FAMILY` 스코프) 변수를 텍스트 스타일에 바인딩해 Pretendard 를 지정한다. **폰트 교체는 이 변수 값 하나만 바꾼다.**
 - **불투명도 단위 주의** — Figma 의 `OPACITY` 스코프 변수는 **% 단위(0–100)** 다. `opacity.disabled` 0.4 는 Figma 변수 `40` 으로 넣어야 한다. 0.4 를 그대로 넣으면 실제 불투명도가 0.004 가 되어 거의 투명해진다. `choropleth/bin-*` 도 같다.
 - **바인딩 대상이 없는 값은 scope 를 비운다** — `duration/*` · `heat/max` · `heat/radius`. 픽커에 뜨면 잡음만 된다. easing 은 변수로 만들지 않고 곡선으로만 남겼다.
