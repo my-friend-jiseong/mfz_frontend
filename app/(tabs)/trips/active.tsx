@@ -22,9 +22,10 @@ import { AddDestinationModal } from '@/components/trips/AddDestinationModal';
 import { useQuickPhoto } from '@/components/fields/useQuickPhoto';
 import { QuickPhotoSheet } from '@/components/fields/QuickPhotoSheet';
 import { navigateToTripDetail } from '@/utils/postTripFlow';
-import { trips as tripsApi, localizeError, ROUTE_MAX_WAYPOINTS } from '@/api';
+import { trips as tripsApi, ROUTE_MAX_WAYPOINTS } from '@/api';
 import { VISIT_STATUS_LABEL } from '@/types/entities';
-import { nearestNeighborOrder, describeOptimizeAlgorithm } from '@/utils/routeOptimize';
+import { describeOptimizeAlgorithm } from '@/utils/routeOptimize';
+import { useOptimizeRoute } from '@/components/trips/useOptimizeRoute';
 import { safeBack } from '@/utils/backNavigation';
 import { spacing, touchTarget } from '@/theme/spacing';
 import type { Destination } from '@/types/entities';
@@ -49,11 +50,6 @@ function pointsOfDestinations(
 function routeKeyOf(pts: readonly { lat: number; lng: number }[]): string {
   return pts.map((p) => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`).join('|');
 }
-
-// 서버 응답이 요청한 목적지 수와 안 맞을 때 내부적으로 던지는 마커. localizeError 는
-// plain Error 를 message 그대로 돌려주므로, 이 값이 그대로 사용자 Alert 에 노출되지
-// 않게 catch 쪽에서 별도로 걸러 한국어 문구로 바꾼다.
-const ORDER_MISMATCH_MARKER = 'optimized_order_mismatch';
 
 /**
  * 실도로 경로 요청. 실패(503 kakao_provider_unavailable 등)는 null 로 삼킨다 —
@@ -101,7 +97,7 @@ export default function ActiveTrip() {
     [allTrips, activeTripId],
   );
 
-  const [optimizing, setOptimizing] = useState(false);
+  const { optimizing, run: runOptimize } = useOptimizeRoute();
   const [elapsedTick, setElapsedTick] = useState(0);
   const [addOpen, setAddOpen] = useState(false);
 
@@ -397,53 +393,25 @@ export default function ActiveTrip() {
       ? { lat: startSource.latitude, lng: startSource.longitude }
       : { lat: pendingFields[0].lat, lng: pendingFields[0].lng };
 
-    setOptimizing(true);
-    try {
-      const res = await tripsApi.optimizeNavigation(activeTripId, {
-        startLat: start.lat,
-        startLng: start.lng,
-        fields: pendingFields.map((f) => ({
-          fieldId: f.fieldId,
-          name: f.name,
-          lat: f.lat,
-          lng: f.lng,
-        })),
-      });
-      const fieldToDest = new Map(pendingFields.map((f) => [f.fieldId, f.destId]));
-      const orderedDestIds = res.optimizedOrder
-        .map((o) => fieldToDest.get(o.fieldId))
-        .filter((id): id is string => typeof id === 'string');
-      if (orderedDestIds.length !== pendingFields.length) {
-        // 마커 문자열 — localizeError 는 plain Error 를 message 그대로 돌려주므로
-        // catch 쪽에서 이 값을 걸러 한국어 문구로 바꾼다(아래).
-        throw new Error(ORDER_MISMATCH_MARKER);
-      }
-      await applyOptimizedOrder(orderedDestIds, res.summary);
-    } catch (e) {
-      const ordered = nearestNeighborOrder(
-        start,
-        pendingFields.map((f) => ({ id: f.destId, lat: f.lat, lng: f.lng })),
-      );
-      const totalDistanceKm = ordered.reduce(
-        (sum, n) => sum + n.distanceFromPrevKm,
-        0,
-      );
-      const totalEtaMinutes = ordered.reduce((sum, n) => sum + n.etaMinutes, 0);
-      await applyOptimizedOrder(
-        ordered.map((n) => n.id),
-        {
-          algorithm: 'nearest_neighbor',
-          totalDistanceKm: Math.round(totalDistanceKm * 100) / 100,
-          totalEtaMinutes,
-          offlineReason:
-            e instanceof Error && e.message === ORDER_MISMATCH_MARKER
-              ? '서버 응답이 요청한 목적지 수와 달랐습니다'
-              : localizeError(e),
-        },
-      );
-    } finally {
-      setOptimizing(false);
-    }
+    // useOptimizeRoute 는 fieldId 공간에서 동작한다 — 로컬 전용인 destId 는 별도 프로퍼티로
+    // 실어 보내고, 결과에서 그대로 꺼내 쓴다(예전엔 fieldToDest Map 을 따로 만들었다).
+    const nodes = pendingFields.map((f) => ({
+      id: f.fieldId,
+      destId: f.destId,
+      name: f.name,
+      lat: f.lat,
+      lng: f.lng,
+    }));
+    const result = await runOptimize(start, nodes, (body) =>
+      tripsApi.optimizeNavigation(activeTripId, body),
+    );
+    const orderedDestIds = result.ordered.map((n) => n.destId);
+    await applyOptimizedOrder(
+      orderedDestIds,
+      result.source === 'fallback'
+        ? { ...result.summary, offlineReason: result.fallbackReason }
+        : result.summary,
+    );
   };
 
   const finalizeEnd = (endedTripId: string, originalTripId: string | null) => {

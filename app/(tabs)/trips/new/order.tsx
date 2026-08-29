@@ -13,7 +13,8 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { StickyBottomBar } from '@/components/ui/StickyBottomBar';
-import { nearestNeighborOrder, describeOptimizeAlgorithm } from '@/utils/routeOptimize';
+import { describeOptimizeAlgorithm } from '@/utils/routeOptimize';
+import { useOptimizeRoute } from '@/components/trips/useOptimizeRoute';
 import { trips as tripsApi } from '@/api';
 import { safeBack } from '@/utils/backNavigation';
 import { fieldDetailLine } from '@/utils/fieldFacets';
@@ -60,14 +61,15 @@ export default function NewTripOrder() {
   const [title, setTitle] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [optimized, setOptimized] = useState(false);
-  const [optimizing, setOptimizing] = useState(false);
+  const { optimizing, run: runOptimize } = useOptimizeRoute();
 
   // 동선 최적화 — 백엔드 optimize-preview 우선(backend-backlog §5, 2026-08-18 결과보고서로 재개),
-  // 실패 시 클라이언트 nearest-neighbor 폴백. tripId 없는 사전 단계라 optimize-preview 를 쓴다
-  // (외근 시작 후 전용인 /navigation/optimize 는 여기서 호출 불가). 출발지는 list[0] 좌표
-  // (현재 위치 권한 없이 동작).
+  // 실패 시 클라이언트 nearest-neighbor 폴백. 공통 로직은 useOptimizeRoute — active.tsx 의
+  // 재최적화와 같은 훅을 쓴다(/code-review high 지적: 사본 표류로 가드가 한쪽에만 있었다).
+  // tripId 없는 사전 단계라 optimize-preview 를 쓴다 (외근 시작 후 전용인 /navigation/optimize
+  // 는 여기서 호출 불가). 출발지는 list[0] 좌표 (현재 위치 권한 없이 동작).
   const handleOptimize = async () => {
-    if (optimizing) return; // 연타로 겹쳐 뜬 요청 결과가 뒤섞이는 걸 막는다.
+    if (optimizing) return;
     if (list.length < 2) {
       Alert.alert('최적 순서 추천', '최소 2개 이상의 현장이 필요합니다.');
       return;
@@ -80,50 +82,13 @@ export default function NewTripOrder() {
       );
     }
     const start = { lat: list[0].lat, lng: list[0].lng };
-    setOptimizing(true);
-    let ordered: OrderedField[];
-    let totalKm: number;
-    let totalEta: number;
-    let algorithm: string;
-    try {
-      const res = await tripsApi.optimizePreview({
-        startLat: start.lat,
-        startLng: start.lng,
-        fields: list.map((f) => ({ fieldId: f.id, name: f.address, lat: f.lat, lng: f.lng })),
-      });
-      const byId = new Map(list.map((f) => [f.id, f]));
-      const mapped: OrderedField[] = [];
-      for (const o of res.optimizedOrder) {
-        const base = byId.get(o.fieldId);
-        if (!base) continue;
-        mapped.push({
-          ...base,
-          distanceFromPrevKm: o.distanceFromPrevKm,
-          etaMinutes: o.etaMinutes,
-        });
-      }
-      // 응답이 요청한 현장 수와 다르면(누락·중복) 결과를 신뢰하지 않는다 — 조용히
-      // 현장이 사라진 채로 외근을 시작하는 것보다 클라이언트 폴백이 낫다.
-      if (mapped.length !== list.length) {
-        throw new Error('optimize_preview_mismatch');
-      }
-      ordered = mapped;
-      totalKm = res.summary.totalDistanceKm;
-      totalEta = res.summary.totalEtaMinutes;
-      algorithm = res.summary.algorithm;
-    } catch {
-      ordered = nearestNeighborOrder(start, list);
-      totalKm = ordered.reduce((a, x) => a + (x.distanceFromPrevKm ?? 0), 0);
-      totalEta = ordered.reduce((a, x) => a + (x.etaMinutes ?? 0), 0);
-      algorithm = 'nearest_neighbor';
-    } finally {
-      setOptimizing(false);
-    }
-    setList(ordered);
+    const nodes = list.map((f) => ({ ...f, name: f.address }));
+    const result = await runOptimize(start, nodes, (body) => tripsApi.optimizePreview(body));
+    setList(result.ordered);
     setOptimized(true);
     Alert.alert(
       '최적 순서 적용됨',
-      `${describeOptimizeAlgorithm(algorithm)} · 총 ${totalKm.toFixed(1)}km · 예상 ${totalEta}분\n\n수동으로 더 조정하셔도 됩니다.`,
+      `${describeOptimizeAlgorithm(result.summary.algorithm)} · 총 ${result.summary.totalDistanceKm.toFixed(1)}km · 예상 ${result.summary.totalEtaMinutes}분\n\n수동으로 더 조정하셔도 됩니다.`,
     );
   };
 
