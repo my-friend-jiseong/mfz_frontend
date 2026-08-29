@@ -163,6 +163,19 @@ export interface OptimizedOrderItem {
   etaMinutes: number;
 }
 
+// backend-backlog §5 — 2026-08-18 결과보고서로 재개(경로: /navigation/optimize-preview →
+// /optimize-preview). tripId 불필요 — 외근 시작 전 미리보기 전용.
+export interface OptimizePreviewBody {
+  startLat: number;
+  startLng: number;
+  fields: Array<{ fieldId: string; name?: string; lat: number; lng: number }>;
+}
+
+export interface OptimizePreviewResponse {
+  optimizedOrder: OptimizedOrderItem[];
+  summary: { algorithm: string; totalDistanceKm: number; totalEtaMinutes: number };
+}
+
 export interface OptimizeNavigationBody {
   startLat: number;
   startLng: number;
@@ -187,11 +200,16 @@ export interface RouteBody {
   /** 경유지 — 스펙상 최대 30개. 초과분을 잘라내면 실제로 가지 않는 경로가 그려지므로 호출 측이 포기할 것. */
   waypoints?: LatLng[];
 }
-/** 백엔드 응답 — distance(m), duration(초). 본문 미보장 대비로 전부 optional. */
+/** 백엔드 응답 — distance(m), duration(초). 본문 미보장 대비로 전부 optional.
+ * transId·cached·provider 는 2026-08-18 결과보고서로 추가된 필드 — 실패 로그·디버깅용,
+ * 현재 소비처 없음(그래도 계약과 타입을 맞춰 둔다). */
 export interface RouteResponse {
   distance?: number;
   duration?: number;
   vertexes?: LatLng[];
+  transId?: string;
+  cached?: boolean;
+  provider?: string;
 }
 
 /** 스펙 명시 상한 — 호출 측 가드에서 공유. */
@@ -287,6 +305,13 @@ export const trips = {
       { method: 'POST', body },
     ),
 
+  /** 외근 시작 전 동선 최적화 — tripId 불필요 (backend-backlog §5, 2026-08-18 재개) */
+  optimizePreview: (body: OptimizePreviewBody) =>
+    request<OptimizePreviewResponse>('/api/trips/optimize-preview', {
+      method: 'POST',
+      body,
+    }),
+
   /** 다중 현장 동선 최적 순서 제안 — 외근 시작 후 */
   optimizeNavigation: (tripId: string, body: OptimizeNavigationBody) =>
     request<OptimizeNavigationResponse>(
@@ -294,8 +319,10 @@ export const trips = {
       { method: 'POST', body },
     ),
 
-  // backend-backlog §22 — 실도로 차량 경로. 503 kakao_provider_unavailable 은 정상적으로
-  // 발생할 수 있는 실패다(외부 제공자 장애) — 호출 측은 직선 폴리라인으로 폴백할 것.
+  // backend-backlog §22 — 실도로 차량 경로. 2026-08-18 결과보고서로 오류가 세분화됐다:
+  // 503 kakao_route_unavailable(경로 없음/조회 실패) · 503 kakao_route_quota_exceeded ·
+  // 504 kakao_route_timeout. 셋 다 정상적으로 발생할 수 있는 실패다(외부 제공자 장애·쿼터·지연) —
+  // 호출 측은 구분 없이 직선 폴리라인으로 폴백할 것.
   route: (tripId: string, body: RouteBody) =>
     request<RouteResponse>(`/api/trips/${tripId}/route`, {
       method: 'POST',

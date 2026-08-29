@@ -28,6 +28,8 @@ export type {
   TripTimelineEntry,
   NavigationDeepLinksBody,
   NavigationDeepLinksResponse,
+  OptimizePreviewBody,
+  OptimizePreviewResponse,
   OptimizeNavigationBody,
   OptimizeNavigationResponse,
   OptimizedOrderItem,

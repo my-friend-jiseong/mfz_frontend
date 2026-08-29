@@ -31,6 +31,12 @@
   nearest-neighbor 의 직선거리 ETA(`src/utils/routeOptimize.ts`)를 `duration` 으로 대체.
 - 확인 필요: 경유지 개수 제한(초과 시 분할 호출), 무료 쿼터 — 실호출로 실측.
 
+## 후속 — 백엔드 하드닝 (2026-08-18)
+`/api/trips/:tripId/route` 가 경유지 POST(1~30개, `v1/waypoints/directions`)·8초 타임아웃·
+5분 캐시·오류 세분화(`kakao_route_unavailable`/`kakao_route_quota_exceeded`/`kakao_route_timeout`)
+로 보강됐다(`docs/backend/카카오-라우팅-API-구현-결과보고서-2026-08-18.md`). 프론트 계약은
+그대로라 이 문서의 코드 변경은 없다 — 호출부는 여전히 실패를 구분 없이 직선 폴백으로 삼킨다.
+
 ## 보류 (결정 기록)
 - **도보**: 카카오는 제휴(Partnership) API 한정이라 일반 신청 불가. 대안은 Tmap 보행자 API 였으나 **추진 안 함** (2026-06-06).
 - **대중교통**: 카카오 미제공. 대안은 ODsay 였으나 **추진 안 함** (동일).

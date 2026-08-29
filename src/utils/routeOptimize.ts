@@ -1,7 +1,17 @@
 // 외근 시작 전 단계의 클라이언트 측 동선 최적화 (nearest neighbor + Haversine).
-// 백엔드 POST /api/trips/{tripId}/navigation/optimize 는 외근 시작 후의 tripId 만
-// 허용하므로 (404 "Trip or visit not found"), 외근 시작 전 미리보기는 클라이언트 측에서.
-// 알고리즘은 백엔드와 동일한 nearest_neighbor 라 결과가 거의 일치.
+// 백엔드 POST /api/trips/optimize-preview·{tripId}/navigation/optimize 호출이 실패했을 때의
+// 폴백, 또는 그 두 endpoint 를 아예 쓸 수 없는 화면에서 사용한다.
+
+// 백엔드 알고리즘 코드(backend-backlog §5·§22, 2026-08-18 결과보고서 §3.2) → 사용자 표시용 한국어.
+// 모르는 코드는 원문 그대로 보여준다 — 새 알고리즘이 추가돼도 화면이 깨지지 않게.
+const OPTIMIZE_ALGORITHM_LABEL: Record<string, string> = {
+  exhaustive_straight_line: '완전탐색 (직선거리)',
+  nearest_neighbor: '최근접 이웃',
+};
+
+export function describeOptimizeAlgorithm(algorithm: string): string {
+  return OPTIMIZE_ALGORITHM_LABEL[algorithm] ?? algorithm;
+}
 
 const EARTH_KM = 6371;
 

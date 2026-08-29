@@ -24,7 +24,7 @@ import { QuickPhotoSheet } from '@/components/fields/QuickPhotoSheet';
 import { navigateToTripDetail } from '@/utils/postTripFlow';
 import { trips as tripsApi, localizeError, ROUTE_MAX_WAYPOINTS } from '@/api';
 import { VISIT_STATUS_LABEL } from '@/types/entities';
-import { nearestNeighborOrder } from '@/utils/routeOptimize';
+import { nearestNeighborOrder, describeOptimizeAlgorithm } from '@/utils/routeOptimize';
 import { safeBack } from '@/utils/backNavigation';
 import { spacing, touchTarget } from '@/theme/spacing';
 import type { Destination } from '@/types/entities';
@@ -310,7 +310,14 @@ export default function ActiveTrip() {
 
   const applyOptimizedOrder = async (
     pendingOrderedIds: string[],
-    summary: { algorithm: string; totalDistanceKm: number; totalEtaMinutes: number },
+    summary: {
+      algorithm: string;
+      totalDistanceKm: number;
+      totalEtaMinutes: number;
+      // 백엔드 호출이 실패해 클라이언트 계산으로 대체됐을 때만 채운다 — algorithm 자체는
+      // 항상 실제 알고리즘 코드로 유지하고, 대체 사유는 별도 줄로 보여준다.
+      offlineReason?: string;
+    },
   ) => {
     if (!activeTripId) return;
     const resolvedIds = destinations
@@ -349,9 +356,12 @@ export default function ActiveTrip() {
         : summary.totalEtaMinutes;
     // 실도로 값인지 직선 추정인지 밝힌다 — 숫자만 바뀌면 사용자가 오차를 오해한다.
     const basis = road?.distance != null ? '실도로 기준' : '직선거리 추정';
+    const offlineLine = summary.offlineReason
+      ? `\n(서버 계산 실패 — 기기에서 계산: ${summary.offlineReason})`
+      : '';
     Alert.alert(
       '경로 재최적화 완료',
-      `알고리즘: ${summary.algorithm}\n총 거리: ${km.toFixed(1)} km (${basis})\n예상 ETA: ${min}분`,
+      `알고리즘: ${describeOptimizeAlgorithm(summary.algorithm)}\n총 거리: ${km.toFixed(1)} km (${basis})\n예상 ETA: ${min}분${offlineLine}`,
     );
   };
 
@@ -415,9 +425,10 @@ export default function ActiveTrip() {
       await applyOptimizedOrder(
         ordered.map((n) => n.id),
         {
-          algorithm: `nearest_neighbor (offline · ${localizeError(e)})`,
+          algorithm: 'nearest_neighbor',
           totalDistanceKm: Math.round(totalDistanceKm * 100) / 100,
           totalEtaMinutes,
+          offlineReason: localizeError(e),
         },
       );
     } finally {

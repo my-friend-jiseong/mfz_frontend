@@ -13,7 +13,8 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { StickyBottomBar } from '@/components/ui/StickyBottomBar';
-import { nearestNeighborOrder } from '@/utils/routeOptimize';
+import { nearestNeighborOrder, describeOptimizeAlgorithm } from '@/utils/routeOptimize';
+import { trips as tripsApi } from '@/api';
 import { safeBack } from '@/utils/backNavigation';
 import { fieldDetailLine } from '@/utils/fieldFacets';
 import { colors } from '@/theme/colors';
@@ -60,11 +61,11 @@ export default function NewTripOrder() {
   const [submitting, setSubmitting] = useState(false);
   const [optimized, setOptimized] = useState(false);
 
-  // 동선 최적화 — 외근 시작 전 단계는 클라이언트 nearest-neighbor 만 사용 (backend-backlog §5
-  // option B 확정). 이전엔 POST /api/trips/navigation/optimize-preview 를 먼저 시도하다가
-  // 매번 404 가 콘솔에 떨어졌고, fallback 결과와 동일해 호출 자체를 제거. 출발지는 list[0]
-  // 좌표 (현재 위치 권한 없이 동작).
-  const handleOptimize = () => {
+  // 동선 최적화 — 백엔드 optimize-preview 우선(backend-backlog §5, 2026-08-18 결과보고서로 재개),
+  // 실패 시 클라이언트 nearest-neighbor 폴백. tripId 없는 사전 단계라 optimize-preview 를 쓴다
+  // (외근 시작 후 전용인 /navigation/optimize 는 여기서 호출 불가). 출발지는 list[0] 좌표
+  // (현재 위치 권한 없이 동작).
+  const handleOptimize = async () => {
     if (list.length < 2) {
       Alert.alert('최적 순서 추천', '최소 2개 이상의 현장이 필요합니다.');
       return;
@@ -77,14 +78,42 @@ export default function NewTripOrder() {
       );
     }
     const start = { lat: list[0].lat, lng: list[0].lng };
-    const ordered = nearestNeighborOrder(start, list);
-    const totalKm = ordered.reduce((a, x) => a + (x.distanceFromPrevKm ?? 0), 0);
-    const totalEta = ordered.reduce((a, x) => a + (x.etaMinutes ?? 0), 0);
+    let ordered: OrderedField[];
+    let totalKm: number;
+    let totalEta: number;
+    let algorithm: string;
+    try {
+      const res = await tripsApi.optimizePreview({
+        startLat: start.lat,
+        startLng: start.lng,
+        fields: list.map((f) => ({ fieldId: f.id, name: f.address, lat: f.lat, lng: f.lng })),
+      });
+      const byId = new Map(list.map((f) => [f.id, f]));
+      const mapped: OrderedField[] = [];
+      for (const o of res.optimizedOrder) {
+        const base = byId.get(o.fieldId);
+        if (!base) continue;
+        mapped.push({
+          ...base,
+          distanceFromPrevKm: o.distanceFromPrevKm,
+          etaMinutes: o.etaMinutes,
+        });
+      }
+      ordered = mapped;
+      totalKm = res.summary.totalDistanceKm;
+      totalEta = res.summary.totalEtaMinutes;
+      algorithm = res.summary.algorithm;
+    } catch {
+      ordered = nearestNeighborOrder(start, list);
+      totalKm = ordered.reduce((a, x) => a + (x.distanceFromPrevKm ?? 0), 0);
+      totalEta = ordered.reduce((a, x) => a + (x.etaMinutes ?? 0), 0);
+      algorithm = 'nearest_neighbor';
+    }
     setList(ordered);
     setOptimized(true);
     Alert.alert(
       '최적 순서 적용됨',
-      `총 ${totalKm.toFixed(1)}km · 예상 ${totalEta}분\n\n수동으로 더 조정하셔도 됩니다.`,
+      `${describeOptimizeAlgorithm(algorithm)} · 총 ${totalKm.toFixed(1)}km · 예상 ${totalEta}분\n\n수동으로 더 조정하셔도 됩니다.`,
     );
   };
 
@@ -259,7 +288,7 @@ export default function NewTripOrder() {
           상하 화살표로 순서, × 로 제외할 수 있습니다
         </Text>
         <Button
-          onPress={handleOptimize}
+          onPress={() => void handleOptimize()}
           variant="secondary"
           size="sm"
           leftIcon={optimized ? 'checkmark-circle' : 'sparkles'}

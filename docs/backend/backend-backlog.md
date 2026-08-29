@@ -654,7 +654,7 @@ cron 한 줄이면 된다:
 - **§2 ✅ `PATCH`/`DELETE /api/trips/:tripId`** (release 2026-06) — PATCH 제목·시간 보정(응답 비의존, 로컬 패치), DELETE 관련 레코드 시 `409 has_related_trip_records`→`?force=true`. `tripStore.update`/`remove`. 커밋 `18414f6`·`10b4cd0`·`ec6ab90`.
 - **§3 ✅ 주소검색 `address.json`+`keyword.json` 병합 — 기구현 확인** (2026-07-26) — 백엔드 `searchFieldAddress` 가 이미 두 API 를 병렬 호출·병합·중복제거하고 있음(추가 커밋 없음). 백엔드 측 요청 충족(매칭 기준). ⚠️ **2026-07-28 정정**: "잔여는 프론트 선택 정리뿐" 은 틀렸다 — 응답에 **장소명이 없어** 프론트가 클라이언트 SDK 를 걷어낼 수 없다. → **§28**.
 - **§4 ✅ `detailAddress` optional 완화** (release 2026-06) — `detail_address_required` 400 제거, point 성 현장(가로수·광장) 등록 OK. 프론트 무변경.
-- **§5 ✅ `POST /trips/navigation/optimize-preview` 404 → 클라이언트 only 확정** (2026-05-31) — `optimizePreview`·관련 타입 삭제, `order.tsx` 는 `nearestNeighborOrder` 만. (외근 시작 후 `/optimize` 는 유지.)
+- **§5 ✅ `POST /trips/navigation/optimize-preview` 404 → 클라이언트 only 확정** (2026-05-31) — `optimizePreview`·관련 타입 삭제, `order.tsx` 는 `nearestNeighborOrder` 만. (외근 시작 후 `/optimize` 는 유지.) ⚠️ **2026-08-29 정정 — 재개.** 백엔드가 `docs/roadmap/06_kakao-routing-api-report.md` 제안을 반영해 endpoint 를 실제로 구현·배포했다(`docs/backend/카카오-라우팅-API-구현-결과보고서-2026-08-18.md`). 경로가 `/api/trips/navigation/optimize-preview` → **`/api/trips/optimize-preview`** 로 바뀌었다. `tripsApi.optimizePreview`·타입 복원, `order.tsx` 는 백엔드 우선 + 실패 시 nearest-neighbor 폴백으로 재통합.
 - **§7 ✅ 보고서 본문 검증 완화 + 사진 첨부 → 새 양식으로 해소** (2026-06-04) — content·보고서 레벨 사진 개념 제거(본문=`field_reports`), 사진은 `POST /reports/:id/field-reports`.
 - **§8 ✅ 자동 체크인 — 현 반자동 정책 유지(변경 없음)** (2026-05-10) — arrival→Alert→사용자 탭→checkIn confirm 안전망이 의도된 동작. 재개 조건: 현장 작업자 "확인 번거로움" 신호 누적 시.
 - **§9 ✅ visit 단계 모델(phase: 조치 전/중/후)** (release 2026-07-26) — `visit_photos.phase`(`before|during|after|null`), `POST /visits/:visitId/photos` multipart `phase?`, 응답 `attachment.phase` + 파생 `phaseProgress`(trip timeline·visit 상세 포함), `POST /reports/from-trip/:tripId` 이 phase→`beforePhotoUrl`/`pendingPhotoUrl`/`afterPhotoUrl` 자동 매핑. `visit_phase_invalid`(400). 커밋 `5a53b02`. ⚠️ **배포됐으나 프론트에 도달하지 않음** — phase 가 붙은 곳은 visit 사진인데 프론트는 현장 사진 엔드포인트를 쓴다(2026-07-28 OpenAPI 실측). → **§27 로 재요청.**
@@ -680,6 +680,16 @@ cron 한 줄이면 된다:
 ---
 
 ## 변경 이력
+
+- **2026-08-29**: **§5 재개 — 카카오 라우팅 API 결과보고서(2026-08-18) 반영.** 백엔드가
+  `docs/roadmap/06_kakao-routing-api-report.md` 제안대로 `/api/trips/optimize-preview`
+  (경로가 예전 `/navigation/optimize-preview` 에서 바뀜) 와 `/api/trips/:tripId/route`(다중
+  경유지·타임아웃·캐시·오류 세분화)를 구현·배포했다. 프론트 반영: `tripsApi.optimizePreview`
+  복원, `order.tsx`(외근 시작 전) 를 백엔드 우선 + client nearest-neighbor 폴백으로 재통합,
+  `active.tsx` 재최적화 Alert 가 알고리즘 코드(`exhaustive_straight_line` 등)를 로컬라이즈 없이
+  그대로 노출하던 것도 함께 고침(`describeOptimizeAlgorithm`). §22 는 오류 코드가
+  `kakao_route_unavailable`/`kakao_route_quota_exceeded`/`kakao_route_timeout` 로 세분화됐다
+  — 프론트는 기존과 동일하게 구분 없이 직선 폴백.
 
 - **2026-08-10**: **§30-B 긴급도 상향 — 오늘 Play 비공개 테스트 트랙 제출을 시작한다.**
   이 항목(위치정보 이용약관 페이지 + `/terms`·`/privacy` v1.0 본문 교체)이 열려 있는 채로
