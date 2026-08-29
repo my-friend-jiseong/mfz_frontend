@@ -117,11 +117,50 @@ return JSON.stringify(s.absoluteBoundingBox);
 **커밋 메시지에 `Co-Authored-By` 트레일러를 넣지 말 것** — hook 이 impersonation 사유로 차단한다.
 메시지는 `-F` 파일로 넘긴다. staged-only 커밋 후 push.
 
-### 4.4 백로그 (착수 안 함 / 의도적 보류)
+### 4.4 백로그 (착수 안 함)
 
-- Phase 4 — 화면(스크린) 프레임
-- 도메인 컴포넌트(`MapDashboard`, `TripStatusBanner`, `MapSheetLayout` 등)
-- 라이브러리 퍼블리시 · Code Connect 매핑
+#### ⚠️ 먼저 — 이 런타임에서는 컴포넌트를 인스턴스화할 수 없다
+
+`createInstance()` 는 내부 텍스트의 폰트 로드를 요구하는데, **Pretendard 가 이 런타임에 없다**(§5-2).
+화면 프레임은 대부분 인스턴스 조립이라 아래 (a)·(b) 는 이 벽을 먼저 넘어야 한다.
+
+**우회 절차** — `FilterAccordion` 을 이 방법으로 만들었다:
+① 관련 텍스트 스타일을 전부 `42dot Sans` 로 내린다 → ② 인스턴스 생성·배치·오버라이드 →
+③ `font-family/base`(`VariableID:58:2`)로 복구하고 `restoreFailed: []` 를 확인한다.
+face 이름은 공백 없이 (`SemiBold`). 중간에 실패하면 복구를 반드시 돌릴 것 — 안 돌리면 파일 전체 폰트가 42dot Sans 로 남는다.
+
+#### (a) 화면 프레임
+
+라우트 파일 34개 / 실제 화면 28개(`app/`). **권장 순서**:
+
+1. 탭 루트 4개 — `trips`(외근) · `fields`(현장) · `reports`(보고서) · `profile/index`(내 정보)
+2. 지도 홈 `(tabs)/index` — `MapSheetLayout` 스냅(`['18%','55%','92%']`)이 얽혀 있어 정지 프레임 3장이 필요하다
+3. 서브 화면 — `trips/visit` · `reports/[id]/edit` · `trips/[id]/edit` · `fields/categories` · `fields/[id]/checkin`
+
+화면별 디자인 결정은 이미 `docs/reference/design-system.md` **§14(미적용 / 차후 과제)** 의 탭·서브 화면 패스 기록에 적혀 있다. 새로 판단하지 말고 그걸 근거로 옮긴다.
+`reports/generate` 는 19줄짜리 redirect 라 UI 가 없다 — 대상에서 뺀다.
+
+#### (b) 도메인 컴포넌트
+
+`ui/` 프리미티브 14개는 끝났고, 아래는 손대지 않았다.
+
+| 위치 | 컴포넌트 |
+|---|---|
+| 지도 chrome | `MapDashboard` · `MapSearchBar` · `MapFilterBar` · `MapLegend` · `MapSheetLayout` · `KakaoMapWebView` |
+| 공통 | `FieldCard` · `TripStatusBanner` · `AttachmentPreview` · `ProjectPicker` · `SafeScreen` · `SessionGuardModal` · `WebChoiceModal` |
+| `fields/` | `FieldFilterBar` · `FieldStatusSummary` · `FieldPinMap` · `CategoryMultiPicker` · `ManualCoordinateForm` · `QuickPhotoSheet` |
+| `trips/` | `TripCard` · `TripFilterBar` · `TripProgressStrip` · `CurrentDestCard` · `DestinationRow` · `ReviewVisitCard` · `AllDoneCard` · `AddDestinationModal` |
+| `reports/` | `ReportFilterBar` |
+
+주의:
+- **지도 chrome 이 `elevation` 을 쓰는 유일한 자리다**(§7). 다른 데서 그림자를 끌어 쓰지 말 것.
+- `.web.tsx` 짝이 있는 것(`KakaoMapWebView` · `FieldPinMap` · `useKakaoPlaceSearch`)은 **Figma 에 한 벌만** 만든다. 플랫폼 분기는 구현 사정이지 디자인 차이가 아니다.
+- `quickPhotoHandoff.ts` · `useQuickPhoto.ts` · `useKakaoPlaceSearch` 는 컴포넌트가 아니다.
+
+#### (c) 라이브러리 퍼블리시 · Code Connect
+
+- **퍼블리시는 플러그인 API 로 못 한다.** `figma.publish` 같은 API 가 없다 — Figma UI 에서 사람이 눌러야 하고, 팀 라이브러리 기능이라 **유료 플랜이 전제**다. 즉 이건 사용자가 직접 해야 하는 단계다.
+- **Code Connect 는 퍼블리시가 선행 조건이다.** 그 다음 `mcp__claude_ai_Figma__get_code_connect_suggestions` → `add_code_connect_map` 으로 14개 컴포넌트를 `src/components/ui/*.tsx` 에 매핑한다.
 
 ---
 
