@@ -9,7 +9,8 @@
 ## 1. 한 줄 요약
 
 RN 앱(`src/theme/`, `src/components/`)을 역설계해 Figma 파일 `일가요` 의 `DesignSystem` 페이지에
-토큰·타이포·아이콘·컴포넌트 라이브러리를 만들었다. **라이브러리 자체는 완결됐고, 남은 것은 §4.4 백로그다.**
+토큰·타이포·아이콘·컴포넌트 라이브러리를 만들었고 팀 라이브러리로 게시했다.
+지금은 **`UI` 페이지에 화면 프레임을 옮기는 단계**(1/28)다. 남은 것은 §4.4.
 
 **대원칙: 코드가 원본이고 Figma 가 사본이다.** 값이 어긋나면 `src/theme/` 이 이긴다.
 근거 문서는 `docs/reference/design-system.md`, 특히 §15.
@@ -44,7 +45,7 @@ MCP 도구는 `mcp__claude_ai_Figma__use_figma` 하나면 된다(`ToolSearch` �
 | 모션 | `90:2` | 2069 | 3100 | 873 | 990 |
 | 지도 척도 | `95:2` | 2069 | 4200 | 888 | 773 |
 | 컴포넌트 | `3:20` | 3317 | -105 | 1668 | 4020 |
-| 아이콘 | `80:2` | 5100 | -105 | 1360 | 1190 |
+| 아이콘 | `80:2` | 5100 | -105 | 1360 | 1266 |
 | 상태 배지 | `94:2` | 5100 | 1300 | 807 | 934 |
 
 섹션 겹침 0 · 자식 이탈 0 (2026-08-29 재검증).
@@ -80,6 +81,16 @@ EmptyState `101:3` · ErrorState `101:11`
 - **아이콘 67개** — `icon/<name>`, 24×24, `node_modules` 의 `Ionicons.ttf` 에서 윤곽선 직접 추출.
 - **폰트** — 전 텍스트 Pretendard. 스타일은 전부 `font-family/base`(`VariableID:58:2`) 바인딩.
 
+### 3.4 `UI` 페이지 (`0:1`) — 화면
+
+사용자가 만든 자리다. 섹션 이름은 `N_화면이름`, 그 순서가 작업 순서다.
+
+| 섹션 | id | 프레임 | 대응 코드 |
+|---|---|---|---|
+| `0_회원가입` | `3:3` | `114:3` · 390×852 | `app/(auth)/signup.tsx` |
+
+프레임 폭은 390 고정, 높이는 **스크롤 전체**(뷰포트 844 는 `docs/caption` 한 줄로 적는다).
+
 ---
 
 ## 4. 작업 현황
@@ -110,10 +121,13 @@ return JSON.stringify(s.absoluteBoundingBox);
 
 배리언트 총합 69(30+12+8+6+4+2+2+3+2). 새 컴포넌트는 한 줄로만 붙였다 — **§15 를 늘리지 말 것**.
 
-### 4.3 P2 — 커밋 + 푸시 (진행 중)
+### 4.3 ~~P2 — 커밋 + 푸시~~ ✅ 완료 · ⚠️ 라이브러리 **재게시 필요**
 
-`764bbff` 에 ErrorState 행 2줄 + 이 인수인계 문서를 올렸고, §15 수정은 그 다음 커밋에 올린다.
-`docs/일가요_앱배너.png` 는 **커밋 대상 아님**(사용자 지시) — 추적 안 된 채로 둔다.
+커밋은 따라잡았다. `docs/일가요_앱배너.png` 는 **커밋 대상 아님**(사용자 지시) — 추적 안 된 채로 둔다.
+
+**미결: 게시본이 파일보다 뒤처져 있다.** 초판 게시(§4.4-c) 이후 아이콘 4개 추가(63→67) ·
+그리드 재정렬 · 텍스트 스타일 `h2-heavy` 추가(24→25)가 들어갔다.
+소비자에게 반영하려면 §4.4-(c) 의 브라우저 경로로 **한 번 더 게시**해야 한다.
 **커밋 메시지에 `Co-Authored-By` 트레일러를 넣지 말 것** — hook 이 impersonation 사유로 차단한다.
 메시지는 `-F` 파일로 넘긴다. staged-only 커밋 후 push.
 
@@ -199,14 +213,27 @@ face 이름은 공백 없이 (`SemiBold`). 중간에 실패하면 복구를 반�
 6. **캔버스 텍스트 40자 이내, description 은 한 줄.** 마크다운·HTML 엔티티는 Figma 에서 그대로 보인다.
 7. 스크립트는 **원자적**이다. 실패하면 아무것도 안 바뀌므로 고쳐서 재시도해도 안전하다.
 
+**폰트 내림/복구 — 실제로 통한 코드** (회원가입 화면을 이걸로 만들었다):
+
+```js
+// 내림: 바인딩을 먼저 끊어야 실제 폰트가 바뀐다. face 이름은 그대로 둔다.
+s.setBoundVariable('fontFamily', null);
+s.fontName = { family: '42dot Sans', style: s.fontName.style };   // Regular/SemiBold/Bold/ExtraBold 전부 있다
+
+// 복구: 변수만 다시 물린다. 남는 게 없을 때까지 3~4회 반복.
+s.setBoundVariable('fontFamily', fontVar);   // font-family/base
+```
+
 ---
 
 ## 6. 검증 스크립트 (작업 끝에 그대로 실행)
 
 `use_figma` 에 통째로 넣으면 된다. 스킬 §5 체크리스트를 코드로 옮긴 것.
 
+페이지가 둘이므로 **`3:4`(DesignSystem)과 `0:1`(UI) 양쪽**에 돌린다.
+
 ```js
-const page = figma.root.children.find(p => p.id === '3:4');
+const page = figma.root.children.find(p => p.id === '3:4');   // ← '0:1' 로 바꿔 한 번 더
 await figma.setCurrentPageAsync(page);
 
 // 섹션 겹침 · 자식 이탈
@@ -259,7 +286,7 @@ return JSON.stringify({
 **통과 기준**: `ov: []` · `outside: 0` · `floating: 0` · `fams` 는 `{Pretendard: N}` 단일 ·
 `over40: 0` · `stylesNotBound: []` · `allScopes: []` · `noCode: []` · `lowOpacityNodes: []` · `longDesc: []`
 
-2026-08-29 기준 **전 항목 통과**한다(`outside 0`, 폰트 `{Pretendard: 659}`, `maxLen 39`, `totalVars 170`).
+2026-08-29 기준 **양쪽 페이지 전 항목 통과**한다 — DesignSystem `{Pretendard: 663}` `maxLen 39`, UI `{Pretendard: 20}` `maxLen 33`, `totalVars 170`.
 
 ---
 
