@@ -157,10 +157,21 @@ face 이름은 공백 없이 (`SemiBold`). 중간에 실패하면 복구를 반�
 - `.web.tsx` 짝이 있는 것(`KakaoMapWebView` · `FieldPinMap` · `useKakaoPlaceSearch`)은 **Figma 에 한 벌만** 만든다. 플랫폼 분기는 구현 사정이지 디자인 차이가 아니다.
 - `quickPhotoHandoff.ts` · `useQuickPhoto.ts` · `useKakaoPlaceSearch` 는 컴포넌트가 아니다.
 
-#### (c) 라이브러리 퍼블리시 · Code Connect
+#### (c) ~~라이브러리 퍼블리시~~ ✅ 완료 (2026-08-29) · Code Connect 남음
 
-- **퍼블리시는 플러그인 API 로 못 한다.** `figma.publish` 같은 API 가 없다 — Figma UI 에서 사람이 눌러야 하고, 팀 라이브러리 기능이라 **유료 플랜이 전제**다. 즉 이건 사용자가 직접 해야 하는 단계다.
-- **Code Connect 는 퍼블리시가 선행 조건이다.** 그 다음 `mcp__claude_ai_Figma__get_code_connect_suggestions` → `add_code_connect_map` 으로 14개 컴포넌트를 `src/components/ui/*.tsx` 에 매핑한다.
+**퍼블리시 완료.** 플러그인 API 에는 `figma.publish` 가 없지만, **Claude in Chrome 브라우저 자동화로 하면 된다** —
+에셋 패널 → 라이브러리(책) 아이콘 → `게시…` → 항목 확인 → `게시`.
+초판으로 **110개 항목**(컴포넌트 77 = 프리미티브 14 + 아이콘 63, 텍스트 스타일 24, 효과 스타일 3, 변수 컬렉션 6)을 올렸고,
+이후 `라이브러리 관리` 가 `변경 사항 없음` 으로 바뀐 것까지 확인했다.
+→ 라이브러리를 고쳤으면 **매번 이 경로로 재게시**해야 소비자에게 반영된다.
+
+**남은 것 — Code Connect.** 퍼블리시가 선행 조건이었으므로 이제 막힌 것이 없다.
+`mcp__claude_ai_Figma__get_code_connect_suggestions` → `add_code_connect_map` 으로
+프리미티브 14개를 `src/components/ui/*.tsx` 에 매핑한다.
+
+> 관찰: 게시 시점에 Figma 가 **누락된 글꼴**을 보고했다. 파일은 `font-family/base` = Pretendard 인데
+> 브라우저/데스크톱 Figma 에 Pretendard 가 로컬 설치돼 있지 않으면 대체 글꼴로 렌더된다.
+> 라이브러리를 쓰는 사람은 Pretendard 를 로컬에 설치해야 코드와 같은 모양이 나온다.
 
 ---
 
