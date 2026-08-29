@@ -52,9 +52,9 @@ MCP 도구는 `mcp__claude_ai_Figma__use_figma` 하나면 된다(`ToolSearch` �
 
 섹션 겹침 0 · 자식 이탈 0 (2026-08-29 재검증).
 
-### 3.2 컴포넌트 — 14개 (모두 `컴포넌트` 섹션 `3:20` 안)
+### 3.2 컴포넌트 — 15개 (모두 `컴포넌트` 섹션 `3:20` 안)
 
-COMPONENT_SET 9개:
+COMPONENT_SET 10개:
 
 | 이름 | id | 배리언트 |
 |---|---|---:|
@@ -67,9 +67,12 @@ COMPONENT_SET 9개:
 | FilterOptionRow | `102:14` | 2 (selected false/true × Show dot) |
 | FilterHead | `102:27` | 3 (default/active/expanded) |
 | FilterAccordion | `103:54` | 2 (collapsed/expanded) |
+| **FieldCard** | `172:339` | 3 (status=pending/in_progress/done) — B트랙 P3.a, 2026-08-29 |
 
 단일 COMPONENT 5개: GroupLabel `44:2` · FieldLabel `44:4` · StickyBottomBar `45:9` ·
 EmptyState `101:3` · ErrorState `101:11`
+
+**B트랙(도메인 컴포넌트)** 진행 중 — §4.4-b, `plans/figma-screens.md` 참조. FieldCard(P3.a) 완료.
 
 ### 3.3 토큰
 
