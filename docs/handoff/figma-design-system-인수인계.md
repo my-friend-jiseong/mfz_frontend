@@ -12,7 +12,7 @@
 
 RN 앱(`src/theme/`, `src/components/`)을 역설계해 Figma 파일 `일가요` 의 `DesignSystem` 페이지에
 토큰·타이포·아이콘·컴포넌트 라이브러리를 만들었고 팀 라이브러리로 게시했다.
-지금은 **`UI` 페이지에 화면 프레임을 옮기는 단계**(6/28)다. 남은 것은 §4.4.
+지금은 **`UI` 페이지에 화면 프레임을 옮기는 단계**(7/28)다. 남은 것은 §4.4.
 
 **대원칙: 코드가 원본이고 Figma 가 사본이다.** 값이 어긋나면 `src/theme/` 이 이긴다.
 근거 문서는 `docs/reference/design-system.md`, 특히 §15.
@@ -97,6 +97,7 @@ EmptyState `101:3` · ErrorState `101:11`
 | `3_카테고리` | `150:183` | `150:185` · 390×844 | 목록 + 인라인 편집 1행 | `app/(tabs)/fields/categories.tsx` |
 | `4_내정보수정` | `154:198` | `154:200` · 390×715 | 기본(이름 dirty=false) | `app/(tabs)/profile/edit.tsx` |
 | `5_보고서수정` | `158:230` | `158:232` · 390×307 | 기본(dirty=false) | `app/(tabs)/reports/[id]/edit.tsx` |
+| `6_외근수정` | `161:245` | `161:247` · 390×433 | 기본(dirty=false) | `app/(tabs)/trips/[id]/edit.tsx` |
 
 오류 프레임은 `validate()` 가 만드는 조합을 그대로 그렸다 — 필드 4개 `state=error` +
 약관 오류 caption. **`globalError` 는 넣지 않았다**: 검증 실패면 서버를 호출하기 전에 return 하므로
@@ -144,7 +145,7 @@ return JSON.stringify(s.absoluteBoundingBox);
 **3차 게시(확인됨, 2026-08-29)** — 오류 상태 화면 작업의 폰트 사이클 변경 37건. 다음 세션이 열어
 `게시…` → `변경되지 않음 (115)` + `게시` 버튼 비활성 확인. 정상 완료.
 
-**4~8차 게시(2026-08-29)** — `1_로그인`~`5_보고서수정` 폰트 사이클 변경(스타일·컴포넌트, **내용 변화 없음**).
+**4~9차 게시(2026-08-29)** — `1_로그인`~`6_외근수정` 폰트 사이클 변경(스타일·컴포넌트, **내용 변화 없음**).
 `변경되지 않음 (115)` 확인. (`게시 중` 토스트는 수 분 남지만 다이얼로그 상태가 정답.)
 5차부터 게시 다이얼로그에서 **`MenuRow` 를 체크 해제**하고 게시한다 — 로컬 유지, `변경 사항 (1/1)` 로 남아 있으면 정상.
 
@@ -172,7 +173,7 @@ face 이름은 공백 없이 (`SemiBold`). 중간에 실패하면 복구를 반�
 INSTANCE_SWAP 과 얽히면 벡터가 6×11 로 뭉개진다(실제로 당함). 색은 인스턴스 프레임 `.fills` 가 아니라
 내부 VECTOR 의 `.fills` 를 `text/*` 로 바인딩(프레임에 칠하면 회색 박스가 생긴다).
 
-#### (a) 화면 프레임 — 진행 중 (6/28)
+#### (a) 화면 프레임 — 진행 중 (7/28)
 
 **자리는 `UI` 페이지(`0:1`)다.** 사용자가 `0_회원가입`(`3:3`) 섹션을 만들어뒀다 —
 탭 루트부터가 아니라 **`N_화면이름` 번호 순서**가 사용자의 규칙이므로 그걸 따른다.
@@ -194,6 +195,8 @@ INSTANCE_SWAP 과 얽히면 벡터가 6×11 로 뭉개진다(실제로 당함). 
   ※ 이메일 안내문이 43자 — **실제 앱 카피**라 40자 규칙(주석/문서용)에서 예외. `over40` 검증은 이 노드 하나 때문에 1이 정상.
 - ✅ `5_보고서수정` — `app/(tabs)/reports/[id]/edit.tsx`. 섹션 `158:230`. 프레임 `158:232` 390×307.
   FieldLabel(제목 + counter) + Input(제목 + helper) + `변경 사항 없음` disabled(save icon) + `취소` ghost. `Show label=false`(FieldLabel 이 라벨).
+- ✅ `6_외근수정` — `app/(tabs)/trips/[id]/edit.tsx`. 섹션 `161:245`. 프레임 `161:247` 390×433.
+  h2-heavy 제목 + 부제 + FieldLabel + Input + `변경 사항 없음`/`취소` + 위험 구역(`외근 삭제` dangerGhost + trash). `2_내정보`·`4_내정보수정` 과 같은 위험 구역 패턴(borderTop + paddingTop md).
 - **탭 루트 4개는 전부 `MapSheetLayout`**(trips·fields·reports 목록 + reports 도) — 스냅 3프레임 필요, 별도 세션. profile·categories 처럼 지도 없는 화면부터 훑는 게 빠르다.
 - 다음: `5_` — `fields/new` · `reports/new` · `reports/[id]/edit` · `trips/[id]/edit` · `fields/[id]/checkin` · `trips/visit` 등 폼·서브 화면.
 
