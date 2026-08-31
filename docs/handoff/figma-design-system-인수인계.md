@@ -12,7 +12,7 @@
 
 RN 앱(`src/theme/`, `src/components/`)을 역설계해 Figma 파일 `일가요` 의 `DesignSystem` 페이지에
 토큰·타이포·아이콘·컴포넌트 라이브러리를 만들었고 팀 라이브러리로 게시했다.
-지금은 **`UI` 페이지에 화면 프레임을 옮기는 단계**(22/28)다. 남은 것은 §4.4.
+**`UI` 페이지 화면 이식 완료** — 24/24(코드에 UI 가 있는 전 화면). 리다이렉트 4개(`app/index`·`(tabs)/index`·`reports/generate`·`+not-found`)는 프레임 없음. 상세는 §4.4.
 
 **대원칙: 코드가 원본이고 Figma 가 사본이다.** 값이 어긋나면 `src/theme/` 이 이긴다.
 근거 문서는 `docs/reference/design-system.md`, 특히 §15.
@@ -113,6 +113,7 @@ DestinationRow(P3.e) · 지도 chrome(P3.f: MapSearchBar·MapFab·MapLegend) 완
 | 외근 | 외근 수정 | `161:245` | `161:247` · 390×844 | 3 | `app/(tabs)/trips/[id]/edit.tsx` |
 | 외근 | 방문 상세 | `167:281` | `167:283` · MapSheetLayout 스냅 92% | 3 | `app/(tabs)/trips/visit.tsx` |
 | 외근 | 방문 순서 확인 | `278:931` | `278:932` · MapSheetLayout 셸(수동, snap 55%) + head(Input 제목 + 안내 2줄 + 최적 순서 추천/다시 추천 + summaryCard 총거리/ETA/현장수) + 순서 행×4(orderBadge + 주소/상세/ETA + ▲▼✕ 컨트롤) + StickyBottomBar(외근 시작) | 3 | `app/(tabs)/trips/new/order.tsx` |
+| 외근 | 인앱 길안내 | `303:1101` | `303:1102` · header(chevron-back + 목적지명 body-bold, borderBottom) + 전체 지도 placeholder(중앙 primary 핀) + 부유 chip(open-outline + `카카오맵으로 길안내`) | 2 | `app/(tabs)/trips/navigate.tsx` |
 | 현장 | 현장 (목록) | `232:592` | `232:593` · MapSheetLayout 셸 + toolbar(Input + FieldFilterBar 4-head + FieldStatusSummary) + FieldCard 리스트 + StickyBottomBar(새 현장 + 촬영) | 1 | `app/(tabs)/fields/index.tsx` |
 | 현장 | 현장 등록 | `225:461` | `225:462` · 스크롤 폼(검색 Input + 선택주소 Card + 지도 placeholder + 이름/상세 Input + 프로젝트/분류 picker trigger + 상태 FilterChip×3 + Button) | 2 | `app/(tabs)/fields/new.tsx` |
 | 현장 | 카테고리 관리 | `150:183` | `150:185` · 목록 + 인라인 편집 1행 | 2 | `app/(tabs)/fields/categories.tsx` |
@@ -126,8 +127,10 @@ DestinationRow(P3.e) · 지도 chrome(P3.f: MapSearchBar·MapFab·MapLegend) 완
 | 보고서 | 현장 보고 작성 (마법사) | `293:1011` | `293:1012` · 스크롤 폼(h2-heavy `(2/4)` + 힌트 + 현장 readonly Card + 제목 Input + 조치 전·중·후 phaseBox×3[사진 160 + 사진/제거 + 현장 사진에서 불러오기 + 캡션 Input] + 저장 후 다음 현장 + 건너뛰기 + 나중에) | 3 | `app/(tabs)/reports/[id]/field-report.tsx` |
 | 내 정보 | 내 정보 · 홈 | `136:137` | `136:139` · 390×844 | 1 | `app/(tabs)/profile/index.tsx` |
 | 내 정보 | 내 정보 수정 | `154:198` | `154:200` · 이름 dirty=false | 2 | `app/(tabs)/profile/edit.tsx` |
+| 내 정보 | 계정 삭제 | `299:1077` | `299:1078` · 스크롤 폼(warnBox danger + GroupLabel 삭제되는 정보 + itemsCard 7행(close-circle) + 법령 주석 + GroupLabel 본인 확인 + 비밀번호 Input + 동의 체크박스 + 회원 탈퇴 destructive(disabled) + 취소) | 3 | `app/(tabs)/profile/delete-account.tsx` |
 
 빈 tier 자리(외근 T1·T2 등)는 비워 둔다 — 미구현 상위 화면이 채워질 슬롯. `N_` 숫자 접두사 폐기.
+`app/index` · `(tabs)/index` · `reports/generate` · `+not-found` 는 `<Redirect>` 뿐이라 프레임 없음 — 화면 완료 24/24.
 새 화면은 라우트 depth 로 tier 를 정해 해당 부모 안에 넣는다. **같은 tier 에 화면이 2개면 부모 SECTION 을 넓히고
 오른쪽 형제 부모를 밀어낸다** (2026-08-31: `외근`→1540(h 3520)·`현장`→1520·`보고서`→1034. x: `현장` 986 · `보고서` 2572 · `내 정보` 3672). **tier 가 세로로 넘치면 부모 SECTION 높이도 키운다**(방문 순서 프레임 1048 → `외근` h 3348→3520).
 
@@ -207,7 +210,7 @@ face 이름은 공백 없이 (`SemiBold`). 중간에 실패하면 복구를 반�
 INSTANCE_SWAP 과 얽히면 벡터가 6×11 로 뭉개진다(실제로 당함). 색은 인스턴스 프레임 `.fills` 가 아니라
 내부 VECTOR 의 `.fills` 를 `text/*` 로 바인딩(프레임에 칠하면 회색 박스가 생긴다).
 
-#### (a) 화면 프레임 — 진행 중 (22/28)
+#### (a) 화면 프레임 — 완료 (24/24)
 
 **자리는 `UI` 페이지(`0:1`)의 내비게이션 계층 트리다** (§3.4·§9). 새 화면은 라우트 depth 로 tier 를
 정해 해당 부모 SECTION(`인증`·`외근`·`현장`·`보고서`·`내 정보`) 안에 넣는다. 아래 ✅ 목록의 `N_` 이름은
@@ -280,8 +283,12 @@ INSTANCE_SWAP 과 얽히면 벡터가 6×11 로 뭉개진다(실제로 당함). 
   MapSheetLayout 아님 — SafeScreen + ScrollView. `wizard=1` 상태로 스냅(단계 `(2/4)`).
   h2-heavy `현장 보고 작성 (2/4)` + `bodySm` 힌트 + `bodySm-bold` `현장 *` + 현장 readonly Card(`bg/surface`+`border/muted`; 마법사는 `isEdit=true` 라 dashed pick 버튼 아님) + `Input`(제목) + phaseBox×3(수동 surface Card: `bodySm-bold` 조치 전/중/후 + 사진 160[찬 칸=surface-muted, 빈 칸=dashed+`사진 없음`] + `사진`/`사진 변경` secondary sm + `제거` ghost sm + `현장 사진에서 불러오기` ghost sm FILL + 캡션 `Input`) + `저장 후 다음 현장` primary lg + `이 현장 건너뛰기`/`나중에 작성하기` ghost.
   ※ 힌트 42자 — 마법사 안내 카피라 40자 규칙 예외(`over40` 1).
-- **탭 루트 4/4 + 진행 중 외근 + 외근/현장/보고서 상세 + 방문 순서 + 현장 수정 + 현장 보고 작성 완료.** `ReviewVisitCard` 는 2 callsite(trips/[id]·active) 라 나중에 `3:20` 승격 대상.
-- 다음: 나머지 서브 화면 — `profile/delete-account` · `+not-found`.
+- ✅ `계정 삭제` — `app/(tabs)/profile/delete-account.tsx`. 섹션 `299:1077`. 프레임 `299:1078` 390×714, 내 정보 tier 3(부모 h 3186).
+  SafeScreen + ScrollView. warnBox(`intent/danger-muted`+`intent/danger`, `alert-circle` + `bodySm-semibold` danger) + `GroupLabel`(삭제되는 정보) + itemsCard(수동 surface Card: `close-circle-outline` 16 danger + `bodySm` ×7 + `caption` 법령 주석) + `GroupLabel`(본인 확인) + Card(비밀번호 `Input` + helper) + 동의행(`square-outline` 22 + `bodySm`) + `회원 탈퇴` destructive `state=disabled` + `취소` ghost.
+- ✅ `인앱 길안내` — `app/(tabs)/trips/navigate.tsx`. 섹션 `303:1101`. 프레임 `303:1102` 390×844, 외근 tier 2(외근 시작·외근 정리 옆, 1540 폭에 3열).
+  SafeScreen 전체 화면. header(`chevron-back` 22 + 목적지명 `body-bold`, `bg/surface`+borderBottom) + `map (KakaoMapWebView)` FILL(`bg/surface-muted` + 중앙 `brand/primary` 20px 핀) + 부유 chip(`layoutPositioning='ABSOLUTE'`, `open-outline` 14 + `caption-bold` `카카오맵으로 길안내`, surface pill).
+- **모든 화면 완료 (24/24).** 코드에 UI 가 있는 전 화면이 `UI` 페이지에 있다. `ReviewVisitCard` 는 2 callsite(trips/[id]·active) 라 나중에 `3:20` 승격 대상.
+- 리다이렉트(`app/index`·`(tabs)/index`·`reports/generate`·`+not-found`)는 `<Redirect>` 뿐이라 프레임 없음.
 
 나머지 화면(라우트 34개 / 실제 화면 28개)에서 참고할 것:
 
@@ -519,3 +526,6 @@ return JSON.stringify({
     SafeScreen + ScrollView. phaseBox×3 수동(사진 160 + 사진/제거 + 캡션 Input).
     ⚠️ tier Y 관례(72/1200/2400)는 위 tier 화면이 tall 하면 깨진다 — `보고서 상세`(tier2, 1336h)가 2400 존을 침범 → 보고서 열의 tier 3 전체를 y 2600 으로 내렸다(`보고서 수정` 도 함께). **한 열 안에서 tier 는 정렬하되 열마다 Y 가 다를 수 있다.**
     폰트 사이클 후 `restoreFailed: []`, 재게시 `변경 사항 없음`. 22/28.
+28. (2026-08-31) A트랙 — `계정 삭제`(`299:1077`/`299:1078`) + `인앱 길안내`(`303:1101`/`303:1102`, §3.4·§4.4-a). `profile/delete-account.tsx`(내 정보 t3, 부모 h 3186) · `trips/navigate.tsx`(외근 t2).
+    둘 다 SafeScreen. 계정 삭제 = warnBox + itemsCard 7행 + 비밀번호 Card + 동의 체크박스 + destructive disabled. 인앱 길안내 = header + 지도 FILL + 부유 chip(`layoutPositioning='ABSOLUTE'`).
+    **A트랙 완료 — 24/24.** 리다이렉트 4개는 프레임 없음. 폰트 사이클 후 `restoreFailed: []`, 재게시 `변경 사항 없음`.
