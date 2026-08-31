@@ -64,6 +64,7 @@ const p = { type: 'SOLID', color: { r: rgba.r, g: rgba.g, b: rgba.b } };
 const paint = figma.variables.setBoundVariableForPaint(p, 'color', variable);
 ```
 - `paint.opacity` 는 바인딩을 거치며 **사라진다.** 반투명은 바인딩 후 `Object.assign({}, p, {opacity})` 로 다시 얹는다.
+  `createComponentFromNode` 도 자식 페인트의 `opacity` 를 1 로 되돌린다 — 반투명 스와치는 **컴포넌트화한 뒤** 노드를 다시 훑어 `fills` 를 재설정한다.
 - 세트를 만든 뒤 `fills` 전수 검사로 `color` vs 해석값 불일치를 확인한다.
 
 ### 3.3 불투명도 변수는 % 단위

@@ -46,15 +46,15 @@ MCP 도구는 `mcp__claude_ai_Figma__use_figma` 하나면 된다(`ToolSearch` �
 | 타이포그래피 | `27:4` | 2069 | 1985 | 883 | 970 |
 | 모션 | `90:2` | 2069 | 3100 | 873 | 990 |
 | 지도 척도 | `95:2` | 2069 | 4200 | 888 | 773 |
-| 컴포넌트 | `3:20` | 3317 | -105 | 1668 | 6030 |
+| 컴포넌트 | `3:20` | 3317 | -105 | 1668 | 6512 |
 | 아이콘 | `80:2` | 5100 | -105 | 1360 | 1266 |
 | 상태 배지 | `94:2` | 5100 | 1300 | 807 | 934 |
 
 섹션 겹침 0 · 자식 이탈 0 (2026-08-29 재검증).
 
-### 3.2 컴포넌트 — 19개 (모두 `컴포넌트` 섹션 `3:20` 안)
+### 3.2 컴포넌트 — 22개 (모두 `컴포넌트` 섹션 `3:20` 안)
 
-COMPONENT_SET 14개:
+COMPONENT_SET 15개:
 
 | 이름 | id | 배리언트 |
 |---|---|---:|
@@ -70,14 +70,17 @@ COMPONENT_SET 14개:
 | FilterDateRow | `201:319` | 2 (Filled=false/true) — 필터 날짜 범위 행. B트랙 P3.c, 2026-08-31 |
 | MapSheetLayout | `204:323` | 2 (state=peek/open) — 지도 하단 시트 셸. props Title·Show back·Show action. B트랙 P3.d, 2026-08-31 |
 | DestinationRow | `207:331` | 2 (isCurrent=false/true) — 외근 목적지 행. props Order·Address·Detail·Show detail + 상태 Badge 인스턴스. B트랙 P3.e, 2026-08-31 |
+| MapLegend | `211:395` | 2 (mode=heatmap/choropleth) — 지도 좌하단 범례. B트랙 P3.f, 2026-08-31 |
 | **FieldCard** | `172:339` | 3 (status=pending/in_progress/done) — B트랙 P3.a, 2026-08-29 |
 | **TripCard** | `198:329` | 2 (ended=false/true) — B트랙 P3.b, 2026-08-31. 불리언 4(보고서·진행률·지도 버튼·지도 포커스) + 텍스트 4 |
 
-단일 COMPONENT 5개: GroupLabel `44:2` · FieldLabel `44:4` · StickyBottomBar `45:9` ·
-EmptyState `101:3` · ErrorState `101:11`
+단일 COMPONENT 7개: GroupLabel `44:2` · FieldLabel `44:4` · StickyBottomBar `45:9` ·
+EmptyState `101:3` · ErrorState `101:11` · MapSearchBar `211:316`(props Placeholder·Show clear) ·
+MapFab `211:322`(44px 원형, 아이콘 스왑 + Show badge) — 뒤 둘은 B트랙 P3.f, 2026-08-31.
 
-**B트랙(도메인 컴포넌트)** 진행 중 — §4.4-b, `plans/figma-screens.md` 참조.
-FieldCard(P3.a) · TripCard(P3.b) · FieldFilterBar(P3.c, `FilterDateRow` 로 마감) · MapSheetLayout(P3.d) · DestinationRow(P3.e) 완료.
+**B트랙(도메인 컴포넌트) 완료** — §4.4-b, `plans/figma-screens.md` 참조.
+FieldCard(P3.a) · TripCard(P3.b) · FieldFilterBar(P3.c, `FilterDateRow` 로 마감) · MapSheetLayout(P3.d) ·
+DestinationRow(P3.e) · 지도 chrome(P3.f: MapSearchBar·MapFab·MapLegend) 완료. 다음은 A트랙.
 
 ### 3.3 토큰
 
@@ -412,3 +415,7 @@ return JSON.stringify({
 13. (2026-08-31) B트랙 P3.e — `DestinationRow` `207:331` 신설. `DestinationRow.tsx` 를 컴포넌트화 — 순번 원 + 주소/상세 + 상태 Badge.
     `isCurrent=true` 는 카드·순번 원을 primary/primary-muted 로 칠하고 순번 텍스트를 `on/primary`. props Order·Address·Detail·Show detail, Badge 는 중첩 인스턴스.
     폰트 사이클 후 `restoreFailed: []`, `MenuRow` 제외 재게시, 새로고침 후 `변경되지 않음 (122)` 확증.
+14. (2026-08-31) B트랙 P3.f(마지막) — 지도 chrome 3개. `MapSearchBar` `211:316`(부유 검색 pill, `elevation/raised`) ·
+    `MapFab` `211:322`(44px 원형 버튼, `layers-outline` 아이콘 + `Show badge` primary 점) · `MapLegend` `211:395`(heatmap: heat/* 4색 바 / choropleth: `choropleth/base` 5단계 스와치).
+    ⚠️ `createComponentFromNode` 가 페인트 opacity 를 1 로 정규화 → 스와치 반투명을 컴포넌트화 후 명시 재적용해야 했다.
+    폰트 사이클 후 `restoreFailed: []`, `MenuRow` 제외 재게시, 새로고침 후 `변경되지 않음 (125)` 확증. **B트랙 종료 — 다음은 A트랙.**
