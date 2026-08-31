@@ -12,7 +12,7 @@
 
 RN 앱(`src/theme/`, `src/components/`)을 역설계해 Figma 파일 `일가요` 의 `DesignSystem` 페이지에
 토큰·타이포·아이콘·컴포넌트 라이브러리를 만들었고 팀 라이브러리로 게시했다.
-지금은 **`UI` 페이지에 화면 프레임을 옮기는 단계**(20/28)다. 남은 것은 §4.4.
+지금은 **`UI` 페이지에 화면 프레임을 옮기는 단계**(21/28)다. 남은 것은 §4.4.
 
 **대원칙: 코드가 원본이고 Figma 가 사본이다.** 값이 어긋나면 `src/theme/` 이 이긴다.
 근거 문서는 `docs/reference/design-system.md`, 특히 §15.
@@ -118,6 +118,7 @@ DestinationRow(P3.e) · 지도 chrome(P3.f: MapSearchBar·MapFab·MapLegend) 완
 | 현장 | 카테고리 관리 | `150:183` | `150:185` · 목록 + 인라인 편집 1행 | 2 | `app/(tabs)/fields/categories.tsx` |
 | 현장 | 현장 상세 | `262:855` | `262:856` · MapSheetLayout 셸(수동, snap 92%) + 상태 pill(▲ 조치 중 + ⇄ 변경) + h3 제목/부제 + folder·pricetags 메타 + 길찾기/수정 + 메모(GroupLabel + Input + 추가 + 카드×2) + 사진 추가 + PhotoGrid×3 + 방문 이력(GroupLabel + visitCard×2 Badge) | 2 | `app/(tabs)/fields/[id]/index.tsx` |
 | 현장 | 체크인 | `163:264` | `163:266` · completed 선택 | 3 | `app/(tabs)/fields/[id]/checkin.tsx` |
+| 현장 | 현장 수정 | `286:958` | `286:959` · 스크롤 폼(검색 Input + 현 위치로 이동 + 주소 readonly Card + pinMap + 이름 Input + 프로젝트/분류 picker + 상세 Input + 상태 FilterChip×3 + 저장(disabled)/취소 + 위험 구역 현장 삭제) | 3 | `app/(tabs)/fields/[id]/edit.tsx` |
 | 보고서 | 보고서 (목록) | `237:724` | `237:725` · MapSheetLayout 셸 + toolbar(Input + ReportFilterBar 1-head) + 그룹(외근 헤더 + 보고서 Card 리스트) + StickyBottomBar | 1 | `app/(tabs)/reports/index.tsx` |
 | 보고서 | 보고서 작성 | `220:442` | `220:443` · Input + tripCard(Card detach) + 위치도 placeholder + Button | 2 | `app/(tabs)/reports/new.tsx` |
 | 보고서 | 보고서 상세 | `270:888` | `270:889` · MapSheetLayout 셸(수동, snap 55%) + h2-heavy 제목 + tripLink pill(primary-muted) + meta + 위치도 placeholder + sectionHead(현장별 전·중·후 + 현장 보고 추가) + FieldReportCard×2(전/중/후 슬롯, dashed=없음) + Word 다운로드/다시 생성/PDF + 수정·삭제 divider row | 2 | `app/(tabs)/reports/[id]/index.tsx` |
@@ -205,7 +206,7 @@ face 이름은 공백 없이 (`SemiBold`). 중간에 실패하면 복구를 반�
 INSTANCE_SWAP 과 얽히면 벡터가 6×11 로 뭉개진다(실제로 당함). 색은 인스턴스 프레임 `.fills` 가 아니라
 내부 VECTOR 의 `.fills` 를 `text/*` 로 바인딩(프레임에 칠하면 회색 박스가 생긴다).
 
-#### (a) 화면 프레임 — 진행 중 (20/28)
+#### (a) 화면 프레임 — 진행 중 (21/28)
 
 **자리는 `UI` 페이지(`0:1`)의 내비게이션 계층 트리다** (§3.4·§9). 새 화면은 라우트 depth 로 tier 를
 정해 해당 부모 SECTION(`인증`·`외근`·`현장`·`보고서`·`내 정보`) 안에 넣는다. 아래 ✅ 목록의 `N_` 이름은
@@ -271,8 +272,11 @@ INSTANCE_SWAP 과 얽히면 벡터가 6×11 로 뭉개진다(실제로 당함). 
   MapSheetLayout `initialIndex=1` → 시트 chrome 수동 + map absolute 180 + sheet/content HUG.
   head = `Input`(외근 제목) + `body-semibold` 안내 + `bodySm` 힌트 + `다시 추천` secondary sm(optimized 상태 = `intent/success-muted` 배경 + `checkmark-circle`) + summaryCard(`success-muted`: 총 거리/예상 ETA/방문 현장 3열, 1×28 divider). list = 순서 행×4(수동 surface Card row: orderBadge 28 원 `brand/primary` + `on/primary` 번호, rowText[`body-semibold` 주소 + `bodySm` 상세 + `caption-semibold` primary ETA], controls[▲▼ 32×26 `surface-muted`+border, ✕ `danger-muted`+`danger` border]). StickyBottomBar(수동) → `외근 시작 (4곳)` primary lg.
   ⚠️ `frame.resize()` 뒤 `layoutMode` 를 세팅하면 HUG 로 접혀 자식(28×28 배지)이 텍스트 폭으로 쭈그러든다 → `resize` 를 layoutMode·sizing 세팅 **뒤에** 하거나 `primaryAxisSizingMode='FIXED'` 명시.
-- **탭 루트 4/4 + 진행 중 외근 + 외근 상세 + 현장 상세 + 보고서 상세 + 방문 순서 완료.** `ReviewVisitCard` 는 2 callsite(trips/[id]·active) 라 나중에 `3:20` 승격 대상.
-- 다음: 나머지 서브 화면 — `fields/[id]/edit` · `reports/[id]/field-report` · `profile/delete-account` · `+not-found`.
+- ✅ `현장 수정` — `app/(tabs)/fields/[id]/edit.tsx`. 섹션 `286:958`. 프레임 `286:959` 390×1116, tier 3(현장 부모 h 3588 로 키움 — 체크인 옆 2열, 폭 1520 유지).
+  MapSheetLayout 아님 — SafeScreen + ScrollView 세로 폼. `현장 등록` 골격에 되돌리기/저장/삭제 추가한 꼴.
+  검색 `Input` + `현 위치로 이동` secondary sm + `FieldLabel`(주소) + 주소 readonly Card(`bg/surface`+`border/muted`, 미변경 상태) + pinHint + pinMap(surface-muted + primary 핀 점) + `FieldLabel`(이름, counter 7/100) + `Input`(placeholder=주소 + helper) + `FieldLabel`(프로젝트) + picker(수동 48h: `folder-outline` + 라벨 + `해제` pill) + `FieldLabel`(분류) + picker(`pricetags-outline`) + `FieldLabel`(상세, counter) + `Input` + `FieldLabel`(상태) + `FilterChip`×3(조치 중 = `state=default` recolor to `brand/primary`@0.13) + `변경 사항 없음` primary lg `state=disabled` + `취소` ghost + 위험 구역(`현장 삭제` dangerGhost, `border/muted` top).
+- **탭 루트 4/4 + 진행 중 외근 + 외근/현장/보고서 상세 + 방문 순서 + 현장 수정 완료.** `ReviewVisitCard` 는 2 callsite(trips/[id]·active) 라 나중에 `3:20` 승격 대상.
+- 다음: 나머지 서브 화면 — `reports/[id]/field-report` · `profile/delete-account` · `+not-found`.
 
 나머지 화면(라우트 34개 / 실제 화면 28개)에서 참고할 것:
 
@@ -503,3 +507,6 @@ return JSON.stringify({
     행은 DestinationRow 아님 — 수동 Card(orderBadge + 주소/ETA + ▲▼✕). summaryCard·optimize 버튼은 optimized 상태로 스냅.
     ⚠️ `frame.resize()` 를 `layoutMode` 세팅 뒤에 하면 자식이 HUG 로 접힌다 — 28×28 orderBadge 가 텍스트 폭으로 쭈그러들어 `primaryAxisSizingMode='FIXED'` + 재-`resize` 로 복구. tier 세로 초과 시 부모 SECTION 높이도 키운다.
     ⚠️ 작업 중 다른 협업자(조성민)가 `UI` 페이지를 `UI - 원본`/`UI - 개선본` 로 분리하고 캔버스에 낙서 — 라이브러리(스타일/변수) 게시엔 영향 없음. 폰트 사이클 후 `restoreFailed: []`, 재게시 `변경 사항 없음`. 20/28.
+26. (2026-08-31) A트랙 — `현장 수정`(`286:958`/`286:959`, §3.4·§4.4-a). `fields/[id]/edit.tsx`, tier 3. `현장` 부모 h 3588 로 키움(폭 1520 유지).
+    MapSheetLayout 아님 — SafeScreen + ScrollView 세로 auto-layout 폼. `현장 등록` 과 같은 picker(수동 48h + `해제` pill). `Button` `state=disabled`(저장), `FilterChip` recolor(활성).
+    ⚠️ `frame.appendChild(x)` 는 void 반환 — `.layoutSizingHorizontal` 체이닝 불가, `addFill()` 헬퍼로 분리. 폰트 사이클 후 `restoreFailed: []`, 재게시 `변경 사항 없음`. 21/28.
