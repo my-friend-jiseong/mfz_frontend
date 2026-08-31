@@ -242,7 +242,7 @@ INSTANCE_SWAP 과 얽히면 벡터가 6×11 로 뭉개진다(실제로 당함). 
 - ✅ `8_방문상세` — `app/(tabs)/trips/visit.tsx`. 섹션 `167:281`. 프레임 `167:283` 390×844.
   **첫 MapSheetLayout 프레임.** `initialIndex 2`(스냅 92% 고정)라 단일 프레임으로 충분. 지도 스트립(`bg/surface-muted` 라벨) + 시트(`bg/surface` + `elevation/modal` + top `radius/lg` + 그래버) + 헤더(chevron-back + h3) + titleRow(h2-heavy + Badge success md ■) + 시각 + `메모·사진 추가`(secondary +arrow-forward-circle).
   → 시트 chrome(스트립·그래버·헤더 골격)은 다른 탭 목록 화면(스냅 3프레임)에서도 재사용할 수 있게 이 프레임을 참조.
-- ✅ `외근 시작 · 현장 선택` — `app/(tabs)/trips/new/select.tsx`. 섹션 `215:260`. 프레임 `215:261` 390×844, tier 2.
+- ✅ `외근 시작 · 현장 선택` — `app/(tabs)/trips/new/select.tsx`. 섹션 `215:260`. 프레임 `215:261` 390×1098(2026-08-31 높이 확장 — FieldCard 6장이 844 를 넘어 이탈했던 것 수정, 다른 스크롤 화면과 통일), tier 2.
   **B트랙 컴포넌트로 조립한 첫 화면.** `MapSheetLayout`(state=open) 인스턴스 → `detachInstance()` → `content` 프레임을 채운다.
   head(count `bodySm-bold primary` + `모두 선택` FilterChip dashed + Input search + FilterAccordion 조치상태/프로젝트/카테고리 3-head) ·
   `FieldCard`×6(`Show checkbox=true`, 일부 `Checked`) · `StickyBottomBar` 인스턴스 detach 후 Button(`다음 (3)` primary lg +arrow-forward).
@@ -535,3 +535,4 @@ return JSON.stringify({
 29. (2026-08-31) B트랙 후속 — `PickerTrigger` `309:1103` 신설(§3.2·§4.4-b). ProjectPicker·CategoryMultiPicker 가 2 callsite(`fields/new`·`fields/[id]/edit`)라 공용 트리거를 `3:20` 로 승격. `현장 수정`(`286:959`)의 수동 picker 2개를 인스턴스로 교체. §4.4-b 표를 실제 승격 현황(✅ 표기)으로 갱신.
     ⚠️ 게시 스피너가 `게시 중` 인 채 멈춰도 다이얼로그가 닫히면 서버엔 반영된 것 — 새로고침 후 라이브러리 책 아이콘의 파란 점이 사라졌는지 + `게시` 다이얼로그 `변경되지 않음 (128)` 로 확인. 반복 클릭 금지. 폰트 사이클 후 `restoreFailed: []`.
     ※ Code Connect(C트랙)는 사용자 지시로 보류.
+30. (2026-08-31) 최종 검증 스윕(`0:1` 전체 5 부모 + 27 프레임) — 부모 겹침 0·떠 있는 노드 0·텍스트 519개 Pretendard 바인딩. `외근 시작·현장 선택`(이전 세션)만 FieldCard 6장이 844 프레임을 166px 이탈 → 프레임 1098 로 확장(list 688·sticky y=840·content 916·sheet 978), 폰트 무관 리사이즈라 재게시 불필요. 접힌 `FilterAccordion Panel`(hidden, 우측 26px)은 설계상 정상.
