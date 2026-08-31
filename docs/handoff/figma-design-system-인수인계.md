@@ -12,7 +12,7 @@
 
 RN 앱(`src/theme/`, `src/components/`)을 역설계해 Figma 파일 `일가요` 의 `DesignSystem` 페이지에
 토큰·타이포·아이콘·컴포넌트 라이브러리를 만들었고 팀 라이브러리로 게시했다.
-지금은 **`UI` 페이지에 화면 프레임을 옮기는 단계**(10/28)다. 남은 것은 §4.4.
+지금은 **`UI` 페이지에 화면 프레임을 옮기는 단계**(11/28)다. 남은 것은 §4.4.
 
 **대원칙: 코드가 원본이고 Figma 가 사본이다.** 값이 어긋나면 `src/theme/` 이 이긴다.
 근거 문서는 `docs/reference/design-system.md`, 특히 §15.
@@ -111,6 +111,7 @@ DestinationRow(P3.e) · 지도 chrome(P3.f: MapSearchBar·MapFab·MapLegend) 완
 | 외근 | 방문 상세 | `167:281` | `167:283` · MapSheetLayout 스냅 92% | 3 | `app/(tabs)/trips/visit.tsx` |
 | 현장 | 카테고리 관리 | `150:183` | `150:185` · 목록 + 인라인 편집 1행 | 2 | `app/(tabs)/fields/categories.tsx` |
 | 현장 | 체크인 | `163:264` | `163:266` · completed 선택 | 3 | `app/(tabs)/fields/[id]/checkin.tsx` |
+| 보고서 | 보고서 작성 | `220:442` | `220:443` · Input + tripCard(Card detach) + 위치도 placeholder + Button | 2 | `app/(tabs)/reports/new.tsx` |
 | 보고서 | 보고서 수정 | `158:230` | `158:232` · dirty=false | 3 | `app/(tabs)/reports/[id]/edit.tsx` |
 | 내 정보 | 내 정보 · 홈 | `136:137` | `136:139` · 390×844 | 1 | `app/(tabs)/profile/index.tsx` |
 | 내 정보 | 내 정보 수정 | `154:198` | `154:200` · 이름 dirty=false | 2 | `app/(tabs)/profile/edit.tsx` |
@@ -194,7 +195,7 @@ face 이름은 공백 없이 (`SemiBold`). 중간에 실패하면 복구를 반�
 INSTANCE_SWAP 과 얽히면 벡터가 6×11 로 뭉개진다(실제로 당함). 색은 인스턴스 프레임 `.fills` 가 아니라
 내부 VECTOR 의 `.fills` 를 `text/*` 로 바인딩(프레임에 칠하면 회색 박스가 생긴다).
 
-#### (a) 화면 프레임 — 진행 중 (10/28)
+#### (a) 화면 프레임 — 진행 중 (11/28)
 
 **자리는 `UI` 페이지(`0:1`)의 내비게이션 계층 트리다** (§3.4·§9). 새 화면은 라우트 depth 로 tier 를
 정해 해당 부모 SECTION(`인증`·`외근`·`현장`·`보고서`·`내 정보`) 안에 넣는다. 아래 ✅ 목록의 `N_` 이름은
@@ -231,8 +232,10 @@ INSTANCE_SWAP 과 얽히면 벡터가 6×11 로 뭉개진다(실제로 당함). 
   `FieldCard`×6(`Show checkbox=true`, 일부 `Checked`) · `StickyBottomBar` 인스턴스 detach 후 Button(`다음 (3)` primary lg +arrow-forward).
   **P3.a FieldCard 검증 완료** — 인스턴스 6개 + 체크박스 레이아웃 정상.
   ⚠️ `FilterAccordion` 인스턴스는 데모 head 2개를 달고 온다 → detach 후 relabel + head clone(폰트 다운 창에서). `StickyBottomBar` `Content` SLOT 도 detach 후 채운다.
+- ✅ `보고서 작성` — `app/(tabs)/reports/new.tsx`. 섹션 `220:442`. 프레임 `220:443` 390×844, tier 2. 지도 없는 폼.
+  header(chevron-back + h3) + 제목 `Input` + `연결 외근` label + tripCard(`Card` md 인스턴스 detach) + 스캐폴드 안내 + `위치도` label + 지도 placeholder + `보고서 만들기` Button.
 - **탭 루트 4개는 전부 `MapSheetLayout`**(trips·fields·reports 목록 + reports 도) — 스냅 3프레임 필요, 별도 세션. profile·categories 처럼 지도 없는 화면부터 훑는 게 빠르다.
-- 다음: `fields/new` · `reports/new` · 탭 루트 4개.
+- 다음: `fields/new` · 탭 루트 4개.
 
 나머지 화면(라우트 34개 / 실제 화면 28개)에서 참고할 것:
 
@@ -430,3 +433,7 @@ return JSON.stringify({
     **패턴**: `content`/`SLOT` 이 있는 셸 컴포넌트(`MapSheetLayout`·`StickyBottomBar`)는 인스턴스 후 `detachInstance()` 하고 안쪽을 채운다.
     `FilterAccordion` 인스턴스는 데모 head 를 달고 오므로 detach → relabel, head 추가는 clone(폰트 다운 창에서). FieldCard×6 검증 완료.
     폰트 사이클 후 `restoreFailed: []`, `MenuRow` 제외 재게시, 새로고침 후 `변경되지 않음` 확증. 10/28.
+16. (2026-08-31) A트랙 — `보고서 작성` 화면(`220:442`/`220:443`, §3.4·§4.4-a). `보고서` 부모 tier2. 지도 없는 폼이라 셸 detach 불필요.
+    header(chevron-back + h3) + 제목 `Input` + `연결 외근` label + tripCard(`Card` padding=md 인스턴스 detach → briefcase + 제목 + meta + `외근 변경` ghost) +
+    스캐폴드 안내 caption + `위치도 — 현장 4곳` label + 지도 placeholder(`bg/surface-muted` + radius/lg) + `보고서 만들기` Button(primary lg + document-text).
+    폰트 사이클 후 `restoreFailed: []`, `MenuRow` 제외 재게시, 새로고침 후 `변경되지 않음 (125)` 확증. 11/28.
