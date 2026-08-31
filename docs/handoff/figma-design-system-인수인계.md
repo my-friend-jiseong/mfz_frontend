@@ -12,7 +12,7 @@
 
 RN 앱(`src/theme/`, `src/components/`)을 역설계해 Figma 파일 `일가요` 의 `DesignSystem` 페이지에
 토큰·타이포·아이콘·컴포넌트 라이브러리를 만들었고 팀 라이브러리로 게시했다.
-지금은 **`UI` 페이지에 화면 프레임을 옮기는 단계**(16/28)다. 남은 것은 §4.4.
+지금은 **`UI` 페이지에 화면 프레임을 옮기는 단계**(17/28)다. 남은 것은 §4.4.
 
 **대원칙: 코드가 원본이고 Figma 가 사본이다.** 값이 어긋나면 `src/theme/` 이 이긴다.
 근거 문서는 `docs/reference/design-system.md`, 특히 §15.
@@ -91,8 +91,8 @@ DestinationRow(P3.e) · 지도 chrome(P3.f: MapSearchBar·MapFab·MapLegend) 완
   \+ 굵기 조합 6(`body-bold body-semibold bodySm-bold bodySm-semibold caption-semibold caption-bold`)
   \+ `groupLabel` + 문서 가구 8(`docs/*`).
   ※ `body-semibold` 는 EmptyState/ErrorState 제목용으로 이번에 추가됐다.
-- **아이콘 69개** — `icon/<name>`, 24×24, `node_modules` 의 `Ionicons.ttf` 에서 윤곽선 직접 추출.
-  ※ `map` · `map-outline` 는 TripCard 지도 버튼용으로 2026-08-31 추가.
+- **아이콘 70개** — `icon/<name>`, 24×24, `node_modules` 의 `Ionicons.ttf` 에서 윤곽선 직접 추출.
+  ※ `map` · `map-outline` 는 TripCard 지도 버튼용으로 2026-08-31 추가. `sparkles` 는 진행 중 외근 재최적화 버튼용으로 2026-08-31 추가.
 - **폰트** — 전 텍스트 Pretendard. 스타일은 전부 `font-family/base`(`VariableID:58:2`) 바인딩.
 
 ### 3.4 `UI` 페이지 (`0:1`) — 화면
@@ -107,6 +107,7 @@ DestinationRow(P3.e) · 지도 chrome(P3.f: MapSearchBar·MapFab·MapLegend) 완
 | 인증 | 로그인 | `124:75` | `124:77` 빈 폼 · `128:91` invalid_credentials | 0 | `app/(auth)/login.tsx` |
 | 인증 | 회원가입 | `3:3` | `114:3` 빈 폼 · `116:37` validate() 실패 | 0 | `app/(auth)/signup.tsx` |
 | 외근 | 외근 내역 (목록) | `229:498` | `229:499` · MapSheetLayout 셸 + toolbar(Input + TripFilterBar + weekStats 3열) + TripCard 리스트(날짜 그룹) + StickyBottomBar | 1 | `app/(tabs)/trips/index.tsx` |
+| 외근 | 진행 중 외근 | `254:803` | `254:804` · MapSheetLayout 셸(수동, headerRight=촬영 btn) + TripProgressStrip + CurrentDestCard(primary-muted, sparkles/건너뛰기/길찾기/체크인) + 목적지 헤더 + DestinationRow×3 + 외근 종료 dangerGhost | 1 | `app/(tabs)/trips/active.tsx` |
 | 외근 | 외근 시작 · 현장 선택 | `215:260` | `215:261` · MapSheetLayout 셸 + FieldCard×6(`Show checkbox`) + StickyBottomBar | 2 | `app/(tabs)/trips/new/select.tsx` |
 | 외근 | 외근 정리 (상세) | `241:747` | `241:748` · MapSheetLayout 셸 + header(h2-heavy + edit btn + meta + statsCard 방문/건너뜀/계획) + ReviewVisitCard×3(collapsed) + 건너뛴 현장 Card + StickyBottomBar | 2 | `app/(tabs)/trips/[id].tsx` |
 | 외근 | 외근 수정 | `161:245` | `161:247` · 390×844 | 3 | `app/(tabs)/trips/[id]/edit.tsx` |
@@ -201,7 +202,7 @@ face 이름은 공백 없이 (`SemiBold`). 중간에 실패하면 복구를 반�
 INSTANCE_SWAP 과 얽히면 벡터가 6×11 로 뭉개진다(실제로 당함). 색은 인스턴스 프레임 `.fills` 가 아니라
 내부 VECTOR 의 `.fills` 를 `text/*` 로 바인딩(프레임에 칠하면 회색 박스가 생긴다).
 
-#### (a) 화면 프레임 — 진행 중 (16/28)
+#### (a) 화면 프레임 — 진행 중 (17/28)
 
 **자리는 `UI` 페이지(`0:1`)의 내비게이션 계층 트리다** (§3.4·§9). 새 화면은 라우트 depth 로 tier 를
 정해 해당 부모 SECTION(`인증`·`외근`·`현장`·`보고서`·`내 정보`) 안에 넣는다. 아래 ✅ 목록의 `N_` 이름은
@@ -253,8 +254,11 @@ INSTANCE_SWAP 과 얽히면 벡터가 6×11 로 뭉개진다(실제로 당함). 
   `MapSheetLayout`(Show back=true) detach → header(h2-heavy 제목 + `create-outline` edit 버튼 36px + `time-outline` 메타 + `statsCard`(Card lg detach: 방문 `metric` primary / 건너뜀·계획 `metricSm`)) +
   "방문한 현장 정리 (N)" + `ReviewVisitCard` collapsed(Card md detach: primary orderBadge + time `bodySm-bold` + Badge(■/●) + 주소 + 상세 + chevron) + "건너뛴 현장 (N)" + skipped Card(surface-muted, border 없음) + StickyBottomBar → `보고서 작성`.
   ⚠️ detach 한 Card 를 `layoutMode='HORIZONTAL'` 로 바꾸면 `primaryAxisSizingMode='FIXED'` 를 명시해야 FILL 폭이 먹는다(안 하면 HUG 로 자식이 뭉침).
-- **탭 루트 4/4 + 외근 상세 완료.** `ReviewVisitCard` 는 2 callsite(trips/[id]·active) 라 나중에 `3:20` 승격 대상.
-- 다음: 나머지 서브 화면 — `trips/active` · `fields/[id]`(현장 상세) · `reports/[id]`(보고서 상세) · `trips/new/order` · `fields/[id]/edit` 등.
+- ✅ `진행 중 외근` — `app/(tabs)/trips/active.tsx`. 섹션 `254:803`. 프레임 `254:804` 390×844, tier 1(외근 내역 옆 — 탭 리다이렉트 대상이라 탭 루트 취급, 외근 부모 1034 폭에 2열).
+  시트 chrome 은 **수동**(headerRight 가 아이콘이 아니라 `촬영` Button 이고 map/sheet 비율이 initialIndex=1 이라 MapSheetLayout 인스턴스 detach 대신 grabber+header 직접 조립) · map absolute 200 + sheet FILL.
+  content = TripProgressStrip(elapsed `caption-semibold` + 방문/건너뜀 카운트 + `40%` `caption-bold` primary + 3dp 트랙) + CurrentDestCard(수동 Card: `brand/primary-muted`+`brand/primary` 테두리, capRow[`caption-bold` primary + `icon/sparkles` 32px btn + `건너뛰기` dangerGhost sm] + titleRow[h3 주소 + info 아이콘] + 상세 + `길찾기`(secondary md)/`체크인`(primary md)) + `목적지 (5)`+`현장 추가` ghost sm + `DestinationRow`×3(방문완료 success / 현재 isCurrent=true / 예정, 중첩 badge 는 인스턴스 후 `setProperties` 로 relabel) + footer `외근 종료 (미완료 2곳)` dangerGhost lg.
+- **탭 루트 4/4 + 진행 중 외근 + 외근 상세 완료.** `ReviewVisitCard` 는 2 callsite(trips/[id]·active) 라 나중에 `3:20` 승격 대상.
+- 다음: 나머지 서브 화면 — `fields/[id]`(현장 상세) · `reports/[id]`(보고서 상세) · `trips/new/order` · `fields/[id]/edit` · `reports/[id]/field-report` · `profile/delete-account` · `+not-found`.
 
 나머지 화면(라우트 34개 / 실제 화면 28개)에서 참고할 것:
 
@@ -471,3 +475,6 @@ return JSON.stringify({
 21. (2026-08-31) A트랙 — `외근 정리`(외근 상세, `241:747`/`241:748`, §3.4·§4.4-a). `trips/[id].tsx`, tier 2(외근 시작 옆, 외근 부모 1034 폭에 2열).
     `MapSheetLayout` detach + header(h2-heavy + edit 버튼 + 메타 + statsCard Card lg detach) + `ReviewVisitCard` collapsed(Card md detach)×3 + skipped Card + StickyBottomBar.
     ⚠️ Card detach 후 `layoutMode` 를 HORIZONTAL 로 바꾸면 `primaryAxisSizingMode='FIXED'` 명시 필요. Badge `Label` 이 안 뜨면 텍스트 노드 직접 set. 폰트 사이클 후 `restoreFailed: []`, `MenuRow` 제외 재게시. 16/28.
+22. (2026-08-31) B트랙 아이콘 — `icon/sparkles`(`251:803`) TTF 추출·게시(§3.2). A트랙 — `진행 중 외근`(`254:803`/`254:804`, §3.4·§4.4-a). `trips/active.tsx`, tier 1(외근 내역 옆, 외근 부모 1034 폭에 2열). **탭 루트 4/4 + 진행 중 + 외근 상세.**
+    시트 chrome 은 수동 조립(headerRight 가 `촬영` Button, initialIndex=1 비율) + TripProgressStrip + CurrentDestCard(수동) + `DestinationRow`×3.
+    ※ 폰트 복구는 **스타일 `fontFamily` 변수 재바인딩만** — `s.fontName` 을 Pretendard 로 직접 세팅하면 "unloaded font" 로 실패(런타임에 Pretendard 없음). 스타일 참조 노드는 재바인딩만으로 Pretendard 를 따라온다. `DestinationRow` 중첩 badge 는 인스턴스 후 `inst.findOne(badge).setProperties()` 로 relabel 됨(중첩 인스턴스 안 인스턴스는 됨 — 중첩 인스턴스 안 컴포넌트만 안 됨). 폰트 사이클 후 `restoreFailed: []`, 재게시 `변경되지 않음 (127)`. 17/28.
