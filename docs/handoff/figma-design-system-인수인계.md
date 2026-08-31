@@ -12,7 +12,7 @@
 
 RN 앱(`src/theme/`, `src/components/`)을 역설계해 Figma 파일 `일가요` 의 `DesignSystem` 페이지에
 토큰·타이포·아이콘·컴포넌트 라이브러리를 만들었고 팀 라이브러리로 게시했다.
-지금은 **`UI` 페이지에 화면 프레임을 옮기는 단계**(11/28)다. 남은 것은 §4.4.
+지금은 **`UI` 페이지에 화면 프레임을 옮기는 단계**(12/28)다. 남은 것은 §4.4.
 
 **대원칙: 코드가 원본이고 Figma 가 사본이다.** 값이 어긋나면 `src/theme/` 이 이긴다.
 근거 문서는 `docs/reference/design-system.md`, 특히 §15.
@@ -109,6 +109,7 @@ DestinationRow(P3.e) · 지도 chrome(P3.f: MapSearchBar·MapFab·MapLegend) 완
 | 외근 | 외근 시작 · 현장 선택 | `215:260` | `215:261` · MapSheetLayout 셸 + FieldCard×6(`Show checkbox`) + StickyBottomBar | 2 | `app/(tabs)/trips/new/select.tsx` |
 | 외근 | 외근 수정 | `161:245` | `161:247` · 390×844 | 3 | `app/(tabs)/trips/[id]/edit.tsx` |
 | 외근 | 방문 상세 | `167:281` | `167:283` · MapSheetLayout 스냅 92% | 3 | `app/(tabs)/trips/visit.tsx` |
+| 현장 | 현장 등록 | `225:461` | `225:462` · 스크롤 폼(검색 Input + 선택주소 Card + 지도 placeholder + 이름/상세 Input + 프로젝트/분류 picker trigger + 상태 FilterChip×3 + Button) | 2 | `app/(tabs)/fields/new.tsx` |
 | 현장 | 카테고리 관리 | `150:183` | `150:185` · 목록 + 인라인 편집 1행 | 2 | `app/(tabs)/fields/categories.tsx` |
 | 현장 | 체크인 | `163:264` | `163:266` · completed 선택 | 3 | `app/(tabs)/fields/[id]/checkin.tsx` |
 | 보고서 | 보고서 작성 | `220:442` | `220:443` · Input + tripCard(Card detach) + 위치도 placeholder + Button | 2 | `app/(tabs)/reports/new.tsx` |
@@ -117,7 +118,8 @@ DestinationRow(P3.e) · 지도 chrome(P3.f: MapSearchBar·MapFab·MapLegend) 완
 | 내 정보 | 내 정보 수정 | `154:198` | `154:200` · 이름 dirty=false | 2 | `app/(tabs)/profile/edit.tsx` |
 
 빈 tier 자리(외근 T1·T2 등)는 비워 둔다 — 미구현 상위 화면이 채워질 슬롯. `N_` 숫자 접두사 폐기.
-새 화면은 라우트 depth 로 tier 를 정해 해당 부모 안에 넣는다.
+새 화면은 라우트 depth 로 tier 를 정해 해당 부모 안에 넣는다. **같은 tier 에 화면이 2개면 부모 SECTION 을 넓히고
+오른쪽 형제 부모를 밀어낸다** (2026-08-31: `현장` 을 1034 로 넓히고 `보고서`→x1580 · `내 정보`→x2180).
 
 오류 프레임은 `validate()` 가 만드는 조합을 그대로 그렸다 — 필드 4개 `state=error` +
 약관 오류 caption. **`globalError` 는 넣지 않았다**: 검증 실패면 서버를 호출하기 전에 return 하므로
@@ -195,7 +197,7 @@ face 이름은 공백 없이 (`SemiBold`). 중간에 실패하면 복구를 반�
 INSTANCE_SWAP 과 얽히면 벡터가 6×11 로 뭉개진다(실제로 당함). 색은 인스턴스 프레임 `.fills` 가 아니라
 내부 VECTOR 의 `.fills` 를 `text/*` 로 바인딩(프레임에 칠하면 회색 박스가 생긴다).
 
-#### (a) 화면 프레임 — 진행 중 (11/28)
+#### (a) 화면 프레임 — 진행 중 (12/28)
 
 **자리는 `UI` 페이지(`0:1`)의 내비게이션 계층 트리다** (§3.4·§9). 새 화면은 라우트 depth 로 tier 를
 정해 해당 부모 SECTION(`인증`·`외근`·`현장`·`보고서`·`내 정보`) 안에 넣는다. 아래 ✅ 목록의 `N_` 이름은
@@ -234,8 +236,11 @@ INSTANCE_SWAP 과 얽히면 벡터가 6×11 로 뭉개진다(실제로 당함). 
   ⚠️ `FilterAccordion` 인스턴스는 데모 head 2개를 달고 온다 → detach 후 relabel + head clone(폰트 다운 창에서). `StickyBottomBar` `Content` SLOT 도 detach 후 채운다.
 - ✅ `보고서 작성` — `app/(tabs)/reports/new.tsx`. 섹션 `220:442`. 프레임 `220:443` 390×844, tier 2. 지도 없는 폼.
   header(chevron-back + h3) + 제목 `Input` + `연결 외근` label + tripCard(`Card` md 인스턴스 detach) + 스캐폴드 안내 + `위치도` label + 지도 placeholder + `보고서 만들기` Button.
+- ✅ `현장 등록` — `app/(tabs)/fields/new.tsx`. 섹션 `225:461`. 프레임 `225:462` 390×~1060(스크롤), tier 2. `현장` 부모를 1034 로 넓혀 카테고리 관리 옆에 뒀다(§3.4).
+  검색 `Input` + `현 위치로 이동`(secondary sm) + 선택주소 `Card`(primary-muted, detach) + 지도 placeholder + 이름 `Input` + `FieldLabel`×3(`Show counter=false`) + 프로젝트/분류 picker trigger(수동: solid primary 테두리 + primary-muted + 아이콘 + 텍스트 + `해제` pill) + 상태 `FilterChip`×3(하나는 warning tint 로 active) + `현장 등록` Button.
+  ⚠️ `FilterChip` `state=active` 인스턴스는 Label 이 렌더 안 될 때가 있다 → `state=default` 인스턴스를 intent 색으로 수동 recolor(코드의 `activeColor` 방식과 동일).
 - **탭 루트 4개는 전부 `MapSheetLayout`**(trips·fields·reports 목록 + reports 도) — 스냅 3프레임 필요, 별도 세션. profile·categories 처럼 지도 없는 화면부터 훑는 게 빠르다.
-- 다음: `fields/new` · 탭 루트 4개.
+- 다음: 탭 루트 4개.
 
 나머지 화면(라우트 34개 / 실제 화면 28개)에서 참고할 것:
 
@@ -437,3 +442,7 @@ return JSON.stringify({
     header(chevron-back + h3) + 제목 `Input` + `연결 외근` label + tripCard(`Card` padding=md 인스턴스 detach → briefcase + 제목 + meta + `외근 변경` ghost) +
     스캐폴드 안내 caption + `위치도 — 현장 4곳` label + 지도 placeholder(`bg/surface-muted` + radius/lg) + `보고서 만들기` Button(primary lg + document-text).
     폰트 사이클 후 `restoreFailed: []`, `MenuRow` 제외 재게시, 새로고침 후 `변경되지 않음 (125)` 확증. 11/28.
+17. (2026-08-31) A트랙 — `현장 등록` 화면(`225:461`/`225:462`, §3.4·§4.4-a). `fields/new.tsx` 스크롤 폼.
+    **부모 SECTION 확장**: `현장` 을 534→1034 로 넓히고 `보고서`(x1080→1580)·`내 정보`(x1680→2180)를 밀어 tier2 에 카테고리 관리 옆 슬롯을 만들었다(§3.4).
+    `ProjectPicker`/`CategoryMultiPicker` 는 DS 컴포넌트가 없어 solid primary trigger 로 근사. `FieldLabel` 은 `Show counter=false`.
+    `FilterChip state=active` 인스턴스 Label 렌더 실패 → `state=default` 를 intent 색으로 수동 recolor(코드 `activeColor` 방식). 폰트 사이클 후 `restoreFailed: []`, `MenuRow` 제외 재게시, `변경되지 않음 (125)`. 12/28.
