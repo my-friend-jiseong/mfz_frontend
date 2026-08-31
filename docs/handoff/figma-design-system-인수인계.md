@@ -12,7 +12,7 @@
 
 RN 앱(`src/theme/`, `src/components/`)을 역설계해 Figma 파일 `일가요` 의 `DesignSystem` 페이지에
 토큰·타이포·아이콘·컴포넌트 라이브러리를 만들었고 팀 라이브러리로 게시했다.
-지금은 **`UI` 페이지에 화면 프레임을 옮기는 단계**(21/28)다. 남은 것은 §4.4.
+지금은 **`UI` 페이지에 화면 프레임을 옮기는 단계**(22/28)다. 남은 것은 §4.4.
 
 **대원칙: 코드가 원본이고 Figma 가 사본이다.** 값이 어긋나면 `src/theme/` 이 이긴다.
 근거 문서는 `docs/reference/design-system.md`, 특히 §15.
@@ -123,6 +123,7 @@ DestinationRow(P3.e) · 지도 chrome(P3.f: MapSearchBar·MapFab·MapLegend) 완
 | 보고서 | 보고서 작성 | `220:442` | `220:443` · Input + tripCard(Card detach) + 위치도 placeholder + Button | 2 | `app/(tabs)/reports/new.tsx` |
 | 보고서 | 보고서 상세 | `270:888` | `270:889` · MapSheetLayout 셸(수동, snap 55%) + h2-heavy 제목 + tripLink pill(primary-muted) + meta + 위치도 placeholder + sectionHead(현장별 전·중·후 + 현장 보고 추가) + FieldReportCard×2(전/중/후 슬롯, dashed=없음) + Word 다운로드/다시 생성/PDF + 수정·삭제 divider row | 2 | `app/(tabs)/reports/[id]/index.tsx` |
 | 보고서 | 보고서 수정 | `158:230` | `158:232` · dirty=false | 3 | `app/(tabs)/reports/[id]/edit.tsx` |
+| 보고서 | 현장 보고 작성 (마법사) | `293:1011` | `293:1012` · 스크롤 폼(h2-heavy `(2/4)` + 힌트 + 현장 readonly Card + 제목 Input + 조치 전·중·후 phaseBox×3[사진 160 + 사진/제거 + 현장 사진에서 불러오기 + 캡션 Input] + 저장 후 다음 현장 + 건너뛰기 + 나중에) | 3 | `app/(tabs)/reports/[id]/field-report.tsx` |
 | 내 정보 | 내 정보 · 홈 | `136:137` | `136:139` · 390×844 | 1 | `app/(tabs)/profile/index.tsx` |
 | 내 정보 | 내 정보 수정 | `154:198` | `154:200` · 이름 dirty=false | 2 | `app/(tabs)/profile/edit.tsx` |
 
@@ -206,7 +207,7 @@ face 이름은 공백 없이 (`SemiBold`). 중간에 실패하면 복구를 반�
 INSTANCE_SWAP 과 얽히면 벡터가 6×11 로 뭉개진다(실제로 당함). 색은 인스턴스 프레임 `.fills` 가 아니라
 내부 VECTOR 의 `.fills` 를 `text/*` 로 바인딩(프레임에 칠하면 회색 박스가 생긴다).
 
-#### (a) 화면 프레임 — 진행 중 (21/28)
+#### (a) 화면 프레임 — 진행 중 (22/28)
 
 **자리는 `UI` 페이지(`0:1`)의 내비게이션 계층 트리다** (§3.4·§9). 새 화면은 라우트 depth 로 tier 를
 정해 해당 부모 SECTION(`인증`·`외근`·`현장`·`보고서`·`내 정보`) 안에 넣는다. 아래 ✅ 목록의 `N_` 이름은
@@ -275,8 +276,12 @@ INSTANCE_SWAP 과 얽히면 벡터가 6×11 로 뭉개진다(실제로 당함). 
 - ✅ `현장 수정` — `app/(tabs)/fields/[id]/edit.tsx`. 섹션 `286:958`. 프레임 `286:959` 390×1116, tier 3(현장 부모 h 3588 로 키움 — 체크인 옆 2열, 폭 1520 유지).
   MapSheetLayout 아님 — SafeScreen + ScrollView 세로 폼. `현장 등록` 골격에 되돌리기/저장/삭제 추가한 꼴.
   검색 `Input` + `현 위치로 이동` secondary sm + `FieldLabel`(주소) + 주소 readonly Card(`bg/surface`+`border/muted`, 미변경 상태) + pinHint + pinMap(surface-muted + primary 핀 점) + `FieldLabel`(이름, counter 7/100) + `Input`(placeholder=주소 + helper) + `FieldLabel`(프로젝트) + picker(수동 48h: `folder-outline` + 라벨 + `해제` pill) + `FieldLabel`(분류) + picker(`pricetags-outline`) + `FieldLabel`(상세, counter) + `Input` + `FieldLabel`(상태) + `FilterChip`×3(조치 중 = `state=default` recolor to `brand/primary`@0.13) + `변경 사항 없음` primary lg `state=disabled` + `취소` ghost + 위험 구역(`현장 삭제` dangerGhost, `border/muted` top).
-- **탭 루트 4/4 + 진행 중 외근 + 외근/현장/보고서 상세 + 방문 순서 + 현장 수정 완료.** `ReviewVisitCard` 는 2 callsite(trips/[id]·active) 라 나중에 `3:20` 승격 대상.
-- 다음: 나머지 서브 화면 — `reports/[id]/field-report` · `profile/delete-account` · `+not-found`.
+- ✅ `현장 보고 작성` (마법사) — `app/(tabs)/reports/[id]/field-report.tsx`. 섹션 `293:1011`. 프레임 `293:1012` 390×1570, tier 3(보고서 부모 h 4242. tier 3 을 y 2400→2600 으로 내림 — 위 tier 2 `보고서 상세` 가 1336 로 넘쳐서. `보고서 수정` 도 함께 이동).
+  MapSheetLayout 아님 — SafeScreen + ScrollView. `wizard=1` 상태로 스냅(단계 `(2/4)`).
+  h2-heavy `현장 보고 작성 (2/4)` + `bodySm` 힌트 + `bodySm-bold` `현장 *` + 현장 readonly Card(`bg/surface`+`border/muted`; 마법사는 `isEdit=true` 라 dashed pick 버튼 아님) + `Input`(제목) + phaseBox×3(수동 surface Card: `bodySm-bold` 조치 전/중/후 + 사진 160[찬 칸=surface-muted, 빈 칸=dashed+`사진 없음`] + `사진`/`사진 변경` secondary sm + `제거` ghost sm + `현장 사진에서 불러오기` ghost sm FILL + 캡션 `Input`) + `저장 후 다음 현장` primary lg + `이 현장 건너뛰기`/`나중에 작성하기` ghost.
+  ※ 힌트 42자 — 마법사 안내 카피라 40자 규칙 예외(`over40` 1).
+- **탭 루트 4/4 + 진행 중 외근 + 외근/현장/보고서 상세 + 방문 순서 + 현장 수정 + 현장 보고 작성 완료.** `ReviewVisitCard` 는 2 callsite(trips/[id]·active) 라 나중에 `3:20` 승격 대상.
+- 다음: 나머지 서브 화면 — `profile/delete-account` · `+not-found`.
 
 나머지 화면(라우트 34개 / 실제 화면 28개)에서 참고할 것:
 
@@ -510,3 +515,7 @@ return JSON.stringify({
 26. (2026-08-31) A트랙 — `현장 수정`(`286:958`/`286:959`, §3.4·§4.4-a). `fields/[id]/edit.tsx`, tier 3. `현장` 부모 h 3588 로 키움(폭 1520 유지).
     MapSheetLayout 아님 — SafeScreen + ScrollView 세로 auto-layout 폼. `현장 등록` 과 같은 picker(수동 48h + `해제` pill). `Button` `state=disabled`(저장), `FilterChip` recolor(활성).
     ⚠️ `frame.appendChild(x)` 는 void 반환 — `.layoutSizingHorizontal` 체이닝 불가, `addFill()` 헬퍼로 분리. 폰트 사이클 후 `restoreFailed: []`, 재게시 `변경 사항 없음`. 21/28.
+27. (2026-08-31) A트랙 — `현장 보고 작성`(마법사, `293:1011`/`293:1012`, §3.4·§4.4-a). `reports/[id]/field-report.tsx`, tier 3. `wizard=1` 상태.
+    SafeScreen + ScrollView. phaseBox×3 수동(사진 160 + 사진/제거 + 캡션 Input).
+    ⚠️ tier Y 관례(72/1200/2400)는 위 tier 화면이 tall 하면 깨진다 — `보고서 상세`(tier2, 1336h)가 2400 존을 침범 → 보고서 열의 tier 3 전체를 y 2600 으로 내렸다(`보고서 수정` 도 함께). **한 열 안에서 tier 는 정렬하되 열마다 Y 가 다를 수 있다.**
+    폰트 사이클 후 `restoreFailed: []`, 재게시 `변경 사항 없음`. 22/28.
