@@ -12,7 +12,7 @@
 
 RN 앱(`src/theme/`, `src/components/`)을 역설계해 Figma 파일 `일가요` 의 `DesignSystem` 페이지에
 토큰·타이포·아이콘·컴포넌트 라이브러리를 만들었고 팀 라이브러리로 게시했다.
-지금은 **`UI` 페이지에 화면 프레임을 옮기는 단계**(19/28)다. 남은 것은 §4.4.
+지금은 **`UI` 페이지에 화면 프레임을 옮기는 단계**(20/28)다. 남은 것은 §4.4.
 
 **대원칙: 코드가 원본이고 Figma 가 사본이다.** 값이 어긋나면 `src/theme/` 이 이긴다.
 근거 문서는 `docs/reference/design-system.md`, 특히 §15.
@@ -112,6 +112,7 @@ DestinationRow(P3.e) · 지도 chrome(P3.f: MapSearchBar·MapFab·MapLegend) 완
 | 외근 | 외근 정리 (상세) | `241:747` | `241:748` · MapSheetLayout 셸 + header(h2-heavy + edit btn + meta + statsCard 방문/건너뜀/계획) + ReviewVisitCard×3(collapsed) + 건너뛴 현장 Card + StickyBottomBar | 2 | `app/(tabs)/trips/[id].tsx` |
 | 외근 | 외근 수정 | `161:245` | `161:247` · 390×844 | 3 | `app/(tabs)/trips/[id]/edit.tsx` |
 | 외근 | 방문 상세 | `167:281` | `167:283` · MapSheetLayout 스냅 92% | 3 | `app/(tabs)/trips/visit.tsx` |
+| 외근 | 방문 순서 확인 | `278:931` | `278:932` · MapSheetLayout 셸(수동, snap 55%) + head(Input 제목 + 안내 2줄 + 최적 순서 추천/다시 추천 + summaryCard 총거리/ETA/현장수) + 순서 행×4(orderBadge + 주소/상세/ETA + ▲▼✕ 컨트롤) + StickyBottomBar(외근 시작) | 3 | `app/(tabs)/trips/new/order.tsx` |
 | 현장 | 현장 (목록) | `232:592` | `232:593` · MapSheetLayout 셸 + toolbar(Input + FieldFilterBar 4-head + FieldStatusSummary) + FieldCard 리스트 + StickyBottomBar(새 현장 + 촬영) | 1 | `app/(tabs)/fields/index.tsx` |
 | 현장 | 현장 등록 | `225:461` | `225:462` · 스크롤 폼(검색 Input + 선택주소 Card + 지도 placeholder + 이름/상세 Input + 프로젝트/분류 picker trigger + 상태 FilterChip×3 + Button) | 2 | `app/(tabs)/fields/new.tsx` |
 | 현장 | 카테고리 관리 | `150:183` | `150:185` · 목록 + 인라인 편집 1행 | 2 | `app/(tabs)/fields/categories.tsx` |
@@ -126,7 +127,7 @@ DestinationRow(P3.e) · 지도 chrome(P3.f: MapSearchBar·MapFab·MapLegend) 완
 
 빈 tier 자리(외근 T1·T2 등)는 비워 둔다 — 미구현 상위 화면이 채워질 슬롯. `N_` 숫자 접두사 폐기.
 새 화면은 라우트 depth 로 tier 를 정해 해당 부모 안에 넣는다. **같은 tier 에 화면이 2개면 부모 SECTION 을 넓히고
-오른쪽 형제 부모를 밀어낸다** (2026-08-31: `현장`→1520·`보고서`→1034, `보고서` x2066 · `내 정보` x3166. `외근` 은 1034 유지 — tier1·tier2 각 2열).
+오른쪽 형제 부모를 밀어낸다** (2026-08-31: `외근`→1540(h 3520)·`현장`→1520·`보고서`→1034. x: `현장` 986 · `보고서` 2572 · `내 정보` 3672). **tier 가 세로로 넘치면 부모 SECTION 높이도 키운다**(방문 순서 프레임 1048 → `외근` h 3348→3520).
 
 오류 프레임은 `validate()` 가 만드는 조합을 그대로 그렸다 — 필드 4개 `state=error` +
 약관 오류 caption. **`globalError` 는 넣지 않았다**: 검증 실패면 서버를 호출하기 전에 return 하므로
@@ -204,7 +205,7 @@ face 이름은 공백 없이 (`SemiBold`). 중간에 실패하면 복구를 반�
 INSTANCE_SWAP 과 얽히면 벡터가 6×11 로 뭉개진다(실제로 당함). 색은 인스턴스 프레임 `.fills` 가 아니라
 내부 VECTOR 의 `.fills` 를 `text/*` 로 바인딩(프레임에 칠하면 회색 박스가 생긴다).
 
-#### (a) 화면 프레임 — 진행 중 (19/28)
+#### (a) 화면 프레임 — 진행 중 (20/28)
 
 **자리는 `UI` 페이지(`0:1`)의 내비게이션 계층 트리다** (§3.4·§9). 새 화면은 라우트 depth 로 tier 를
 정해 해당 부모 SECTION(`인증`·`외근`·`현장`·`보고서`·`내 정보`) 안에 넣는다. 아래 ✅ 목록의 `N_` 이름은
@@ -266,8 +267,12 @@ INSTANCE_SWAP 과 얽히면 벡터가 6×11 로 뭉개진다(실제로 당함). 
   MapSheetLayout `initialIndex=1`(snap 55%) → 시트 chrome 수동 + map absolute 180 + sheet/content HUG.
   content = h2-heavy 제목 + tripLink pill(수동: `brand/primary-muted`, `briefcase-outline` 14 + `bodySm-semibold` primary + `chevron-forward`) + `caption` meta + `bodySm-bold` 위치도 라벨 + overviewMap(surface-muted 220h radius-lg border) + sectionHead(`bodySm-bold` + `현장 보고 추가` secondary sm) + FieldReportCard×2(수동 surface Card: frHead[`bodySm-bold` 제목 + `수정` ghost sm/`삭제` dangerGhost sm] + frSlots[전·중·후 `caption-bold` 라벨 + 정사각 슬롯, 없는 칸은 `dashPattern` 점선 + `없음`]) + `Word 파일 다운로드` primary FILL + `Word 다시 생성` ghost sm(center) + `PDF 내보내기` secondary FILL + actions divider row(`수정` secondary / `삭제` dangerGhost, `border/muted` top).
   ※ meta 텍스트 "작성: … · 수정: …" 41자 — **실제 앱 카피**라 40자 규칙(주석/문서용) 예외. `over40` 은 이 노드 하나로 1.
-- **탭 루트 4/4 + 진행 중 외근 + 외근 상세 + 현장 상세 + 보고서 상세 완료.** `ReviewVisitCard` 는 2 callsite(trips/[id]·active) 라 나중에 `3:20` 승격 대상.
-- 다음: 나머지 서브 화면 — `trips/new/order` · `fields/[id]/edit` · `reports/[id]/field-report` · `profile/delete-account` · `+not-found`.
+- ✅ `방문 순서 확인` — `app/(tabs)/trips/new/order.tsx`. 섹션 `278:931`. 프레임 `278:932` 390×1048, tier 3(외근 부모 1540/h3520 로 확장 — 외근 수정·방문 상세 옆 3열).
+  MapSheetLayout `initialIndex=1` → 시트 chrome 수동 + map absolute 180 + sheet/content HUG.
+  head = `Input`(외근 제목) + `body-semibold` 안내 + `bodySm` 힌트 + `다시 추천` secondary sm(optimized 상태 = `intent/success-muted` 배경 + `checkmark-circle`) + summaryCard(`success-muted`: 총 거리/예상 ETA/방문 현장 3열, 1×28 divider). list = 순서 행×4(수동 surface Card row: orderBadge 28 원 `brand/primary` + `on/primary` 번호, rowText[`body-semibold` 주소 + `bodySm` 상세 + `caption-semibold` primary ETA], controls[▲▼ 32×26 `surface-muted`+border, ✕ `danger-muted`+`danger` border]). StickyBottomBar(수동) → `외근 시작 (4곳)` primary lg.
+  ⚠️ `frame.resize()` 뒤 `layoutMode` 를 세팅하면 HUG 로 접혀 자식(28×28 배지)이 텍스트 폭으로 쭈그러든다 → `resize` 를 layoutMode·sizing 세팅 **뒤에** 하거나 `primaryAxisSizingMode='FIXED'` 명시.
+- **탭 루트 4/4 + 진행 중 외근 + 외근 상세 + 현장 상세 + 보고서 상세 + 방문 순서 완료.** `ReviewVisitCard` 는 2 callsite(trips/[id]·active) 라 나중에 `3:20` 승격 대상.
+- 다음: 나머지 서브 화면 — `fields/[id]/edit` · `reports/[id]/field-report` · `profile/delete-account` · `+not-found`.
 
 나머지 화면(라우트 34개 / 실제 화면 28개)에서 참고할 것:
 
@@ -494,3 +499,7 @@ return JSON.stringify({
 24. (2026-08-31) A트랙 — `보고서 상세`(`270:888`/`270:889`, §3.4·§4.4-a). `reports/[id]/index.tsx`, tier 2. `보고서` 부모 534→1034 확장, `내 정보`→x3166 이동.
     MapSheetLayout `initialIndex=1` → 시트 chrome 수동 + map absolute 180 + sheet/content HUG. tripLink pill·FieldReportCard 는 수동 표면. 빈 전·중·후 슬롯은 `frame.dashPattern=[4,4]` + `없음`. `Button`(수정/삭제 ghost·dangerGhost) 인스턴스.
     ※ meta "작성: … · 수정: …" 41자 = 실제 카피, 40자 규칙 예외(`over40` 1 정상). 폰트 사이클 후 `restoreFailed: []`, 재게시 `변경 사항 없음`. 19/28.
+25. (2026-08-31) A트랙 — `방문 순서 확인`(`278:931`/`278:932`, §3.4·§4.4-a). `trips/new/order.tsx`, tier 3. `외근` 부모 1034→1540·h 3348→3520 확장, `현장`·`보고서`·`내 정보` x +506 이동.
+    행은 DestinationRow 아님 — 수동 Card(orderBadge + 주소/ETA + ▲▼✕). summaryCard·optimize 버튼은 optimized 상태로 스냅.
+    ⚠️ `frame.resize()` 를 `layoutMode` 세팅 뒤에 하면 자식이 HUG 로 접힌다 — 28×28 orderBadge 가 텍스트 폭으로 쭈그러들어 `primaryAxisSizingMode='FIXED'` + 재-`resize` 로 복구. tier 세로 초과 시 부모 SECTION 높이도 키운다.
+    ⚠️ 작업 중 다른 협업자(조성민)가 `UI` 페이지를 `UI - 원본`/`UI - 개선본` 로 분리하고 캔버스에 낙서 — 라이브러리(스타일/변수) 게시엔 영향 없음. 폰트 사이클 후 `restoreFailed: []`, 재게시 `변경 사항 없음`. 20/28.
