@@ -12,7 +12,7 @@
 
 RN 앱(`src/theme/`, `src/components/`)을 역설계해 Figma 파일 `일가요` 의 `DesignSystem` 페이지에
 토큰·타이포·아이콘·컴포넌트 라이브러리를 만들었고 팀 라이브러리로 게시했다.
-지금은 **`UI` 페이지에 화면 프레임을 옮기는 단계**(14/28)다. 남은 것은 §4.4.
+지금은 **`UI` 페이지에 화면 프레임을 옮기는 단계**(15/28)다. 남은 것은 §4.4.
 
 **대원칙: 코드가 원본이고 Figma 가 사본이다.** 값이 어긋나면 `src/theme/` 이 이긴다.
 근거 문서는 `docs/reference/design-system.md`, 특히 §15.
@@ -114,6 +114,7 @@ DestinationRow(P3.e) · 지도 chrome(P3.f: MapSearchBar·MapFab·MapLegend) 완
 | 현장 | 현장 등록 | `225:461` | `225:462` · 스크롤 폼(검색 Input + 선택주소 Card + 지도 placeholder + 이름/상세 Input + 프로젝트/분류 picker trigger + 상태 FilterChip×3 + Button) | 2 | `app/(tabs)/fields/new.tsx` |
 | 현장 | 카테고리 관리 | `150:183` | `150:185` · 목록 + 인라인 편집 1행 | 2 | `app/(tabs)/fields/categories.tsx` |
 | 현장 | 체크인 | `163:264` | `163:266` · completed 선택 | 3 | `app/(tabs)/fields/[id]/checkin.tsx` |
+| 보고서 | 보고서 (목록) | `237:724` | `237:725` · MapSheetLayout 셸 + toolbar(Input + ReportFilterBar 1-head) + 그룹(외근 헤더 + 보고서 Card 리스트) + StickyBottomBar | 1 | `app/(tabs)/reports/index.tsx` |
 | 보고서 | 보고서 작성 | `220:442` | `220:443` · Input + tripCard(Card detach) + 위치도 placeholder + Button | 2 | `app/(tabs)/reports/new.tsx` |
 | 보고서 | 보고서 수정 | `158:230` | `158:232` · dirty=false | 3 | `app/(tabs)/reports/[id]/edit.tsx` |
 | 내 정보 | 내 정보 · 홈 | `136:137` | `136:139` · 390×844 | 1 | `app/(tabs)/profile/index.tsx` |
@@ -199,7 +200,7 @@ face 이름은 공백 없이 (`SemiBold`). 중간에 실패하면 복구를 반�
 INSTANCE_SWAP 과 얽히면 벡터가 6×11 로 뭉개진다(실제로 당함). 색은 인스턴스 프레임 `.fills` 가 아니라
 내부 VECTOR 의 `.fills` 를 `text/*` 로 바인딩(프레임에 칠하면 회색 박스가 생긴다).
 
-#### (a) 화면 프레임 — 진행 중 (14/28)
+#### (a) 화면 프레임 — 진행 중 (15/28)
 
 **자리는 `UI` 페이지(`0:1`)의 내비게이션 계층 트리다** (§3.4·§9). 새 화면은 라우트 depth 로 tier 를
 정해 해당 부모 SECTION(`인증`·`외근`·`현장`·`보고서`·`내 정보`) 안에 넣는다. 아래 ✅ 목록의 `N_` 이름은
@@ -245,8 +246,10 @@ INSTANCE_SWAP 과 얽히면 벡터가 6×11 로 뭉개진다(실제로 당함). 
   `MapSheetLayout`(state=open, `Show back=false`) detach → toolbar(Input search + TripFilterBar[FilterAccordion detach → 기간/보고 여부] + weekStats 3열: `metricSm` 이번 주 외근 primary · 방문 · 누적 시간 muted) + list(날짜 그룹 header `caption-bold` + `TripCard` 인스턴스, `Map focused` 예시 1개) + `StickyBottomBar` detach → `외근 시작` Button.
 - ✅ `현장 (목록)` (탭 루트) — `app/(tabs)/fields/index.tsx`. 섹션 `232:592`. 프레임 `232:593` 390×844, tier 1.
   `외근 내역` 골격 복제. toolbar = Input + FieldFilterBar(FilterAccordion detach → 조치상태/프로젝트/카테고리/방문일 4-head, head clone 2개) + `FieldStatusSummary`(수동: 조치 전 `metric` warning + 조치 중/완료 dot 캡션 + flexGrow 분포 바 `field-status/*`). list = `FieldCard` 인스턴스. StickyBottomBar = `새 현장`(primary) + `촬영`(secondary) 2버튼 row.
-- **탭 루트 남은 2개**(보고서 목록 + reports 도) — 전부 `MapSheetLayout`. 55% 1프레임으로 우선.
-- 다음: 보고서 목록.
+- ✅ `보고서 (목록)` (탭 루트) — `app/(tabs)/reports/index.tsx`. 섹션 `237:724`. 프레임 `237:725` 390×844, tier 1.
+  toolbar = Input + ReportFilterBar(FilterAccordion detach → `작성일` 1-head). list gap `xl`, 그룹 = tripHeader(`briefcase-outline` primary + `외근 · 날짜` `bodySm-bold` + meta `caption` + `chevron-forward`) + 보고서 Card(md, detach: `body-bold` 2줄 제목 + `수정됨` Badge primary + `calendar-outline` + 날짜). StickyBottomBar → `보고서 작성` Button.
+- **탭 루트 4/4 완료.** reports 도(지도) 는 별개 — MapDashboard 조립 필요, 별도.
+- 다음: 잔여 서브 화면(있으면). 탭바 자체 컴포넌트는 미정.
 
 나머지 화면(라우트 34개 / 실제 화면 28개)에서 참고할 것:
 
@@ -457,3 +460,6 @@ return JSON.stringify({
     사이징 체인: shell/content/list 전부 `FILL` 로 세팅해야 프레임을 채운다(trips/new/select 와 동일 함정). 폰트 사이클 후 `restoreFailed: []`, `MenuRow` 제외 재게시, `변경되지 않음`. 13/28.
 19. (2026-08-31) A트랙 — `현장 (목록)` 탭 루트(`232:592`/`232:593`, §3.4·§4.4-a). `fields/index.tsx`, tier 1. `외근 내역` 골격 복제.
     `FieldFilterBar` = FilterAccordion detach 후 4-head(조치상태/프로젝트/카테고리/방문일, 데모 head 2 + clone 2). `FieldStatusSummary` 는 DS 컴포넌트가 아니라 수동 조립(`metric` + dot 캡션 + flexGrow 분포 바). StickyBottomBar 는 2버튼(새 현장 + 촬영). 폰트 사이클 후 `restoreFailed: []`, `MenuRow` 제외 재게시, `변경되지 않음 (125)`. 14/28.
+20. (2026-08-31) A트랙 — `보고서 (목록)` 탭 루트(`237:724`/`237:725`, §3.4·§4.4-a). `reports/index.tsx`, tier 1. **탭 루트 4/4 완료.**
+    toolbar = Input + ReportFilterBar(FilterAccordion detach → `작성일` 1-head, 데모 head 2번째 제거). 그룹 = tripHeader(briefcase + `외근 · 날짜` + meta + chevron) + 보고서 Card(md detach: 2줄 제목 + `수정됨` Badge + calendar + 날짜).
+    ※ 사이징 체인 FILL 은 같은 스크립트 안에서 세팅(별도 fix 패스 불필요). 폰트 사이클 후 `restoreFailed: []`, `MenuRow` 제외 재게시, `1개의 변경 사항`. 15/28. Figma 탭 열어 둠(사용자 지시).
