@@ -12,7 +12,7 @@
 
 RN 앱(`src/theme/`, `src/components/`)을 역설계해 Figma 파일 `일가요` 의 `DesignSystem` 페이지에
 토큰·타이포·아이콘·컴포넌트 라이브러리를 만들었고 팀 라이브러리로 게시했다.
-지금은 **`UI` 페이지에 화면 프레임을 옮기는 단계**(9/28)다. 남은 것은 §4.4.
+지금은 **`UI` 페이지에 화면 프레임을 옮기는 단계**(10/28)다. 남은 것은 §4.4.
 
 **대원칙: 코드가 원본이고 Figma 가 사본이다.** 값이 어긋나면 `src/theme/` 이 이긴다.
 근거 문서는 `docs/reference/design-system.md`, 특히 §15.
@@ -106,6 +106,7 @@ DestinationRow(P3.e) · 지도 chrome(P3.f: MapSearchBar·MapFab·MapLegend) 완
 |---|---|---|---|---|---|
 | 인증 | 로그인 | `124:75` | `124:77` 빈 폼 · `128:91` invalid_credentials | 0 | `app/(auth)/login.tsx` |
 | 인증 | 회원가입 | `3:3` | `114:3` 빈 폼 · `116:37` validate() 실패 | 0 | `app/(auth)/signup.tsx` |
+| 외근 | 외근 시작 · 현장 선택 | `215:260` | `215:261` · MapSheetLayout 셸 + FieldCard×6(`Show checkbox`) + StickyBottomBar | 2 | `app/(tabs)/trips/new/select.tsx` |
 | 외근 | 외근 수정 | `161:245` | `161:247` · 390×844 | 3 | `app/(tabs)/trips/[id]/edit.tsx` |
 | 외근 | 방문 상세 | `167:281` | `167:283` · MapSheetLayout 스냅 92% | 3 | `app/(tabs)/trips/visit.tsx` |
 | 현장 | 카테고리 관리 | `150:183` | `150:185` · 목록 + 인라인 편집 1행 | 2 | `app/(tabs)/fields/categories.tsx` |
@@ -193,7 +194,7 @@ face 이름은 공백 없이 (`SemiBold`). 중간에 실패하면 복구를 반�
 INSTANCE_SWAP 과 얽히면 벡터가 6×11 로 뭉개진다(실제로 당함). 색은 인스턴스 프레임 `.fills` 가 아니라
 내부 VECTOR 의 `.fills` 를 `text/*` 로 바인딩(프레임에 칠하면 회색 박스가 생긴다).
 
-#### (a) 화면 프레임 — 진행 중 (9/28)
+#### (a) 화면 프레임 — 진행 중 (10/28)
 
 **자리는 `UI` 페이지(`0:1`)의 내비게이션 계층 트리다** (§3.4·§9). 새 화면은 라우트 depth 로 tier 를
 정해 해당 부모 SECTION(`인증`·`외근`·`현장`·`보고서`·`내 정보`) 안에 넣는다. 아래 ✅ 목록의 `N_` 이름은
@@ -224,8 +225,14 @@ INSTANCE_SWAP 과 얽히면 벡터가 6×11 로 뭉개진다(실제로 당함). 
 - ✅ `8_방문상세` — `app/(tabs)/trips/visit.tsx`. 섹션 `167:281`. 프레임 `167:283` 390×844.
   **첫 MapSheetLayout 프레임.** `initialIndex 2`(스냅 92% 고정)라 단일 프레임으로 충분. 지도 스트립(`bg/surface-muted` 라벨) + 시트(`bg/surface` + `elevation/modal` + top `radius/lg` + 그래버) + 헤더(chevron-back + h3) + titleRow(h2-heavy + Badge success md ■) + 시각 + `메모·사진 추가`(secondary +arrow-forward-circle).
   → 시트 chrome(스트립·그래버·헤더 골격)은 다른 탭 목록 화면(스냅 3프레임)에서도 재사용할 수 있게 이 프레임을 참조.
+- ✅ `외근 시작 · 현장 선택` — `app/(tabs)/trips/new/select.tsx`. 섹션 `215:260`. 프레임 `215:261` 390×844, tier 2.
+  **B트랙 컴포넌트로 조립한 첫 화면.** `MapSheetLayout`(state=open) 인스턴스 → `detachInstance()` → `content` 프레임을 채운다.
+  head(count `bodySm-bold primary` + `모두 선택` FilterChip dashed + Input search + FilterAccordion 조치상태/프로젝트/카테고리 3-head) ·
+  `FieldCard`×6(`Show checkbox=true`, 일부 `Checked`) · `StickyBottomBar` 인스턴스 detach 후 Button(`다음 (3)` primary lg +arrow-forward).
+  **P3.a FieldCard 검증 완료** — 인스턴스 6개 + 체크박스 레이아웃 정상.
+  ⚠️ `FilterAccordion` 인스턴스는 데모 head 2개를 달고 온다 → detach 후 relabel + head clone(폰트 다운 창에서). `StickyBottomBar` `Content` SLOT 도 detach 후 채운다.
 - **탭 루트 4개는 전부 `MapSheetLayout`**(trips·fields·reports 목록 + reports 도) — 스냅 3프레임 필요, 별도 세션. profile·categories 처럼 지도 없는 화면부터 훑는 게 빠르다.
-- 다음: `5_` — `fields/new` · `reports/new` · `reports/[id]/edit` · `trips/[id]/edit` · `fields/[id]/checkin` · `trips/visit` 등 폼·서브 화면.
+- 다음: `fields/new` · `reports/new` · 탭 루트 4개.
 
 나머지 화면(라우트 34개 / 실제 화면 28개)에서 참고할 것:
 
@@ -419,3 +426,7 @@ return JSON.stringify({
     `MapFab` `211:322`(44px 원형 버튼, `layers-outline` 아이콘 + `Show badge` primary 점) · `MapLegend` `211:395`(heatmap: heat/* 4색 바 / choropleth: `choropleth/base` 5단계 스와치).
     ⚠️ `createComponentFromNode` 가 페인트 opacity 를 1 로 정규화 → 스와치 반투명을 컴포넌트화 후 명시 재적용해야 했다.
     폰트 사이클 후 `restoreFailed: []`, `MenuRow` 제외 재게시, 새로고침 후 `변경되지 않음 (125)` 확증. **B트랙 종료 — 다음은 A트랙.**
+15. (2026-08-31) A트랙 재개 — `외근 시작 · 현장 선택` 화면(`215:260`/`215:261`, §3.4·§4.4-a). B트랙 컴포넌트로 조립한 첫 화면.
+    **패턴**: `content`/`SLOT` 이 있는 셸 컴포넌트(`MapSheetLayout`·`StickyBottomBar`)는 인스턴스 후 `detachInstance()` 하고 안쪽을 채운다.
+    `FilterAccordion` 인스턴스는 데모 head 를 달고 오므로 detach → relabel, head 추가는 clone(폰트 다운 창에서). FieldCard×6 검증 완료.
+    폰트 사이클 후 `restoreFailed: []`, `MenuRow` 제외 재게시, 새로고침 후 `변경되지 않음` 확증. 10/28.

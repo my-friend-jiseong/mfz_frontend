@@ -117,6 +117,8 @@ easing(cubic-bezier)은 변수 타입이 없다 — 곡선으로만 그린다.
 
 **섹션 안에는 프레임만 둔다.** 캡션·주석 텍스트 노드(`ScrollView·`, `뷰포트 390×844`, `initialIndex 2`, 오류 경로명 등)를 넣지 않는다 — 프레임 이름(`로그인` · `로그인 · 오류`)과 섹션 이름으로 충분하다. 구현 세부는 §1 규칙대로 캔버스에 안 쓴다. 섹션은 프레임을 24px 여백으로 감싸게 리사이즈(`resizeWithoutConstraints`).
 
+**화면 조립 = 컴포넌트 인스턴스 + `detachInstance()`.** `content` 플레이스홀더나 `SLOT`(`MapSheetLayout`·`StickyBottomBar`·`Card`)이 있는 셸은 인스턴스한 뒤 detach 해야 안쪽을 채울 수 있다(플러그인 API 로 인스턴스 자식에 직접 append 불가). `FilterAccordion` 등은 데모 자식을 달고 오므로 detach → relabel; 자식 clone·append 는 반드시 폰트 다운 창에서(Pretendard 텍스트 노드는 restore 상태에서 clone 불가). 인스턴스 생성·detach·`setProperties`(텍스트) 전부 폰트 다운 필요.
+
 | 섹션 | id | 컴포넌트 세트 | id |
 |---|---|---|---|
 | 색상표 | `3:16` | Button | `37:118` |
