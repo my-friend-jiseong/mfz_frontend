@@ -52,7 +52,7 @@ MCP 도구는 `mcp__claude_ai_Figma__use_figma` 하나면 된다(`ToolSearch` �
 
 섹션 겹침 0 · 자식 이탈 0 (2026-08-29 재검증).
 
-### 3.2 컴포넌트 — 22개 (모두 `컴포넌트` 섹션 `3:20` 안)
+### 3.2 컴포넌트 — 23개 (모두 `컴포넌트` 섹션 `3:20` 안)
 
 COMPONENT_SET 15개:
 
@@ -74,9 +74,10 @@ COMPONENT_SET 15개:
 | **FieldCard** | `172:339` | 3 (status=pending/in_progress/done) — B트랙 P3.a, 2026-08-29 |
 | **TripCard** | `198:329` | 2 (ended=false/true) — B트랙 P3.b, 2026-08-31. 불리언 4(보고서·진행률·지도 버튼·지도 포커스) + 텍스트 4 |
 
-단일 COMPONENT 7개: GroupLabel `44:2` · FieldLabel `44:4` · StickyBottomBar `45:9` ·
+단일 COMPONENT 8개: GroupLabel `44:2` · FieldLabel `44:4` · StickyBottomBar `45:9` ·
 EmptyState `101:3` · ErrorState `101:11` · MapSearchBar `211:316`(props Placeholder·Show clear) ·
-MapFab `211:322`(44px 원형, 아이콘 스왑 + Show badge) — 뒤 둘은 B트랙 P3.f, 2026-08-31.
+MapFab `211:322`(44px 원형, 아이콘 스왑 + Show badge) ·
+PickerTrigger `309:1103`(48h, `Icon source`/`Label`/`Show clear`. ProjectPicker·CategoryMultiPicker 공용 — 2 callsite 승격, 2026-08-31).
 
 **B트랙(도메인 컴포넌트) 완료** — §4.4-b, `plans/figma-screens.md` 참조.
 FieldCard(P3.a) · TripCard(P3.b) · FieldFilterBar(P3.c, `FilterDateRow` 로 마감) · MapSheetLayout(P3.d) ·
@@ -301,24 +302,27 @@ INSTANCE_SWAP 과 얽히면 벡터가 6×11 로 뭉개진다(실제로 당함). 
 **빠진 아이콘은 먼저 채운다.** 회원가입에서 `eye-outline` · `eye-off-outline` · `checkbox` · `square-outline` 4개가 없어
 `Ionicons.ttf` 에서 추출해 넣었다(아이콘 63 → 67, 그리드는 알파벳 순으로 재정렬). 스크립트는 §5·스킬 §4 참조.
 
-#### (b) 도메인 컴포넌트
+#### (b) 도메인 컴포넌트 — B트랙 (2026-08-31 완료)
 
-`ui/` 프리미티브 14개는 끝났고, 아래는 손대지 않았다.
+`ui/` 프리미티브 14개 + 아래를 `3:20` 에 만들었다(§3.2 표에 id·배리언트). **✅ = 컴포넌트로 승격**.
 
 | 위치 | 컴포넌트 |
 |---|---|
-| 지도 chrome | `MapDashboard` · `MapSearchBar` · `MapFilterBar` · `MapLegend` · `MapSheetLayout` · `KakaoMapWebView` |
-| 공통 | `FieldCard` · `TripStatusBanner` · `AttachmentPreview` · `ProjectPicker` · `SafeScreen` · `SessionGuardModal` · `WebChoiceModal` |
-| `fields/` | `FieldFilterBar` · `FieldStatusSummary` · `FieldPinMap` · `CategoryMultiPicker` · `ManualCoordinateForm` · `QuickPhotoSheet` |
-| `trips/` | `TripCard` · `TripFilterBar` · `TripProgressStrip` · `CurrentDestCard` · `DestinationRow` · `ReviewVisitCard` · `AllDoneCard` · `AddDestinationModal` |
-| `reports/` | `ReportFilterBar` |
+| 지도 chrome | ✅`MapSearchBar` ✅`MapFab` ✅`MapLegend` ✅`MapSheetLayout` · `MapDashboard`·`MapFilterBar`·`KakaoMapWebView`(화면 조립 시 placeholder) |
+| 공통 | ✅`FieldCard` ✅`PickerTrigger`(ProjectPicker·CategoryMultiPicker 공용) · `TripStatusBanner`·`AttachmentPreview`·`SafeScreen`·`SessionGuardModal`·`WebChoiceModal` |
+| `fields/` | ✅`FieldFilterBar`(=`FilterAccordion` 래퍼) · `FieldStatusSummary`(1 callsite, 화면 수동)·`FieldPinMap`·`ManualCoordinateForm`·`QuickPhotoSheet` |
+| `trips/` | ✅`TripCard` ✅`TripFilterBar` ✅`DestinationRow` · `TripProgressStrip`·`CurrentDestCard`·`ReviewVisitCard`·`AllDoneCard`·`AddDestinationModal`(전부 1 callsite, 화면에서 수동 조립) |
+| `reports/` | ✅`ReportFilterBar`(=`FilterAccordion` 래퍼) |
+
+- 승격 안 한 것은 **callsite 1개**라 화면 프레임 안에서 수동으로 그렸다(§14 "2번째 callsite 시 승격"). 2번째가 생기면 그때 `3:20` 로 뽑는다.
+- `MenuRow`(`143:151` 로컬)·`ReviewVisitCard`(trips/[id] 1곳) 는 승격 후보 감시 대상.
 
 주의:
 - **지도 chrome 이 `elevation` 을 쓰는 유일한 자리다**(§7). 다른 데서 그림자를 끌어 쓰지 말 것.
 - `.web.tsx` 짝이 있는 것(`KakaoMapWebView` · `FieldPinMap` · `useKakaoPlaceSearch`)은 **Figma 에 한 벌만** 만든다. 플랫폼 분기는 구현 사정이지 디자인 차이가 아니다.
 - `quickPhotoHandoff.ts` · `useQuickPhoto.ts` · `useKakaoPlaceSearch` 는 컴포넌트가 아니다.
 
-#### (c) ~~라이브러리 퍼블리시~~ ✅ 완료 (2026-08-29) · Code Connect 남음
+#### (c) ~~라이브러리 퍼블리시~~ ✅ 완료 (2026-08-29) · Code Connect 보류(사용자 지시 2026-08-31)
 
 **퍼블리시 완료.** 플러그인 API 에는 `figma.publish` 가 없지만, **Claude in Chrome 브라우저 자동화로 하면 된다** —
 에셋 패널 → 라이브러리(책) 아이콘 → `게시…` → 항목 확인 → `게시`.
@@ -326,9 +330,8 @@ INSTANCE_SWAP 과 얽히면 벡터가 6×11 로 뭉개진다(실제로 당함). 
 2차 **115개**(아이콘 4 + `h2-heavy` 추가분 반영). 게시 후 `변경되지 않음 (115)` · `게시` 버튼 비활성까지 확인했다.
 → 라이브러리를 고쳤으면 **매번 이 경로로 재게시**해야 소비자에게 반영된다.
 
-**남은 것 — Code Connect.** 퍼블리시가 선행 조건이었으므로 이제 막힌 것이 없다.
-`mcp__claude_ai_Figma__get_code_connect_suggestions` → `add_code_connect_map` 으로
-프리미티브 14개를 `src/components/ui/*.tsx` 에 매핑한다.
+**Code Connect — 보류.** 사용자 지시(2026-08-31)로 이번 사이클에서 제외. 재개 시:
+`get_code_connect_suggestions` → `add_code_connect_map` 으로 프리미티브 14개 + B트랙 컴포넌트를 `src/components/**/*.tsx` 에 매핑. **코드 파일에 `figma.connect()` 를 넣는 작업이라 "코드 = 원본, 안 건드림" 원칙에서 벗어난다** — 별도 승인 필요.
 
 > 관찰: 게시 시점에 Figma 가 **누락된 글꼴**을 보고했다. 파일은 `font-family/base` = Pretendard 인데
 > 브라우저/데스크톱 Figma 에 Pretendard 가 로컬 설치돼 있지 않으면 대체 글꼴로 렌더된다.
@@ -529,3 +532,6 @@ return JSON.stringify({
 28. (2026-08-31) A트랙 — `계정 삭제`(`299:1077`/`299:1078`) + `인앱 길안내`(`303:1101`/`303:1102`, §3.4·§4.4-a). `profile/delete-account.tsx`(내 정보 t3, 부모 h 3186) · `trips/navigate.tsx`(외근 t2).
     둘 다 SafeScreen. 계정 삭제 = warnBox + itemsCard 7행 + 비밀번호 Card + 동의 체크박스 + destructive disabled. 인앱 길안내 = header + 지도 FILL + 부유 chip(`layoutPositioning='ABSOLUTE'`).
     **A트랙 완료 — 24/24.** 리다이렉트 4개는 프레임 없음. 폰트 사이클 후 `restoreFailed: []`, 재게시 `변경 사항 없음`.
+29. (2026-08-31) B트랙 후속 — `PickerTrigger` `309:1103` 신설(§3.2·§4.4-b). ProjectPicker·CategoryMultiPicker 가 2 callsite(`fields/new`·`fields/[id]/edit`)라 공용 트리거를 `3:20` 로 승격. `현장 수정`(`286:959`)의 수동 picker 2개를 인스턴스로 교체. §4.4-b 표를 실제 승격 현황(✅ 표기)으로 갱신.
+    ⚠️ 게시 스피너가 `게시 중` 인 채 멈춰도 다이얼로그가 닫히면 서버엔 반영된 것 — 새로고침 후 라이브러리 책 아이콘의 파란 점이 사라졌는지 + `게시` 다이얼로그 `변경되지 않음 (128)` 로 확인. 반복 클릭 금지. 폰트 사이클 후 `restoreFailed: []`.
+    ※ Code Connect(C트랙)는 사용자 지시로 보류.
