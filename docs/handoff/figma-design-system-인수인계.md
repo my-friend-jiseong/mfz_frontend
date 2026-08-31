@@ -46,15 +46,15 @@ MCP 도구는 `mcp__claude_ai_Figma__use_figma` 하나면 된다(`ToolSearch` �
 | 타이포그래피 | `27:4` | 2069 | 1985 | 883 | 970 |
 | 모션 | `90:2` | 2069 | 3100 | 873 | 990 |
 | 지도 척도 | `95:2` | 2069 | 4200 | 888 | 773 |
-| 컴포넌트 | `3:20` | 3317 | -105 | 1668 | 5124 |
+| 컴포넌트 | `3:20` | 3317 | -105 | 1668 | 5706 |
 | 아이콘 | `80:2` | 5100 | -105 | 1360 | 1266 |
 | 상태 배지 | `94:2` | 5100 | 1300 | 807 | 934 |
 
 섹션 겹침 0 · 자식 이탈 0 (2026-08-29 재검증).
 
-### 3.2 컴포넌트 — 17개 (모두 `컴포넌트` 섹션 `3:20` 안)
+### 3.2 컴포넌트 — 18개 (모두 `컴포넌트` 섹션 `3:20` 안)
 
-COMPONENT_SET 12개:
+COMPONENT_SET 13개:
 
 | 이름 | id | 배리언트 |
 |---|---|---:|
@@ -68,13 +68,15 @@ COMPONENT_SET 12개:
 | FilterHead | `102:27` | 3 (default/active/expanded) |
 | FilterAccordion | `103:54` | 2 (collapsed/expanded) |
 | FilterDateRow | `201:319` | 2 (Filled=false/true) — 필터 날짜 범위 행. B트랙 P3.c, 2026-08-31 |
+| MapSheetLayout | `204:323` | 2 (state=peek/open) — 지도 하단 시트 셸. props Title·Show back·Show action. B트랙 P3.d, 2026-08-31 |
 | **FieldCard** | `172:339` | 3 (status=pending/in_progress/done) — B트랙 P3.a, 2026-08-29 |
 | **TripCard** | `198:329` | 2 (ended=false/true) — B트랙 P3.b, 2026-08-31. 불리언 4(보고서·진행률·지도 버튼·지도 포커스) + 텍스트 4 |
 
 단일 COMPONENT 5개: GroupLabel `44:2` · FieldLabel `44:4` · StickyBottomBar `45:9` ·
 EmptyState `101:3` · ErrorState `101:11`
 
-**B트랙(도메인 컴포넌트)** 진행 중 — §4.4-b, `plans/figma-screens.md` 참조. FieldCard(P3.a) · TripCard(P3.b) · FieldFilterBar(P3.c, `FilterDateRow` 로 마감) 완료.
+**B트랙(도메인 컴포넌트)** 진행 중 — §4.4-b, `plans/figma-screens.md` 참조.
+FieldCard(P3.a) · TripCard(P3.b) · FieldFilterBar(P3.c, `FilterDateRow` 로 마감) · MapSheetLayout(P3.d) 완료.
 
 ### 3.3 토큰
 
@@ -402,3 +404,7 @@ return JSON.stringify({
 11. (2026-08-31) B트랙 P3.c — FieldFilterBar/TripFilterBar/ReportFilterBar 는 전부 `FilterAccordion` 껍데기 + 그룹 정의뿐이라
     새 컴포넌트가 필요한 부분은 날짜 범위 행 하나. `FilterDateRow` `201:319` 신설(label + 값 + `calendar-outline`, Filled 2종, props Label·Value).
     폰트 사이클 후 `restoreFailed: []`, `MenuRow` 제외 재게시.
+12. (2026-08-31) B트랙 P3.d — `MapSheetLayout` `204:323` 신설. `MapSheetLayout.tsx` 의 시트 셸(rounded-top surface + grabber + header)을
+    컴포넌트화. `state=peek`(핸들 띠만) / `state=open`(grabber + back·제목·액션 + content placeholder). 3스냅(peek/55%/max)은 동작이라 화면 문서에만.
+    폰트 사이클 후 `restoreFailed: []`, `MenuRow` 제외 재게시. ※ 재게시 직후 브라우저가 스타일 참조 컴포넌트 ~13개를 `수정됨` 으로 다시 표시했으나
+    **페이지 새로고침 시 사라짐**(stale diff). 루프 돌지 말 것 — 새로고침 후 `변경되지 않음 (121)` 확증.

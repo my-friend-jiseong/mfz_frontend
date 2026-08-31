@@ -50,6 +50,7 @@ description: |
 - **변수 생성과 바인딩은 다른 호출로 나눈다.** 같은 스크립트면 "unloaded font" 로 실패한다. 재시도 루프(3~4회) 권장.
 - **텍스트를 고치려면:** ① 관련 스타일을 `42dot Sans` 로 내린다(face 이름 유지) → ② 편집·스타일 적용 → ③ `font-family/base`(`VariableID:58:2`)로 되돌린다.
 - **내림/복구를 한 번 돌면 텍스트 스타일 전부가 `수정됨` 으로 잡힌다** — 내용은 같아도 게시본과 어긋나므로 작업 뒤 재게시.
+  재게시 직후 스타일을 참조하는 컴포넌트 ~13개가 다시 `수정됨` 으로 뜰 수 있다 — **stale diff 다. 페이지 새로고침하면 사라진다.** 반복 게시로 좇지 말 것.
 - face 이름은 공백 없이: `Regular` `SemiBold` `Bold` `ExtraBold`. Inter 의 `Semi Bold`(공백)로 만들면 Pretendard 에 없는 face 가 되어 누락 스타일로 뜬다.
 - **노드에 `letterSpacing`·`textCase` 를 덮으면 스타일 링크가 끊긴다.** 그런 처리는 스타일이 갖게 한다(`groupLabel`).
 
