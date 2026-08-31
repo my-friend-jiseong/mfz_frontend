@@ -46,15 +46,15 @@ MCP 도구는 `mcp__claude_ai_Figma__use_figma` 하나면 된다(`ToolSearch` �
 | 타이포그래피 | `27:4` | 2069 | 1985 | 883 | 970 |
 | 모션 | `90:2` | 2069 | 3100 | 873 | 990 |
 | 지도 척도 | `95:2` | 2069 | 4200 | 888 | 773 |
-| 컴포넌트 | `3:20` | 3317 | -105 | 1668 | 4932 |
+| 컴포넌트 | `3:20` | 3317 | -105 | 1668 | 5124 |
 | 아이콘 | `80:2` | 5100 | -105 | 1360 | 1266 |
 | 상태 배지 | `94:2` | 5100 | 1300 | 807 | 934 |
 
 섹션 겹침 0 · 자식 이탈 0 (2026-08-29 재검증).
 
-### 3.2 컴포넌트 — 16개 (모두 `컴포넌트` 섹션 `3:20` 안)
+### 3.2 컴포넌트 — 17개 (모두 `컴포넌트` 섹션 `3:20` 안)
 
-COMPONENT_SET 11개:
+COMPONENT_SET 12개:
 
 | 이름 | id | 배리언트 |
 |---|---|---:|
@@ -67,13 +67,14 @@ COMPONENT_SET 11개:
 | FilterOptionRow | `102:14` | 2 (selected false/true × Show dot) |
 | FilterHead | `102:27` | 3 (default/active/expanded) |
 | FilterAccordion | `103:54` | 2 (collapsed/expanded) |
+| FilterDateRow | `201:319` | 2 (Filled=false/true) — 필터 날짜 범위 행. B트랙 P3.c, 2026-08-31 |
 | **FieldCard** | `172:339` | 3 (status=pending/in_progress/done) — B트랙 P3.a, 2026-08-29 |
 | **TripCard** | `198:329` | 2 (ended=false/true) — B트랙 P3.b, 2026-08-31. 불리언 4(보고서·진행률·지도 버튼·지도 포커스) + 텍스트 4 |
 
 단일 COMPONENT 5개: GroupLabel `44:2` · FieldLabel `44:4` · StickyBottomBar `45:9` ·
 EmptyState `101:3` · ErrorState `101:11`
 
-**B트랙(도메인 컴포넌트)** 진행 중 — §4.4-b, `plans/figma-screens.md` 참조. FieldCard(P3.a) · TripCard(P3.b) 완료.
+**B트랙(도메인 컴포넌트)** 진행 중 — §4.4-b, `plans/figma-screens.md` 참조. FieldCard(P3.a) · TripCard(P3.b) · FieldFilterBar(P3.c, `FilterDateRow` 로 마감) 완료.
 
 ### 3.3 토큰
 
@@ -398,3 +399,6 @@ return JSON.stringify({
 10. (2026-08-31) B트랙 P3.b — `TripCard` `198:329` 신설(§3.2). 외근 목록 카드, ended 배리언트 2종.
     상태·보고서 배지는 Badge 인스턴스, 지도 버튼은 `map`/`map-outline` 아이콘 2개를 겹쳐 `Map focused` 로 토글.
     아이콘 2개 `80:2` 에 추가(§3.3). 폰트 다운/복구 사이클 후 `restoreFailed: []` 확인, 라이브러리 재게시(`MenuRow` 제외, `변경되지 않음 (119)`).
+11. (2026-08-31) B트랙 P3.c — FieldFilterBar/TripFilterBar/ReportFilterBar 는 전부 `FilterAccordion` 껍데기 + 그룹 정의뿐이라
+    새 컴포넌트가 필요한 부분은 날짜 범위 행 하나. `FilterDateRow` `201:319` 신설(label + 값 + `calendar-outline`, Filled 2종, props Label·Value).
+    폰트 사이클 후 `restoreFailed: []`, `MenuRow` 제외 재게시.
