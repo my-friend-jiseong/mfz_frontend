@@ -12,7 +12,7 @@
 
 RN 앱(`src/theme/`, `src/components/`)을 역설계해 Figma 파일 `일가요` 의 `DesignSystem` 페이지에
 토큰·타이포·아이콘·컴포넌트 라이브러리를 만들었고 팀 라이브러리로 게시했다.
-지금은 **`UI` 페이지에 화면 프레임을 옮기는 단계**(18/28)다. 남은 것은 §4.4.
+지금은 **`UI` 페이지에 화면 프레임을 옮기는 단계**(19/28)다. 남은 것은 §4.4.
 
 **대원칙: 코드가 원본이고 Figma 가 사본이다.** 값이 어긋나면 `src/theme/` 이 이긴다.
 근거 문서는 `docs/reference/design-system.md`, 특히 §15.
@@ -119,13 +119,14 @@ DestinationRow(P3.e) · 지도 chrome(P3.f: MapSearchBar·MapFab·MapLegend) 완
 | 현장 | 체크인 | `163:264` | `163:266` · completed 선택 | 3 | `app/(tabs)/fields/[id]/checkin.tsx` |
 | 보고서 | 보고서 (목록) | `237:724` | `237:725` · MapSheetLayout 셸 + toolbar(Input + ReportFilterBar 1-head) + 그룹(외근 헤더 + 보고서 Card 리스트) + StickyBottomBar | 1 | `app/(tabs)/reports/index.tsx` |
 | 보고서 | 보고서 작성 | `220:442` | `220:443` · Input + tripCard(Card detach) + 위치도 placeholder + Button | 2 | `app/(tabs)/reports/new.tsx` |
+| 보고서 | 보고서 상세 | `270:888` | `270:889` · MapSheetLayout 셸(수동, snap 55%) + h2-heavy 제목 + tripLink pill(primary-muted) + meta + 위치도 placeholder + sectionHead(현장별 전·중·후 + 현장 보고 추가) + FieldReportCard×2(전/중/후 슬롯, dashed=없음) + Word 다운로드/다시 생성/PDF + 수정·삭제 divider row | 2 | `app/(tabs)/reports/[id]/index.tsx` |
 | 보고서 | 보고서 수정 | `158:230` | `158:232` · dirty=false | 3 | `app/(tabs)/reports/[id]/edit.tsx` |
 | 내 정보 | 내 정보 · 홈 | `136:137` | `136:139` · 390×844 | 1 | `app/(tabs)/profile/index.tsx` |
 | 내 정보 | 내 정보 수정 | `154:198` | `154:200` · 이름 dirty=false | 2 | `app/(tabs)/profile/edit.tsx` |
 
 빈 tier 자리(외근 T1·T2 등)는 비워 둔다 — 미구현 상위 화면이 채워질 슬롯. `N_` 숫자 접두사 폐기.
 새 화면은 라우트 depth 로 tier 를 정해 해당 부모 안에 넣는다. **같은 tier 에 화면이 2개면 부모 SECTION 을 넓히고
-오른쪽 형제 부모를 밀어낸다** (2026-08-31: `현장` 을 1034→1520 으로 넓히고 `보고서`→x2066 · `내 정보`→x2666. `외근` 은 1034 유지 — tier1·tier2 각 2열).
+오른쪽 형제 부모를 밀어낸다** (2026-08-31: `현장`→1520·`보고서`→1034, `보고서` x2066 · `내 정보` x3166. `외근` 은 1034 유지 — tier1·tier2 각 2열).
 
 오류 프레임은 `validate()` 가 만드는 조합을 그대로 그렸다 — 필드 4개 `state=error` +
 약관 오류 caption. **`globalError` 는 넣지 않았다**: 검증 실패면 서버를 호출하기 전에 return 하므로
@@ -203,7 +204,7 @@ face 이름은 공백 없이 (`SemiBold`). 중간에 실패하면 복구를 반�
 INSTANCE_SWAP 과 얽히면 벡터가 6×11 로 뭉개진다(실제로 당함). 색은 인스턴스 프레임 `.fills` 가 아니라
 내부 VECTOR 의 `.fills` 를 `text/*` 로 바인딩(프레임에 칠하면 회색 박스가 생긴다).
 
-#### (a) 화면 프레임 — 진행 중 (18/28)
+#### (a) 화면 프레임 — 진행 중 (19/28)
 
 **자리는 `UI` 페이지(`0:1`)의 내비게이션 계층 트리다** (§3.4·§9). 새 화면은 라우트 depth 로 tier 를
 정해 해당 부모 SECTION(`인증`·`외근`·`현장`·`보고서`·`내 정보`) 안에 넣는다. 아래 ✅ 목록의 `N_` 이름은
@@ -261,8 +262,12 @@ INSTANCE_SWAP 과 얽히면 벡터가 6×11 로 뭉개진다(실제로 당함). 
 - ✅ `현장 상세` — `app/(tabs)/fields/[id]/index.tsx`. 섹션 `262:855`. 프레임 `262:856` 390×918, tier 2(현장 부모 1520 로 넓힘 — 카테고리 관리·현장 등록 옆 3열).
   MapSheetLayout `initialIndex=2`(snap 92%)라 시트 chrome 수동 조립(그래버+헤더) + map absolute 72 + sheet/content HUG.
   content = 상태 pill(수동: `brand/primary`@0.13 배경 + `brand/primary` 테두리, `▲`+`조치 중` `bodySm-bold` + 1×10 hairline + `swap-horizontal` 12 + `변경` `caption-semibold`, 전부 primary 색) + h3 제목 + `body` 부제 + metaRow×2(`folder-outline`/`pricetags-outline` 14 + `bodySm` muted) + actionRow(`길찾기`/`수정` secondary md FILL) + `GroupLabel`(메모) + memoInputRow(`Input` no-label + `추가` primary) + memoCard×2(수동 surface Card: `bodySm` + 22px close 원 + `caption` 메타) + `사진 추가 (3)` secondary FILL + photoGrid(surface-muted 정사각×3 FILL) + `GroupLabel`(방문 이력) + visitCard×2(수동: `bodySm` 날짜 + `Badge` tone/shape, other 는 사유 `caption`).
-- **탭 루트 4/4 + 진행 중 외근 + 외근 상세 + 현장 상세 완료.** `ReviewVisitCard` 는 2 callsite(trips/[id]·active) 라 나중에 `3:20` 승격 대상.
-- 다음: 나머지 서브 화면 — `reports/[id]`(보고서 상세) · `trips/new/order` · `fields/[id]/edit` · `reports/[id]/field-report` · `profile/delete-account` · `+not-found`.
+- ✅ `보고서 상세` — `app/(tabs)/reports/[id]/index.tsx`. 섹션 `270:888`. 프레임 `270:889` 390×1288, tier 2(보고서 부모 1034 로 넓힘 — 보고서 작성 옆 2열, `내 정보`→x3166).
+  MapSheetLayout `initialIndex=1`(snap 55%) → 시트 chrome 수동 + map absolute 180 + sheet/content HUG.
+  content = h2-heavy 제목 + tripLink pill(수동: `brand/primary-muted`, `briefcase-outline` 14 + `bodySm-semibold` primary + `chevron-forward`) + `caption` meta + `bodySm-bold` 위치도 라벨 + overviewMap(surface-muted 220h radius-lg border) + sectionHead(`bodySm-bold` + `현장 보고 추가` secondary sm) + FieldReportCard×2(수동 surface Card: frHead[`bodySm-bold` 제목 + `수정` ghost sm/`삭제` dangerGhost sm] + frSlots[전·중·후 `caption-bold` 라벨 + 정사각 슬롯, 없는 칸은 `dashPattern` 점선 + `없음`]) + `Word 파일 다운로드` primary FILL + `Word 다시 생성` ghost sm(center) + `PDF 내보내기` secondary FILL + actions divider row(`수정` secondary / `삭제` dangerGhost, `border/muted` top).
+  ※ meta 텍스트 "작성: … · 수정: …" 41자 — **실제 앱 카피**라 40자 규칙(주석/문서용) 예외. `over40` 은 이 노드 하나로 1.
+- **탭 루트 4/4 + 진행 중 외근 + 외근 상세 + 현장 상세 + 보고서 상세 완료.** `ReviewVisitCard` 는 2 callsite(trips/[id]·active) 라 나중에 `3:20` 승격 대상.
+- 다음: 나머지 서브 화면 — `trips/new/order` · `fields/[id]/edit` · `reports/[id]/field-report` · `profile/delete-account` · `+not-found`.
 
 나머지 화면(라우트 34개 / 실제 화면 28개)에서 참고할 것:
 
@@ -486,3 +491,6 @@ return JSON.stringify({
     MapSheetLayout `initialIndex=2` → 시트 chrome 수동 + map absolute 72 + sheet/content HUG. 상태 pill·메모 카드·visit 카드는 수동 표면(surface+border+radius). `GroupLabel`·`Input`·`Badge` 인스턴스.
     ⚠️ 프레임 `primaryAxisSizingMode` 를 AUTO 로 두고 나중에 `resize(w,h)` 하면 FIXED 로 굳는다 — 다시 AUTO 로 세팅해야 HUG. sheet 는 `layoutSizingVertical='HUG'` + `primaryAxisSizingMode='AUTO'` 둘 다.
     폰트 사이클 후 `restoreFailed: []`, 재게시 `변경되지 않음 (127)`(게시 스피너가 멈춘 채 남지만 서버엔 반영됨 — 새로고침 확인). 18/28.
+24. (2026-08-31) A트랙 — `보고서 상세`(`270:888`/`270:889`, §3.4·§4.4-a). `reports/[id]/index.tsx`, tier 2. `보고서` 부모 534→1034 확장, `내 정보`→x3166 이동.
+    MapSheetLayout `initialIndex=1` → 시트 chrome 수동 + map absolute 180 + sheet/content HUG. tripLink pill·FieldReportCard 는 수동 표면. 빈 전·중·후 슬롯은 `frame.dashPattern=[4,4]` + `없음`. `Button`(수정/삭제 ghost·dangerGhost) 인스턴스.
+    ※ meta "작성: … · 수정: …" 41자 = 실제 카피, 40자 규칙 예외(`over40` 1 정상). 폰트 사이클 후 `restoreFailed: []`, 재게시 `변경 사항 없음`. 19/28.
