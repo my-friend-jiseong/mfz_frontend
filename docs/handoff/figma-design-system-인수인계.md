@@ -12,7 +12,7 @@
 
 RN 앱(`src/theme/`, `src/components/`)을 역설계해 Figma 파일 `일가요` 의 `DesignSystem` 페이지에
 토큰·타이포·아이콘·컴포넌트 라이브러리를 만들었고 팀 라이브러리로 게시했다.
-지금은 **`UI` 페이지에 화면 프레임을 옮기는 단계**(15/28)다. 남은 것은 §4.4.
+지금은 **`UI` 페이지에 화면 프레임을 옮기는 단계**(16/28)다. 남은 것은 §4.4.
 
 **대원칙: 코드가 원본이고 Figma 가 사본이다.** 값이 어긋나면 `src/theme/` 이 이긴다.
 근거 문서는 `docs/reference/design-system.md`, 특히 §15.
@@ -108,6 +108,7 @@ DestinationRow(P3.e) · 지도 chrome(P3.f: MapSearchBar·MapFab·MapLegend) 완
 | 인증 | 회원가입 | `3:3` | `114:3` 빈 폼 · `116:37` validate() 실패 | 0 | `app/(auth)/signup.tsx` |
 | 외근 | 외근 내역 (목록) | `229:498` | `229:499` · MapSheetLayout 셸 + toolbar(Input + TripFilterBar + weekStats 3열) + TripCard 리스트(날짜 그룹) + StickyBottomBar | 1 | `app/(tabs)/trips/index.tsx` |
 | 외근 | 외근 시작 · 현장 선택 | `215:260` | `215:261` · MapSheetLayout 셸 + FieldCard×6(`Show checkbox`) + StickyBottomBar | 2 | `app/(tabs)/trips/new/select.tsx` |
+| 외근 | 외근 정리 (상세) | `241:747` | `241:748` · MapSheetLayout 셸 + header(h2-heavy + edit btn + meta + statsCard 방문/건너뜀/계획) + ReviewVisitCard×3(collapsed) + 건너뛴 현장 Card + StickyBottomBar | 2 | `app/(tabs)/trips/[id].tsx` |
 | 외근 | 외근 수정 | `161:245` | `161:247` · 390×844 | 3 | `app/(tabs)/trips/[id]/edit.tsx` |
 | 외근 | 방문 상세 | `167:281` | `167:283` · MapSheetLayout 스냅 92% | 3 | `app/(tabs)/trips/visit.tsx` |
 | 현장 | 현장 (목록) | `232:592` | `232:593` · MapSheetLayout 셸 + toolbar(Input + FieldFilterBar 4-head + FieldStatusSummary) + FieldCard 리스트 + StickyBottomBar(새 현장 + 촬영) | 1 | `app/(tabs)/fields/index.tsx` |
@@ -200,7 +201,7 @@ face 이름은 공백 없이 (`SemiBold`). 중간에 실패하면 복구를 반�
 INSTANCE_SWAP 과 얽히면 벡터가 6×11 로 뭉개진다(실제로 당함). 색은 인스턴스 프레임 `.fills` 가 아니라
 내부 VECTOR 의 `.fills` 를 `text/*` 로 바인딩(프레임에 칠하면 회색 박스가 생긴다).
 
-#### (a) 화면 프레임 — 진행 중 (15/28)
+#### (a) 화면 프레임 — 진행 중 (16/28)
 
 **자리는 `UI` 페이지(`0:1`)의 내비게이션 계층 트리다** (§3.4·§9). 새 화면은 라우트 depth 로 tier 를
 정해 해당 부모 SECTION(`인증`·`외근`·`현장`·`보고서`·`내 정보`) 안에 넣는다. 아래 ✅ 목록의 `N_` 이름은
@@ -248,8 +249,12 @@ INSTANCE_SWAP 과 얽히면 벡터가 6×11 로 뭉개진다(실제로 당함). 
   `외근 내역` 골격 복제. toolbar = Input + FieldFilterBar(FilterAccordion detach → 조치상태/프로젝트/카테고리/방문일 4-head, head clone 2개) + `FieldStatusSummary`(수동: 조치 전 `metric` warning + 조치 중/완료 dot 캡션 + flexGrow 분포 바 `field-status/*`). list = `FieldCard` 인스턴스. StickyBottomBar = `새 현장`(primary) + `촬영`(secondary) 2버튼 row.
 - ✅ `보고서 (목록)` (탭 루트) — `app/(tabs)/reports/index.tsx`. 섹션 `237:724`. 프레임 `237:725` 390×844, tier 1.
   toolbar = Input + ReportFilterBar(FilterAccordion detach → `작성일` 1-head). list gap `xl`, 그룹 = tripHeader(`briefcase-outline` primary + `외근 · 날짜` `bodySm-bold` + meta `caption` + `chevron-forward`) + 보고서 Card(md, detach: `body-bold` 2줄 제목 + `수정됨` Badge primary + `calendar-outline` + 날짜). StickyBottomBar → `보고서 작성` Button.
-- **탭 루트 4/4 완료.** reports 도(지도) 는 별개 — MapDashboard 조립 필요, 별도.
-- 다음: 잔여 서브 화면(있으면). 탭바 자체 컴포넌트는 미정.
+- ✅ `외근 정리` (외근 상세) — `app/(tabs)/trips/[id].tsx`. 섹션 `241:747`. 프레임 `241:748` 390×844, tier 2.
+  `MapSheetLayout`(Show back=true) detach → header(h2-heavy 제목 + `create-outline` edit 버튼 36px + `time-outline` 메타 + `statsCard`(Card lg detach: 방문 `metric` primary / 건너뜀·계획 `metricSm`)) +
+  "방문한 현장 정리 (N)" + `ReviewVisitCard` collapsed(Card md detach: primary orderBadge + time `bodySm-bold` + Badge(■/●) + 주소 + 상세 + chevron) + "건너뛴 현장 (N)" + skipped Card(surface-muted, border 없음) + StickyBottomBar → `보고서 작성`.
+  ⚠️ detach 한 Card 를 `layoutMode='HORIZONTAL'` 로 바꾸면 `primaryAxisSizingMode='FIXED'` 를 명시해야 FILL 폭이 먹는다(안 하면 HUG 로 자식이 뭉침).
+- **탭 루트 4/4 + 외근 상세 완료.** `ReviewVisitCard` 는 2 callsite(trips/[id]·active) 라 나중에 `3:20` 승격 대상.
+- 다음: 나머지 서브 화면 — `trips/active` · `fields/[id]`(현장 상세) · `reports/[id]`(보고서 상세) · `trips/new/order` · `fields/[id]/edit` 등.
 
 나머지 화면(라우트 34개 / 실제 화면 28개)에서 참고할 것:
 
@@ -463,3 +468,6 @@ return JSON.stringify({
 20. (2026-08-31) A트랙 — `보고서 (목록)` 탭 루트(`237:724`/`237:725`, §3.4·§4.4-a). `reports/index.tsx`, tier 1. **탭 루트 4/4 완료.**
     toolbar = Input + ReportFilterBar(FilterAccordion detach → `작성일` 1-head, 데모 head 2번째 제거). 그룹 = tripHeader(briefcase + `외근 · 날짜` + meta + chevron) + 보고서 Card(md detach: 2줄 제목 + `수정됨` Badge + calendar + 날짜).
     ※ 사이징 체인 FILL 은 같은 스크립트 안에서 세팅(별도 fix 패스 불필요). 폰트 사이클 후 `restoreFailed: []`, `MenuRow` 제외 재게시, `1개의 변경 사항`. 15/28. Figma 탭 열어 둠(사용자 지시).
+21. (2026-08-31) A트랙 — `외근 정리`(외근 상세, `241:747`/`241:748`, §3.4·§4.4-a). `trips/[id].tsx`, tier 2(외근 시작 옆, 외근 부모 1034 폭에 2열).
+    `MapSheetLayout` detach + header(h2-heavy + edit 버튼 + 메타 + statsCard Card lg detach) + `ReviewVisitCard` collapsed(Card md detach)×3 + skipped Card + StickyBottomBar.
+    ⚠️ Card detach 후 `layoutMode` 를 HORIZONTAL 로 바꾸면 `primaryAxisSizingMode='FIXED'` 명시 필요. Badge `Label` 이 안 뜨면 텍스트 노드 직접 set. 폰트 사이클 후 `restoreFailed: []`, `MenuRow` 제외 재게시. 16/28.
