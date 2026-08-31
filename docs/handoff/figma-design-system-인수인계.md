@@ -12,7 +12,7 @@
 
 RN 앱(`src/theme/`, `src/components/`)을 역설계해 Figma 파일 `일가요` 의 `DesignSystem` 페이지에
 토큰·타이포·아이콘·컴포넌트 라이브러리를 만들었고 팀 라이브러리로 게시했다.
-지금은 **`UI` 페이지에 화면 프레임을 옮기는 단계**(13/28)다. 남은 것은 §4.4.
+지금은 **`UI` 페이지에 화면 프레임을 옮기는 단계**(14/28)다. 남은 것은 §4.4.
 
 **대원칙: 코드가 원본이고 Figma 가 사본이다.** 값이 어긋나면 `src/theme/` 이 이긴다.
 근거 문서는 `docs/reference/design-system.md`, 특히 §15.
@@ -110,6 +110,7 @@ DestinationRow(P3.e) · 지도 chrome(P3.f: MapSearchBar·MapFab·MapLegend) 완
 | 외근 | 외근 시작 · 현장 선택 | `215:260` | `215:261` · MapSheetLayout 셸 + FieldCard×6(`Show checkbox`) + StickyBottomBar | 2 | `app/(tabs)/trips/new/select.tsx` |
 | 외근 | 외근 수정 | `161:245` | `161:247` · 390×844 | 3 | `app/(tabs)/trips/[id]/edit.tsx` |
 | 외근 | 방문 상세 | `167:281` | `167:283` · MapSheetLayout 스냅 92% | 3 | `app/(tabs)/trips/visit.tsx` |
+| 현장 | 현장 (목록) | `232:592` | `232:593` · MapSheetLayout 셸 + toolbar(Input + FieldFilterBar 4-head + FieldStatusSummary) + FieldCard 리스트 + StickyBottomBar(새 현장 + 촬영) | 1 | `app/(tabs)/fields/index.tsx` |
 | 현장 | 현장 등록 | `225:461` | `225:462` · 스크롤 폼(검색 Input + 선택주소 Card + 지도 placeholder + 이름/상세 Input + 프로젝트/분류 picker trigger + 상태 FilterChip×3 + Button) | 2 | `app/(tabs)/fields/new.tsx` |
 | 현장 | 카테고리 관리 | `150:183` | `150:185` · 목록 + 인라인 편집 1행 | 2 | `app/(tabs)/fields/categories.tsx` |
 | 현장 | 체크인 | `163:264` | `163:266` · completed 선택 | 3 | `app/(tabs)/fields/[id]/checkin.tsx` |
@@ -198,7 +199,7 @@ face 이름은 공백 없이 (`SemiBold`). 중간에 실패하면 복구를 반�
 INSTANCE_SWAP 과 얽히면 벡터가 6×11 로 뭉개진다(실제로 당함). 색은 인스턴스 프레임 `.fills` 가 아니라
 내부 VECTOR 의 `.fills` 를 `text/*` 로 바인딩(프레임에 칠하면 회색 박스가 생긴다).
 
-#### (a) 화면 프레임 — 진행 중 (13/28)
+#### (a) 화면 프레임 — 진행 중 (14/28)
 
 **자리는 `UI` 페이지(`0:1`)의 내비게이션 계층 트리다** (§3.4·§9). 새 화면은 라우트 depth 로 tier 를
 정해 해당 부모 SECTION(`인증`·`외근`·`현장`·`보고서`·`내 정보`) 안에 넣는다. 아래 ✅ 목록의 `N_` 이름은
@@ -242,8 +243,10 @@ INSTANCE_SWAP 과 얽히면 벡터가 6×11 로 뭉개진다(실제로 당함). 
   ⚠️ `FilterChip` `state=active` 인스턴스는 Label 이 렌더 안 될 때가 있다 → `state=default` 인스턴스를 intent 색으로 수동 recolor(코드의 `activeColor` 방식과 동일).
 - ✅ `외근 내역` (탭 루트) — `app/(tabs)/trips/index.tsx`. 섹션 `229:498`. 프레임 `229:499` 390×844, tier 1.
   `MapSheetLayout`(state=open, `Show back=false`) detach → toolbar(Input search + TripFilterBar[FilterAccordion detach → 기간/보고 여부] + weekStats 3열: `metricSm` 이번 주 외근 primary · 방문 · 누적 시간 muted) + list(날짜 그룹 header `caption-bold` + `TripCard` 인스턴스, `Map focused` 예시 1개) + `StickyBottomBar` detach → `외근 시작` Button.
-- **탭 루트 남은 3개**(현장·보고서 목록 + reports 도) — 전부 `MapSheetLayout`. 55% 1프레임으로 우선.
-- 다음: 현장 목록 · 보고서 목록.
+- ✅ `현장 (목록)` (탭 루트) — `app/(tabs)/fields/index.tsx`. 섹션 `232:592`. 프레임 `232:593` 390×844, tier 1.
+  `외근 내역` 골격 복제. toolbar = Input + FieldFilterBar(FilterAccordion detach → 조치상태/프로젝트/카테고리/방문일 4-head, head clone 2개) + `FieldStatusSummary`(수동: 조치 전 `metric` warning + 조치 중/완료 dot 캡션 + flexGrow 분포 바 `field-status/*`). list = `FieldCard` 인스턴스. StickyBottomBar = `새 현장`(primary) + `촬영`(secondary) 2버튼 row.
+- **탭 루트 남은 2개**(보고서 목록 + reports 도) — 전부 `MapSheetLayout`. 55% 1프레임으로 우선.
+- 다음: 보고서 목록.
 
 나머지 화면(라우트 34개 / 실제 화면 28개)에서 참고할 것:
 
@@ -452,3 +455,5 @@ return JSON.stringify({
 18. (2026-08-31) A트랙 — **첫 탭 루트** `외근 내역`(`229:498`/`229:499`, §3.4·§4.4-a). `trips/index.tsx`, tier 1.
     `MapSheetLayout`(state=open, Show back=false) detach → toolbar(Input + TripFilterBar[FilterAccordion detach·relabel 기간/보고 여부] + weekStats 3열 `metricSm`) + `TripCard` 리스트(날짜 그룹) + `StickyBottomBar` detach → `외근 시작` Button.
     사이징 체인: shell/content/list 전부 `FILL` 로 세팅해야 프레임을 채운다(trips/new/select 와 동일 함정). 폰트 사이클 후 `restoreFailed: []`, `MenuRow` 제외 재게시, `변경되지 않음`. 13/28.
+19. (2026-08-31) A트랙 — `현장 (목록)` 탭 루트(`232:592`/`232:593`, §3.4·§4.4-a). `fields/index.tsx`, tier 1. `외근 내역` 골격 복제.
+    `FieldFilterBar` = FilterAccordion detach 후 4-head(조치상태/프로젝트/카테고리/방문일, 데모 head 2 + clone 2). `FieldStatusSummary` 는 DS 컴포넌트가 아니라 수동 조립(`metric` + dot 캡션 + flexGrow 분포 바). StickyBottomBar 는 2버튼(새 현장 + 촬영). 폰트 사이클 후 `restoreFailed: []`, `MenuRow` 제외 재게시, `변경되지 않음 (125)`. 14/28.
