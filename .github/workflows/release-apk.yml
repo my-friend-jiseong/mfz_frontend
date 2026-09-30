@@ -27,9 +27,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Node 22 — eas-version: latest 가 받는 eas-cli(24.x)의 의존성(@oclif/plugin-autocomplete)이
+      # node >=22 를 요구한다. 20 에선 Setup EAS 단계가 yarn engine 오류로 죽었다(2026-09-14·09-30 실패).
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
