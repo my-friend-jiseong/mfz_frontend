@@ -35,7 +35,8 @@ export const DESTINATION_STATUS_BADGE: Record<
   Destination['status'],
   { tone: BadgeTone; shape: BadgeShape; label: string }
 > = {
-  pending: { tone: 'warning', shape: 'circle', label: '예정' },
+  // 명세 v2 §1.4: '예정' 표기를 쓰지 않는다. 방문이 없는 목적지의 결과는 '미정'.
+  pending: { tone: 'neutral', shape: 'circle', label: '미정' },
   arrived: { tone: 'success', shape: 'square', label: '방문 완료' },
   skipped: { tone: 'neutral', shape: 'diamond', label: '건너뜀' },
 };
