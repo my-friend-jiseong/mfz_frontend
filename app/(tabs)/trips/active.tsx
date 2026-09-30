@@ -614,10 +614,6 @@ export default function ActiveTrip() {
 
 const styles = StyleSheet.create({
   screenRoot: { flex: 1 },
-  // ★ paddingBottom 이 큰 이유 — 시트 콘텐츠 래퍼는 최대 detent 높이로 고정돼 있어(가로채기
-  //   회피용, MapSheetLayout 주석 참고) 기본 detent(55%)에서는 래퍼 하단 ~130dp 가 화면
-  //   밖이고 그 위 56dp 는 탭바에 가린다. 이 여백이 없으면 목록 끝까지 스크롤해도 마지막
-  //   요소(외근 종료)가 탭바 뒤에 남아 아예 누를 수 없다(실측: 종료 611~631 vs 탭바 583~639).
   // paddingBottom 은 렌더에서 useSheetBottomInset 으로 준다(예전 240 고정값은 탭바를 숨기자 모자랐다).
   list: { paddingHorizontal: spacing.lg },
   // 간격 리듬 — 진행률·현재 목적지는 한 덩어리(md), 목적지 목록과 종료 버튼은 다른

@@ -309,7 +309,7 @@ INSTANCE_SWAP 과 얽히면 벡터가 6×11 로 뭉개진다(실제로 당함). 
 | 위치 | 컴포넌트 |
 |---|---|
 | 지도 chrome | ✅`MapSearchBar` ✅`MapFab` ✅`MapLegend` ✅`MapSheetLayout` · `MapDashboard`·`MapFilterBar`·`KakaoMapWebView`(화면 조립 시 placeholder) |
-| 공통 | ✅`FieldCard` ✅`PickerTrigger`(ProjectPicker·CategoryMultiPicker 공용) · `TripStatusBanner`·`AttachmentPreview`·`SafeScreen`·`SessionGuardModal`·`WebChoiceModal` |
+| 공통 | ✅`FieldCard` ✅`PickerTrigger`(ProjectPicker·CategoryMultiPicker 공용) · `TripStatusBanner`·`AttachmentPreview`·`SafeScreen`·`SessionGuardModal` (`WebChoiceModal` 은 UI v2 에서 `ActionSheet` 로 대체·삭제) |
 | `fields/` | ✅`FieldFilterBar`(=`FilterAccordion` 래퍼) · `FieldStatusSummary`(1 callsite, 화면 수동)·`FieldPinMap`·`ManualCoordinateForm`·`QuickPhotoSheet` |
 | `trips/` | ✅`TripCard` ✅`TripFilterBar` ✅`DestinationRow` · `TripProgressStrip`·`CurrentDestCard`·`ReviewVisitCard`·`AllDoneCard`·`AddDestinationModal`(전부 1 callsite, 화면에서 수동 조립) |
 | `reports/` | ✅`ReportFilterBar`(=`FilterAccordion` 래퍼) |

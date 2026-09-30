@@ -25,7 +25,7 @@ import { OverflowButton } from '@/components/ui/NavHeader';
 import { showActionSheet } from '@/components/ui/ActionSheet';
 import { confirm } from '@/components/ui/ConfirmDialog';
 import { toast } from '@/components/ui/Toast';
-import { BottomActionBar, BOTTOM_ACTION_BAR_HEIGHT } from '@/components/ui/BottomActionBar';
+import { BottomActionBar, useBottomActionBarHeight } from '@/components/ui/BottomActionBar';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
@@ -117,7 +117,7 @@ export default function ReportDetail() {
   const overviewMapRef = useRef<View>(null);
   const [tilesReady, setTilesReady] = useState(false);
   const detailStatus = useReportStore((s) => s.detailStatus[reportId]);
-  const bottomPad = useSheetBottomInset(BOTTOM_ACTION_BAR_HEIGHT);
+  const bottomPad = useSheetBottomInset(useBottomActionBarHeight());
   const fetchedRef = useRef<string | null>(null);
 
   // 진입 시 백엔드에서 detail 페치 (목록은 fieldReports 없음).

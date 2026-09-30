@@ -7,7 +7,7 @@ export { FilterChip } from './FilterChip';
 export { StickyBottomBar } from './StickyBottomBar';
 export { useHideOnScroll } from './useHideOnScroll';
 export { LoadingState } from './LoadingState';
-export { BottomActionBar, BOTTOM_ACTION_BAR_HEIGHT } from './BottomActionBar';
+export { BottomActionBar, BOTTOM_ACTION_BAR_HEIGHT, useBottomActionBarHeight } from './BottomActionBar';
 export { toast, ToastHost } from './Toast';
 export { showActionSheet, ActionSheetHost, type ActionSheetOption } from './ActionSheet';
 export { confirm, notice, ConfirmDialogHost, type ConfirmOptions } from './ConfirmDialog';

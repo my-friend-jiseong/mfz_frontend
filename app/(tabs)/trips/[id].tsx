@@ -14,7 +14,7 @@ import { Text } from '@/components/ui/Text';
 import { Badge } from '@/components/ui/Badge';
 import { DESTINATION_STATUS_BADGE } from '@/theme/statusBadge';
 import { Button } from '@/components/ui/Button';
-import { BottomActionBar, BOTTOM_ACTION_BAR_HEIGHT } from '@/components/ui/BottomActionBar';
+import { BottomActionBar, useBottomActionBarHeight } from '@/components/ui/BottomActionBar';
 import { EditableTitle } from '@/components/ui/EditableTitle';
 import { confirm, notice } from '@/components/ui/ConfirmDialog';
 import { toast } from '@/components/ui/Toast';
@@ -50,6 +50,7 @@ export default function TripDetail() {
   const removeVisit = useVisitStore((s) => s.remove);
   const updateTrip = useTripStore((s) => s.update);
   const [expandedIds, setExpandedIds] = useState<ReadonlySet<string>>(new Set());
+  const barHeight = useBottomActionBarHeight();
 
   const visits = useMemo(
     () =>
@@ -95,14 +96,19 @@ export default function TripDetail() {
   // 건너뛴 현장 = 직접 건너뛴 목적지 + 방문 없이 종료된 목적지(명세 FE-OUT-09: 외근 종료 시
   // 남은 방문은 건너뜀·미정). **종료된 외근일 때만** — 콜드스타트·다른 기기에서 시작한 진행 중
   // 외근이 activeTripId 가드를 빠져나와 이 화면에 오면, 아직 안 간 목적지까지 건너뜀으로 셌다(리뷰).
+  // 방문 없는 목적지 판정은 타임라인을 받은 뒤에만 — 받기 전엔 방문이 비어 모두 건너뜀으로 보인다.
+  // arrived 였는데 방문을 지운 목적지(FE-WRAP-03)도 결과가 미정이므로 여기 든다(리뷰: 어느 쪽에도 안 보였다).
   const tripEnded = !!trip?.endedAt;
+  const timelineLoaded = useTripStore((s) => (id ? s.detailStatus[id] === 'success' : false));
   const skippedDestinations = useMemo(() => {
-    const visited = new Set(visits.map((v) => v.fieldId));
-    return destinations.filter(
-      (d) =>
-        d.status === 'skipped' || (tripEnded && d.status === 'pending' && !visited.has(d.fieldId)),
+    // fieldId 가 빈 타임라인 항목(백로그 §16)은 판정에 쓰지 않는다 — '' 로는 아무것도 가리키지 못한다.
+    const visited = new Set(visits.map((v) => v.fieldId).filter(Boolean));
+    return destinations.filter((d) =>
+      d.status === 'skipped'
+        ? true
+        : tripEnded && timelineLoaded && !visited.has(d.fieldId),
     );
-  }, [destinations, visits, tripEnded]);
+  }, [destinations, visits, tripEnded, timelineLoaded]);
 
   // visit 을 카드 데이터의 진실값으로. destination 이 살아있으면 order 만 그쪽에서 가져옴.
   const destinationByFieldId = useMemo(() => {
@@ -265,7 +271,10 @@ export default function TripDetail() {
         // tripFieldIds 는 destination.order → visit 순으로 쌓인 방문 순서 그대로다(위 memo 참고).
         routeFieldIds={tripFieldIds}
       >
-        <BottomSheetScrollView style={sheetScrollableStyle} contentContainerStyle={styles.scroll}>
+        <BottomSheetScrollView
+          style={sheetScrollableStyle}
+          contentContainerStyle={[styles.scroll, { paddingBottom: barHeight + spacing.xxl * 3 }]}
+        >
         <View style={styles.header}>
           {/* 제목을 탭하면 그 자리에서 고친다(FE-WRAP-05). 헤더 수정 아이콘은 없다(FE-WRAP-04). */}
           <EditableTitle
@@ -420,8 +429,8 @@ export default function TripDetail() {
 
 const styles = StyleSheet.create({
   screenRoot: { flex: 1 },
-  // 하단 액션 바 뒤로 마지막 카드가 숨지 않게 — 바 높이 + 시트 래퍼 여유(active.tsx ★ 주석과 같은 이유).
-  scroll: { padding: spacing.lg, paddingBottom: BOTTOM_ACTION_BAR_HEIGHT + spacing.xxl * 3 },
+  // paddingBottom 은 렌더에서 — 하단 바 실제 높이(safe area 포함) + 여유.
+  scroll: { padding: spacing.lg },
   header: { gap: spacing.sm, marginBottom: spacing.lg },
   metaRow: {
     flexDirection: 'row',

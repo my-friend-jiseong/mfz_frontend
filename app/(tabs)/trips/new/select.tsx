@@ -335,5 +335,6 @@ const styles = StyleSheet.create({
     maxWidth: 200,
   },
   selectedChipLabel: { flexShrink: 1 },
-  list: { paddingHorizontal: spacing.lg, paddingBottom: listBottomInset },
+  // paddingBottom 은 렌더에서 useSheetBottomInset(listBottomInset).
+  list: { paddingHorizontal: spacing.lg },
 });

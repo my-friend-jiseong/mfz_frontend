@@ -17,7 +17,14 @@ interface Props {
 }
 
 // 버튼 52 + 위 12 + 아래 최소 12. 스크롤 콘텐츠가 바 뒤로 숨지 않게 하단 여백 계산에 쓴다.
+// 실제 높이는 홈 인디케이터만큼 더 크다 — 여백 계산에는 useBottomActionBarHeight() 를 쓴다.
 export const BOTTOM_ACTION_BAR_HEIGHT = 52 + spacing.md * 2;
+
+/** 이 기기에서 바의 실제 높이(버튼 + 위 여백 + max(safe area, 12)). */
+export function useBottomActionBarHeight(): number {
+  const insets = useSafeAreaInsets();
+  return 52 + spacing.md + Math.max(insets.bottom, spacing.md);
+}
 
 /**
  * 하단 액션 바 (명세 v2 §1.2). 흰 배경 + 위쪽 1px 구분선 + 좌우 16.

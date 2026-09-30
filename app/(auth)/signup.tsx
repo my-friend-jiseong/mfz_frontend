@@ -337,7 +337,8 @@ export default function Signup() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  scroll: { padding: spacing.xl, paddingTop: spacing.xxl * 2 },
+  // 제목이 NavHeader 로 올라가 본문 위 큰 여백(xxl×2)은 필요 없다.
+  scroll: { padding: spacing.xl, paddingTop: spacing.md },
   form: { gap: spacing.md },
   termsBox: {
     marginTop: spacing.md,

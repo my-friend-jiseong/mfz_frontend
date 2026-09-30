@@ -365,7 +365,8 @@ async function flowFirstField(page, ctx) {
 }
 
 async function flowB3StatusChipModal(page, ctx) {
-  // B-3 회귀: 현장 상세에서 상태 chip 탭 → WebChoiceModal 뜨고 + 선택한 상태로 정확히 변경.
+  // B-3 회귀: 현장 상세에서 상태 chip 탭 → 상태 액션 시트가 뜨고 + 선택한 상태로 정확히 변경.
+  // (UI v2: WebChoiceModal → ActionSheet. 시트 제목 "현재 상태: X", 조치 완료는 확인 대화상자 1회 더.)
   // 이 시점 path = /fields/{newFieldId} (직전 단계 결과)
   const startPath = new URL(page.url()).pathname;
   if (!startPath.startsWith('/fields/') || startPath === '/fields/new' || startPath === '/fields') {
@@ -396,24 +397,27 @@ async function flowB3StatusChipModal(page, ctx) {
     await chip.click();
     await page.waitForTimeout(500);
 
-    // WebChoiceModal 뜸 — title "상태 변경", 옵션 카드들에 "조치 X" 텍스트 + "취소" 별도.
-    const modalTitle = page.getByText('상태 변경', { exact: true }).first();
+    // 상태 액션 시트 — 제목 "현재 상태: X", 행마다 "조치 X".
+    const modalTitle = page.getByText(/^현재 상태:/).first();
     const modalVisible = await modalTitle.isVisible().catch(() => false);
     if (!modalVisible) {
-      add('FAIL', 'B-3 상태 chip 클릭 — WebChoiceModal 미노출', `chip="${beforeLabel}"`);
+      add('FAIL', 'B-3 상태 chip 클릭 — 상태 시트 미노출', `chip="${beforeLabel}"`);
       return;
     }
-    add('PASS', 'B-3 상태 chip 클릭 → WebChoiceModal 표시', `before="${beforeLabel}"`);
+    add('PASS', 'B-3 상태 chip 클릭 → 상태 시트 표시', `before="${beforeLabel}"`);
 
     // 모달 안에서 "조치 중" 또는 "조치 완료" 중 하나 (현재가 아닌) 누름.
     // 간단히 "조치 중" 우선 (조치 전 → 조치 중 시나리오).
     const targetLabel = beforeLabel.includes('조치 전') ? '조치 중' : (beforeLabel.includes('조치 중') ? '조치 완료' : '조치 전');
-    // 모달 안의 옵션 카드는 promptChoice 호출에서 첫 비-cancel 두 옵션. 모달 외 텍스트 (chip 등) 에도 같은 글자가 있어 정확히 잡기 까다로움 — 모달 안의 button 으로 가깝게.
-    // WebChoiceModal 의 choice 카드는 colors.primary 스타일. 그냥 getByText 로 잡되 마지막 가시 요소 우선.
+    // 시트 밖(chip 등)에도 같은 글자가 있다 — 시트가 마지막에 마운트되므로 마지막 가시 요소를 누른다.
     const choices = page.getByText(targetLabel, { exact: true });
     const count = await choices.count();
-    // 마지막 (모달이 위에 있으므로 가장 위 z-index = 마지막 마운트) 클릭
     await choices.nth(count - 1).click();
+    await page.waitForTimeout(800);
+    // 조치 완료는 확인 대화상자가 한 번 더 뜬다.
+    if (targetLabel === '조치 완료') {
+      await page.getByText('완료', { exact: true }).last().click().catch(() => {});
+    }
     await page.waitForTimeout(2000);
 
     // PATCH 응답 확인

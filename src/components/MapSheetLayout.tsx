@@ -67,13 +67,19 @@ interface Props {
  * 사용자가 지도 보려면 시트를 직접 드래그 → 다음 focus 시 다시 펼침.
  */
 /**
- * 55%(index 1)로 여는 시트의 목록 하단 여백. 콘텐츠 래퍼가 최대 detent 높이로 고정돼 있어
- * (위 height 우회 주석) 55% 에서는 래퍼 아래쪽 약 45% 가 화면 밖이다 — 그만큼 비워야 마지막
- * 항목까지 스크롤된다. 고정 숫자(240)는 탭바를 숨기자(명세 §2.1) 모자랐다(웹 실측: 303px 가 화면 밖).
+ * 55%(index 1)로 여는 시트의 목록 하단 여백 — 55% detent 에서 콘텐츠 래퍼가 화면 밖으로 나가는 길이.
+ * 래퍼는 최대 detent 높이(컨테이너 − topGap − 핸들)로 고정이라(아래 height 우회 주석) 55% 에서
+ * 화면 밖 = 0.45 × 컨테이너 − topGap. 고정 240 은 탭바를 숨기자(명세 §2.1) 모자랐다(웹 실측 303px).
+ *
+ * 컨테이너 실측값은 시트 안에서만 알 수 있고 이 훅은 시트의 부모(화면)에서 부르므로 창 높이로
+ * 근사한다 — 컨테이너 ≤ 창이라 조금 넉넉할 뿐 모자라진 않는다. 최대 detent 로 끌어올리면 그만큼
+ * 목록 아래가 빈다(알려진 타협).
  */
 export function useSheetBottomInset(extra = 0): number {
   const { height } = useWindowDimensions();
-  return Math.round(height * 0.45) + extra;
+  const insets = useSafeAreaInsets();
+  const topGap = insets.top + SHEET_TOP_GAP_EXTRA;
+  return Math.max(0, Math.round(height * 0.45 - topGap)) + spacing.xl + extra;
 }
 
 export function MapSheetLayout({

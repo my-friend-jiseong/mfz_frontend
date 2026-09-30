@@ -287,7 +287,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.successMuted,
     borderColor: colors.success,
   },
-  list: { paddingHorizontal: spacing.lg, paddingBottom: listBottomInset },
+  // paddingBottom 은 렌더에서 useSheetBottomInset(listBottomInset).
+  list: { paddingHorizontal: spacing.lg },
   // 표면은 Card 가 준다 (강령 7). 누를 수 없는 행이라 onPress 는 없다 —
   // DestinationRow(누를 수 있는 목적지 행)와 같은 모양이 되도록 padding 도 md 로 맞춘다.
   row: {
