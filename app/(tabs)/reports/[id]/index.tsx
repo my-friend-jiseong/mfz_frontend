@@ -14,7 +14,7 @@ import { safeBack } from '@/utils/backNavigation';
 import { captureOverviewMap } from '@/utils/captureView';
 import { isFieldReportEmpty } from '@/utils/fieldReport';
 import { EmptyState } from '@/components/EmptyState';
-import { MapSheetLayout, sheetScrollableStyle } from '@/components/MapSheetLayout';
+import { MapSheetLayout, sheetScrollableStyle, useSheetBottomInset } from '@/components/MapSheetLayout';
 import { KakaoMapWebView, fieldsToMarkers } from '@/components/KakaoMapWebView';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -117,6 +117,7 @@ export default function ReportDetail() {
   const overviewMapRef = useRef<View>(null);
   const [tilesReady, setTilesReady] = useState(false);
   const detailStatus = useReportStore((s) => s.detailStatus[reportId]);
+  const bottomPad = useSheetBottomInset(BOTTOM_ACTION_BAR_HEIGHT);
   const fetchedRef = useRef<string | null>(null);
 
   // 진입 시 백엔드에서 detail 페치 (목록은 fieldReports 없음).
@@ -316,7 +317,10 @@ export default function ReportDetail() {
         mapFieldIds={overviewFieldIds}
         headerRight={isOwner ? <OverflowButton onPress={openMore} label="보고서 상세 더보기" /> : undefined}
       >
-        <BottomSheetScrollView style={sheetScrollableStyle} contentContainerStyle={styles.scroll}>
+        <BottomSheetScrollView
+          style={sheetScrollableStyle}
+          contentContainerStyle={[styles.scroll, { paddingBottom: bottomPad }]}
+        >
           {isOwner ? (
             <EditableTitle value={report.title} onSubmit={saveTitle} maxLength={100} label="보고서 제목" />
           ) : (
@@ -424,10 +428,8 @@ export default function ReportDetail() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  // ★ 55% 로 열리는 시트 — 콘텐츠 래퍼는 최대 detent 높이로 고정돼 있어(MapSheetLayout 주석) 기본
-  //   detent 에서는 래퍼 하단 ~270dp 가 화면 밖이다. 여기에 하단 바(76)까지 가리므로 그만큼 비운다.
-  //   (trips/active 의 240 과 같은 이유, 웹 실측: 두 번째 현장 카드가 스크롤 끝에서도 바 뒤에 남았다.)
-  scroll: { padding: spacing.lg, paddingBottom: BOTTOM_ACTION_BAR_HEIGHT + 280 },
+  // paddingBottom 은 렌더에서 — 55% 시트 + 하단 바(useSheetBottomInset 주석).
+  scroll: { padding: spacing.lg },
   tripLink: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -7,7 +7,7 @@ import { useFieldStore } from '@/stores/fieldStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useTripStore } from '@/stores/tripStore';
 import { EmptyState } from '@/components/EmptyState';
-import { MapSheetLayout, sheetScrollableStyle } from '@/components/MapSheetLayout';
+import { MapSheetLayout, sheetScrollableStyle, useSheetBottomInset } from '@/components/MapSheetLayout';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -53,6 +53,7 @@ function withLegs(list: OrderedField[]): OrderedField[] {
 
 export default function NewTripOrder() {
   const router = useRouter();
+  const listBottomPad = useSheetBottomInset(listBottomInset);
   const params = useLocalSearchParams<{ fieldIds?: string }>();
   const userId = useAuthStore((s) => s.user?.id);
   const getField = useFieldStore((s) => s.getById);
@@ -253,7 +254,8 @@ export default function NewTripOrder() {
         keyExtractor={(f) => String(f.id)}
         renderItem={renderItem}
         style={sheetScrollableStyle}
-        contentContainerStyle={styles.list}
+        // 55% 시트 + 하단 CTA 뒤로 마지막 행이 숨지 않게(useSheetBottomInset 주석).
+        contentContainerStyle={[styles.list, { paddingBottom: listBottomPad }]}
       />
       <StickyBottomBar>
         <Button

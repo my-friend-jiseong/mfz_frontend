@@ -66,6 +66,16 @@ interface Props {
  * sheet 가 내려가면 화면 밖으로 사라지므로, 탭 재진입 시 항상 보여야 함.
  * 사용자가 지도 보려면 시트를 직접 드래그 → 다음 focus 시 다시 펼침.
  */
+/**
+ * 55%(index 1)로 여는 시트의 목록 하단 여백. 콘텐츠 래퍼가 최대 detent 높이로 고정돼 있어
+ * (위 height 우회 주석) 55% 에서는 래퍼 아래쪽 약 45% 가 화면 밖이다 — 그만큼 비워야 마지막
+ * 항목까지 스크롤된다. 고정 숫자(240)는 탭바를 숨기자(명세 §2.1) 모자랐다(웹 실측: 303px 가 화면 밖).
+ */
+export function useSheetBottomInset(extra = 0): number {
+  const { height } = useWindowDimensions();
+  return Math.round(height * 0.45) + extra;
+}
+
 export function MapSheetLayout({
   title,
   onBack,

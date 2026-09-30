@@ -319,7 +319,15 @@ DESTINATION_STATUS_BADGE = {
 | `FieldLabel` | `children` · `counter` · `trailing` · `style` | 폼 컨트롤 위 라벨 줄. 오른쪽에 글자수(`counter`)나 임의 요소(`trailing`, 되돌리기 버튼 등). 기본 `marginTop: md`, 굵기 semibold |
 | `GroupLabel` | `children` · `style` | 카드 한 덩어리 위의 눈썹 라벨 — caption+bold+muted+uppercase. 기본 `marginTop: xl`(그룹↔그룹), 영역 경계(xxl)·화면 첫 줄(0)은 `style` 로 덮는다. `FieldLabel` 과 다른 층이다 — 아래 9.1 |
 | `LoadingState` | `label` · `inline` | 로딩 표시 |
-| `StickyBottomBar` | `children` (+ `useSafeAreaInsets`) | 화면 하단 sticky CTA, home indicator 회피 |
+| `StickyBottomBar` | `children` (+ `useSafeAreaInsets`) | 화면 하단에 **떠 있는** CTA, home indicator 회피 |
+| `BottomActionBar` | `children`(주, 남은 폭) · `secondary`(보조, 내용 폭) · `absolute` | 바닥에 **붙은** 하단 액션 바 — 흰 배경 + 상단 1px. 명세 v2 §1.2. 지도 시트 화면에선 `absolute` 로 시트 밖에 마운트 |
+| `NavHeader` · `OverflowButton` | `title` · `onBack` · `right` | 지도 없는 푸시 화면의 `←` + 제목. 네이티브 스택 헤더 대신 — 다른 탭 스택으로 건너온 화면(체크인)은 네이티브 back 이 엉뚱한 곳으로 간다 |
+| `Toast` · `toast()` | `message` · `icon` | 2초 자동 닫힘. 루트 `ToastHost` 1개 — `router.replace` 직후 호출해도 살아남는다. 실패 안내에는 쓰지 않는다(Alert) |
+| `ActionSheet` · `showActionSheet()` | `options: {label, icon, tone, selected, onPress}[]` · `title` | `···` 오버플로·사진·현장 선택 시트. RN `Modal` — gorhom `BottomSheetModal` 은 dynamic sizing 회귀(#2710) 때문에 쓰지 않는다. `onPress` 는 시트가 완전히 닫힌 뒤 부른다(iOS 모달 연쇄) |
+| `ConfirmDialog` · `confirm()` · `notice()` | `title` · `message` · `confirmLabel` · `destructive` → `Promise<boolean>` | 확인·차단 안내. 웹·네이티브 같은 모양. 파괴적 확인은 스크림 탭으로 닫히지 않는다. 호스트가 없으면 `false` — 확인 없이 삭제로 새지 않게 |
+| `EditableTitle` | `value` · `onSubmit`(throw 하면 입력칸 유지) · `label` | 탭해서 고치는 제목(외근 정리·보고서 상세). 완료·키보드 완료·blur 저장, 빈 값 복원 |
+| `ReorderButtons` · `reorderA11yProps` · `swapAt` | `index` · `count` · `onMove` | ▲▼ 순서 이동. 스크린리더는 커스텀 액션(`moveUp`/`moveDown`) — `increment` 는 슬라이더 의미라 쓰지 않는다 |
+| `SwipeRow` · `useSwipePressGuard` | `onDelete` · `deleteLabel` | 왼쪽 스와이프 → 삭제. RNGH `Pan().runOnJS(true)` + RN `Animated` — `ReanimatedSwipeable` 은 우리 스택 iOS 크래시(#3720). 스와이프를 끝낸 탭이 행 안 Pressable 로 새지 않게 가드를 쓴다 |
 | `EmptyState` | `title` · `description` · `icon` · `action` | 빈 상태 (`src/components/EmptyState.tsx`) |
 | `ErrorState` | `message` · `onRetry` | 조회 실패 (`src/components/ErrorState.tsx`). `EmptyState` 와 같은 화면으로 처리하지 않는다 — 실패를 empty 로 렌더하면 '데이터 없음' 으로 오독된다 |
 
@@ -374,7 +382,8 @@ DESTINATION_STATUS_BADGE = {
 | | `MapDashboard` · `MapSearchBar` · `MapFilterBar` · `MapLegend` | 지도 위 부유 chrome — **elevation 을 쓰는 유일한 자리**(7절) |
 | | `KakaoMapWebView`(+`.web`) | 지도 본체. 웹은 SDK 직접 주입, 네이티브는 WebView |
 | | `ProjectPicker` | 현장 폼의 프로젝트 선택 + 인라인 생성 |
-| | `SessionGuardModal` · `WebChoiceModal` | 세션 만료 안내 / 3+ 선택지 모달(web `Alert` 가 OK·Cancel 로 뭉개는 자리) |
+| | `SessionGuardModal` | 세션 만료 안내. (3+ 선택지 `WebChoiceModal` 은 UI v2 에서 `ActionSheet` 로 대체·삭제) |
+| | `trips/VisitRecordForm` | 체크인·방문 수정 공용 폼(결과 칩·작업 사진·메모). 사진은 고르기만 하고 저장 시 올린다 |
 | | `AttachmentPreview` | 사진 그리드 (음성 메모는 ERD v2 에서 폐기) |
 
 > 이 표는 **디자인 결정이 걸린 것**만 담는다. 2026-07-30 감사 전까지 `src/components/` 15 개 중

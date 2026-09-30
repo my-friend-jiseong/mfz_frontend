@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Text } from '@/components/ui/Text';
 import { SafeScreen } from '@/components/SafeScreen';
+import { NavHeader } from '@/components/ui/NavHeader';
 
 interface FieldErrors {
   email?: string;
@@ -166,15 +167,13 @@ export default function Signup() {
 
   return (
     <SafeScreen>
+    {/* 명세 v2 FE-AUTH-03 — 로그인 복귀는 헤더 ← 하나. 본문 '이미 계정이 있어요' 는 없앴다. */}
+    <NavHeader title="회원가입" onBack={() => safeBack(router, '/(auth)/login')} />
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <Text variant="h2" weight="heavy" style={styles.title}>
-          회원가입
-        </Text>
-
         <View style={styles.form}>
           <Input
             label="이메일"
@@ -329,15 +328,6 @@ export default function Signup() {
           >
             가입하고 시작하기
           </Button>
-
-          <Button
-            onPress={() => safeBack(router)}
-            variant="ghost"
-            size="sm"
-            fullWidth
-          >
-            이미 계정이 있어요
-          </Button>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -348,7 +338,6 @@ export default function Signup() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   scroll: { padding: spacing.xl, paddingTop: spacing.xxl * 2 },
-  title: { marginBottom: spacing.xl },
   form: { gap: spacing.md },
   termsBox: {
     marginTop: spacing.md,

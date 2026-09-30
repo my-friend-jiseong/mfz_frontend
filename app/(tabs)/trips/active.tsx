@@ -7,7 +7,7 @@ import { useTripStore } from '@/stores/tripStore';
 import { useDestinationStore } from '@/stores/destinationStore';
 import { useFieldStore } from '@/stores/fieldStore';
 import { useVisitStore } from '@/stores/visitStore';
-import { MapSheetLayout, sheetScrollableStyle } from '@/components/MapSheetLayout';
+import { MapSheetLayout, sheetScrollableStyle, useSheetBottomInset } from '@/components/MapSheetLayout';
 import { Button } from '@/components/ui/Button';
 import { OverflowButton } from '@/components/ui/NavHeader';
 import { showActionSheet } from '@/components/ui/ActionSheet';
@@ -102,6 +102,8 @@ export default function ActiveTrip() {
   );
 
   const { optimizing, run: runOptimize } = useOptimizeRoute();
+  // 55% 시트에서 목록 끝(외근 종료 버튼)까지 스크롤되게 — useSheetBottomInset 주석.
+  const listBottomPad = useSheetBottomInset(spacing.xl);
   const [addOpen, setAddOpen] = useState(false);
 
   // 종료 진행 중 표식 — 아래 `activeTripId === null` 리다이렉트 가드를 재운다.
@@ -587,7 +589,7 @@ export default function ActiveTrip() {
           ListHeaderComponent={listHeader}
           ListFooterComponent={listFooter}
           style={sheetScrollableStyle}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[styles.list, { paddingBottom: listBottomPad }]}
         />
       </MapSheetLayout>
       {/* 화면 하단에 떠 있는 바를 두지 않는다 — 시트를 55% 로 내리면 그 바가 현재 목적지
@@ -616,7 +618,8 @@ const styles = StyleSheet.create({
   //   회피용, MapSheetLayout 주석 참고) 기본 detent(55%)에서는 래퍼 하단 ~130dp 가 화면
   //   밖이고 그 위 56dp 는 탭바에 가린다. 이 여백이 없으면 목록 끝까지 스크롤해도 마지막
   //   요소(외근 종료)가 탭바 뒤에 남아 아예 누를 수 없다(실측: 종료 611~631 vs 탭바 583~639).
-  list: { paddingHorizontal: spacing.lg, paddingBottom: 240 },
+  // paddingBottom 은 렌더에서 useSheetBottomInset 으로 준다(예전 240 고정값은 탭바를 숨기자 모자랐다).
+  list: { paddingHorizontal: spacing.lg },
   // 간격 리듬 — 진행률·현재 목적지는 한 덩어리(md), 목적지 목록과 종료 버튼은 다른
   // 그룹이라 xl 로 벌린다. 전부 lg 로 균일하면 무엇이 한 덩어리인지 눈이 못 읽는다.
   footer: { marginTop: spacing.xl },

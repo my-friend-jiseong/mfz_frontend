@@ -38,5 +38,6 @@ export const DESTINATION_STATUS_BADGE: Record<
   // 명세 v2 §1.4: '예정' 표기를 쓰지 않는다. 방문이 없는 목적지의 결과는 '미정'.
   pending: { tone: 'neutral', shape: 'circle', label: '미정' },
   arrived: { tone: 'success', shape: 'square', label: '방문 완료' },
-  skipped: { tone: 'neutral', shape: 'diamond', label: '건너뜀' },
+  // 진행 여부(건너뜀)와 결과(미정)를 함께 — 명세 §1.4·수락 기준 7 (체크인 없이 건너뛴 방문의 결과는 미정).
+  skipped: { tone: 'neutral', shape: 'diamond', label: '건너뜀 · 미정' },
 };

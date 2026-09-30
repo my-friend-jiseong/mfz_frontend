@@ -11,6 +11,8 @@ import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout, sheetScrollableStyle } from '@/components/MapSheetLayout';
 import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
+import { Badge } from '@/components/ui/Badge';
+import { DESTINATION_STATUS_BADGE } from '@/theme/statusBadge';
 import { Button } from '@/components/ui/Button';
 import { BottomActionBar, BOTTOM_ACTION_BAR_HEIGHT } from '@/components/ui/BottomActionBar';
 import { EditableTitle } from '@/components/ui/EditableTitle';
@@ -90,10 +92,17 @@ export default function TripDetail() {
   }, [destinations, visits]);
 
   // Hooks must be called unconditionally — 모든 useMemo/useEffect/useRef 를 가드 위로.
-  const skippedDestinations = useMemo(
-    () => destinations.filter((d) => d.status === 'skipped'),
-    [destinations],
-  );
+  // 건너뛴 현장 = 직접 건너뛴 목적지 + 방문 없이 종료된 목적지(명세 FE-OUT-09: 외근 종료 시
+  // 남은 방문은 건너뜀·미정). **종료된 외근일 때만** — 콜드스타트·다른 기기에서 시작한 진행 중
+  // 외근이 activeTripId 가드를 빠져나와 이 화면에 오면, 아직 안 간 목적지까지 건너뜀으로 셌다(리뷰).
+  const tripEnded = !!trip?.endedAt;
+  const skippedDestinations = useMemo(() => {
+    const visited = new Set(visits.map((v) => v.fieldId));
+    return destinations.filter(
+      (d) =>
+        d.status === 'skipped' || (tripEnded && d.status === 'pending' && !visited.has(d.fieldId)),
+    );
+  }, [destinations, visits, tripEnded]);
 
   // visit 을 카드 데이터의 진실값으로. destination 이 살아있으면 order 만 그쪽에서 가져옴.
   const destinationByFieldId = useMemo(() => {
@@ -376,9 +385,13 @@ export default function TripDetail() {
                             </Text>
                           ) : null}
                         </View>
-                        <Text variant="caption" weight="bold" color="textMuted">
-                          건너뜀
-                        </Text>
+                        {/* 결과는 미정 — 체크인 없이 건너뛴 방문(명세 §1.4·수락 기준 7). */}
+                        <Badge
+                          label={DESTINATION_STATUS_BADGE.skipped.label}
+                          tone={DESTINATION_STATUS_BADGE.skipped.tone}
+                          shape={DESTINATION_STATUS_BADGE.skipped.shape}
+                          size="sm"
+                        />
                       </View>
                     </Card>
                   );

@@ -55,6 +55,11 @@ description: |
 - 서버에 없는 API 는 프론트에서 optional 로 먼저 만들고 `docs/backend/backend-backlog.md` 에 적는다. 없는 엔드포인트를 추측해 호출하지 않는다.
 - **이 저장소 파일은 CRLF 다.** node/sed 로 `
 ` 이 들어간 문자열을 치환하면 매치 실패가 **조용히** 지나간다(Phase 1 에서 호스트 마운트가 이렇게 빠졌다). 여러 줄 치환은 Edit 도구로 하거나, 치환 후 grep 으로 반영을 확인한다.
+- **55% 로 여는 지도 시트의 목록 하단 여백은 `useSheetBottomInset()`** — 콘텐츠 래퍼가 최대 detent 높이라 약 45% 가 화면 밖이다. 고정 숫자(240)는 탭바를 숨기자 모자랐다(실측 303px).
+- **Pressable 이 든 행에 스와이프를 붙이면 손을 뗀 탭이 onPress 로 샌다**(웹 실측). 가림막으론 못 막는다 — 행 안 Pressable 이 `useSwipePressGuard()` 로 거른다.
+- **현장 보고 PATCH 에서 지우기는 `null`** — `undefined` 는 요청에서 빠져 "그대로 두기" 가 된다(사진 제거·설명 비우기가 반영 안 되던 원인).
+- 확인 창·선택 시트는 `confirm()`·`showActionSheet()`. `Alert.alert` 는 실패 안내에만. 시트 `onPress` 는 시트가 닫힌 뒤 불리므로 이어서 다른 모달을 띄워도 된다.
+- 웹 검증은 창 크기를 못 바꾸는 자동화 브라우저에서 `document.write` 로 390×844 iframe 을 띄워 한다(같은 origin 이라 클릭·JS 모두 된다). 파일이 바뀌면 바깥 페이지가 새로고침돼 iframe 을 다시 띄워야 한다.
 - 삭제되는 라우트(`trips/[id]/edit`)의 참조는 `grep` 전수로 찾는다. `head` 로 자르지 않는다.
 
 ## 4. 검증
