@@ -10,6 +10,8 @@ import {
   View,
 } from 'react-native';
 import { Text } from '@/components/ui/Text';
+import { toast } from '@/components/ui/Toast';
+import { safeBack } from '@/utils/backNavigation';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFieldStore } from '@/stores/fieldStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -273,7 +275,8 @@ export default function NewField() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 생성 성공 공통 후처리 — Quick Photo 에서 넘어온 사진이 있으면 새 현장에 첨부 후 상세로 이동.
+  // 생성 성공 공통 후처리 — Quick Photo 에서 넘어온 사진이 있으면 새 현장에 첨부한다.
+  // 명세 v2 FE-SITE-01a: 등록 후엔 상세가 아니라 **현장 목록**으로 돌아가고 토스트를 2초 띄운다.
   const finishCreate = async (field: Field) => {
     if (entry.photo) {
       const res = await addPhoto(field.id, entry.photo);
@@ -281,11 +284,14 @@ export default function NewField() {
         // 현장 생성은 이미 성공 — 사진만 실패. 상세 화면에서 재시도 가능하므로 이동은 계속한다.
         Alert.alert(
           '사진 등록 실패',
-          `현장은 등록됐지만 사진 업로드에 실패했어요. 현장 상세에서 다시 등록해주세요.\n(${res.error})`,
+          `현장은 등록됐지만 사진 업로드에 실패했어요. 체크인할 때 사진을 다시 추가해주세요.\n(${res.error})`,
         );
       }
     }
-    router.replace(`/(tabs)/fields/${field.id}` as never);
+    toast('현장이 등록되었습니다');
+    // 등록 화면(모달)을 닫고 들어온 자리로 — 현장 목록에서 왔으면 목록, 외근 중 현장 추가에서
+    // 왔으면 그 외근. replace 는 목록 위에 목록을 한 겹 더 쌓았다(리뷰).
+    safeBack(router, '/(tabs)/fields');
   };
 
   const handleCreate = async () => {

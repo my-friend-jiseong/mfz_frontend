@@ -31,7 +31,8 @@ interface VisitState {
   // 방문별 작업 사진 캐시 (visits.detail 응답). 현장 상세·외근 정리·방문 수정이 공유한다.
   photosByVisit: Record<string, VisitPhoto[]>;
 
-  loadPhotos: (tripId: string, visitId: string) => Promise<void>;
+  /** 성공 여부 — 실패는 조용히 삼키되 호출 측이 재시도를 판단할 수 있게. */
+  loadPhotos: (tripId: string, visitId: string) => Promise<boolean>;
   addPhoto: (visitId: string, file: UploadFile, phase?: VisitPhotoPhase) => Promise<GenericResult>;
   remove: (visitId: string) => Promise<RemoveResult>;
 
@@ -88,8 +89,10 @@ export const useVisitStore = create<VisitState>((set, get) => ({
     try {
       const res = await visitsApi.detail(tripId, visitId);
       set((s) => ({ photosByVisit: { ...s.photosByVisit, [visitId]: res.photos ?? [] } }));
+      return true;
     } catch {
       // 사진은 부가 정보 — 못 받아도 화면은 나머지로 그린다.
+      return false;
     }
   },
 

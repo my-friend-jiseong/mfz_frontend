@@ -12,7 +12,6 @@ import {
 import { Text } from '@/components/ui/Text';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFieldStore } from '@/stores/fieldStore';
-import { useVisitStore } from '@/stores/visitStore';
 import { safeBack } from '@/utils/backNavigation';
 import {
   FIELD_STATUS_VALUES,
@@ -69,12 +68,6 @@ export default function EditField() {
   const field = useFieldStore((s) => s.getById(fieldId));
   const loadFieldDetail = useFieldStore((s) => s.loadDetail);
   const update = useFieldStore((s) => s.update);
-  const remove = useFieldStore((s) => s.remove);
-  // 방문 이력 카운트 — 삭제 사전 안내용. 단일 actor 정책상 visit 있으면 백엔드가 삭제 거부.
-  // 진입 시 fieldStore.loadDetail → visitStore.syncFromRecentVisits 로 hydrate.
-  const visitCount = useVisitStore(
-    (s) => s.visits.filter((v) => v.fieldId === fieldId).length,
-  );
   const fetchedRef = useRef<string | null>(null);
   useEffect(() => {
     if (!fieldId) return;
@@ -381,48 +374,6 @@ export default function EditField() {
     safeBack(router);
   };
 
-  const performDelete = async () => {
-    const r = await remove(fieldId);
-    if (r.ok) {
-      router.replace('/(tabs)/fields' as never);
-      return;
-    }
-    if ('needsConfirm' in r) {
-      // 단일 Actor 정책 — 강제 삭제 미지원, 안내만.
-      Alert.alert(
-        '삭제할 수 없습니다',
-        r.message + '\n\n방문 기록이 남아 있는 현장은 삭제할 수 없습니다.',
-      );
-    } else if (/일시적인 오류|일시적|서버/.test(r.error)) {
-      Alert.alert(
-        '서버 오류',
-        '현재 서버에서 삭제를 처리하지 못하고 있습니다.\n잠시 후 다시 시도해주세요.',
-      );
-    } else {
-      Alert.alert('삭제 실패', r.error);
-    }
-  };
-
-  const handleDelete = () => {
-    // 방문 이력 있으면 백엔드가 차단함을 미리 안내 — anti-pattern '정말 삭제할까요 → 사실은 삭제 못 함' 해소.
-    // Alert.alert 는 webAlertPatch 가 web 에서 window.alert/confirm 으로 자동 라우팅.
-    if (visitCount > 0) {
-      Alert.alert(
-        '삭제할 수 없습니다',
-        `이 현장에는 방문 기록이 ${visitCount}건 있어 삭제할 수 없습니다.\n\n방문 기록을 정리하거나 현장 상태를 '조치 완료' 로 변경해주세요.`,
-      );
-      return;
-    }
-    Alert.alert(
-      '현장 삭제',
-      '이 현장을 삭제할까요? 메모·사진도 함께 정리됩니다.',
-      [
-        { text: '취소', style: 'cancel' },
-        { text: '삭제', style: 'destructive', onPress: () => void performDelete() },
-      ],
-    );
-  };
-
   const handleCancel = () => {
     if (!hasChanges) {
       safeBack(router);
@@ -720,19 +671,6 @@ export default function EditField() {
           취소
         </Button>
 
-        {/* 위험 구역 — 파괴적 삭제는 저장 동선과 분리(구분선) + 낮은 비중(dangerGhost). trips edit 와 동일. */}
-        <View style={styles.dangerZone}>
-          <Button
-            onPress={handleDelete}
-            variant="dangerGhost"
-            size="sm"
-            fullWidth
-            leftIcon="trash"
-            style={styles.dangerBtn}
-          >
-            현장 삭제
-          </Button>
-        </View>
       </ScrollView>
     </KeyboardAvoidingView>
     </SafeScreen>
@@ -759,13 +697,6 @@ const styles = StyleSheet.create({
   error: { marginTop: spacing.md },
   statusRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
   submit: { marginTop: spacing.xl },
-  dangerZone: {
-    marginTop: spacing.xxl,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderMuted,
-  },
-  dangerBtn: { marginTop: spacing.xs },
   // 주소 검색·현위치·지도
   locateBtn: { marginTop: spacing.sm, alignSelf: 'flex-start' },
   loadingRow: {

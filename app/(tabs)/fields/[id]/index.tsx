@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
@@ -9,23 +9,23 @@ import { safeBack } from '@/utils/backNavigation';
 import { useVisitStore } from '@/stores/visitStore';
 import { EmptyState } from '@/components/EmptyState';
 import { MapSheetLayout, sheetScrollableStyle } from '@/components/MapSheetLayout';
-import { promptChoice } from '@/components/WebChoiceModal';
-import { pickPhoto, promptPhotoSource } from '@/utils/media';
 import { openKakaoRouteTo } from '@/utils/kakaoMap';
 import { PhotoGrid } from '@/components/AttachmentPreview';
+import { OverflowButton } from '@/components/ui/NavHeader';
+import { showActionSheet } from '@/components/ui/ActionSheet';
+import { confirm, notice } from '@/components/ui/ConfirmDialog';
+import { toast } from '@/components/ui/Toast';
+import { useTripStore } from '@/stores/tripStore';
+import { useDestinationStore } from '@/stores/destinationStore';
 import { Card } from '@/components/ui/Card';
 import { Badge, BADGE_SHAPE_GLYPH } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { FIELD_STATUS_BADGE, VISIT_STATUS_BADGE } from '@/theme/statusBadge';
 import { fmtDateTime } from '@/utils/datetime';
-import { Input } from '@/components/ui/Input';
 import { GroupLabel } from '@/components/ui/GroupLabel';
 import { fieldSubtitle, fieldTitle } from '@/utils/fieldFacets';
 import { colors } from '@/theme/colors';
-import { spacing, radius, touchTarget } from '@/theme/spacing';
-
-// 메모 삭제 버튼은 22px — 목록이 두꺼워지지 않게 크기는 두고 터치 영역만 44 로 채운다.
-const MEMO_DELETE_HIT_SLOP = (touchTarget.control - 22) / 2;
+import { spacing, radius } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
 import { withAlpha } from '@/theme/withAlpha';
 import {
@@ -35,7 +35,9 @@ import {
   type Visit,
 } from '@/types/entities';
 
-// ERD v2: 메모·사진은 현장(field) 전용. 음성 메모·방문 첨부 제거.
+// 현장 상세 (명세 v2 §5). 메모·사진은 **조회 전용** — 쓰는 곳은 체크인과 방문 수정뿐이다(§1.3).
+// 사진은 현장 직접 사진 + 이 현장 방문들의 사진을 최신순으로 합친다(방문 사진은 현장 상세 응답에
+// 없어 방문마다 따로 받는다 — 백로그 §35). 수정·삭제는 헤더 `···` 시트로.
 
 export default function FieldDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -45,12 +47,12 @@ export default function FieldDetail() {
   const allFields = useFieldStore((s) => s.fields);
   const directAttachmentsMap = useFieldStore((s) => s.directAttachments);
   const loadFieldDetail = useFieldStore((s) => s.loadDetail);
-  const addFieldTextMemo = useFieldStore((s) => s.addTextMemo);
-  const addFieldPhoto = useFieldStore((s) => s.addPhoto);
-  const removeTextMemo = useFieldStore((s) => s.removeTextMemo);
-  const removePhoto = useFieldStore((s) => s.removePhoto);
+  const removeField = useFieldStore((s) => s.remove);
   const patchFieldStatus = useFieldStore((s) => s.patchStatus);
   const allVisits = useVisitStore((s) => s.visits);
+  const photosByVisit = useVisitStore((s) => s.photosByVisit);
+  const loadVisitPhotos = useVisitStore((s) => s.loadPhotos);
+  const activeTripId = useTripStore((s) => s.activeTripId);
 
   // 진입 시 detail 페치 (directAttachments 채우기)
   useEffect(() => {
@@ -62,74 +64,10 @@ export default function FieldDetail() {
     [allFields, fieldId],
   );
   const directAttachments = directAttachmentsMap[fieldId] ?? [];
-  const directTextMemos = directAttachments.filter((a) => a.type === 'text');
-  const directPhotos = directAttachments
-    .filter((a) => a.type === 'photo' && a.fileUrl)
-    .map((a) => ({ id: a.id, fileUrl: a.fileUrl as string }));
-  const directPhotoCount = directPhotos.length;
-
-  const [memoInput, setMemoInput] = useState('');
-  const [memoSubmitting, setMemoSubmitting] = useState(false);
-  const [photoBusy, setPhotoBusy] = useState(false);
-
-  const handleAddDirectMemo = async () => {
-    const t = memoInput.trim();
-    if (!t) return;
-    setMemoSubmitting(true);
-    const r = await addFieldTextMemo(fieldId, t);
-    setMemoSubmitting(false);
-    if (r.ok) {
-      setMemoInput('');
-    } else {
-      Alert.alert('메모 추가 실패', r.error);
-    }
-  };
-
-  const uploadDirectPhoto = async (source: 'camera' | 'library') => {
-    setPhotoBusy(true);
-    try {
-      const file = await pickPhoto(source);
-      if (!file) return;
-      const r = await addFieldPhoto(fieldId, file);
-      if (!r.ok) Alert.alert('사진 추가 실패', r.error);
-    } finally {
-      setPhotoBusy(false);
-    }
-  };
-
-  const handleAddDirectPhoto = () => {
-    if (photoBusy) return;
-    promptPhotoSource((src) => void uploadDirectPhoto(src));
-  };
-
-  const handleRemoveMemo = (memoId: string) => {
-    promptChoice('메모 삭제', '이 메모를 삭제할까요?', [
-      { label: '취소', style: 'cancel' as const },
-      {
-        label: '삭제',
-        style: 'destructive' as const,
-        onPress: async () => {
-          const r = await removeTextMemo(fieldId, memoId);
-          if (!r.ok) Alert.alert('메모 삭제 실패', r.error);
-        },
-      },
-    ]);
-  };
-
-  const handleRemovePhoto = (photoId: string) => {
-    promptChoice('사진 삭제', '이 사진을 삭제할까요?', [
-      { label: '취소', style: 'cancel' as const },
-      {
-        label: '삭제',
-        style: 'destructive' as const,
-        onPress: async () => {
-          const r = await removePhoto(fieldId, photoId);
-          if (!r.ok) Alert.alert('사진 삭제 실패', r.error);
-        },
-      },
-    ]);
-  };
-
+  // 최신순 (FE-SITE-05).
+  const directTextMemos = directAttachments
+    .filter((a) => a.type === 'text')
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const visits = useMemo(
     () =>
       allVisits
@@ -144,6 +82,32 @@ export default function FieldDetail() {
   // previous render" 로 화면이 죽는다. URL 직접 진입·콜드스타트에서 재현됐다
   // (목록에서 눌러 들어가면 이미 하이드레이트돼 있어 안 터진다).
   const statusBusyRef = useRef(false);
+
+  // 방문 사진 — 방문마다 한 번. 현장 사진과 합쳐 최신순으로 보여준다.
+  const fetchedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    for (const v of visits) {
+      if (fetchedRef.current.has(v.id)) continue;
+      fetchedRef.current.add(v.id);
+      // 실패하면 표시를 지워 다음 렌더(방문 목록 갱신 등)에서 다시 시도한다.
+      void loadVisitPhotos(v.tripId, v.id).then((ok) => {
+        if (!ok) fetchedRef.current.delete(v.id);
+      });
+    }
+  }, [visits, loadVisitPhotos]);
+
+  const photos = useMemo(() => {
+    const all: { id: string; fileUrl: string; createdAt: string }[] = [];
+    for (const a of directAttachments) {
+      if (a.type === 'photo' && a.fileUrl) all.push({ id: a.id, fileUrl: a.fileUrl, createdAt: a.createdAt });
+    }
+    for (const v of visits) {
+      for (const ph of photosByVisit[v.id] ?? []) {
+        all.push({ id: ph.attachmentId, fileUrl: ph.fileUrl, createdAt: ph.createdAt });
+      }
+    }
+    return all.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }, [directAttachments, visits, photosByVisit]);
 
   if (!field) {
     return (
@@ -164,37 +128,71 @@ export default function FieldDetail() {
       statusBusyRef.current = false;
     }
   };
+  // 상태 변경 — 액션 시트에서 고른다. '조치 완료' 는 종결 상태라 한 번 더 확인.
   const handleStatusTap = () => {
     if (statusBusyRef.current) return;
     const others = FIELD_STATUS_VALUES.filter((s) => s !== field.status);
-    promptChoice('상태 변경', `현재: ${FIELD_STATUS_LABEL[field.status]}`, [
-      ...others.map((s) => ({
+    showActionSheet(
+      others.map((s) => ({
         label: FIELD_STATUS_LABEL[s],
-        onPress: () => {
-          // done 으로 가는 전환만 한 번 더 confirm — '완료' 는 종결 상태라 실수 보호.
-          // 자연 진행(pending→in_progress, in_progress→done 의 중간 흐름) 도 done 만
-          // 한 번 더 확인. 그 외 전환은 즉시 적용 (promptChoice 자체가 1차 선택).
+        onPress: async () => {
           if (s === 'done') {
-            promptChoice(
-              '조치 완료 처리',
-              '이 현장을 조치 완료로 변경할까요?',
-              [
-                { label: '취소', style: 'cancel' as const },
-                {
-                  label: '완료',
-                  style: 'destructive' as const,
-                  onPress: () => void applyStatus(s),
-                },
-              ],
-            );
-          } else {
-            void applyStatus(s);
+            const ok = await confirm({
+              title: '조치 완료 처리',
+              message: '이 현장을 조치 완료로 변경할까요?',
+              confirmLabel: '완료',
+            });
+            if (!ok) return;
           }
+          void applyStatus(s);
         },
       })),
-      { label: '취소', style: 'cancel' as const },
-    ]);
+      `현재 상태: ${FIELD_STATUS_LABEL[field.status]}`,
+    );
   };
+
+  // FE-SITE-06 — 현장 삭제는 이 경로에서만. 진행 중 외근의 목적지면 먼저 막는다.
+  const handleDelete = async () => {
+    const inActiveTrip =
+      activeTripId !== null &&
+      useDestinationStore.getState().byTrip(activeTripId).some((d) => d.fieldId === field.id);
+    if (inActiveTrip) {
+      await notice('삭제할 수 없습니다', '외근 종료 후 삭제할 수 있습니다.');
+      return;
+    }
+    // 서버는 방문 기록이 있는 현장의 삭제를 거부한다(백로그 §40) — 묻고 나서 거절하지 않게 먼저 알린다.
+    if (visits.length > 0) {
+      await notice('삭제할 수 없습니다', `방문 기록이 ${visits.length}건 있는 현장은 아직 삭제할 수 없습니다.`);
+      return;
+    }
+    const ok = await confirm({
+      title: '이 현장을 삭제할까요?',
+      message: '되돌릴 수 없습니다.',
+      confirmLabel: '삭제',
+      destructive: true,
+    });
+    if (!ok) return;
+    const r = await removeField(field.id);
+    if (r.ok) {
+      toast('현장을 삭제했습니다');
+      router.replace('/(tabs)/fields' as never);
+    } else if ('needsConfirm' in r) {
+      // 서버는 방문 기록이 있는 현장의 삭제를 거부한다(백로그 §40 — 명세 FE-SITE-09 와 충돌).
+      await notice('삭제할 수 없습니다', '방문 기록이 있는 현장은 아직 삭제할 수 없습니다.');
+    } else {
+      Alert.alert('삭제 실패', r.error);
+    }
+  };
+
+  const openMore = () =>
+    showActionSheet([
+      {
+        label: '현장 정보 수정',
+        icon: 'create-outline',
+        onPress: () => router.push(`/(tabs)/fields/${field.id}/edit` as never),
+      },
+      { label: '현장 삭제', icon: 'trash-outline', tone: 'danger', onPress: () => void handleDelete() },
+    ]);
 
   // 목록 카드와 동일한 규칙 — fieldTitle(name || address) + fieldSubtitle(제목이 안 보여준 나머지).
   const title = fieldTitle(field);
@@ -285,96 +283,43 @@ export default function FieldDetail() {
         </View>
       ) : null}
 
-      {/* 삭제는 여기 두지 않는다 — 되돌릴 수 없는 동작은 '수정' 안의 위험 구역 하나로 모은다.
-          외근은 이미 같은 이동을 했다(trips/[id]/edit 주석: "상세 제목행의 빨강 휴지통에서 이동").
-          차단 정책(방문 기록 있으면 거부)도 그쪽에 같은 내용으로 있어 경로가 중복이었다.
-
-          길찾기·수정은 동급 액션이라 한 줄 2분할 — CurrentDestCard 가 같은 이유로 이미 쓰는
-          배치다("이동 중 가장 자주 누르는 길찾기가 가장 작게 눌려 있던 셈"). 이 화면도 같은
-          역전이 있었다: 현장 동선의 행동(길찾기)이 size="sm" 작은 버튼이고 관리 행동(수정)이
-          전폭이라, 큰 쪽이 덜 쓰는 동작이었다. 순서는 실사용대로 찾아간다 → 고친다. */}
-      <View style={styles.actionRow}>
-        <Button
-          onPress={() =>
-            void openKakaoRouteTo(field.address, field.latitude, field.longitude)
-          }
-          variant="secondary"
-          leftIcon="navigate"
-          style={styles.actionBtn}
-        >
-          길찾기
-        </Button>
-        <Button
-          onPress={() => router.push(`/(tabs)/fields/${field.id}/edit` as never)}
-          variant="secondary"
-          leftIcon="create-outline"
-          style={styles.actionBtn}
-        >
-          수정
-        </Button>
-      </View>
+      {/* 길찾기만 본문에 — 수정·삭제는 헤더 `···` 로 옮겼다(명세 FE-SITE-06). */}
+      <Button
+        onPress={() => void openKakaoRouteTo(field.address, field.latitude, field.longitude)}
+        variant="secondary"
+        leftIcon="navigate"
+        fullWidth
+        style={styles.navBtn}
+      >
+        길찾기
+      </Button>
 
       <GroupLabel>메모 ({directTextMemos.length})</GroupLabel>
-      <View style={styles.memoInputRow}>
-        <Input
-          value={memoInput}
-          onChangeText={setMemoInput}
-          placeholder="현장에 남길 메모"
-          maxLength={2000}
-          multiline
-          numberOfLines={2}
-          containerStyle={styles.memoInputWrap}
-        />
-        <Button
-          onPress={handleAddDirectMemo}
-          disabled={!memoInput.trim()}
-          loading={memoSubmitting}
-        >
-          추가
-        </Button>
-      </View>
       {directTextMemos.length > 0 ? (
         <View style={styles.memoList}>
           {directTextMemos.map((m) => (
             <Card key={m.id} padding="md">
-              <View style={styles.memoHead}>
-                <Text variant="bodySm" style={styles.memoText}>
-                  {m.text}
-                </Text>
-                <Pressable
-                  onPress={() => handleRemoveMemo(m.id)}
-                  accessibilityRole="button"
-                  accessibilityLabel="메모 삭제"
-                  hitSlop={MEMO_DELETE_HIT_SLOP}
-                  style={({ pressed }) => [
-                    styles.memoDeleteBtn,
-                    pressed && { opacity: opacity.pressed },
-                  ]}
-                >
-                  <Ionicons name="close" size={14} color={colors.textMuted} />
-                </Pressable>
-              </View>
-              <Text variant="caption" color="textMuted" style={styles.memoMeta}>
+              <Text variant="bodySm">{m.text}</Text>
+              <Text variant="caption" color="textMuted" style={styles.memoMeta} numeric>
                 {fmtDateTime(m.createdAt)}
               </Text>
             </Card>
           ))}
         </View>
-      ) : null}
+      ) : (
+        <Text variant="bodySm" color="textSubtle" style={styles.empty}>
+          체크인에서 남긴 메모가 여기에 보입니다
+        </Text>
+      )}
 
-      <Button
-        onPress={handleAddDirectPhoto}
-        variant="secondary"
-        fullWidth
-        leftIcon="camera"
-        loading={photoBusy}
-        style={styles.photoBtn}
-      >
-        사진 추가
-        {directPhotoCount > 0 ? ` (${directPhotoCount})` : ''}
-      </Button>
-
-      <PhotoGrid photos={directPhotos} onDelete={handleRemovePhoto} />
+      <GroupLabel>사진 ({photos.length})</GroupLabel>
+      {photos.length > 0 ? (
+        <PhotoGrid photos={photos} />
+      ) : (
+        <Text variant="bodySm" color="textSubtle" style={styles.empty}>
+          체크인에서 찍은 사진이 여기에 보입니다
+        </Text>
+      )}
 
       <GroupLabel>방문 이력 ({visits.length})</GroupLabel>
     </View>
@@ -385,6 +330,7 @@ export default function FieldDetail() {
       title="현장 상세"
       onBack={() => safeBack(router)}
       initialIndex={2}
+      headerRight={<OverflowButton onPress={openMore} label="현장 상세 더보기" />}
     >
       <BottomSheetFlatList
         data={visits}
@@ -434,36 +380,10 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     marginTop: spacing.xs,
   },
-  actionRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginTop: spacing.md,
-  },
-  actionBtn: { flex: 1 },
-  memoInputRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-    alignItems: 'flex-end',
-  },
-  memoInputWrap: { flex: 1 },
+  navBtn: { marginTop: spacing.md },
+  empty: { marginTop: spacing.xs },
   memoList: { marginTop: spacing.sm, gap: spacing.xs },
-  memoHead: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-  },
-  memoText: { flex: 1 },
-  memoDeleteBtn: {
-    width: 22,
-    height: 22,
-    borderRadius: radius.pill,
-    backgroundColor: colors.surfaceMuted,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   memoMeta: { marginTop: spacing.xs },
-  photoBtn: { marginTop: spacing.sm },
   list: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
   visitCard: { marginBottom: spacing.xs },
   visitHead: {
