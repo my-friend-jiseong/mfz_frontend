@@ -541,6 +541,148 @@ Word 를 못 받아도 PDF 로 대체 시연 가능).
 
 ---
 
+## 35. 🟠 방문 단위 **메모**가 없다 — 명세 v2 방문 수정의 메모 편집이 성립하지 않는다
+
+명세 v2(`docs/일가요-프론트엔드-요구사항-명세-v2.md` §1.3·§4.4)는 메모·사진을 **방문 단위**로
+쓰고 고친다. 사진은 서버에 있는데 메모는 없다. 로드맵 [`07_ui-v2-redesign.md`](../roadmap/07_ui-v2-redesign.md) §4-A.
+
+### 실측 (2026-09-30, 더미계정 `demo3`, 운영)
+
+| 호출 | 결과 |
+|---|---|
+| `POST /api/visits/:id/photos` (multipart `file`, `phase`) | **201** — 방문 상세 `photos[]` 에 들어간다 |
+| `GET /api/trips/:tripId/visits/:id` | `photos[]` · `fieldPhotos[]` · `phaseProgress` 포함 |
+| `POST /api/visits/:id/memos/text` | **404** `Cannot POST` — OpenAPI 에는 있다(잔존 기재) |
+| `DELETE /api/visits/:id/photos/:attachmentId` | **404** — 삭제 경로 없음 |
+| `PATCH /api/fields/:id/memos/:memoId` | **404** — 메모 수정 없음(삭제+재생성만) |
+| `GET /api/fields/:id` | `memos[]`·`photos[]` 는 현장 직접 첨부만. **방문 사진은 안 들어온다** |
+
+### 요청
+
+1. 방문 텍스트 메모 `POST /api/visits/:id/memos` + `PATCH`/`DELETE` — 또는 `memos.visit_id` nullable FK.
+2. 방문 사진 삭제 `DELETE /api/visits/:id/photos/:attachmentId`.
+3. `GET /api/fields/:id` 에 방문 사진·메모를 최신순으로 합쳐 내려주기(각 항목에 `visitId`·`visitedAt`).
+4. OpenAPI 에서 `/memos/text`(음성 메모 포함) 잔존 기재 정리.
+
+### 프론트 선조치
+
+- 체크인·방문 수정의 **사진은 방문 사진 API** 로 올린다(서버 지원). 방문 수정에서 사진 **제거는 숨긴다**.
+- **메모는 현장 메모 API** 로 쓴다. 명세 FE-CHK-04("기존 메모를 불러와 수정")에 맞춰 최신 메모를 불러오고,
+  바뀌면 삭제 + 재생성한다.
+- 현장 상세 사진은 현장 사진 ∪ `recentVisits` 각 방문의 `photos` 를 프론트에서 합친다(N+1 호출).
+
+### 우선순위
+🟠 — UI 는 선조치로 동작하지만, 방문을 지웠을 때 메모가 남는 등 명세와 어긋난다.
+
+### 발견 시점
+2026-09-30, UI v2 개편 Phase 0 계약 실측.
+
+---
+
+## 36. 🟠 방문 삭제 API 가 없다 — `DELETE /api/visits/:id`
+
+명세 v2 FE-WRAP-03·FE-VED-04: 외근 정리의 스와이프 삭제와 방문 수정의 `방문 삭제`.
+**현장(마스터)은 남기고 그 방문과 첨부만** 지운다.
+
+### 실측 (2026-09-30)
+`DELETE /api/visits/:id` · `DELETE /api/trips/:tripId/visits/:id` 모두 **404**(라우트 없음). `PATCH /api/visits/:id` 도 404.
+
+### 요청
+1. `DELETE /api/visits/:id` — 방문 사진·메모 cascade, 해당 목적지는 `pending` 또는 `skipped` 로 되돌림(어느 쪽인지 알려주면 프론트가 맞춘다).
+2. 그 방문이 보고서의 현장 보고에 쓰였으면 **409 `visit_in_report`**(§39 와 같은 판정).
+
+### 프론트 선조치
+UI(스와이프·`방문 삭제` 버튼·확인 대화상자)는 만들고, 호출은 404 를 받으면 "아직 지원되지 않는 기능입니다" 로 안내한다.
+서버가 붙으면 호출부 한 곳만 바뀐다.
+
+### 우선순위
+🟠
+
+### 발견 시점
+2026-09-30, UI v2 Phase 0.
+
+---
+
+## 37. 🟡 `기타` 결과의 사유 10자 강제 — 명세 v2 "체크인 입력 비강제" 와 충돌
+
+명세 v2 FE-CHK-05·FE-UX-04: 체크인·방문 수정의 모든 입력은 선택이다.
+서버는 `PATCH /api/visits/:id/status {status:'other'}` 에 사유가 없으면 **400 `visit_status_reason_required`**(2026-09-30 재확인).
+
+### 요청
+`other` 의 `reason` 을 선택으로. 10자 규칙을 유지해야 할 이유가 있으면 알려 달라(프론트는 규칙의 근거 문서를 찾지 못했다).
+
+### 참고 — `미정`(UNDECIDED)은 서버 변경 없이 간다
+체크인은 방문을 **`completed` 로 생성**한다(실측). 명세 1.4 의 `미정` 은 "미방문 또는 체크인 없이 건너뛴 경우" 이므로
+**방문이 없는 목적지**를 프론트에서 `미정` 으로 파생한다. 체크인에서 상태를 고르지 않으면 서버 기본값(`완료`)을 그대로 쓴다.
+
+### 프론트 선조치
+`기타` 는 사유 입력칸을 선택 입력으로 보여주고, 10자 미만이면 서버 거절 문구를 안내한다.
+
+### 우선순위
+🟡
+
+### 발견 시점
+2026-09-30, UI v2 Phase 0.
+
+---
+
+## 38. 🟢 `from-trip` 이 현장 선택·순서를 받지 않는다 — 프론트 우회로 해결, 정합성 요청만
+
+명세 v2 FE-RPT-02a: 보고서 작성에서 현장 순서를 ▲▼ 로 바꾸면 현장 보고 순서도 따른다.
+
+### 실측 (2026-09-30)
+- `POST /api/reports/from-trip/:tripId {title, fieldIds:[B]}` → `fieldIds` 를 **무시**하고 A·B 둘 다 생성.
+- `FieldReport` 에 순서 필드가 없다. 대신 `POST /api/reports` → `POST …/field-reports` 를 B, A 순으로 부르면 **조회도 B, A** (생성 순).
+
+### 프론트 선조치
+보고서 작성은 `from-trip` 대신 **빈 보고서 + 현장 보고 순차 생성**으로 바꾼다. 서버 변경 없이 명세를 충족한다.
+
+### 요청 (낮음)
+`from-trip` 에 `fieldIds[]`(순서 포함), `FieldReport.order` + 재정렬 PATCH. 있으면 보고서 생성이 N+1 호출에서 1회로 준다.
+
+### 발견 시점
+2026-09-30, UI v2 Phase 0 (로드맵 §6 S2).
+
+---
+
+## 39. 🟡 현장 보고가 어느 **방문**에서 왔는지 모른다 — 방문 삭제 차단 판정 불가
+
+명세 v2 FE-WRAP-03·FE-VED-04: "보고서에 반영된 방문이면 차단 안내". `FieldReport` 에는 `fieldId` 만 있고 `visitId` 가 없다.
+
+### 요청
+`field_reports.visit_id`(nullable) 또는 §36 의 서버 409 판정.
+
+### 프론트 선조치
+같은 외근(`report.tripId`)의 보고서에 같은 `fieldId` 의 현장 보고가 있으면 차단한다(근사치 — 같은 외근에서 같은 현장을 두 번 방문한 경우를 구분 못 한다).
+
+### 발견 시점
+2026-09-30, UI v2 Phase 0.
+
+---
+
+## 40. 🟠 방문 이력이 있는 현장은 **영원히 삭제할 수 없다** — 명세 v2 FE-SITE-09 와 충돌
+
+### 실측 (2026-09-30)
+방문이 1건이라도 있는 현장 `DELETE /api/fields/:id` → **409 `has_related_visits`** `{visitCount}`.
+
+명세 v2 FE-SITE-09 는 반대다: 현장을 삭제해도 **과거 방문은 외근 내역·외근 정리·보고서에서 삭제 시점의 현장 정보로 계속 보인다**
+(= soft delete + 방문·보고서 쪽은 스냅샷 유지). FE-SITE-06 의 차단 조건은 "진행 중 외근에 포함된 현장" 하나뿐이다.
+
+### 요청
+1. 현장 soft delete 를 방문 이력과 무관하게 허용. 과거 외근·보고서 응답의 `siteName`·주소는 삭제 후에도 채워 줄 것.
+2. **진행 중 외근의 목적지인 현장**만 409 `field_in_active_trip`.
+
+### 프론트 선조치
+진행 중 외근 목적지와 대조해 먼저 차단하고("외근 종료 후 삭제할 수 있습니다"), `has_related_visits` 409 는 "방문 기록이 있는 현장은 아직 삭제할 수 없습니다" 로 안내한다.
+
+### 우선순위
+🟠 — 사용자가 현장을 정리할 방법이 없다.
+
+### 발견 시점
+2026-09-30, UI v2 Phase 0.
+
+---
+
 ## 🔗 2026-07-26 배치 프론트 연동 — ✅ 종결 (이력)
 
 > 2026-07-26 백엔드 배치([release-2026-07-26-backend-backlog.md](./archive/release-2026-07-26-backend-backlog.md))로
