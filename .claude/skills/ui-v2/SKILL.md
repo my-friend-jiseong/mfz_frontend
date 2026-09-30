@@ -60,6 +60,10 @@ description: |
 - **현장 보고 PATCH 에서 지우기는 `null`** — `undefined` 는 요청에서 빠져 "그대로 두기" 가 된다(사진 제거·설명 비우기가 반영 안 되던 원인).
 - 확인 창·선택 시트는 `confirm()`·`showActionSheet()`. `Alert.alert` 는 실패 안내에만. 시트 `onPress` 는 시트가 닫힌 뒤 불리므로 이어서 다른 모달을 띄워도 된다.
 - 웹 검증은 창 크기를 못 바꾸는 자동화 브라우저에서 `document.write` 로 390×844 iframe 을 띄워 한다(같은 origin 이라 클릭·JS 모두 된다). 파일이 바뀌면 바깥 페이지가 새로고침돼 iframe 을 다시 띄워야 한다.
+- **폼은 `KeyboardAvoidingView` 대신 `ui/KeyboardAvoid`**. SDK 54 Android 는 edge-to-edge 라 창이 줄지 않는다 — RN KAV 를 Android 에서 undefined 로 두면 키보드가 입력칸·하단 바를 덮는다(에뮬레이터 실측).
+- **`SafeScreen` top edge**: 네이티브 스택 헤더 화면(`_layout` headerShown)은 `edges={[]}`. 외근 배너가 있을 땐 SafeScreen 이 알아서 top 을 뺀다.
+- **다른 탭 스택으로 push 한 화면(체크인)은 뒤로가기 후에도 언마운트되지 않는다** — 저장 안 한 상태는 blur/focus 에서 직접 정리한다.
+- 웹 검증 후 **Android 에뮬레이터로 한 번 더** 본다(메모리 project-android-emulator-testing). 위 세 가지는 웹에서 재현되지 않았다.
 - 삭제되는 라우트(`trips/[id]/edit`)의 참조는 `grep` 전수로 찾는다. `head` 로 자르지 않는다.
 
 ## 4. 검증
