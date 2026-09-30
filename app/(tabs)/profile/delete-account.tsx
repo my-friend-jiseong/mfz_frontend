@@ -1,14 +1,13 @@
 import { useState } from 'react';
 import {
   Alert,
-  KeyboardAvoidingView,
   Linking,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
+import { KeyboardAvoid } from '@/components/ui/KeyboardAvoid';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '@/stores/authStore';
@@ -106,11 +105,10 @@ export default function DeleteAccount() {
   };
 
   return (
-    <SafeScreen>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+    // 네이티브 스택 헤더(_layout headerShown)가 status bar 를 이미 덮는다 — top 을 또 두르면 이중 여백(Android 실측).
+    <SafeScreen edges={[]}>
+      <KeyboardAvoid
+        style={styles.flex}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           {/* 경고 박스는 손으로 짠 표면이 아니라 Card 에 tone 만 얹는다 — fields new/edit 의
               warnBox 와 같은 패턴(muted 배경 + 같은 계열 테두리). 테두리 없이 배경만 깔면
@@ -191,7 +189,7 @@ export default function DeleteAccount() {
             취소
           </Button>
         </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAvoid>
     </SafeScreen>
   );
 }

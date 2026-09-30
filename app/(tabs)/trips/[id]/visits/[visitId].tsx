@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, View } from 'react-native';
+import { KeyboardAvoid } from '@/components/ui/KeyboardAvoid';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Text } from '@/components/ui/Text';
 import { Card } from '@/components/ui/Card';
@@ -145,10 +146,8 @@ export default function VisitEdit() {
   return (
     <SafeScreen>
       <NavHeader title="방문 수정" onBack={back} />
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      <KeyboardAvoid
+        style={styles.flex}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <Card padding="lg" style={styles.header}>
             <Badge label={VISIT_STATUS_LABEL[visit.status]} tone={badge.tone} shape={badge.shape} size="sm" />
@@ -197,7 +196,7 @@ export default function VisitEdit() {
             저장
           </Button>
         </BottomActionBar>
-      </KeyboardAvoidingView>
+      </KeyboardAvoid>
     </SafeScreen>
   );
 }

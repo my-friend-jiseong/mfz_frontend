@@ -3,12 +3,12 @@ import {
   Alert,
   Image,
   Keyboard,
-  KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
+import { KeyboardAvoid } from '@/components/ui/KeyboardAvoid';
 import { Text } from '@/components/ui/Text';
 import { toast } from '@/components/ui/Toast';
 import { safeBack } from '@/utils/backNavigation';
@@ -394,10 +394,8 @@ export default function NewField() {
 
   return (
     <SafeScreen>
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
+    <KeyboardAvoid
+      style={styles.container}>
       {placeSearchBridge}
       <ScrollView
         contentContainerStyle={styles.scroll}
@@ -637,7 +635,7 @@ export default function NewField() {
           현장 등록
         </Button>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardAvoid>
     </SafeScreen>
   );
 }

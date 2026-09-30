@@ -208,6 +208,37 @@
 
 iOS 전용 경로(액션 시트 뒤 350ms 지연, `clearButtonMode`)는 Android 로 확인할 수 없다 — iPhone 이 있으면 D5·D6·D10 만 다시 본다.
 
+### 11.1 결과 — Android 에뮬레이터 (2026-09-30)
+
+환경: AVD `ilgayo_test` (Pixel 7, Android 15 / API 35, google_apis x86_64, WHPX) + Expo Go(SDK 54) · `adb` 로 조작, `logcat` 로 크래시 감시. 전 과정 크래시 0.
+
+| # | 결과 | 비고 |
+|---|---|---|
+| D1 | ✅ | 스와이프 → 삭제 노출, 카드 안 펼쳐짐, 보고서 반영 방문 차단 안내 |
+| D2 | ✅ | 카드 위 세로 밀기 = 스크롤 |
+| D3 | ✅ | 펼친 뒤에도 끝까지 스크롤, 하단 바 가림 없음 |
+| D4 | ✅ | Android 는 목록을 밀면 시트가 먼저 최대로 올라간 뒤 스크롤 — 외근 종료까지 닿음. 최대 높이에서 목록 아래가 빈다(알려진 타협) |
+| D5 | ✅ | 시트 → 확인 대화상자, 대화상자 → 형식 시트 양방향 연쇄 |
+| D6 | ✅ | 사진 시트 → 앨범(Photo Picker) → 슬롯 업로드 201 → 서버 URL 미리보기 |
+| D7 | ✅ | 체크인 완료 = check-in → status → 방문 사진 → 메모 순서로 성공, 토스트 |
+| D8 | ❌→✅ | **키보드가 메모 칸·하단 바를 가림** → `KeyboardAvoid` 로 수정 후 통과 |
+| D9 | ✅ | 제목 인라인 수정 → 키보드 완료 키로 저장 |
+| D10 | ✅ | 하드웨어 back 이 시트·대화상자만 닫음 |
+| D11 | ✅ | 탭 루트에서만 탭바 |
+| D12 | ✅ | 토스트가 제스처 바와 겹치지 않음 |
+| D13 | ✅ | 로그인 직후 크래시 없음 |
+| D14 | ✅ | PDF 생성 → Chrome 으로 열림 |
+
+**실기기에서만 드러나 고친 것 (5건)**
+
+1. **Android 키보드가 폼을 가림** — SDK 54 Android 는 edge-to-edge 라 창이 줄지 않는데 `KeyboardAvoidingView` 를 Android 에서 `behavior=undefined` 로 두고 있었다. 10개 폼 화면 전부(로그인·회원가입·현장 등록/수정·내 정보 수정·계정 삭제 포함, **v2 이전부터의 결함**). `ui/KeyboardAvoid` 로 교체 — Android 는 Reanimated `useAnimatedKeyboard`(translucent 옵션)로 키보드 높이를 매 프레임 따라간다. Keyboard 이벤트 방식은 리뷰에서 내비게이션 바 높이 누락·높이 변화 미반영으로 걸려 바꿨다.
+2. **상단 이중 여백 두 종류(기존 결함)** — ① 외근 배너 아래: 네이티브 `SafeAreaView` 가 배너 규칙(provider top=0)을 무시하고 inset 을 또 더했다 → provider top 이 0 이면 top edge 를 뺀다. ② 네이티브 스택 헤더 아래(현장 수정·내 정보 수정·회원 탈퇴): 헤더가 이미 status bar 를 덮는데 `SafeScreen` 이 또 둘렀다(배너 없을 때 ~110px) → 그 화면들은 `edges={[]}`.
+3. **체크인에서 뒤로 나갔다 오면 저장 안 한 입력이 남음** — 현장 탭 스택에 머물러 언마운트되지 않았다. 방문을 만들기 전이면 blur 시 비우고 기존 메모만 다시 채운다(FE-CHK-01·04). 리뷰 후속: 완료했거나 다른 외근에서 만든 방문이면 다음 포커스에서 새 세션으로(이전 외근 방문에 덮어쓰던 여지), 저장 중엔 비우지 않음.
+4. **스와이프 삭제 영역이 카드 둥근 모서리로 비침** — 닫혀 있을 땐 투명.
+5. **시트·대화상자 딤이 상태바를 덮지 않음** — `Modal statusBarTranslucent`.
+
+남은 것: iOS 실기기(D5·D6·D10), 카메라 촬영 경로(에뮬레이터에선 앨범으로 대체).
+
 ## 9. 조사 출처
 
 - 점진 전환: [Shopify RN 마이그레이션](https://shopify.engineering/migrating-our-largest-mobile-app-to-react-native) · [Toss 컬러 시스템 교체](https://toss.tech/article/tds-color-system-update) · [Toss 디자인 시스템 재고](https://toss.tech/article/rethinking-design-system)

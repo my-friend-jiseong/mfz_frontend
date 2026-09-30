@@ -92,7 +92,7 @@ export function ActionSheetHost() {
   if (!pending) return null;
 
   return (
-    <Modal transparent visible animationType="none" onRequestClose={() => close()}>
+    <Modal transparent visible statusBarTranslucent animationType="none" onRequestClose={() => close()}>
       <View style={styles.root}>
         <Animated.View style={[StyleSheet.absoluteFill, styles.scrim, { opacity: anim }]}>
           <Pressable

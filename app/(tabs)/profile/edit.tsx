@@ -1,12 +1,11 @@
 import { useRef, useState } from 'react';
 import {
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   ScrollView,
   StyleSheet,
   TextInput,
 } from 'react-native';
+import { KeyboardAvoid } from '@/components/ui/KeyboardAvoid';
 import { useAuthStore } from '@/stores/authStore';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
@@ -109,11 +108,10 @@ export default function ProfileEdit() {
   };
 
   return (
-    <SafeScreen>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+    // 네이티브 스택 헤더(_layout headerShown)가 status bar 를 이미 덮는다 — top 을 또 두르면 이중 여백(Android 실측).
+    <SafeScreen edges={[]}>
+      <KeyboardAvoid
+        style={styles.flex}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           {/* 화면 첫 줄 — scroll 의 padding xl 위에 marginTop 을 더하지 않는다. */}
           <GroupLabel style={styles.firstGroup}>이름</GroupLabel>
@@ -204,7 +202,7 @@ export default function ProfileEdit() {
             이메일({user?.email ?? '-'})은 로그인 식별자라 변경할 수 없습니다.
           </Text>
         </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAvoid>
     </SafeScreen>
   );
 }

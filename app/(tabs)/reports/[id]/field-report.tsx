@@ -2,14 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Image,
-  KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
+import { KeyboardAvoid } from '@/components/ui/KeyboardAvoid';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Text } from '@/components/ui/Text';
@@ -485,7 +484,7 @@ function FieldReportEditor() {
         onBack={() => void (mode === 'wizard' ? handleLater() : leaveEdit())}
         right={headerRight}
       />
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoid style={styles.flex}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <Text variant="h2" weight="heavy">
             {heading}
@@ -606,7 +605,7 @@ function FieldReportEditor() {
             </Button>
           ) : null}
         </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAvoid>
 
       {/* 현장 사진 갤러리 — 방문·현장 사진을 골라 지금 단계 슬롯에 넣는다. */}
       <Modal visible={galleryOpen} animationType="fade" transparent onRequestClose={() => setGalleryOpen(false)}>

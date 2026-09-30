@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, View } from 'react-native';
+import { KeyboardAvoid } from '@/components/ui/KeyboardAvoid';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Text } from '@/components/ui/Text';
@@ -178,7 +179,7 @@ export default function ComposeReport() {
   return (
     <SafeScreen>
       <NavHeader title="보고서 작성" onBack={() => safeBack(router, '/(tabs)/reports')} />
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoid style={styles.flex}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <Input
             label="제목"
@@ -308,7 +309,7 @@ export default function ComposeReport() {
             보고서 만들기
           </Button>
         </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAvoid>
     </SafeScreen>
   );
 }

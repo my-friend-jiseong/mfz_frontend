@@ -1,7 +1,6 @@
 import { useRef, useState } from 'react';
 import {
   Alert,
-  KeyboardAvoidingView,
   Linking,
   Platform,
   Pressable,
@@ -10,6 +9,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { KeyboardAvoid } from '@/components/ui/KeyboardAvoid';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '@/stores/authStore';
@@ -169,10 +169,8 @@ export default function Signup() {
     <SafeScreen>
     {/* 명세 v2 FE-AUTH-03 — 로그인 복귀는 헤더 ← 하나. 본문 '이미 계정이 있어요' 는 없앴다. */}
     <NavHeader title="회원가입" onBack={() => safeBack(router, '/(auth)/login')} />
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
+    <KeyboardAvoid
+      style={styles.container}>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <View style={styles.form}>
           <Input
@@ -330,7 +328,7 @@ export default function Signup() {
           </Button>
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardAvoid>
     </SafeScreen>
   );
 }

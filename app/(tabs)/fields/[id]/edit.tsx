@@ -2,13 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Keyboard,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
+import { KeyboardAvoid } from '@/components/ui/KeyboardAvoid';
 import { Text } from '@/components/ui/Text';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFieldStore } from '@/stores/fieldStore';
@@ -397,11 +396,10 @@ export default function EditField() {
   const pinLng = newAddress ? newAddress.lng : field.longitude;
 
   return (
-    <SafeScreen>
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
+    // 네이티브 스택 헤더(_layout headerShown)가 status bar 를 이미 덮는다 — top 을 또 두르면 이중 여백(Android 실측).
+    <SafeScreen edges={[]}>
+    <KeyboardAvoid
+      style={styles.container}>
       {placeSearchBridge}
       <ScrollView
         contentContainerStyle={styles.scroll}
@@ -672,7 +670,7 @@ export default function EditField() {
         </Button>
 
       </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardAvoid>
     </SafeScreen>
   );
 }

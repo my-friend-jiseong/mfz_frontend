@@ -1,14 +1,13 @@
 import { useRef, useState } from 'react';
 import {
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   TextInput,
   View,
 } from 'react-native';
+import { KeyboardAvoid } from '@/components/ui/KeyboardAvoid';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '@/stores/authStore';
@@ -85,10 +84,8 @@ export default function Login() {
 
   return (
     <SafeScreen>
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
+    <KeyboardAvoid
+      style={styles.container}>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
           <Text variant="h1" color="primary" align="center">
@@ -193,7 +190,7 @@ export default function Login() {
           </Pressable>
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardAvoid>
     </SafeScreen>
   );
 }

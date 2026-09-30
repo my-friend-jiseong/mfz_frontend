@@ -38,6 +38,10 @@ export function useSwipePressGuard(): () => boolean {
  */
 export function SwipeRow({ children, onDelete, deleteLabel = '삭제', onOpenChange }: Props) {
   const tx = useRef(new Animated.Value(0)).current;
+  // 삭제 영역 투명도 — 렌더마다 새 보간 노드를 만들지 않게 한 번만.
+  const actionOpacity = useRef(
+    tx.interpolate({ inputRange: [-12, -2], outputRange: [1, 0], extrapolate: 'clamp' }),
+  ).current;
   const base = useRef(0);
   const [open, setOpen] = useState(false);
   // 끄는 중 — 손을 뗄 때 이어지는 클릭(웹 click·네이티브 press)이 아래 카드의 onPress 로 새지 않게
@@ -101,7 +105,14 @@ export function SwipeRow({ children, onDelete, deleteLabel = '삭제', onOpenCha
         if (e.nativeEvent.actionName === 'delete') onDelete();
       }}
     >
-      <View style={styles.actionSlot} importantForAccessibility="no-hide-descendants">
+      {/* 닫혀 있을 땐 투명 — 카드의 둥근 모서리 틈으로 빨간 삭제 영역이 비쳐 보였다(Android 실측). */}
+      <Animated.View
+        style={[
+          styles.actionSlot,
+          { opacity: actionOpacity },
+        ]}
+        importantForAccessibility="no-hide-descendants"
+      >
         <Pressable
           onPress={() => {
             settle(false);
@@ -115,7 +126,7 @@ export function SwipeRow({ children, onDelete, deleteLabel = '삭제', onOpenCha
             {deleteLabel}
           </Text>
         </Pressable>
-      </View>
+      </Animated.View>
       <GestureDetector gesture={pan}>
         <Animated.View style={{ transform: [{ translateX: tx }] }}>
           <SwipeGuardContext.Provider value={shouldIgnorePress}>{children}</SwipeGuardContext.Provider>

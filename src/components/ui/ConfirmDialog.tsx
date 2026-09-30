@@ -86,7 +86,7 @@ export function ConfirmDialogHost() {
   const confirmBg = pending.destructive ? colors.danger : colors.primary;
 
   return (
-    <Modal transparent visible animationType="none" onRequestClose={() => finish(false)}>
+    <Modal transparent visible statusBarTranslucent animationType="none" onRequestClose={() => finish(false)}>
       <Animated.View style={[styles.root, { opacity: anim }]}>
         <Pressable
           style={StyleSheet.absoluteFill}
