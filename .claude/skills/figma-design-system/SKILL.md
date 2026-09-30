@@ -111,7 +111,9 @@ easing(cubic-bezier)은 변수 타입이 없다 — 곡선으로만 그린다.
 
 ## 6. 파일 좌표
 
-`fileKey` `MlfpDS0wOeN90iNl5JCPWp` · 페이지 `DesignSystem` `3:4` · `UI` `0:1`
+`fileKey` `MlfpDS0wOeN90iNl5JCPWp` · 페이지 `DesignSystem` `3:4` · `UI - 원본` `0:1` · `UI - 개선본` `336:1078`
+
+**`UI - 개선본` 은 디자이너 소유다 — 이 스킬로 수정하지 않는다.** 그 페이지를 코드로 옮기는 일은 `ui-v2` 스킬.
 
 **화면은 `UI` 페이지에 넣는다.** 사용자가 만든 `N_화면이름` 섹션(`0_회원가입` `3:3`)이 기준이다 — 폭 390, 높이는 스크롤 전체지만 **최소 844**(갤럭시 뷰포트). 짧은 화면은 `primaryAxisSizingMode='FIXED'` + `resize(390,844)` 로 하단 여백을 채운다(콘텐츠는 MIN 정렬 유지). 없는 아이콘은 TTF 에서 추출해 먼저 채운다.
 
