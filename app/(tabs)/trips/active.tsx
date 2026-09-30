@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Platform, StyleSheet, View } from 'react-native';
+import { Alert, StyleSheet, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import { Redirect, useRouter } from 'expo-router';
@@ -9,6 +9,10 @@ import { useFieldStore } from '@/stores/fieldStore';
 import { useVisitStore } from '@/stores/visitStore';
 import { MapSheetLayout, sheetScrollableStyle } from '@/components/MapSheetLayout';
 import { Button } from '@/components/ui/Button';
+import { OverflowButton } from '@/components/ui/NavHeader';
+import { showActionSheet } from '@/components/ui/ActionSheet';
+import { confirm } from '@/components/ui/ConfirmDialog';
+import { toast } from '@/components/ui/Toast';
 import {
   VISIT_STATUS_BADGE,
   DESTINATION_STATUS_BADGE,
@@ -27,7 +31,7 @@ import { VISIT_STATUS_LABEL } from '@/types/entities';
 import { describeOptimizeAlgorithm } from '@/utils/routeOptimize';
 import { useOptimizeRoute } from '@/components/trips/useOptimizeRoute';
 import { safeBack } from '@/utils/backNavigation';
-import { spacing, touchTarget } from '@/theme/spacing';
+import { spacing } from '@/theme/spacing';
 import type { Destination } from '@/types/entities';
 
 // ----- backend-backlog §22 헬퍼 -----
@@ -98,7 +102,6 @@ export default function ActiveTrip() {
   );
 
   const { optimizing, run: runOptimize } = useOptimizeRoute();
-  const [elapsedTick, setElapsedTick] = useState(0);
   const [addOpen, setAddOpen] = useState(false);
 
   // 종료 진행 중 표식 — 아래 `activeTripId === null` 리다이렉트 가드를 재운다.
@@ -122,15 +125,6 @@ export default function ActiveTrip() {
     if (useDestinationStore.getState().byTrip(activeTripId).length > 0) return;
     void fetchDestinations(activeTripId);
   }, [activeTripId, fetchDestinations]);
-
-  // 외근 진행 시간을 1분 주기로 갱신. 화면이 active 일 때만 동작.
-  // deps 를 activeTripId (스칼라) 로 좁힘 — 이전엔 activeTrip 객체 (allTrips memo 결과)
-  // 가 다른 store mutation 마다 새 reference 가 되어 인터벌이 분 단위로 리셋되는 회로.
-  useEffect(() => {
-    if (!activeTripId) return;
-    const id = setInterval(() => setElapsedTick((n) => n + 1), 60_000);
-    return () => clearInterval(id);
-  }, [activeTripId]);
 
   const destinations = useMemo<Destination[]>(() => {
     if (activeTripId === null) return [];
@@ -209,8 +203,7 @@ export default function ActiveTrip() {
     const arrived = destinations.filter((d) => d.status === 'arrived').length;
     const skipped = destinations.filter((d) => d.status === 'skipped').length;
     const resolved = arrived + skipped;
-    const ratio = total === 0 ? 0 : Math.round((resolved / total) * 100);
-    return { total, arrived, skipped, resolved, ratio };
+    return { total, arrived, skipped, resolved };
   }, [destinations]);
 
   // O(1) visit lookup. 매 row 마다 allVisits.find 풀스캔하던 회로 차단.
@@ -223,19 +216,13 @@ export default function ActiveTrip() {
     return map;
   }, [allVisits, activeTripId]);
 
-  const elapsedLabel = useMemo(() => {
-    void elapsedTick;
+  // 시작 시각만 — 경과 시간·진행률(%)은 표시하지 않는다(명세 FE-OUT-04).
+  const startedAtLabel = useMemo(() => {
     if (!activeTrip) return null;
     const start = new Date(activeTrip.startedAt);
     const pad = (n: number) => String(n).padStart(2, '0');
-    const startedAtStr = `${pad(start.getHours())}:${pad(start.getMinutes())}`;
-    const diffMs = Math.max(0, Date.now() - start.getTime());
-    const totalMin = Math.floor(diffMs / 60_000);
-    const h = Math.floor(totalMin / 60);
-    const m = totalMin % 60;
-    const dur = h > 0 ? `${h}시간 ${m}분` : `${m}분`;
-    return `${startedAtStr} 시작 · ${dur} 진행 중`;
-  }, [activeTrip, elapsedTick]);
+    return `${pad(start.getHours())}:${pad(start.getMinutes())} 시작`;
+  }, [activeTrip]);
 
   const currentDest = useMemo(
     () => destinations.find((d) => d.status === 'pending'),
@@ -297,15 +284,38 @@ export default function ActiveTrip() {
     router.push(`/(tabs)/fields/${currentDest.fieldId}/checkin` as never);
   };
 
-  const handleSkip = () => {
+  // 건너뛰기 — 되돌릴 수 없어 한 번 확인한다. 결과는 미정 유지(FE-OUT-07).
+  const handleSkip = async () => {
     if (!currentDest) return;
-    Alert.alert('이 목적지를 건너뛸까요?', '나중에 별도 처리할 수 있습니다.', [
-      { text: '취소', style: 'cancel' },
-      {
-        text: '건너뛰기',
-        style: 'destructive',
-        onPress: () => markSkipped(currentDest.id),
-      },
+    const target = currentDest;
+    const ok = await confirm({
+      title: '이 방문을 건너뛸까요?',
+      message: '결과는 미정으로 남고 다음 목적지로 넘어갑니다.',
+      confirmLabel: '건너뛰기',
+    });
+    if (!ok) return;
+    markSkipped(target.id);
+    toast('이 방문을 건너뛰었습니다');
+  };
+
+  // `···` — 촬영 / 이 방문 건너뛰기 / 현장 추가 (명세 FE-OUT-06).
+  // '순서 다시 추천' 은 명세에 없지만 기존 재최적화 기능을 잃지 않도록 같은 시트 끝에 둔다.
+  const openMore = () => {
+    showActionSheet([
+      { label: '촬영', icon: 'camera', onPress: () => void quickPhoto.start() },
+      ...(currentDest
+        ? [{ label: '이 방문 건너뛰기', icon: 'play-skip-forward' as const, onPress: () => void handleSkip() }]
+        : []),
+      { label: '현장 추가', icon: 'add', onPress: () => setAddOpen(true) },
+      ...(pendingDests.length >= 2
+        ? [
+            {
+              label: '남은 순서 다시 추천',
+              icon: 'sparkles-outline' as const,
+              onPress: () => void handleReoptimize(),
+            },
+          ]
+        : []),
     ]);
   };
 
@@ -441,56 +451,31 @@ export default function ActiveTrip() {
       // 그냥 닫으면 어느 버튼의 onPress 도 안 돌아 플래그가 true 로 남고, 이후 외근이 다른
       // 경로로 종료되면 이 화면이 영원히 빈 화면(null)이 된다. 실제 종료 호출 직전에만 켠다.
       endingRef.current = false;
-      const confirmEnd = async () => {
-        if (__DEV__) console.log('[trips/end] confirmEnd → endTrip(true)');
-        endingRef.current = true;
-        const force = await endTrip(true);
-        if (__DEV__) console.log('[trips/end] confirmEnd result', force);
-        if (force.ok) {
-          finalizeEnd(force.trip.id, tripId);
-          return;
-        }
-        endingRef.current = false;
-        // force=true 호출이 또 needsConfirm 을 받았다 = 백엔드가 forceEndWithoutVisit:true 를
-        // 못 받았거나 인식 안 하고 있음. 침묵하지 않고 사용자에게 명시.
-        if ('needsConfirm' in force) {
-          const msg =
-            '외근 종료가 처리되지 않았습니다. (forceEndWithoutVisit 가 적용 안 됨)\n' +
-            '잠시 후 다시 시도하거나 페이지를 새로고침해주세요.';
-          console.error('[trips/end] force=true 호출이 confirm_required 반환', force);
-          if (Platform.OS === 'web') {
-            window.alert(msg);
-          } else {
-            Alert.alert('외근 종료 실패', msg);
-          }
-          return;
-        }
-        if (Platform.OS === 'web') {
-          window.alert(`오류: ${force.error}`);
-        } else {
-          Alert.alert('오류', force.error);
-        }
-      };
-      if (Platform.OS === 'web') {
-        if (window.confirm(r.message)) {
-          void confirmEnd();
-        }
-      } else {
-        // 취소·바깥 닫기 모두 별도 처리가 필요 없다 — 위에서 이미 플래그를 내려뒀고
-        // confirmEnd 만 다시 켠다.
-        Alert.alert('외근 종료 확인', r.message, [
-          { text: '취소', style: 'cancel' },
-          { text: '종료', style: 'destructive', onPress: () => void confirmEnd() },
-        ]);
+      const ok = await confirm({
+        title: '외근 종료 확인',
+        message: r.message,
+        confirmLabel: '종료',
+        destructive: true,
+      });
+      if (!ok) return;
+      endingRef.current = true;
+      const force = await endTrip(true);
+      if (force.ok) {
+        finalizeEnd(force.trip.id, tripId);
+        return;
       }
+      endingRef.current = false;
+      // force=true 가 또 needsConfirm 이면 서버가 forceEndWithoutVisit 를 못 받은 것 — 침묵하지 않는다.
+      Alert.alert(
+        '외근 종료 실패',
+        'needsConfirm' in force
+          ? '외근 종료가 처리되지 않았습니다. 잠시 후 다시 시도해주세요.'
+          : force.error,
+      );
       return;
     }
     endingRef.current = false;
-    if (Platform.OS === 'web') {
-      window.alert(`오류: ${r.error}`);
-    } else {
-      Alert.alert('오류', r.error);
-    }
+    Alert.alert('오류', r.error);
   };
 
   // 함수 컴포넌트 (`() => JSX`) 형태로 ListHeaderComponent 에 넘기면 매 render 마다
@@ -500,35 +485,19 @@ export default function ActiveTrip() {
   const listHeader = (
     <View style={styles.header}>
       <TripProgressStrip
-        startedAtLabel={elapsedLabel}
+        startedAtLabel={startedAtLabel}
         arrived={progress.arrived}
         skipped={progress.skipped}
         total={progress.total}
-        ratio={progress.ratio}
       />
       {currentDest ? (
         <CurrentDestCard
-          order={currentDest.order}
           // 상대 위치 — "전체 K곳 중 M번째" — order 가 갑자기 3 으로 점프하는 사용자 혼란 방지.
           positionLabel={`${progress.total}곳 중 ${progress.resolved + 1}번째`}
           address={currentDestField?.address ?? '알 수 없는 현장'}
           addressDetail={currentDestField?.addressDetail ?? undefined}
           onNavigate={handleNavigate}
           onCheckIn={handleCheckIn}
-          onSkip={handleSkip}
-          onShowField={
-            currentDestField
-              ? () =>
-                  router.push(
-                    `/(tabs)/fields/${currentDestField.id}` as never,
-                  )
-              : undefined
-          }
-          onReoptimize={
-            pendingDests.length >= 2 ? () => void handleReoptimize() : undefined
-          }
-          optimizing={optimizing}
-          pendingCount={pendingDests.length}
         />
       ) : (
         <AllDoneCard />
@@ -537,14 +506,6 @@ export default function ActiveTrip() {
         <Text variant="bodySm" weight="bold" color="textMuted">
           목적지 ({destinations.length})
         </Text>
-        <Button
-          onPress={() => setAddOpen(true)}
-          variant="ghost"
-          size="sm"
-          leftIcon="add-circle-outline"
-        >
-          현장 추가
-        </Button>
       </View>
     </View>
   );
@@ -559,7 +520,8 @@ export default function ActiveTrip() {
         onPress={handleEnd}
         disabled={tripBusy}
         loading={tripBusy}
-        variant={allDone ? 'destructive' : 'dangerGhost'}
+        // 전부 처리되면 종료가 다음 할 일이라 주 버튼으로, 남았으면 빨강 텍스트(종료를 막지는 않는다 — FE-OUT-09).
+        variant={allDone ? 'primary' : 'dangerGhost'}
         size="lg"
         fullWidth
         leftIcon="stop-circle"
@@ -606,28 +568,13 @@ export default function ActiveTrip() {
   return (
     <View style={styles.screenRoot}>
       <MapSheetLayout
-        title="진행 중인 외근"
+        title="진행 중 외근"
         onBack={() => safeBack(router)}
         // 55% — 이동 중 쓰는 화면이라 위 절반에 지도를 남긴다. 최대(2)로 열면 지도가 60dp 만
         // 남아 순번 마커·경로선을 정작 이 화면에서 못 본다. select·order 와 같은 값.
         initialIndex={1}
-        // 촬영은 외근 중 아무 때나 쓰는 동작이라 상시 노출이 필요한데, 화면 하단에 띄우면
-        // 55% 시트에서 현재 목적지 카드의 길찾기·체크인을 덮는다(실측: 35dp 겹침).
-        // 시트 헤더 우측이 항상 보이면서 주 CTA 와 자리를 다투지 않는 자리다.
-        headerRight={
-          <Button
-            onPress={() => void quickPhoto.start()}
-            variant="secondary"
-            size="sm"
-            leftIcon="camera"
-            loading={quickPhoto.preparing}
-            accessibilityLabel="빠른 촬영 — 가까운 현장에 사진 등록"
-            // size="sm" 은 높이 36 — 최소 44dp 타깃까지 세로 여백으로 채운다.
-            style={styles.headerAction}
-          >
-            촬영
-          </Button>
-        }
+        // 예외 동작(촬영·건너뛰기·현장 추가)은 `···` 시트로 — 첫 화면의 상시 CTA 는 길찾기·체크인뿐(수락 기준 1).
+        headerRight={<OverflowButton onPress={openMore} label="진행 중 외근 더보기" />}
         mapFieldIds={tripFieldIds}
         // 목적지 순서 그대로 — 배경 지도에 순번 마커 + 점선 동선.
         routeFieldIds={tripFieldIds}
@@ -673,7 +620,6 @@ const styles = StyleSheet.create({
   // 간격 리듬 — 진행률·현재 목적지는 한 덩어리(md), 목적지 목록과 종료 버튼은 다른
   // 그룹이라 xl 로 벌린다. 전부 lg 로 균일하면 무엇이 한 덩어리인지 눈이 못 읽는다.
   footer: { marginTop: spacing.xl },
-  headerAction: { minHeight: touchTarget.control, justifyContent: 'center' },
   header: { paddingTop: spacing.md, gap: spacing.md },
   sectionTitleRow: {
     flexDirection: 'row',

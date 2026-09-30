@@ -9,7 +9,6 @@ interface Props {
   arrived: number;
   skipped: number;
   total: number;
-  ratio: number;
 }
 
 // 진행 중 외근의 진행률 — 한 줄 스트립.
@@ -22,8 +21,9 @@ export function TripProgressStrip({
   arrived,
   skipped,
   total,
-  ratio,
 }: Props) {
+  // 막대는 처리된 비율(방문+건너뜀)을 보여준다. 숫자 %는 표시하지 않는다(명세 FE-OUT-04).
+  const ratio = total === 0 ? 0 : Math.round(((arrived + skipped) / total) * 100);
   return (
     <View style={styles.wrap}>
       <View style={styles.row}>
@@ -38,13 +38,7 @@ export function TripProgressStrip({
           <View style={styles.elapsed} />
         )}
         <Text variant="caption" weight="semibold" color="textMuted" numeric>
-          방문 {arrived}
-          {skipped > 0 ? ` · 건너뜀 ${skipped}` : ''} / {total}곳
-        </Text>
-        {/* 이 화면의 focal 은 아래 현재 목적지 카드다 — 진행률은 맥락이라 키우지 않는다.
-            1 화면 = 1 결정(강령 1). 대신 tabular 로 방문 수가 바뀔 때 폭이 안 흔들리게. */}
-        <Text variant="caption" weight="heavy" color="primary" numeric>
-          {ratio}%
+          방문 {arrived} · 건너뜀 {skipped} / {total}곳
         </Text>
       </View>
       <View style={styles.track}>

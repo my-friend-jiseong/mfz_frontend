@@ -24,13 +24,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { useHideOnScroll } from '@/components/ui/useHideOnScroll';
 import { colors } from '@/theme/colors';
 import { listBottomInset, spacing } from '@/theme/spacing';
-import {
-  durationMinutes,
-  fmtDate,
-  fmtMinutes,
-  isThisWeek,
-  tripDateGroup,
-} from '@/utils/datetime';
+import { fmtDate, tripDateGroup } from '@/utils/datetime';
 import type { Destination, Trip, Visit } from '@/types/entities';
 
 // 외근 제목 = title 우선, 없으면 시작일 날짜(카드에 보이는 제목과 동일).
@@ -136,22 +130,6 @@ export default function TripsList() {
     return out;
   }, [myTrips, query, fromDate, toDate, reported, reportedTripIds]);
 
-  // 상단 요약 — 검색 결과가 아니라 '이번 주 내가 뭘 했나' 를 답한다. 그래서 검색 필터
-  // 이전 값(myTrips)으로 집계. 검색 중엔 아래에서 결과 건수 문구로 대체된다.
-  const weekStats = useMemo(() => {
-    const inWeek = myTrips.filter((t) => isThisWeek(t.startedAt));
-    return {
-      count: inWeek.length,
-      visits: inWeek.reduce(
-        (n, t) => n + (visitCountByTrip.get(t.id) ?? t.visitCount ?? 0),
-        0,
-      ),
-      minutes: inWeek.reduce(
-        (n, t) => n + durationMinutes(t.startedAt, t.endedAt),
-        0,
-      ),
-    };
-  }, [myTrips, visitCountByTrip]);
 
   // 날짜 그룹 섹션 — trips 가 startedAt 내림차순이라 같은 그룹은 연속으로 붙는다.
   // 검색 중엔 그룹핑을 끈다: 검색은 '찾기'라 구간 훑기용 헤더가 잡음이 된다.
@@ -297,46 +275,6 @@ export default function TripsList() {
               {query ? '검색 결과' : '필터 결과'} {trips.length}건
             </Text>
           </View>
-        ) : myTrips.length > 0 ? (
-          weekStats.count === 0 ? (
-            <View style={styles.summary}>
-              <Ionicons name="calendar-outline" size={14} color={colors.textMuted} />
-              <Text variant="caption" weight="semibold" color="textMuted">
-                이번 주 외근 없음
-              </Text>
-            </View>
-          ) : (
-            // 이 화면의 focal — 목록은 '찾기'용이고, 탭을 열었을 때 답이 필요한 질문은
-            // "이번 주에 내가 얼마나 돌았나" 다 (강령 1·8). 이전엔 셋 다 caption(12) 한 줄에
-            // 가운뎃점으로 붙어 있어 숫자가 라벨과 같은 크기였다.
-            <View style={styles.weekStats}>
-              <View style={styles.statCol}>
-                <Text variant="caption" weight="semibold" color="textMuted">
-                  이번 주 외근
-                </Text>
-                <Text variant="metricSm" color="primary">
-                  {weekStats.count}
-                </Text>
-              </View>
-              <View style={styles.statCol}>
-                <Text variant="caption" weight="semibold" color="textMuted">
-                  방문
-                </Text>
-                <Text variant="metricSm">{weekStats.visits}</Text>
-              </View>
-              <View style={styles.statCol}>
-                <Text variant="caption" weight="semibold" color="textMuted">
-                  누적 시간
-                </Text>
-                {/* 세 열은 크기를 같게 둔다. 한 열만 h3(18) 로 낮췄더니 컬럼 높이가
-                    46 vs 50 이 되어 flex-end 정렬에서 이 열의 라벨만 4px 내려앉았다(실측).
-                    위계는 색으로 충분하다 — 건수는 primary, 시간은 textMuted. */}
-                <Text variant="metricSm" color="textMuted">
-                  {fmtMinutes(weekStats.minutes)}
-                </Text>
-              </View>
-            </View>
-          )
         ) : null}
       </View>
       <BottomSheetFlatList
@@ -422,17 +360,6 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     paddingHorizontal: spacing.xs,
   },
-  // 정렬 기준은 라벨 줄(위)이다. 바닥을 맞추면 숫자 크기가 다른 열의 라벨만 내려앉는다.
-  // 카드 껍데기 없이 캔버스 위에 — 시트 안이라 세로가 귀하고, 이건 목록의 머리말이지
-  // 또 하나의 카드가 아니다.
-  weekStats: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.xl,
-    paddingHorizontal: spacing.xs,
-    paddingTop: spacing.xs,
-  },
-  statCol: { gap: spacing.xs },
   list: { padding: spacing.lg, paddingBottom: listBottomInset },
   // 날짜 그룹 구분선. 첫 그룹이 목록 맨 위에 붙지 않도록 상단 여백을 조금 더 준다.
   groupHeader: {

@@ -17,8 +17,8 @@ interface ToastItem {
 
 // 명세 v2: 토스트는 2초 뒤 사라진다 (현장 등록·나중에 다시 작성·체크인 저장).
 const VISIBLE_MS = 2000;
-// 탭바(약 49) 위 16 — Figma `외근 내역 · 토스트` 에서 탭바 상단과 토스트 하단 간격.
-const TAB_BAR_CLEARANCE = 49 + spacing.lg;
+// 탭바(56) 위. 탭 루트에선 탭바 위로 24, 하단 액션 바(76)가 있는 푸시 화면에선 바 바로 위에 뜬다.
+const TAB_BAR_CLEARANCE = 56 + spacing.xl;
 
 let show: ((item: ToastItem) => void) | null = null;
 let seq = 0;

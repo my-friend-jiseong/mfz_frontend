@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Alert, StyleSheet, View } from 'react-native';
 import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { Ionicons } from '@expo/vector-icons';
 import { useTripStore } from '@/stores/tripStore';
@@ -12,17 +12,21 @@ import { MapSheetLayout, sheetScrollableStyle } from '@/components/MapSheetLayou
 import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
-import { StickyBottomBar } from '@/components/ui/StickyBottomBar';
+import { BottomActionBar, BOTTOM_ACTION_BAR_HEIGHT } from '@/components/ui/BottomActionBar';
+import { EditableTitle } from '@/components/ui/EditableTitle';
+import { confirm, notice } from '@/components/ui/ConfirmDialog';
+import { toast } from '@/components/ui/Toast';
 import { ReviewVisitCard } from '@/components/trips/ReviewVisitCard';
+import { memoForVisit } from '@/utils/visitRecord';
+import { visitInReport } from '@/utils/visitGuards';
 import { safeBack } from '@/utils/backNavigation';
 import { fieldDetailLine } from '@/utils/fieldFacets';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
-import { opacity } from '@/theme/motion';
 import { fmtDate, fmtDateTime, fmtDuration } from '@/utils/datetime';
 
 // 외근 상세 — 종료된 외근 전용. 진행 중인 외근은 activeTripId === id 가드로 active 화면에 위임.
-// visit 결과 정정 + 현장 메모/사진을 한 화면에서 마무리.
+// 명세 v2 §4.3: 방문 카드는 읽기 전용 요약(펼침)이고, 고치는 곳은 방문 수정 화면이다.
 export default function TripDetail() {
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string }>();
@@ -38,6 +42,12 @@ export default function TripDetail() {
   const allDestinations = useDestinationStore((s) => s.destinations);
   const getField = useFieldStore((s) => s.getById);
   const loadFieldDetail = useFieldStore((s) => s.loadDetail);
+  const directAttachments = useFieldStore((s) => s.directAttachments);
+  const photosByVisit = useVisitStore((s) => s.photosByVisit);
+  const loadVisitPhotos = useVisitStore((s) => s.loadPhotos);
+  const removeVisit = useVisitStore((s) => s.remove);
+  const updateTrip = useTripStore((s) => s.update);
+  const [expandedIds, setExpandedIds] = useState<ReadonlySet<string>>(new Set());
 
   const visits = useMemo(
     () =>
@@ -149,6 +159,17 @@ export default function TripDetail() {
     }
   }, [fieldIdsKey, loadFieldDetail]);
 
+  // 방문별 사진 — 펼친 요약에만 보이므로 처음 펼칠 때 받는다(방문 수만큼 요청이 나가지 않게).
+  const fetchedVisitPhotosRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!id) return;
+    for (const vid of expandedIds) {
+      if (fetchedVisitPhotosRef.current.has(vid)) continue;
+      fetchedVisitPhotosRef.current.add(vid);
+      void loadVisitPhotos(id, vid);
+    }
+  }, [id, expandedIds, loadVisitPhotos]);
+
   // 가드 — hooks 호출 끝난 뒤로 옮김 (Rules of Hooks).
   // 잘못된 진입 — tripId 없음
   if (!id) {
@@ -188,8 +209,42 @@ export default function TripDetail() {
   // 종료 후 review 재진입에선 destinations 가 비어있을 수 있음 — visit 으로 폴백.
   const totalDest = destinations.length || visitCount + skippedCount;
 
-  const isActiveTrip = activeTripId === id;
-  const canDelete = !isActiveTrip;
+  const toggle = (visitId: string) =>
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(visitId)) next.delete(visitId);
+      else next.add(visitId);
+      return next;
+    });
+
+  // FE-WRAP-05 — 빈 값은 EditableTitle 이 이전 제목으로 되돌린다. 실패하면 입력칸을 남긴다.
+  const saveTitle = async (title: string) => {
+    const r = await updateTrip(id, { title });
+    if (!r.ok) {
+      Alert.alert('제목 저장 실패', r.error);
+      throw new Error(r.error);
+    }
+  };
+
+  // FE-WRAP-03 — 스와이프 삭제. 보고서에 반영된 방문이면 차단.
+  const deleteVisit = async (visitId: string, fieldId: string) => {
+    if (await visitInReport(id, fieldId)) {
+      await notice('삭제할 수 없습니다', '보고서에서 먼저 삭제해야 합니다.');
+      return;
+    }
+    const ok = await confirm({
+      title: '이 방문을 삭제할까요?',
+      message: '현장은 남고, 이 방문의 기록만 지워집니다.',
+      confirmLabel: '삭제',
+      destructive: true,
+    });
+    if (!ok) return;
+    const r = await removeVisit(visitId);
+    if (r.ok) toast('방문을 삭제했습니다');
+    else if ('unsupported' in r) {
+      await notice('아직 지원되지 않는 기능입니다', '방문 삭제는 서버 준비 후 사용할 수 있습니다.');
+    } else Alert.alert('방문 삭제 실패', r.error);
+  };
 
   return (
     <View style={styles.screenRoot}>
@@ -203,27 +258,13 @@ export default function TripDetail() {
       >
         <BottomSheetScrollView style={sheetScrollableStyle} contentContainerStyle={styles.scroll}>
         <View style={styles.header}>
-          <View style={styles.titleRow}>
-            <Text variant="h2" weight="heavy" style={styles.titleText}>
-              {trip.title || `${fmtDate(trip.startedAt)} 외근`}
-            </Text>
-            {/* 수정 진입만 노출. 삭제(파괴적)는 수정 화면 하단 '위험 구역'으로 이동해
-                일상 동작 옆 빨강 휴지통의 오탭·과대 비중을 제거. (fields edit 패턴과 일치) */}
-            {canDelete ? (
-              <Pressable
-                onPress={() => router.push(`/(tabs)/trips/${id}/edit` as never)}
-                accessibilityRole="button"
-                accessibilityLabel="외근 수정"
-                hitSlop={8}
-                style={({ pressed }) => [
-                  styles.editBtn,
-                  pressed && { opacity: opacity.pressed },
-                ]}
-              >
-                <Ionicons name="create-outline" size={20} color={colors.textMuted} />
-              </Pressable>
-            ) : null}
-          </View>
+          {/* 제목을 탭하면 그 자리에서 고친다(FE-WRAP-05). 헤더 수정 아이콘은 없다(FE-WRAP-04). */}
+          <EditableTitle
+            value={trip.title || `${fmtDate(trip.startedAt)} 외근`}
+            onSubmit={saveTitle}
+            maxLength={50}
+            label="외근 제목"
+          />
           <View style={styles.metaRow}>
             <Ionicons name="time-outline" size={14} color={colors.textMuted} />
             <Text variant="bodySm" color="textMuted">
@@ -284,14 +325,20 @@ export default function TripDetail() {
                 </Text>
                 {visitCards.map((c) => {
                   const field = getField(c.fieldId);
+                  const vid = c.visit.id;
                   return (
                     <ReviewVisitCard
-                      key={c.visit.id}
+                      key={vid}
                       visit={c.visit}
                       order={c.displayOrder}
-                      fieldId={c.fieldId}
                       fieldAddress={field?.address ?? '알 수 없는 현장'}
                       fieldAddressDetail={field?.addressDetail || undefined}
+                      memo={memoForVisit(directAttachments[c.fieldId], c.visit.visitedAt)?.text}
+                      photos={photosByVisit[vid]}
+                      expanded={expandedIds.has(vid)}
+                      onToggle={() => toggle(vid)}
+                      onEdit={() => router.push(`/(tabs)/trips/${id}/visits/${vid}` as never)}
+                      onDelete={() => void deleteVisit(vid, c.fieldId)}
                     />
                   );
                 })}
@@ -344,7 +391,7 @@ export default function TripDetail() {
       </MapSheetLayout>
       {/* StickyBottomBar 는 BottomSheet 외부에 — 시트 내부 absolute 자식의 터치를
           @gorhom/bottom-sheet 의 pan 제스처가 가로채는 회로 차단. (active.tsx 와 동일 패턴) */}
-      <StickyBottomBar>
+      <BottomActionBar absolute>
         <Button
           onPress={() => router.push(`/(tabs)/reports/new?tripId=${id}` as never)}
           size="lg"
@@ -353,30 +400,16 @@ export default function TripDetail() {
         >
           보고서 작성
         </Button>
-      </StickyBottomBar>
+      </BottomActionBar>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   screenRoot: { flex: 1 },
-  scroll: { padding: spacing.lg, paddingBottom: spacing.xxl * 2 },
+  // 하단 액션 바 뒤로 마지막 카드가 숨지 않게 — 바 높이 + 시트 래퍼 여유(active.tsx ★ 주석과 같은 이유).
+  scroll: { padding: spacing.lg, paddingBottom: BOTTOM_ACTION_BAR_HEIGHT + spacing.xxl * 3 },
   header: { gap: spacing.sm, marginBottom: spacing.lg },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-  },
-  titleText: { flex: 1 },
-  editBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surfaceMuted,
-  },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -36,7 +36,13 @@ export type {
 } from './endpoints/trips';
 
 export { visits } from './endpoints/visits';
-export type { CheckInBody, CheckInResponse, VisitDetailResponse } from './endpoints/visits';
+export type {
+  CheckInBody,
+  CheckInResponse,
+  VisitDetailResponse,
+  VisitPhoto,
+  VisitPhotoPhase,
+} from './endpoints/visits';
 
 export { fields } from './endpoints/fields';
 export type {

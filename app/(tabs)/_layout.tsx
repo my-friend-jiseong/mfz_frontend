@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Redirect, Tabs, router } from 'expo-router';
+import { Redirect, Tabs, router, useSegments } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/theme/colors';
@@ -27,6 +27,10 @@ export default function TabsLayout() {
   // (tabs) 가 토큰 없이 hydrateTrips/Fields 를 호출해 401 을 흘리는 회로 차단.
   // index.tsx 의 redirect 는 / 진입에서만 동작하므로 여기 별도 게이트가 필요.
   const insets = useSafeAreaInsets();
+  // 명세 v2 §2.1 — 하단 탭은 탭 루트 화면에서만 보인다. segments 가 ['(tabs)', 'trips'] 면 루트,
+  // 그보다 깊으면('(tabs)','trips','active' 등) 푸시 화면이다. 푸시 화면은 자기 하단 바를 갖는다.
+  const segments = useSegments();
+  const hideTabBar = segments.length > 2;
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const hydrateTrips = useTripStore((s) => s.hydrate);
   const hydrateFields = useFieldStore((s) => s.hydrate);
@@ -64,7 +68,7 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textMuted,
-        tabBarStyle: {
+        tabBarStyle: hideTabBar ? { display: 'none' } : {
           borderTopColor: colors.border,
           // 콘텐츠 높이 56 = Material Design bottom navigation 표준값. 거기에 OS 가 보고하는
           // 실제 네비게이션 바 높이(insets.bottom)만 더해 바를 띄운다 — 임의 수치 없이 표준 + 실측.

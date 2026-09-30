@@ -1,8 +1,7 @@
 import { useMemo, useState } from 'react';
-import { Alert, Pressable, StyleSheet, View } from 'react-native';
+import { Alert, StyleSheet, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
-import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFieldStore } from '@/stores/fieldStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -13,14 +12,14 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { StickyBottomBar } from '@/components/ui/StickyBottomBar';
-import { describeOptimizeAlgorithm } from '@/utils/routeOptimize';
+import { ReorderButtons, reorderA11yProps, swapAt } from '@/components/ui/ReorderButtons';
+import { describeOptimizeAlgorithm, haversineKm } from '@/utils/routeOptimize';
 import { useOptimizeRoute } from '@/components/trips/useOptimizeRoute';
 import { trips as tripsApi } from '@/api';
 import { safeBack } from '@/utils/backNavigation';
 import { fieldDetailLine } from '@/utils/fieldFacets';
 import { colors } from '@/theme/colors';
 import { listBottomInset, radius, spacing } from '@/theme/spacing';
-import { opacity } from '@/theme/motion';
 
 interface OrderedField {
   id: string;
@@ -28,9 +27,28 @@ interface OrderedField {
   addressDetail: string;
   lat: number;
   lng: number;
-  // 추천 적용 시 채워짐 — 추천 미사용 시 undefined
+  // 추천 적용 시 서버(실도로) 값으로 채워짐 — 손으로 순서를 바꾸면 버리고 직선 추정으로 다시 계산.
   distanceFromPrevKm?: number;
   etaMinutes?: number;
+}
+
+// 도심 차량 평균 시속 — nearestNeighborOrder 의 기본값과 같다.
+const AVG_SPEED_KMH = 35;
+
+// 순서대로 구간 거리·ETA 를 붙인다 (명세 FE-OUT-03a: ▲▼ 할 때마다 다시 계산).
+// 좌표가 없는 현장(0,0)은 구간을 0 으로 둔다 — 지구 반대편까지 거리를 더하지 않게.
+function withLegs(list: OrderedField[]): OrderedField[] {
+  return list.map((f, i) => {
+    if (i === 0) return { ...f, distanceFromPrevKm: 0, etaMinutes: 0 };
+    const prev = list[i - 1];
+    const hasCoords = (x: OrderedField) => x.lat !== 0 || x.lng !== 0;
+    const km = hasCoords(prev) && hasCoords(f) ? haversineKm(prev, f) : 0;
+    return {
+      ...f,
+      distanceFromPrevKm: Math.round(km * 10) / 10,
+      etaMinutes: km === 0 ? 0 : Math.max(1, Math.round((km / AVG_SPEED_KMH) * 60)),
+    };
+  });
 }
 
 export default function NewTripOrder() {
@@ -92,28 +110,9 @@ export default function NewTripOrder() {
     );
   };
 
-  const moveUp = (idx: number) => {
-    if (idx <= 0) return;
-    setList((prev) => {
-      const next = [...prev];
-      [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
-      return next;
-    });
-    setOptimized(false);
-  };
-
-  const moveDown = (idx: number) => {
-    setList((prev) => {
-      if (idx >= prev.length - 1) return prev;
-      const next = [...prev];
-      [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
-      return next;
-    });
-    setOptimized(false);
-  };
-
-  const removeAt = (idx: number) => {
-    setList((prev) => prev.filter((_, i) => i !== idx));
+  // ▲▼ — 앞·뒤 현장과 자리를 바꾸고 구간 거리·ETA 를 다시 계산한다.
+  const move = (from: number, to: number) => {
+    setList((prev) => withLegs(swapAt(prev, from, to)));
     setOptimized(false);
   };
 
@@ -121,12 +120,10 @@ export default function NewTripOrder() {
   // (순서를 정하는 화면인데 정작 동선이 안 보이던 문제)
   const routeFieldIds = useMemo(() => list.map((f) => f.id), [list]);
 
-  const totalDistanceKm = optimized
-    ? list.reduce((a, x) => a + (x.distanceFromPrevKm ?? 0), 0)
-    : null;
-  const totalEtaMin = optimized
-    ? list.reduce((a, x) => a + (x.etaMinutes ?? 0), 0)
-    : null;
+  // 추천 전에도 직선 추정으로 보여준다 — 순서를 손으로 바꾸는 판단 근거가 거리다.
+  const legs = useMemo(() => (optimized ? list : withLegs(list)), [list, optimized]);
+  const totalDistanceKm = legs.reduce((a, x) => a + (x.distanceFromPrevKm ?? 0), 0);
+  const totalEtaMin = legs.reduce((a, x) => a + (x.etaMinutes ?? 0), 0);
 
   const handleConfirm = async () => {
     if (!userId || list.length === 0 || submitting) return;
@@ -160,7 +157,7 @@ export default function NewTripOrder() {
     item: OrderedField;
     index: number;
   }) => (
-    <Card padding="md" style={styles.row}>
+    <Card padding="md" style={styles.row} {...reorderA11yProps(index, list.length, move)}>
       <View style={styles.orderBadge}>
         <Text variant="bodySm" weight="bold" color="onPrimary">
           {index + 1}
@@ -176,65 +173,13 @@ export default function NewTripOrder() {
             {fieldDetailLine(item)}
           </Text>
         ) : null}
-        {optimized && item.distanceFromPrevKm !== undefined ? (
-          <Text
-            variant="caption"
-            weight="semibold"
-            color="primary"
-            style={styles.eta}
-          >
-            {index === 0
-              ? '출발지 인근'
-              : `+${item.distanceFromPrevKm}km · ${item.etaMinutes}분`}
-          </Text>
-        ) : null}
+        <Text variant="caption" weight="semibold" color="primary" style={styles.eta}>
+          {index === 0
+            ? '출발지 인근'
+            : `+${legs[index]?.distanceFromPrevKm ?? 0}km · ${legs[index]?.etaMinutes ?? 0}분`}
+        </Text>
       </View>
-      <View style={styles.controls}>
-        <Pressable
-          onPress={() => moveUp(index)}
-          disabled={index === 0}
-          accessibilityLabel="위로 이동"
-          style={({ pressed }) => [
-            styles.ctrlBtn,
-            index === 0 && styles.ctrlDisabled,
-            pressed && { opacity: opacity.pressed },
-          ]}
-        >
-          <Ionicons name="chevron-up" size={14} color={colors.text} />
-        </Pressable>
-        <Pressable
-          onPress={() => moveDown(index)}
-          disabled={index === list.length - 1}
-          accessibilityLabel="아래로 이동"
-          style={({ pressed }) => [
-            styles.ctrlBtn,
-            index === list.length - 1 && styles.ctrlDisabled,
-            pressed && { opacity: opacity.pressed },
-          ]}
-        >
-          <Ionicons name="chevron-down" size={14} color={colors.text} />
-        </Pressable>
-        <Pressable
-          onPress={() =>
-            Alert.alert(
-              '이 현장 빼기',
-              `${item.address} 를 외근에서 제외할까요?`,
-              [
-                { text: '취소', style: 'cancel' },
-                { text: '빼기', style: 'destructive', onPress: () => removeAt(index) },
-              ],
-            )
-          }
-          accessibilityLabel="제외"
-          style={({ pressed }) => [
-            styles.ctrlBtn,
-            styles.ctrlDanger,
-            pressed && { opacity: opacity.pressed },
-          ]}
-        >
-          <Ionicons name="close" size={16} color={colors.danger} />
-        </Pressable>
-      </View>
+      <ReorderButtons index={index} count={list.length} onMove={move} />
     </Card>
   );
 
@@ -259,8 +204,8 @@ export default function NewTripOrder() {
         <Text variant="body" weight="semibold">
           위에서부터 순서대로 방문합니다
         </Text>
-        <Text variant="bodySm" color="textMuted" style={{ marginTop: 2 }}>
-          상하 화살표로 순서, × 로 제외할 수 있습니다
+        <Text variant="bodySm" color="textMuted" style={styles.hint}>
+          오른쪽 화살표로 순서를 바꿀 수 있습니다
         </Text>
         <Button
           onPress={() => void handleOptimize()}
@@ -272,7 +217,7 @@ export default function NewTripOrder() {
         >
           {optimized ? '다시 추천' : '최적 순서 추천'}
         </Button>
-        {totalDistanceKm !== null && totalEtaMin !== null ? (
+        {list.length > 0 ? (
           <Card padding="md" style={styles.summaryCard}>
             <View style={styles.summaryItem}>
               <Text variant="caption" weight="semibold" color="textMuted">
@@ -360,22 +305,7 @@ const styles = StyleSheet.create({
   rowText: { flex: 1 },
   detail: { marginTop: 2 },
   eta: { marginTop: 4 },
-  controls: { gap: 4 },
-  ctrlBtn: {
-    width: 32,
-    height: 26,
-    borderRadius: radius.sm,
-    backgroundColor: colors.surfaceMuted,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  ctrlDisabled: { opacity: opacity.disabled },
-  ctrlDanger: {
-    borderColor: colors.danger,
-    backgroundColor: colors.dangerMuted,
-  },
+  hint: { marginTop: 2 },
   summaryCard: {
     flexDirection: 'row',
     alignItems: 'center',

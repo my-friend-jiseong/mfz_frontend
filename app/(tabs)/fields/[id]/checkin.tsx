@@ -1,403 +1,226 @@
 import { useEffect, useRef, useState } from 'react';
-import {
-  Alert,
-  Image,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  View,
-} from 'react-native';
-import { Text } from '@/components/ui/Text';
-import { BADGE_SHAPE_GLYPH } from '@/components/ui/Badge';
-import { FieldLabel } from '@/components/ui/FieldLabel';
-import { VISIT_STATUS_BADGE } from '@/theme/statusBadge';
+import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Text } from '@/components/ui/Text';
+import { Card } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { BottomActionBar } from '@/components/ui/BottomActionBar';
+import { NavHeader } from '@/components/ui/NavHeader';
+import { toast } from '@/components/ui/Toast';
+import { EmptyState } from '@/components/EmptyState';
+import { SafeScreen } from '@/components/SafeScreen';
+import { VisitRecordForm } from '@/components/trips/VisitRecordForm';
 import { useFieldStore } from '@/stores/fieldStore';
-import { pickPhoto, promptPhotoSource } from '@/utils/media';
 import { useTripStore } from '@/stores/tripStore';
 import { useVisitStore } from '@/stores/visitStore';
 import { useDestinationStore } from '@/stores/destinationStore';
-import {
-  VISIT_STATUS_VALUES,
-  VISIT_STATUS_LABEL,
-  type VisitStatus,
-} from '@/types/entities';
-import { EmptyState } from '@/components/EmptyState';
-import { Card } from '@/components/ui/Card';
-import { Input } from '@/components/ui/Input';
-import { Button } from '@/components/ui/Button';
 import { fieldDetailLine } from '@/utils/fieldFacets';
+import {
+  EMPTY_RECORD,
+  latestMemo,
+  otherReasonShort,
+  saveVisitRecord,
+  type VisitRecordValue,
+} from '@/utils/visitRecord';
+import { openReportForTripField } from '@/utils/reportEntry';
 import { colors } from '@/theme/colors';
-import { spacing, radius } from '@/theme/spacing';
-import { opacity } from '@/theme/motion';
+import { spacing } from '@/theme/spacing';
 
-// 사진 슬롯 하단 라벨이 차지하는 높이 — 미리보기 이미지를 그만큼 띄운다.
-const PHASE_LABEL_HEIGHT = 22;
-import { withAlpha } from '@/theme/withAlpha';
-import { SafeScreen } from '@/components/SafeScreen';
+const ACTIVE_ROUTE = '/(tabs)/trips/active';
 
-// ERD v2: 체크인은 방문 기록(trip·field·시각·status)만 생성. 메모·사진·음성 첨부는
-// 현장(field) 상세에서 관리.
-
-// visit status → 색·형상 매핑 (3중 인코딩).
+// 체크인 (명세 v2 §4.1).
+// 방문은 **`체크인 완료` 를 눌러야** 만든다 — 예전엔 화면 진입과 동시에 만들어서 뒤로가기해도
+// 방문이 남았다(FE-CHK-01 위반). 사진도 고르기만 하고 완료 시점에 올린다.
 export default function FieldCheckin() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const fieldId = id ?? '';
   const router = useRouter();
 
   const field = useFieldStore((s) => s.getById(fieldId));
+  const loadFieldDetail = useFieldStore((s) => s.loadDetail);
+  const attachments = useFieldStore((s) => s.directAttachments[fieldId]);
   const activeTripId = useTripStore((s) => s.activeTripId);
   const checkIn = useVisitStore((s) => s.checkIn);
-  const setResult = useVisitStore((s) => s.setResult);
-  const addPhoto = useFieldStore((s) => s.addPhoto);
-  const removePhoto = useFieldStore((s) => s.removePhoto);
   const findDestination = useDestinationStore((s) => s.findByTripField);
   const markDestinationArrived = useDestinationStore((s) => s.markArrived);
 
-  const [visitId, setVisitId] = useState<string | null>(null);
-  const [status, setStatus] = useState<VisitStatus>('completed');
-  const [reason, setReason] = useState('');
-  const [saving, setSaving] = useState(false);
-  // checkIn 중복 호출 가드 — StrictMode dev 더블 마운트 / 빠른 재 mount 시 visit 두 번 생성 방지
-  const checkInGuardRef = useRef(false);
+  const [value, setValue] = useState<VisitRecordValue>(EMPTY_RECORD);
+  const [saving, setSaving] = useState<null | 'done' | 'report'>(null);
+  // 이 화면에서 이미 만든 방문 — 보고서 작성 후 돌아와 다시 완료를 눌러도 방문이 두 번 생기지 않게.
+  const createdVisitId = useRef<string | null>(null);
 
-  // 단계별 사진 슬롯 — 백엔드 단계 메타(backlog §9) 도착 전, 세션 내 시각 유도용.
-  // 슬롯별 prior photoId 를 보관 — 재선택 시 removePhoto 선행으로 서버 중복 누적 차단.
-  type Phase = 'before' | 'during' | 'after';
-  interface PhaseSlotState { uri: string | null; photoId: string | null; }
-  const emptySlot: PhaseSlotState = { uri: null, photoId: null };
-  const [phaseSlots, setPhaseSlots] = useState<Record<Phase, PhaseSlotState>>({
-    before: emptySlot,
-    during: emptySlot,
-    after: emptySlot,
+  // 현장의 기존 메모를 불러와 고칠 수 있게 한다 (FE-CHK-04). 사용자가 입력을 시작한 뒤엔 덮지 않는다.
+  // 불러온 메모는 **이전 방문의 것**이다 — 고쳐도 그걸 지우지 않고 이번 방문 메모를 새로 쓴다.
+  const prefilled = useRef(false);
+  const memo = latestMemo(attachments);
+  // 저장 기준선 — 처음엔 불러온 텍스트, 한 번 저장한 뒤엔 이번 방문에 쓴 메모.
+  const saved = useRef<{ memoText: string; memo: ReturnType<typeof latestMemo> }>({
+    memoText: '',
+    memo: null,
   });
-  const [phaseBusy, setPhaseBusy] = useState<Phase | null>(null);
-
-  const handlePhasePick = (phase: Phase) => {
-    if (phaseBusy) return;
-    promptPhotoSource((source) => {
-      void (async () => {
-        setPhaseBusy(phase);
-        try {
-          const file = await pickPhoto(source);
-          if (!file) return;
-          // 같은 슬롯에 이전에 업로드한 사진이 있으면 서버에서도 먼저 제거.
-          // 실패해도 새 업로드는 시도 — 사용자 입력이 막히지 않도록.
-          const prior = phaseSlots[phase].photoId;
-          if (prior) {
-            void removePhoto(fieldId, prior);
-          }
-          // backend-backlog §9 — phase 태그 전달. §9 머지 후 보고서 편집기가 자동 prefill (G2/F2).
-          // checkin Phase ('before'|'during'|'after') = api AttachmentPhase 와 동일 alphabet.
-          const r = await addPhoto(fieldId, file, { phase });
-          if (r.ok) {
-            setPhaseSlots((p) => ({
-              ...p,
-              [phase]: { uri: file.uri, photoId: r.photoId },
-            }));
-          } else {
-            Alert.alert('사진 추가 실패', r.error);
-          }
-        } finally {
-          setPhaseBusy(null);
-        }
-      })();
-    });
-  };
-
   useEffect(() => {
-    if (
-      activeTripId !== null &&
-      fieldId &&
-      visitId === null &&
-      !checkInGuardRef.current
-    ) {
-      checkInGuardRef.current = true;
-      void (async () => {
-        const r = await checkIn(activeTripId, fieldId);
-        if (r.ok) {
-          setVisitId(r.visit.id);
-        } else {
-          checkInGuardRef.current = false;
-          Alert.alert('체크인 실패', r.error);
-        }
-      })();
+    void loadFieldDetail(fieldId);
+  }, [fieldId, loadFieldDetail]);
+  useEffect(() => {
+    if (prefilled.current || !attachments) return;
+    prefilled.current = true;
+    if (memo?.text) {
+      saved.current.memoText = memo.text;
+      setValue((v) => (v.memo ? v : { ...v, memo: memo.text ?? '' }));
     }
-  }, [activeTripId, fieldId, visitId, checkIn]);
+  }, [attachments, memo]);
+
+  const back = () => router.replace(ACTIVE_ROUTE as never);
 
   if (!field) {
     return (
-      <View style={styles.container}>
-        <EmptyState
-          icon="search-outline"
-          title="현장을 찾을 수 없습니다"
-          action={
-            <Button
-              onPress={() => router.replace('/(tabs)/fields' as never)}
-              variant="secondary"
-              leftIcon="arrow-back"
-            >
-              현장 목록으로
-            </Button>
-          }
-        />
-      </View>
+      <SafeScreen>
+        <NavHeader title="체크인" onBack={back} />
+        <EmptyState icon="search-outline" title="현장을 찾을 수 없습니다" />
+      </SafeScreen>
     );
   }
 
   if (activeTripId === null) {
     return (
-      <View style={styles.container}>
+      <SafeScreen>
+        <NavHeader title="체크인" onBack={() => router.replace('/(tabs)/trips' as never)} />
         <EmptyState
           icon="briefcase-outline"
           title="외근 시작 후 체크인 가능합니다"
           description="외근 탭에서 외근을 시작해주세요"
-          action={
-            <Button
-              onPress={() => router.replace('/(tabs)/trips' as never)}
-              leftIcon="briefcase"
-            >
-              외근 탭으로
-            </Button>
-          }
         />
-      </View>
+      </SafeScreen>
     );
   }
 
-  const reasonTrim = reason.trim();
-  const otherReasonValid = status !== 'other' || reasonTrim.length >= 10;
+  const blocked = otherReasonShort(value);
 
-  const handleSaveResult = async () => {
-    if (!visitId || saving || !otherReasonValid) return;
-    setSaving(true);
-    const r = await setResult(visitId, status, status === 'other' ? reasonTrim : undefined);
-    setSaving(false);
-    if (!r.ok) {
-      Alert.alert('상태 저장 실패', r.error);
+  // 방문 생성 + 입력 반영. 성공하면 visitId, 실패하면 null(안내는 여기서 띄운다).
+  const persist = async (): Promise<string | null> => {
+    let visitId = createdVisitId.current;
+    if (!visitId) {
+      const r = await checkIn(activeTripId, fieldId);
+      if (!r.ok) {
+        Alert.alert('체크인 실패', r.error);
+        return null;
+      }
+      visitId = r.visit.id;
+      createdVisitId.current = visitId;
+      const dest = findDestination(activeTripId, fieldId);
+      if (dest && dest.status === 'pending') markDestinationArrived(dest.id);
+    }
+    const res = await saveVisitRecord({
+      visitId,
+      fieldId,
+      initialStatus: null,
+      initialMemo: saved.current.memo,
+      memoBaseline: saved.current.memoText,
+      value,
+    });
+    const { errors } = res;
+    // 보고서 작성으로 갔다가 돌아와 다시 완료를 눌러도 같은 사진·메모를 또 올리지 않게 기준선을 옮긴다.
+    setValue(res.value);
+    saved.current = { memoText: res.value.memo.trim(), memo: res.memo };
+    // 방문은 이미 만들어졌다 — 일부 입력만 실패했으면 알리고 진행한다. 방문 수정에서 다시 고칠 수 있다.
+    if (errors.length > 0) {
+      Alert.alert('일부 내용을 저장하지 못했습니다', `${errors.join('\n')}\n\n외근 정리의 방문 수정에서 다시 입력할 수 있습니다.`);
+    }
+    return visitId;
+  };
+
+  const handleDone = async () => {
+    if (saving || blocked) return;
+    setSaving('done');
+    const visitId = await persist();
+    setSaving(null);
+    if (!visitId) return;
+    toast('체크인을 저장했습니다');
+    // safeBack 대신 replace — 체크인은 trips/active 에서 다른 탭(fields) 스택으로 건너와 있어
+    // canGoBack 기준이 엉뚱하다. 돌아갈 곳이 정해져 있으니 직행한다.
+    router.replace(ACTIVE_ROUTE as never);
+  };
+
+  const handleReport = async () => {
+    if (saving || blocked) return;
+    setSaving('report');
+    const visitId = await persist();
+    if (!visitId) {
+      setSaving(null);
       return;
     }
-    if (activeTripId !== null) {
-      const dest = findDestination(activeTripId, fieldId);
-      if (dest && dest.status === 'pending') {
-        markDestinationArrived(dest.id);
-      }
-    }
-    // safeBack 대신 명시적 replace — 체크인은 trips/active 에서 cross-tab push 로 들어와
-    // fields 탭의 stack 에 단일 screen 으로 박혀 있다. safeBack 의 canGoBack 은 그 fields stack
-    // 기준으로 false → fallback replace('/(tabs)/trips') 가 trips/index 의 Redirect 를 거치는
-    // 우회 경로인데, web 에서 cross-tab replace 가 navigator state 를 깔끔히 전환 못해
-    // URL 만 바뀌고 화면이 그대로 남는 회로가 있었다. 우리는 정확히 active 으로 돌아갈
-    // 의도라 history 의존 없이 직행.
-    router.replace('/(tabs)/trips/active' as never);
+    await openReportForTripField(router, activeTripId, fieldId);
+    setSaving(null);
   };
 
   return (
     <SafeScreen>
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <Card padding="lg" style={styles.header}>
-          <View style={styles.headerTitleRow}>
-            <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
-            <Text variant="bodySm" weight="bold" color="primary">
-              체크인 완료
+      <NavHeader title="체크인" onBack={back} />
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+          <Card padding="lg" style={styles.header}>
+            <View style={styles.headerCap}>
+              <Ionicons name="location" size={16} color={colors.primary} />
+              <Text variant="bodySm" weight="bold" color="primary">
+                체크인
+              </Text>
+            </View>
+            <Text variant="body" weight="semibold">
+              {field.address}
             </Text>
-          </View>
-          <Text variant="body" weight="semibold" style={styles.headerSub}>
-            {field.address}
-          </Text>
-          {/* 주소가 이미 상세주소로 끝나면 중복이다 (fieldFacets 규칙). */}
-          {fieldDetailLine(field) ? (
-            <Text variant="bodySm" color="textMuted" style={styles.headerSubMuted}>
-              {fieldDetailLine(field)}
-            </Text>
-          ) : null}
-        </Card>
+            {/* 주소가 이미 상세주소로 끝나면 중복이다 (fieldFacets 규칙). */}
+            {fieldDetailLine(field) ? (
+              <Text variant="bodySm" color="textMuted">
+                {fieldDetailLine(field)}
+              </Text>
+            ) : null}
+          </Card>
 
-        <FieldLabel>방문 결과 상태</FieldLabel>
-        <View style={styles.statusGrid}>
-          {VISIT_STATUS_VALUES.map((s) => {
-            const active = status === s;
-            const c = colors.visitStatus[s];
-            return (
-              <Pressable
-                key={s}
-                onPress={() => setStatus(s)}
-                accessibilityRole="radio"
-                accessibilityState={{ selected: active }}
-                style={({ pressed }) => [
-                  styles.statusChip,
-                  active && { backgroundColor: withAlpha(c, 0.13), borderColor: c },
-                  pressed && { opacity: opacity.pressed },
-                ]}
-              >
-                <Text
-                  variant="caption"
-                  style={[
-                    { lineHeight: 12 },
-                    active ? { color: c } : { color: colors.textSubtle },
-                  ]}
-                >
-                  {BADGE_SHAPE_GLYPH[VISIT_STATUS_BADGE[s].shape]}
-                </Text>
-                <Text
-                  variant="bodySm"
-                  weight={active ? 'bold' : 'regular'}
-                  style={active ? { color: c } : { color: colors.textMuted }}
-                >
-                  {VISIT_STATUS_LABEL[s]}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        {status === 'other' ? (
-          <Input
-            label="기타 사유 (10자 이상 필수)"
-            value={reason}
-            onChangeText={setReason}
-            placeholder="현장 상황을 10자 이상 설명해주세요"
-            maxLength={500}
-            multiline
-            numberOfLines={3}
-            style={styles.reasonField}
-            helperText={`${reasonTrim.length} / 10자 이상`}
-            error={reasonTrim.length > 0 && reasonTrim.length < 10 ? `${reasonTrim.length} / 10자 이상 필요` : undefined}
-            containerStyle={styles.reasonBox}
-          />
-        ) : null}
-
-        <FieldLabel>작업 사진 (선택 — 보고서에 활용)</FieldLabel>
-        <View style={styles.phaseRow}>
-          {(['before', 'during', 'after'] as const).map((phase) => {
-            const label = phase === 'before' ? '작업 전' : phase === 'during' ? '작업 중' : '작업 후';
-            const uri = phaseSlots[phase].uri;
-            const busy = phaseBusy === phase;
-            return (
-              <Pressable
-                key={phase}
-                onPress={() => handlePhasePick(phase)}
-                disabled={!!phaseBusy}
-                accessibilityRole="button"
-                accessibilityLabel={`${label} 사진 추가`}
-                style={({ pressed }) => [
-                  styles.phaseSlot,
-                  uri && styles.phaseSlotFilled,
-                  pressed && { opacity: opacity.pressed },
-                  busy && { opacity: opacity.disabled },
-                ]}
-              >
-                {uri ? (
-                  <Image source={{ uri }} style={styles.phasePreview} />
-                ) : (
-                  <Ionicons name="camera-outline" size={22} color={colors.textMuted} />
-                )}
-                <Text variant="caption" weight="bold" color={uri ? 'primary' : 'textMuted'}>
-                  {label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        <Button
-          onPress={() => router.push(`/(tabs)/fields/${fieldId}` as never)}
-          variant="secondary"
-          fullWidth
-          rightIcon="arrow-forward"
-          style={styles.toField}
+          <VisitRecordForm value={value} onChange={setValue} disabled={saving !== null} />
+        </ScrollView>
+        <BottomActionBar
+          secondary={
+            <Button
+              onPress={() => void handleReport()}
+              variant="secondary"
+              size="lg"
+              loading={saving === 'report'}
+              disabled={saving !== null || blocked}
+            >
+              보고서 작성
+            </Button>
+          }
         >
-          메모·추가 사진
-        </Button>
-
-        <Button
-          onPress={handleSaveResult}
-          disabled={!visitId || !otherReasonValid}
-          loading={saving}
-          size="lg"
-          fullWidth
-          leftIcon="save"
-          style={styles.submit}
-        >
-          결과 저장
-        </Button>
-      </ScrollView>
-    </KeyboardAvoidingView>
+          <Button
+            onPress={() => void handleDone()}
+            size="lg"
+            fullWidth
+            leftIcon="save"
+            loading={saving === 'done'}
+            disabled={saving !== null || blocked}
+          >
+            체크인 완료
+          </Button>
+        </BottomActionBar>
+      </KeyboardAvoidingView>
     </SafeScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  scroll: { padding: spacing.xl, paddingBottom: spacing.xxl * 2 },
+  flex: { flex: 1 },
+  scroll: { padding: spacing.xl, paddingBottom: spacing.xxl },
   // 테두리를 지우고 배경만 깔면 문서 흐름의 depth 전략(테두리)에서 이 박스만 빠진다 —
   // delete-account 경고 박스와 같은 이유로 같은 계열 테두리를 남긴다(7절).
   header: {
     backgroundColor: colors.primaryMuted,
     borderColor: colors.primary,
     marginBottom: spacing.lg,
-  },
-  headerTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: spacing.xs,
   },
-  headerSub: { marginTop: spacing.xs },
-  headerSubMuted: { marginTop: spacing.xs },
-  statusGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-  },
-  statusChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  reasonBox: { marginTop: spacing.md },
-  reasonField: { minHeight: 72, textAlignVertical: 'top' },
-  phaseRow: { flexDirection: 'row', gap: spacing.sm },
-  phaseSlot: {
-    flex: 1,
-    aspectRatio: 1,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    overflow: 'hidden',
-  },
-  phaseSlotFilled: {
-    borderStyle: 'solid',
-    borderColor: colors.primary,
-    backgroundColor: colors.primaryMuted,
-  },
-  phasePreview: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    // 슬롯 하단 라벨('작업 전' 등) 높이만큼 비워 미리보기가 글자를 덮지 않게 한다.
-    bottom: PHASE_LABEL_HEIGHT,
-    width: '100%',
-    height: undefined,
-  },
-  toField: { marginTop: spacing.xl },
-  submit: { marginTop: spacing.md },
+  headerCap: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
 });

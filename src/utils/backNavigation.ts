@@ -15,12 +15,14 @@ type RouterLike = {
 
 const FALLBACK_HREF = '/(tabs)/trips' as const;
 
-export function safeBack(router?: RouterLike): void {
+// fallback — 스택이 비었을 때 갈 곳. 화면마다 '돌아갈 자리' 가 정해져 있으면 넘긴다
+// (예: 방문 수정 → 그 외근 정리). 없으면 외근 탭.
+export function safeBack(router?: RouterLike, fallback: string = FALLBACK_HREF): void {
   const r = (router ?? defaultRouter) as RouterLike;
   if (typeof r.canGoBack === 'function' && r.canGoBack()) {
     r.back();
     return;
   }
   // canGoBack 미지원 환경(웹의 일부 케이스) 도 대비 — replace 로 안전 fallback.
-  r.replace(FALLBACK_HREF as never);
+  r.replace(fallback as never);
 }

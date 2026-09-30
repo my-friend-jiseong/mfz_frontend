@@ -53,6 +53,8 @@ description: |
 - `Alert.alert` 는 웹에서도 동작한다(`webAlertPatch`). 다만 v2 의 확인 창은 `ConfirmDialog` 로 옮긴다.
 - 스와이프는 RNGH #3720(우리 스택 iOS 크래시) 때문에 **스파이크 결과가 나오기 전엔 쓰지 않는다**. 로드맵 §6 S1.
 - 서버에 없는 API 는 프론트에서 optional 로 먼저 만들고 `docs/backend/backend-backlog.md` 에 적는다. 없는 엔드포인트를 추측해 호출하지 않는다.
+- **이 저장소 파일은 CRLF 다.** node/sed 로 `
+` 이 들어간 문자열을 치환하면 매치 실패가 **조용히** 지나간다(Phase 1 에서 호스트 마운트가 이렇게 빠졌다). 여러 줄 치환은 Edit 도구로 하거나, 치환 후 grep 으로 반영을 확인한다.
 - 삭제되는 라우트(`trips/[id]/edit`)의 참조는 `grep` 전수로 찾는다. `head` 로 자르지 않는다.
 
 ## 4. 검증

@@ -1,7 +1,9 @@
 import { create } from 'zustand';
 import type { Visit, VisitStatus } from '@/types/entities';
 import { normalizeVisitStatus } from '@/types/entities';
-import { visits as visitsApi, localizeError } from '@/api';
+import { visits as visitsApi, localizeError, ApiError } from '@/api';
+import type { UploadFile } from '@/utils/media';
+import type { VisitPhoto, VisitPhotoPhase } from '@/api';
 
 // ERD v2: visits 는 체크인 기록(trip·field·시각·status)만. 메모·사진·음성 첨부 제거됨
 // (memos/field_photos 는 현장 전용 — fieldStore.directAttachments 참조).
@@ -18,8 +20,20 @@ type GenericResult =
   | { ok: true }
   | { ok: false; error: string };
 
+// 방문 삭제 — 서버 라우트가 아직 없다(백로그 §36). 404 는 오류가 아니라 '미지원' 으로 구분한다.
+type RemoveResult =
+  | { ok: true }
+  | { ok: false; unsupported: true }
+  | { ok: false; error: string };
+
 interface VisitState {
   visits: Visit[];
+  // 방문별 작업 사진 캐시 (visits.detail 응답). 현장 상세·외근 정리·방문 수정이 공유한다.
+  photosByVisit: Record<string, VisitPhoto[]>;
+
+  loadPhotos: (tripId: string, visitId: string) => Promise<void>;
+  addPhoto: (visitId: string, file: UploadFile, phase?: VisitPhotoPhase) => Promise<GenericResult>;
+  remove: (visitId: string) => Promise<RemoveResult>;
 
   checkIn: (tripId: string, fieldId: string) => Promise<CheckInResult>;
   setResult: (visitId: string, status: VisitStatus, reason?: string) => Promise<GenericResult>;
@@ -68,6 +82,49 @@ const describeError = localizeError;
 
 export const useVisitStore = create<VisitState>((set, get) => ({
   visits: [],
+  photosByVisit: {},
+
+  loadPhotos: async (tripId, visitId) => {
+    try {
+      const res = await visitsApi.detail(tripId, visitId);
+      set((s) => ({ photosByVisit: { ...s.photosByVisit, [visitId]: res.photos ?? [] } }));
+    } catch {
+      // 사진은 부가 정보 — 못 받아도 화면은 나머지로 그린다.
+    }
+  },
+
+  addPhoto: async (visitId, file, phase) => {
+    try {
+      const res = await visitsApi.addPhoto(visitId, file, phase);
+      set((s) => ({
+        photosByVisit: {
+          ...s.photosByVisit,
+          [visitId]: [...(s.photosByVisit[visitId] ?? []), res.attachment],
+        },
+      }));
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: describeError(e) };
+    }
+  },
+
+  remove: async (visitId) => {
+    try {
+      await visitsApi.remove(visitId);
+      set((s) => {
+        const { [visitId]: _gone, ...rest } = s.photosByVisit;
+        return { visits: s.visits.filter((v) => v.id !== visitId), photosByVisit: rest };
+      });
+      return { ok: true };
+    } catch (e) {
+      // 라우트 자체가 없으면 Express 기본 HTML 404 — 본문이 JSON 이 아니라 client 가 code 를
+      // 'internal_server_error' 로 채운다. JSON not_found(방문이 없음)와 이걸로 구분한다.
+      if (e instanceof ApiError && e.status === 404 && e.code !== 'not_found') {
+        return { ok: false, unsupported: true };
+      }
+      return { ok: false, error: describeError(e) };
+    }
+  },
 
   checkIn: async (_tripId, fieldId) => {
     try {
@@ -159,5 +216,5 @@ export const useVisitStore = create<VisitState>((set, get) => ({
   },
 
   // 로그아웃 시 호출.
-  clearAll: () => set({ visits: [] }),
+  clearAll: () => set({ visits: [], photosByVisit: {} }),
 }));

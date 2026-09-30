@@ -22,7 +22,8 @@ export type ButtonVariant =
   | 'secondary'
   | 'ghost'
   | 'destructive'
-  | 'dangerGhost';
+  | 'dangerGhost'
+  | 'dangerSecondary';
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
 interface Props {
@@ -71,6 +72,17 @@ const VARIANT: Record<
   // ghost(파랑)는 비파괴 액션 전용으로 두어 '빨강=파괴' 규칙과 정합. (UI/UX P1)
   dangerGhost: {
     container: { backgroundColor: 'transparent' },
+    text: { color: colors.danger },
+    tint: colors.danger,
+  },
+  // 하단 액션 바의 보조 삭제 버튼(명세 v2 방문 수정 `방문 삭제`) — secondary 모양에 빨강 글자.
+  // 주 버튼(저장) 옆에서 채워진 빨강이면 저장보다 무겁게 읽힌다.
+  dangerSecondary: {
+    container: {
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.dangerMuted,
+    },
     text: { color: colors.danger },
     tint: colors.danger,
   },

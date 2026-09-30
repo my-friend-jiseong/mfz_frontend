@@ -9,6 +9,7 @@ export default function TripsLayout() {
       <Stack.Screen name="navigate" />
       <Stack.Screen name="new/select" />
       <Stack.Screen name="new/order" />
+      <Stack.Screen name="[id]/visits/[visitId]" />
     </Stack>
   );
 }

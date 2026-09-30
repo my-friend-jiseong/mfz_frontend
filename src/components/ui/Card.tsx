@@ -4,6 +4,8 @@ import {
   StyleSheet,
   View,
   ViewStyle,
+  type AccessibilityActionEvent,
+  type AccessibilityActionInfo,
   type AccessibilityRole,
   type AccessibilityState,
 } from 'react-native';
@@ -30,6 +32,9 @@ interface Props {
   // 스크린 리더가 선택 여부를 읽는다. 기본값은 button.
   accessibilityRole?: AccessibilityRole;
   accessibilityState?: AccessibilityState;
+  // 스크린리더 커스텀 액션 (순서 이동 ▲▼ 등 — ReorderButtons.reorderA11yProps).
+  accessibilityActions?: ReadonlyArray<AccessibilityActionInfo>;
+  onAccessibilityAction?: (event: AccessibilityActionEvent) => void;
 }
 
 const PADDING: Record<Padding, number> = {
@@ -47,14 +52,27 @@ export function Card({
   accessibilityLabel,
   accessibilityRole = 'button',
   accessibilityState,
+  accessibilityActions,
+  onAccessibilityAction,
 }: Props) {
   const base: StyleProp<ViewStyle>[] = [
     styles.base,
     { padding: PADDING[padding] },
   ];
 
+  // 안 눌리는 카드도 라벨·커스텀 액션은 넘긴다 — 예전엔 이 분기에서 a11y prop 을 전부 버렸다
+  // (design-system.md 14절 기록). 역할은 넘기지 않는다: 누를 수 없는 카드에 button 은 거짓말이다.
   if (!onPress) {
-    return <View style={[base, style]}>{children}</View>;
+    return (
+      <View
+        style={[base, style]}
+        accessibilityLabel={accessibilityLabel}
+        accessibilityActions={accessibilityActions}
+        onAccessibilityAction={onAccessibilityAction}
+      >
+        {children}
+      </View>
+    );
   }
 
   return (
@@ -63,6 +81,8 @@ export function Card({
       accessibilityRole={accessibilityRole}
       accessibilityLabel={accessibilityLabel}
       accessibilityState={accessibilityState}
+      accessibilityActions={accessibilityActions}
+      onAccessibilityAction={onAccessibilityAction}
       // 누름 피드백은 opacity 가 아니라 **표면 값**을 바꾼다 — 흰 카드 위에서 opacity 0.85 는
       // 1/255 밖에 안 움직여 사실상 피드백이 없었다(colors.surfacePressed 주석에 계산).
       // scale(0.97) 을 쓰지 않는 이유는 14절 — 값 변경으로 충분하고 reanimated 비용이 없다.

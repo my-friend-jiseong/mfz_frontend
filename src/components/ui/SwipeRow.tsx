@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { createContext, useContext, useMemo, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Text } from './Text';
@@ -16,6 +16,17 @@ interface Props {
 
 const ACTION_W = 88;
 
+// 끌기가 끝난 직후의 탭을 무시하는 창. 손을 떼면 그 자리에서 press 가 완성되는데(웹 Pressable 은
+// 누르기 시작할 때 응답자가 정해져 나중에 덮은 가림막이 못 막는다 — 실측), 그 press 를 행 안의
+// 컨트롤이 스스로 거르게 한다.
+const PRESS_GUARD_MS = 300;
+const SwipeGuardContext = createContext<() => boolean>(() => false);
+
+/** 행 안의 Pressable 이 onPress 첫 줄에서 부른다 — true 면 방금 스와이프한 것이니 무시. */
+export function useSwipePressGuard(): () => boolean {
+  return useContext(SwipeGuardContext);
+}
+
 /**
  * 왼쪽으로 밀면 빨간 `삭제` 가 드러나는 행 (명세 v2 FE-WRAP-03).
  *
@@ -29,6 +40,15 @@ export function SwipeRow({ children, onDelete, deleteLabel = '삭제', onOpenCha
   const tx = useRef(new Animated.Value(0)).current;
   const base = useRef(0);
   const [open, setOpen] = useState(false);
+  // 끄는 중 — 손을 뗄 때 이어지는 클릭(웹 click·네이티브 press)이 아래 카드의 onPress 로 새지 않게
+  // 가림막을 덮는다. 실측(웹): 가림막 없이 끌면 삭제가 드러나면서 카드가 같이 펼쳐졌다.
+  const [dragging, setDragging] = useState(false);
+  const draggingRef = useRef(false);
+  const lastDragEnd = useRef(0);
+  const shouldIgnorePress = useMemo(
+    () => () => draggingRef.current || Date.now() - lastDragEnd.current < PRESS_GUARD_MS,
+    [],
+  );
   // 제스처는 한 번만 만든다 — 콜백은 ref 로 최신 값을 읽어 오래된 클로저를 부르지 않게.
   const onOpenChangeRef = useRef(onOpenChange);
   onOpenChangeRef.current = onOpenChange;
@@ -50,6 +70,10 @@ export function SwipeRow({ children, onDelete, deleteLabel = '삭제', onOpenCha
         .runOnJS(true)
         .activeOffsetX([-10, 10])
         .failOffsetY([-8, 8])
+        .onStart(() => {
+          draggingRef.current = true;
+          setDragging(true);
+        })
         .onUpdate((e) => {
           const x = Math.min(0, Math.max(-ACTION_W * 1.2, base.current + e.translationX));
           tx.setValue(x);
@@ -57,6 +81,12 @@ export function SwipeRow({ children, onDelete, deleteLabel = '삭제', onOpenCha
         .onEnd((e) => {
           const x = base.current + e.translationX;
           settle(x < -ACTION_W / 2 || e.velocityX < -500);
+        })
+        // 클릭 이벤트는 pointerup 뒤에 온다 — 한 틱 늦게 걷어야 가림막이 그 클릭을 받는다.
+        .onFinalize(() => {
+          if (draggingRef.current) lastDragEnd.current = Date.now();
+          draggingRef.current = false;
+          setTimeout(() => setDragging(false), 50);
         }),
     // settle 이 참조하는 값은 ref·setState 뿐이라 첫 렌더의 settle 로 충분하다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -88,12 +118,14 @@ export function SwipeRow({ children, onDelete, deleteLabel = '삭제', onOpenCha
       </View>
       <GestureDetector gesture={pan}>
         <Animated.View style={{ transform: [{ translateX: tx }] }}>
-          {children}
+          <SwipeGuardContext.Provider value={shouldIgnorePress}>{children}</SwipeGuardContext.Provider>
           {/* 열려 있을 때 행을 탭하면 닫기만 한다(펼침·이동이 같이 일어나지 않게). */}
-          {open ? (
+          {open || dragging ? (
             <Pressable
               style={StyleSheet.absoluteFill}
-              onPress={() => settle(false)}
+              onPress={() => {
+                if (!dragging) settle(false);
+              }}
               accessibilityLabel="삭제 버튼 닫기"
             />
           ) : null}
