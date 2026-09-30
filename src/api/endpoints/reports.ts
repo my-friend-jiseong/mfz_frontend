@@ -68,15 +68,6 @@ export interface UpdateReportBody {
   outputFileUrl?: string;
 }
 
-// backend-backlog §18 — release 2026-06: 외근 visits 별 FieldReport 일괄 스캐폴드 단축.
-export interface FromTripBody {
-  title: string;
-}
-export interface FromTripResponse {
-  reportId: string;
-  fieldReports: FieldReport[];
-}
-
 // backend-backlog §6 — release 2026-06: field_reports → Word 통합 생성.
 export interface ExportWordResponse {
   outputFileUrl: string;
@@ -113,15 +104,16 @@ export interface ListReportsParams {
 // ----- 현장별 보고(field_reports) — 전·중·후 사진 + 캡션 -----
 // 요청/응답 정확한 필드명·사진 업로드 방식(URL vs multipart)은 §8 확인 대상.
 // 우선 URL 참조 기반(JSON)으로 가정 — field_photos 업로드 후 그 URL 을 연결.
+// null = 지우기. undefined 는 요청에서 빠져 "그대로 두기" 가 된다(2026-09-30 실측: PATCH null 로 사진·설명 삭제됨).
 export interface FieldReportInput {
   fieldId: string;
-  title?: string;
-  beforePhotoUrl?: string;
-  beforePhotoCaption?: string;
-  pendingPhotoUrl?: string;
-  pendingPhotoCaption?: string;
-  afterPhotoUrl?: string;
-  afterPhotoCaption?: string;
+  title?: string | null;
+  beforePhotoUrl?: string | null;
+  beforePhotoCaption?: string | null;
+  pendingPhotoUrl?: string | null;
+  pendingPhotoCaption?: string | null;
+  afterPhotoUrl?: string | null;
+  afterPhotoCaption?: string | null;
 }
 
 // AI 보고서 생성 (POST /api/reports/generate) — 2026-05-31 결정 §1: 완전 제거.
@@ -147,13 +139,6 @@ export const reports = {
   // ERD v2: hard delete.
   remove: (reportId: string) =>
     request<null>(`/api/reports/${reportId}`, { method: 'DELETE' }),
-
-  // backend-backlog §18 — release 2026-06: 보고서 + 현장보고 스캐폴드 단축 생성.
-  createFromTrip: (tripId: string, body: FromTripBody) =>
-    request<FromTripResponse>(`/api/reports/from-trip/${tripId}`, {
-      method: 'POST',
-      body,
-    }),
 
   // backend-backlog §6 — release 2026-06: field_reports → Word 생성/재생성.
   exportWord: (reportId: string, regenerate = false) =>

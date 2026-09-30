@@ -1,39 +1,33 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Alert,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  View,
-} from 'react-native';
-import { Text } from '@/components/ui/Text';
+import { useEffect, useMemo, useState } from 'react';
+import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Text } from '@/components/ui/Text';
+import { Card } from '@/components/ui/Card';
+import { Badge } from '@/components/ui/Badge';
+import { Input } from '@/components/ui/Input';
+import { Button } from '@/components/ui/Button';
+import { FieldLabel } from '@/components/ui/FieldLabel';
+import { NavHeader } from '@/components/ui/NavHeader';
+import { showActionSheet } from '@/components/ui/ActionSheet';
+import { ReorderButtons, reorderA11yProps, swapAt } from '@/components/ui/ReorderButtons';
+import { SafeScreen } from '@/components/SafeScreen';
 import { useReportStore } from '@/stores/reportStore';
 import { useTripStore } from '@/stores/tripStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useVisitStore } from '@/stores/visitStore';
 import { useFieldStore } from '@/stores/fieldStore';
 import { safeBack } from '@/utils/backNavigation';
-import { Card } from '@/components/ui/Card';
-import { Input } from '@/components/ui/Input';
-import { Button } from '@/components/ui/Button';
-import { KakaoMapWebView, fieldsToMarkers } from '@/components/KakaoMapWebView';
-import type { Field } from '@/types/entities';
+import { fieldDetailLine } from '@/utils/fieldFacets';
+import { VISIT_STATUS_BADGE } from '@/theme/statusBadge';
+import { VISIT_STATUS_LABEL, type Visit } from '@/types/entities';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
-import { opacity } from '@/theme/motion';
 import { fmtDate, fmtTime } from '@/utils/datetime';
-import { SafeScreen } from '@/components/SafeScreen';
 
-// 새 양식(2026-05-31 결정) — 본문/AI/보고서 레벨 사진 제거.
-// 제목 + 외근 선택 → 그 외근의 visits 마다 빈 FieldReport 자동 스캐폴드
-// → 마법사(2026-06-04 결정): 스캐폴드된 현장 보고를 차례로 채우는 단계로 진입.
-//   스캐폴드가 없으면(방문 0건·전체 실패) 기존처럼 상세로.
-
+// 보고서 작성 (명세 v2 FE-RPT-02·02a·10).
+// 제목 + 연결 외근 + 보고서에 넣을 현장(= 그 외근의 체크인한 방문, 방문 순서). ▲▼ 로 바꾼 순서가
+// 곧 현장 보고 순서다. 위치도는 없다(상세 화면에 있다). 만들면 현장 보고 마법사(1/N)로 간다.
 export default function ComposeReport() {
   const router = useRouter();
   const params = useLocalSearchParams<{ tripId?: string }>();
@@ -43,16 +37,15 @@ export default function ComposeReport() {
   const loadTripDetail = useTripStore((s) => s.loadDetail);
   const userId = useAuthStore((s) => s.user?.id);
   const allVisits = useVisitStore((s) => s.visits);
-  const allFields = useFieldStore((s) => s.fields);
+  const getField = useFieldStore((s) => s.getById);
   const loadFieldDetail = useFieldStore((s) => s.loadDetail);
 
   const [tripId, setTripId] = useState<string | null>(params.tripId ?? null);
   const [title, setTitle] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [tripPickerOpen, setTripPickerOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // 위치도 조작 중 부모 ScrollView 잠금 — 안드로이드 제스처 경합 해소용.
-  const [mapBusy, setMapBusy] = useState(false);
+  // 사용자가 ▲▼ 로 정한 방문 순서(visitId). null 이면 아직 손대지 않음 → 방문 시각 순.
+  const [order, setOrder] = useState<string[] | null>(null);
 
   const myTrips = useMemo(() => {
     if (!userId) return [];
@@ -62,95 +55,79 @@ export default function ComposeReport() {
   }, [allTrips, userId]);
 
   // 무결성 검증 (G4/F6) — params.tripId 가 본인 외근이 아니면 reset.
-  // myTrips 가 비어있을 동안엔 보류 (refreshList race) — 한 번이라도 로드된 뒤 검증.
   useEffect(() => {
-    if (!params.tripId) return;
-    if (myTrips.length === 0) return;
+    if (!params.tripId || myTrips.length === 0) return;
     if (!myTrips.some((t) => t.id === params.tripId)) {
       setTripId(null);
       setError('전달된 외근이 본인 소유가 아니어서 선택을 해제했습니다. 외근을 직접 선택해주세요.');
     }
   }, [params.tripId, myTrips]);
 
-  // tripHydrating 은 tripStore.detailStatus 가 단일 진실 출처 (G10/G3) — local useState 제거.
-  // stale finally 가 새 fetch in-flight 인 채 false 로 flip 하던 race 가 store 측 set 으로 해소.
-  const tripHydrating = useTripStore(
-    (s) => (tripId ? s.detailStatus[tripId] === 'loading' : false),
-  );
-
-  // tripId 가 본인 소유 외근인지 — 안정적 boolean. myTrips 배열 참조가 아니라 이 값에 의존해야
-  // 아래 detail 동기화 effect 가 무한 루프에 빠지지 않는다 (loadTripDetail → trips 새 배열 →
-  // myTrips 새 참조 → effect 재실행 → … 304 가 끝없이 도는 회로). 멤버십이 그대로면 true 유지.
+  const tripHydrating = useTripStore((s) => (tripId ? s.detailStatus[tripId] === 'loading' : false));
   const tripIsOwned = useMemo(
     () => (tripId ? myTrips.some((t) => t.id === tripId) : false),
     [tripId, myTrips],
   );
 
-  // 선택된 외근의 detail (visits) 동기화 — 본인 소유 검증 통과해야 호출 (G4).
-  // 본인 소유 아닌 foreign tripId 가 백엔드로 leak 되는 회로 차단. tripId/소유여부가 바뀔 때만 1회.
   useEffect(() => {
     if (!tripId || !tripIsOwned) return;
     void loadTripDetail(tripId);
   }, [tripId, tripIsOwned, loadTripDetail]);
+
+  // 외근을 바꾸면 순서도 처음부터.
+  useEffect(() => setOrder(null), [tripId]);
 
   const selectedTrip = useMemo(
     () => (tripId ? myTrips.find((t) => t.id === tripId) ?? null : null),
     [myTrips, tripId],
   );
 
-  // 선택 외근의 visits — 자동 스캐폴드 대상.
-  const tripVisits = useMemo(() => {
-    if (!tripId) return [];
-    return allVisits
-      .filter((v) => v.tripId === tripId)
-      .sort((a, b) => a.visitedAt.localeCompare(b.visitedAt));
-  }, [tripId, allVisits]);
-
-  const scaffoldFieldIds = tripVisits.map((v) => v.fieldId).filter(Boolean);
-
-  // 위치도 — 선택 외근의 방문 현장 객체(좌표 포함)를 fieldStore 에서 lookup (중복 제거).
-  const previewFields = useMemo(() => {
-    const byId = new Map(allFields.map((f) => [f.id, f]));
-    const seen = new Set<string>();
-    const out: Field[] = [];
-    for (const v of tripVisits) {
-      const fid = v.fieldId;
-      if (!fid || seen.has(fid)) continue;
-      const f = byId.get(fid);
-      if (f) {
-        out.push(f);
-        seen.add(fid);
-      }
-    }
-    return out;
-  }, [allFields, tripVisits]);
-
-  const previewMarkers = useMemo(
-    () => fieldsToMarkers(previewFields),
-    [previewFields],
+  // 체크인한 방문만(FE-RPT-10) — 방문(visit) 자체가 체크인 기록이라 건너뛴 목적지는 여기 없다.
+  // 같은 현장을 두 번 방문했으면 행은 먼저 방문한 것 하나(현장 보고는 현장 단위), 사진은 모든 방문에서.
+  const allTripVisits = useMemo(
+    () =>
+      tripId
+        ? allVisits
+            .filter((v) => v.tripId === tripId && v.fieldId)
+            .sort((a, b) => a.visitedAt.localeCompare(b.visitedAt))
+        : [],
+    [tripId, allVisits],
   );
+  const tripVisits = useMemo(() => {
+    const seen = new Set<string>();
+    return allTripVisits.filter((v) => (seen.has(v.fieldId) ? false : (seen.add(v.fieldId), true)));
+  }, [allTripVisits]);
 
-  // 위치도용 현장 좌표 확보 — visits 의 fieldId 중 fieldStore 에 아직 없는 것만 detail 로드.
-  // tripVisits/loadFieldDetail 에만 의존하고 allFields 엔 의존하지 않음 → loadFieldDetail 이
-  // fields 를 갱신해도 재발화하지 않아 무한 루프 없음(getById 가드가 이미 받은 건 skip).
+  const ordered = useMemo<Visit[]>(() => {
+    if (!order) return tripVisits;
+    const byId = new Map(tripVisits.map((v) => [v.id, v]));
+    const out = order.map((id) => byId.get(id)).filter((v): v is Visit => !!v);
+    // 순서를 정한 뒤 새로 들어온 방문(상세 재로딩)은 끝에 붙인다.
+    for (const v of tripVisits) if (!order.includes(v.id)) out.push(v);
+    return out;
+  }, [order, tripVisits]);
+
   useEffect(() => {
     for (const v of tripVisits) {
-      const fid = v.fieldId;
-      if (!fid) continue;
-      if (useFieldStore.getState().getById(fid)) continue;
-      void loadFieldDetail(fid);
+      if (!useFieldStore.getState().getById(v.fieldId)) void loadFieldDetail(v.fieldId);
     }
   }, [tripVisits, loadFieldDetail]);
 
-  // submit 가드 — 외근 없는 사용자 동선 안내 (F5).
-  const noTripsAtAll = myTrips.length === 0;
+  const move = (from: number, to: number) => setOrder(swapAt(ordered, from, to).map((v) => v.id));
 
-  // CTA 가 왜 눌리지 않는지 — 누른 뒤가 아니라 누르기 전에 알려준다.
-  // handleSubmit 안의 '제목은 1~100자로…' 는 버튼이 disabled 라 도달할 수 없어(제목이 비면
-  // 애초에 못 누름) 사실상 죽은 안내였다. 아래 disabled 조건과 같은 순서로 사유를 도출해
-  // 둘이 어긋나지 않게 한다.
+  const openTripPicker = () =>
+    showActionSheet(
+      myTrips.map((t) => ({
+        label: `${t.title || `${fmtDate(t.startedAt)} 외근`} · ${fmtDate(t.startedAt)}`,
+        selected: t.id === tripId,
+        onPress: () => setTripId(t.id),
+      })),
+      '연결할 외근 선택',
+    );
+
+  const noTripsAtAll = myTrips.length === 0;
   const blockedReason = noTripsAtAll
-    ? null // 위 '아직 작성된 외근이 없어요' 카드가 이미 설명 — 중복 안내 안 함
+    ? null
     : !tripId
       ? '연결할 외근을 선택해주세요'
       : tripHydrating
@@ -166,377 +143,199 @@ export default function ComposeReport() {
       setError('제목은 1~100자로 입력해주세요');
       return;
     }
-    if (!tripId) {
-      setError('외근을 선택해주세요');
-      return;
-    }
-    if (tripHydrating) {
-      // race 차단 (F3) — disabled prop 이 막지만 한 번 더 명시.
-      setError('외근 정보를 불러오는 중입니다. 잠시 후 다시 시도해주세요.');
-      return;
-    }
+    if (!tripId || tripHydrating) return;
     setSubmitting(true);
-    const r = await createWithVisitScaffold({ title: t, tripId }, scaffoldFieldIds);
+    const r = await createWithVisitScaffold(
+      { title: t, tripId },
+      ordered.map((v) => ({
+        fieldId: v.fieldId,
+        visitIds: allTripVisits.filter((x) => x.fieldId === v.fieldId).map((x) => x.id),
+      })),
+    );
     setSubmitting(false);
     if (!r.ok) {
       Alert.alert('보고서 생성 실패', r.error);
       return;
     }
-    // 부분 실패 안내 (F4/G8) — failedFieldIds 로 현장명까지 노출.
     if (r.failedFieldIds.length > 0) {
-      const getField = useFieldStore.getState().getById;
       const names = r.failedFieldIds
         .slice(0, 5)
         .map((fid) => getField(fid)?.address ?? `현장 ${fid.slice(0, 6)}`)
         .join('\n· ');
-      const overflow = r.failedFieldIds.length > 5
-        ? `\n· 외 ${r.failedFieldIds.length - 5}건`
-        : '';
-      const msg = `현장 보고 ${r.attemptedFieldIds.length}건 중 ${r.failedFieldIds.length}건 자동 생성에 실패했습니다.\n\n· ${names}${overflow}\n\n상세 화면에서 직접 추가할 수 있어요.`;
-      Alert.alert('일부 현장 보고 누락', msg);
-    }
-    // 마법사 진입 — 스토어가 스캐폴드 후 상세 순서 기준 첫 현장 보고 id 를 돌려준다.
-    // null 이면(방문 0건·loadDetail 실패) 기존처럼 상세로. 에디터 화면이 hydrated
-    // detailCache 에 의존하므로 캐시 없이 마법사 진입은 불가 — 폴백이 올바른 동작.
-    if (r.firstFieldReportId) {
-      router.replace(
-        `/(tabs)/reports/${r.report.id}/field-report?frId=${r.firstFieldReportId}&wizard=1` as never,
+      const overflow = r.failedFieldIds.length > 5 ? `\n· 외 ${r.failedFieldIds.length - 5}건` : '';
+      Alert.alert(
+        '일부 현장 보고 누락',
+        `현장 보고 ${r.attemptedFieldIds.length}건 중 ${r.failedFieldIds.length}건을 만들지 못했습니다.\n\n· ${names}${overflow}\n\n상세 화면의 '현장 보고 추가' 로 다시 넣을 수 있어요.`,
       );
-    } else {
-      router.replace(`/(tabs)/reports/${r.report.id}` as never);
     }
+    router.replace(
+      (r.firstFieldReportId
+        ? `/(tabs)/reports/${r.report.id}/field-report?frId=${r.firstFieldReportId}&wizard=1`
+        : `/(tabs)/reports/${r.report.id}`) as never,
+    );
   };
 
   return (
     <SafeScreen>
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        keyboardShouldPersistTaps="handled"
-        scrollEnabled={!mapBusy}
-      >
-        <View style={styles.headerRow}>
-          <Pressable
-            onPress={() => safeBack(router)}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="뒤로 가기"
-            style={({ pressed }) => [styles.backBtn, pressed && { opacity: opacity.pressed }]}
-          >
-            <Ionicons name="chevron-back" size={22} color={colors.text} />
-          </Pressable>
-          <Text variant="h3" weight="heavy">
-            보고서 작성
-          </Text>
-        </View>
+      <NavHeader title="보고서 작성" onBack={() => safeBack(router, '/(tabs)/reports')} />
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+          <Input
+            label="제목"
+            value={title}
+            onChangeText={setTitle}
+            placeholder="예: 2026-08-28 사하구 낙동대로 일대 보고서"
+            maxLength={100}
+          />
 
-        <Input
-          label="제목"
-          value={title}
-          onChangeText={setTitle}
-          placeholder="예: 2026-05-31 사하구 가로수 보수"
-          maxLength={100}
-          containerStyle={styles.titleField}
-        />
-
-        <Text variant="bodySm" weight="bold" color="textMuted" style={styles.label}>
-          연결 외근
-        </Text>
-        {selectedTrip ? (
-          <Card padding="md" style={styles.tripCard}>
-            <View style={styles.tripCardHead}>
-              <Ionicons name="briefcase" size={16} color={colors.primary} />
-              <Text variant="body" weight="semibold" style={styles.tripCardTitle}>
-                {selectedTrip.title || `${fmtDate(selectedTrip.startedAt)} 외근`}
+          <FieldLabel style={styles.sectionGap}>연결 외근</FieldLabel>
+          {selectedTrip ? (
+            <Card padding="md" style={styles.tripCard}>
+              <View style={styles.tripCardHead}>
+                <Ionicons name="briefcase" size={16} color={colors.primary} />
+                <Text variant="body" weight="semibold" style={styles.flex}>
+                  {selectedTrip.title || `${fmtDate(selectedTrip.startedAt)} 외근`}
+                </Text>
+              </View>
+              <Text variant="caption" color="textMuted">
+                {fmtDate(selectedTrip.startedAt)} {fmtTime(selectedTrip.startedAt)}
+                {selectedTrip.endedAt ? ` ~ ${fmtTime(selectedTrip.endedAt)}` : ' · 진행 중'}
+                {' · 방문 '}
+                {tripVisits.length}곳
               </Text>
-            </View>
-            <Text variant="caption" color="textMuted" style={styles.tripCardMeta}>
-              {fmtDate(selectedTrip.startedAt)} {fmtTime(selectedTrip.startedAt)}
-              {selectedTrip.endedAt ? ` ~ ${fmtTime(selectedTrip.endedAt)}` : ' · 진행 중'}
-              {' · 방문 '}{tripVisits.length}건
-            </Text>
-            {/* params.tripId 가 있으면 외근이 외부에서 지정된 동선 — picker 잠금. 아니면 변경 가능. */}
-            {!params.tripId ? (
-              <Button
-                onPress={() => setTripPickerOpen(true)}
-                variant="ghost"
-                size="sm"
-                leftIcon="swap-horizontal"
-                style={styles.changeBtn}
-              >
-                외근 변경
-              </Button>
-            ) : null}
-          </Card>
-        ) : (
-          <Button
-            onPress={() => setTripPickerOpen(true)}
-            variant="secondary"
-            fullWidth
-            leftIcon="briefcase-outline"
-            style={styles.pickTripBtn}
-          >
-            외근 선택
-          </Button>
-        )}
-
-        {selectedTrip && tripHydrating ? (
-          <Text variant="caption" color="textMuted" style={styles.scaffoldHint}>
-            외근 정보를 불러오는 중…
-          </Text>
-        ) : selectedTrip && scaffoldFieldIds.length > 0 ? (
-          <Text variant="caption" color="textMuted" style={styles.scaffoldHint}>
-            보고서를 만들면 방문한 현장 {scaffoldFieldIds.length}곳의 현장 보고가
-            자동으로 만들어지고, 이어서 현장별 사진·캡션을 차례로 채우는 단계로
-            넘어갑니다. 건너뛴 현장은 상세 화면에서 나중에 채울 수 있어요.
-          </Text>
-        ) : selectedTrip ? (
-          <Text variant="caption" color="textMuted" style={styles.scaffoldHint}>
-            이 외근은 방문 기록이 없어 현장 보고가 자동 생성되지 않습니다.
-            보고서 생성 후 상세 화면에서 직접 추가할 수 있어요.
-          </Text>
-        ) : null}
-
-        {/* 위치도 — 연결 외근의 방문 현장 전체를 한 화면에 담는 미리보기 지도 (fitToMarkers).
-            좌표가 비동기로 도착하면 마커가 채워지며 자동 재프레이밍. */}
-        {selectedTrip && previewMarkers.length > 0 ? (
-          <>
-            <Text variant="bodySm" weight="bold" color="textMuted" style={styles.label}>
-              위치도 — 현장 {previewMarkers.length}곳
-            </Text>
-            <View style={styles.previewMap}>
-              {/* 위치도는 자유 조작이 기능이라 interactive 를 끄지 않는다. 대신 손이 닿아
-                  있는 동안만 부모 ScrollView 를 잠가 드래그를 지도에 넘긴다(안드로이드). */}
-              <KakaoMapWebView
-                markers={previewMarkers}
-                fitToMarkers
-                onInteractionChange={setMapBusy}
-              />
-            </View>
-          </>
-        ) : null}
-
-        {/* 외근 없는 사용자 — 보고서 생성 자체가 불가하므로 외근부터 시작하도록 안내 (F5) */}
-        {noTripsAtAll ? (
-          <Card padding="md" style={styles.noTripsCard}>
-            <Text variant="bodySm" weight="bold">
-              아직 작성된 외근이 없어요
-            </Text>
-            <Text variant="caption" color="textMuted" style={styles.noTripsBody}>
-              보고서는 외근 단위로 만들어집니다. 먼저 외근을 시작하고 현장을 방문하면
-              그 외근에 대한 보고서를 작성할 수 있어요.
-            </Text>
-            <Button
-              onPress={() => router.replace('/(tabs)/trips/new/select' as never)}
-              variant="secondary"
-              size="sm"
-              leftIcon="play-circle"
-              style={styles.noTripsCta}
-            >
-              외근 시작
+              {!params.tripId ? (
+                <Button
+                  onPress={openTripPicker}
+                  variant="ghost"
+                  size="sm"
+                  leftIcon="swap-horizontal"
+                  style={styles.changeBtn}
+                >
+                  외근 변경
+                </Button>
+              ) : null}
+            </Card>
+          ) : noTripsAtAll ? (
+            <Card padding="md" style={styles.noTripsCard}>
+              <Text variant="bodySm" weight="bold">
+                아직 작성된 외근이 없어요
+              </Text>
+              <Text variant="caption" color="textMuted">
+                보고서는 외근 단위로 만들어집니다. 먼저 외근을 시작해 현장을 방문해주세요.
+              </Text>
+            </Card>
+          ) : (
+            <Button onPress={openTripPicker} variant="secondary" fullWidth leftIcon="briefcase-outline">
+              외근 선택
             </Button>
-          </Card>
-        ) : null}
+          )}
 
-        {error ? (
-          <Text variant="bodySm" color="danger" style={styles.error}>
-            {error}
-          </Text>
-        ) : null}
+          {selectedTrip ? (
+            <>
+              <FieldLabel style={styles.sectionGap}>보고서에 넣을 현장 ({ordered.length})</FieldLabel>
+              {tripHydrating && ordered.length === 0 ? (
+                <Text variant="bodySm" color="textMuted">
+                  외근 정보를 불러오는 중…
+                </Text>
+              ) : ordered.length === 0 ? (
+                <Text variant="bodySm" color="textMuted">
+                  체크인한 방문이 없어 현장 보고가 만들어지지 않습니다. 보고서 상세에서 직접 추가할 수 있어요.
+                </Text>
+              ) : (
+                ordered.map((v, i) => {
+                  const field = getField(v.fieldId);
+                  const badge = VISIT_STATUS_BADGE[v.status];
+                  const detail = field ? fieldDetailLine(field) : null;
+                  return (
+                    <Card
+                      key={v.id}
+                      padding="md"
+                      style={styles.row}
+                      {...reorderA11yProps(i, ordered.length, move)}
+                    >
+                      <View style={styles.orderBadge}>
+                        <Text variant="bodySm" weight="bold" color="onPrimary" numeric>
+                          {i + 1}
+                        </Text>
+                      </View>
+                      <View style={styles.flex}>
+                        <View style={styles.rowTop}>
+                          <Text variant="bodySm" weight="bold" color="textMuted" numeric>
+                            {fmtTime(v.visitedAt)}
+                          </Text>
+                          <Badge label={VISIT_STATUS_LABEL[v.status]} tone={badge.tone} shape={badge.shape} size="sm" />
+                        </View>
+                        <Text variant="body" weight="semibold" numberOfLines={1}>
+                          {field?.address ?? '알 수 없는 현장'}
+                        </Text>
+                        {detail ? (
+                          <Text variant="caption" color="textMuted" numberOfLines={1}>
+                            {detail}
+                          </Text>
+                        ) : null}
+                      </View>
+                      <ReorderButtons index={i} count={ordered.length} onMove={move} />
+                    </Card>
+                  );
+                })
+              )}
+            </>
+          ) : null}
 
-        {/* 실패 메시지(error, 빨강)와 분리 — 이건 아직 못 누르는 이유이지 오류가 아니다. */}
-        {!error && blockedReason ? (
-          <View style={styles.hintRow}>
-            <Ionicons
-              name="information-circle-outline"
-              size={14}
-              color={colors.textMuted}
-            />
-            <Text variant="caption" color="textMuted">
+          {error ? (
+            <Text variant="bodySm" color="danger" style={styles.message}>
+              {error}
+            </Text>
+          ) : blockedReason ? (
+            <Text variant="caption" color="textMuted" style={styles.message}>
               {blockedReason}
             </Text>
-          </View>
-        ) : null}
-
-        <Button
-          onPress={handleSubmit}
-          disabled={
-            !tripId || !title.trim() || submitting || tripHydrating || noTripsAtAll
-          }
-          loading={submitting || tripHydrating}
-          size="lg"
-          fullWidth
-          leftIcon="document-text"
-          style={styles.submitBtn}
-        >
-          보고서 만들기
-        </Button>
-      </ScrollView>
-
-      <Modal
-        visible={tripPickerOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setTripPickerOpen(false)}
-      >
-        <Pressable
-          style={styles.modalBackdrop}
-          onPress={() => setTripPickerOpen(false)}
-        >
-          <Pressable
-            style={styles.modalCard}
-            onPress={(e) => e.stopPropagation()}
-          >
-            <Text variant="body" weight="bold" style={styles.modalTitle}>
-              연결할 외근 선택
+          ) : ordered.length > 0 ? (
+            <Text variant="caption" color="textMuted" style={styles.message}>
+              보고서를 만들면 위 순서대로 현장 보고 {ordered.length}건이 만들어집니다.
             </Text>
-            <ScrollView style={styles.modalList}>
-              {myTrips.map((t) => {
-                // 목록의 visitCount 는 list/detail API 가 내려준 값을 그대로 사용.
-                // allVisits 는 선택된 외근의 상세 로드 후에만 채워지므로(sparse)
-                // 여기서 reduce 하면 미선택 외근이 전부 0건으로 집계됨.
-                const visitCount = t.visitCount ?? 0;
-                const active = t.id === tripId;
-                return (
-                  <Pressable
-                    key={t.id}
-                    onPress={() => {
-                      setTripId(t.id);
-                      setTripPickerOpen(false);
-                    }}
-                    style={({ pressed }) => [
-                      styles.modalItem,
-                      active && styles.modalItemActive,
-                      pressed && { opacity: opacity.pressed },
-                    ]}
-                  >
-                    <View style={styles.modalItemHead}>
-                      <Ionicons
-                        name={active ? 'radio-button-on' : 'radio-button-off'}
-                        size={16}
-                        color={active ? colors.primary : colors.textMuted}
-                      />
-                      <Text variant="body" weight="semibold" style={styles.modalItemTitle}>
-                        {t.title || `${fmtDate(t.startedAt)} 외근`}
-                      </Text>
-                    </View>
-                    <Text variant="caption" color="textMuted" style={styles.modalItemMeta}>
-                      {fmtDate(t.startedAt)} {fmtTime(t.startedAt)}
-                      {t.endedAt ? ` ~ ${fmtTime(t.endedAt)}` : ' · 진행 중'}
-                      {' · 방문 '}{visitCount}건
-                    </Text>
-                  </Pressable>
-                );
-              })}
-              {myTrips.length === 0 ? (
-                <Text variant="bodySm" color="textMuted" style={styles.modalEmpty}>
-                  작성된 외근이 없습니다.
-                </Text>
-              ) : null}
-            </ScrollView>
-            <Button
-              onPress={() => setTripPickerOpen(false)}
-              variant="ghost"
-              fullWidth
-              style={styles.modalClose}
-            >
-              닫기
-            </Button>
-          </Pressable>
-        </Pressable>
-      </Modal>
-    </KeyboardAvoidingView>
+          ) : null}
+
+          <Button
+            onPress={() => void handleSubmit()}
+            disabled={!tripId || !title.trim() || submitting || tripHydrating || noTripsAtAll}
+            loading={submitting}
+            size="lg"
+            fullWidth
+            leftIcon="document-text"
+            style={styles.submit}
+          >
+            보고서 만들기
+          </Button>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  flex: { flex: 1 },
   scroll: { padding: spacing.xl, paddingBottom: spacing.xxl * 2 },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.lg,
-  },
-  backBtn: { padding: spacing.xs },
-  titleField: { marginBottom: spacing.md },
-  label: { marginTop: spacing.md, marginBottom: spacing.xs },
+  sectionGap: { marginTop: spacing.xl },
   tripCard: { gap: spacing.xs },
-  tripCardHead: {
+  tripCardHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  changeBtn: { alignSelf: 'flex-start' },
+  noTripsCard: { backgroundColor: colors.surfaceMuted, borderWidth: 0, gap: spacing.xs },
+  row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: spacing.md,
+    marginBottom: spacing.sm,
   },
-  tripCardTitle: { flex: 1 },
-  tripCardMeta: { marginTop: spacing.xs },
-  changeBtn: { alignSelf: 'flex-start', marginTop: spacing.xs },
-  pickTripBtn: { marginTop: spacing.xs },
-  scaffoldHint: { marginTop: spacing.md },
-  previewMap: {
-    height: 300,
-    marginTop: spacing.xs,
-    borderRadius: radius.lg,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  noTripsCard: {
-    marginTop: spacing.md,
-    backgroundColor: colors.surfaceMuted,
-    borderWidth: 0,
-    gap: spacing.xs,
-  },
-  noTripsBody: { marginTop: spacing.xs },
-  noTripsCta: { alignSelf: 'flex-start', marginTop: spacing.sm },
-  error: { marginTop: spacing.sm },
-  hintRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginTop: spacing.md,
-  },
-  submitBtn: { marginTop: spacing.xl },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: colors.overlay,
+  rowTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  orderBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: spacing.xl,
   },
-  modalCard: {
-    width: '100%',
-    maxWidth: 420,
-    maxHeight: '80%',
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-  },
-  modalTitle: { marginBottom: spacing.md },
-  modalList: { maxHeight: 420 },
-  modalItem: {
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: spacing.xs,
-    gap: spacing.xs,
-  },
-  modalItemActive: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primaryMuted,
-  },
-  modalItemHead: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  modalItemTitle: { flex: 1 },
-  modalItemMeta: { paddingLeft: spacing.xl },
-  modalEmpty: { padding: spacing.lg, textAlign: 'center' },
-  modalClose: { marginTop: spacing.sm },
+  message: { marginTop: spacing.lg },
+  submit: { marginTop: spacing.md },
 });

@@ -13,12 +13,9 @@ import { EmptyState } from '@/components/EmptyState';
 import { ErrorState } from '@/components/ErrorState';
 import { MapSheetLayout, sheetScrollableStyle } from '@/components/MapSheetLayout';
 import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Input';
-import { StickyBottomBar } from '@/components/ui/StickyBottomBar';
 import { LoadingState } from '@/components/ui/LoadingState';
-import { useHideOnScroll } from '@/components/ui/useHideOnScroll';
 import { colors } from '@/theme/colors';
 import { listBottomInset, spacing } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
@@ -124,8 +121,6 @@ export default function ReportsIndex() {
     return result;
   }, [allReports, allTrips, userId, search, fromDate, toDate]);
 
-  const { onScroll, visible } = useHideOnScroll();
-
   return (
     <MapSheetLayout title="보고서">
       <View style={styles.toolbar}>
@@ -159,11 +154,14 @@ export default function ReportsIndex() {
           <View style={styles.group}>
             {item.trip ? (
               <Pressable
+                // 명세 v2 §2.2 — 외근 줄 › 도 보고서 상세로(그 외근의 가장 최근 보고서).
                 onPress={() =>
-                  router.push(`/(tabs)/trips/${item.trip!.id}` as never)
+                  item.reports[0]
+                    ? router.push(`/(tabs)/reports/${item.reports[0].id}` as never)
+                    : undefined
                 }
                 accessibilityRole="button"
-                accessibilityLabel={`${fmtDate(item.trip.startedAt)} 외근 상세로 이동`}
+                accessibilityLabel={`${fmtDate(item.trip.startedAt)} 외근 보고서 보기`}
                 style={({ pressed }) => [
                   styles.tripHeaderRow,
                   pressed && { opacity: opacity.pressed },
@@ -231,8 +229,6 @@ export default function ReportsIndex() {
           </View>
         )}
         contentContainerStyle={styles.list}
-        // gorhom 은 onScroll 을 public 타입에서 제외하지만 런타임엔 useScrollHandler 로 전달함.
-        {...({ onScroll } as object)}
         // 로딩 중·조회 실패·진짜 없음 셋을 갈라 렌더한다 (강령 3).
         // loading/error 는 받아둔 데이터가 없을 때만 이긴다 — 이 스토어의 hydrate 는
         // 외근 탭 포커스마다 돌아서(trips/index) 오프라인 한 번이면 listStatus 가 'error'
@@ -251,35 +247,16 @@ export default function ReportsIndex() {
                   ? '조건에 맞는 보고서가 없습니다'
                   : '작성된 보고서가 없습니다'
               }
+              // 명세 v2 FE-RPT-01 — 목록에서 보고서를 만들지 않는다. 작성 진입은 외근 정리·체크인.
               description={
                 search || hasFilter
                   ? '검색어나 기간을 바꿔보세요'
-                  : '아래 버튼으로 첫 보고서를 작성하세요'
-              }
-              action={
-                !search && !hasFilter ? (
-                  <Button
-                    onPress={() => router.push('/(tabs)/reports/new' as never)}
-                    leftIcon="document-text"
-                  >
-                    보고서 작성
-                  </Button>
-                ) : undefined
+                  : '외근을 마친 뒤 외근 정리에서 보고서를 작성할 수 있어요'
               }
             />
           )
         }
       />
-      <StickyBottomBar visible={visible}>
-        <Button
-          onPress={() => router.push('/(tabs)/reports/new' as never)}
-          size="lg"
-          fullWidth
-          leftIcon="document-text"
-        >
-          보고서 작성
-        </Button>
-      </StickyBottomBar>
     </MapSheetLayout>
   );
 }

@@ -91,8 +91,6 @@ export type {
   UpdateReportBody,
   ListReportsParams,
   FieldReportInput,
-  FromTripBody,
-  FromTripResponse,
   ExportWordResponse,
 } from './endpoints/reports';
 export { map } from './endpoints/map';

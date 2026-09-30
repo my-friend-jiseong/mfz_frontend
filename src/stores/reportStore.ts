@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Report } from '@/types/entities';
-import { reports as reportsApi, localizeError, errorCode, ApiError } from '@/api';
+import { reports as reportsApi, localizeError, errorCode } from '@/api';
 import type {
   ReportListItem,
   ReportDetailResponse,
@@ -10,6 +10,8 @@ import type {
   FieldReportInput,
 } from '@/api';
 import { useAuthStore } from './authStore';
+import { useVisitStore } from './visitStore';
+import { photosToSlots } from '@/utils/visitRecord';
 
 type CreateResult =
   | { ok: true; report: Report }
@@ -55,9 +57,11 @@ interface ReportState {
   // 보고서 생성 + 그 외근 visits 별 빈 FieldReport 자동 스캐폴드 (결정 §3).
   // visits 의 fieldId 가 빈 string 이면 skip (timeline.fieldId 누락 — backlog §16).
   // 부분 실패 시 attempted/failed 카운트 반환, 호출 측이 사용자 안내 (F4).
+  // 명세 v2 FE-RPT-02a — 사용자가 정한 순서대로 현장 보고를 만든다. 각 방문의 단계별 사진을
+  // 슬롯에 미리 채운다(예전엔 from-trip 이 현장 사진 phase 로 서버에서 채웠다).
   createWithVisitScaffold: (
     body: CreateReportBody,
-    visitFieldIds: string[],
+    items: ReadonlyArray<{ fieldId: string; visitIds?: string[] }>,
   ) => Promise<CreateWithScaffoldResult>;
   update: (id: string, body: UpdateReportBody) => Promise<GenericResult>;
   // field_reports → Word 생성/재생성. 성공 시 outputFileUrl 갱신 (다운로드 버튼 노출).
@@ -206,50 +210,13 @@ export const useReportStore = create<ReportState>((set, get) => ({
     }
   },
 
-  createWithVisitScaffold: async (body, visitFieldIds) => {
+  createWithVisitScaffold: async (body, items) => {
     // busy 는 create + scaffold + loadDetail 끝까지 유지 (F10).
     set({ busy: true });
 
-    // (1) from-trip 단축 우선 — 서버가 visits 별 FieldReport 를 일괄 스캐폴드 (round-trip 절감).
-    // 미배포(404/405) 면 아래 레거시 경로로 폴백. 그 외 에러는 부분 생성 가능성이 있어 surface.
-    if (body.tripId) {
-      try {
-        const res = await reportsApi.createFromTrip(body.tripId, { title: body.title });
-        const detail = await get().loadDetail(res.reportId);
-        set({ busy: false });
-        const report: Report =
-          detail ?? {
-            id: res.reportId,
-            creatorId: useAuthStore.getState().user?.id ?? '',
-            tripId: body.tripId,
-            title: body.title,
-            outputFileUrl: null,
-            fieldReports: res.fieldReports,
-            createdAt: '',
-            updatedAt: '',
-          };
-        return {
-          ok: true,
-          report,
-          attemptedFieldIds: res.fieldReports.map((fr) => fr.fieldId),
-          failedFieldIds: [],
-          // detail 캐시가 채워졌을 때만 마법사 진입 — field-report.tsx 가 detailCache 의
-          // fieldReports 에 의존하므로, loadDetail 실패 시 res 의 frId 로 진입하면 빈 캐시로
-          // '현장 보고 없음' 막다른 화면이 된다. 레거시 경로와 동일하게 detail 기준만 사용.
-          firstFieldReportId: detail?.fieldReports?.[0]?.id ?? null,
-        };
-      } catch (e) {
-        const notDeployed =
-          e instanceof ApiError && (e.status === 404 || e.status === 405);
-        if (!notDeployed) {
-          set({ busy: false });
-          return { ok: false, error: describeError(e) };
-        }
-        // 404/405 → 미배포. 레거시 경로로 폴백 (busy 유지).
-      }
-    }
-
-    // (2) 레거시: create + N×addFieldReport.
+    // from-trip 을 쓰지 않는다 — 현장 선택·순서를 받지 않고(2026-09-30 실측: fieldIds 무시),
+    // 현장 보고에는 순서 필드가 없어 **생성 순서가 곧 표시 순서**다(백로그 §38). 그래서 빈 보고서를
+    // 만들고 현장 보고를 원하는 순서대로 하나씩 만든다.
     let created: Report;
     try {
       // create 가 자체 busy=false flip 하지 않도록 직접 api 호출 + 캐시 반영.
@@ -272,21 +239,48 @@ export const useReportStore = create<ReportState>((set, get) => ({
       set({ busy: false });
       return { ok: false, error: describeError(e) };
     }
-    // unique fieldId 만, 빈 string 제외 (timeline.fieldId 누락 — backlog §16).
-    const targets = Array.from(new Set(visitFieldIds.filter(Boolean)));
-    // 병렬 호출 (G9) — distinct fieldId 라 서버 race 없음. wall-time N×latency → max(latency).
-    // allSettled 는 절대 reject 안 함 — 한 건 실패해도 나머지 결과 그대로 반환.
-    const results = await Promise.allSettled(
-      targets.map((fieldId) =>
-        reportsApi.addFieldReport(created.id, { fieldId }),
+
+    // unique fieldId 만, 빈 string 제외. 순서는 호출 측 순서 그대로.
+    const seen = new Set<string>();
+    const targets = items.filter((it) => {
+      if (!it.fieldId || seen.has(it.fieldId)) return false;
+      seen.add(it.fieldId);
+      return true;
+    });
+
+    // 방문 사진 → 슬롯 prefill 재료. 병렬로 받아도 순서와 무관하다.
+    const visitStore = useVisitStore.getState();
+    await Promise.all(
+      targets.flatMap((it) =>
+        (it.visitIds ?? []).map((vid) =>
+          body.tripId && !visitStore.photosByVisit[vid]
+            ? visitStore.loadPhotos(body.tripId, vid)
+            : Promise.resolve(true),
+        ),
       ),
     );
+    // 단계별 최신 사진 — 같은 현장을 여러 번 방문했으면 모든 방문의 사진 중에서 고른다.
+    // 고르는 규칙은 방문 수정 폼과 같은 photosToSlots 하나.
+    const photosOf = (visitIds?: string[]) => {
+      const byVisit = useVisitStore.getState().photosByVisit;
+      const slots = photosToSlots((visitIds ?? []).flatMap((vid) => byVisit[vid] ?? []));
+      return {
+        beforePhotoUrl: slots.before?.uri,
+        pendingPhotoUrl: slots.during?.uri,
+        afterPhotoUrl: slots.after?.uri,
+      };
+    };
+
+    // 순차 호출 — 병렬이면 도착 순서가 뒤섞여 보고서의 현장 순서가 사용자가 정한 것과 달라진다.
     const failedFieldIds: string[] = [];
-    results.forEach((r, i) => {
-      if (r.status === 'rejected') failedFieldIds.push(targets[i]);
-    });
+    for (const it of targets) {
+      try {
+        await reportsApi.addFieldReport(created.id, { fieldId: it.fieldId, ...photosOf(it.visitIds) });
+      } catch {
+        failedFieldIds.push(it.fieldId);
+      }
+    }
     // loadDetail 실패는 보고서/카드 생성 자체엔 영향 X — 별도 catch 후 success 유지 (G6).
-    // try 안에 두면 5xx 가 catch 로 떨어져 호출 측이 '생성 실패' 로 오인 → 중복 보고서 생성.
     let detail: Report | null = null;
     try {
       detail = await get().loadDetail(created.id);
@@ -297,7 +291,7 @@ export const useReportStore = create<ReportState>((set, get) => ({
     return {
       ok: true,
       report: created,
-      attemptedFieldIds: targets,
+      attemptedFieldIds: targets.map((t) => t.fieldId),
       failedFieldIds,
       firstFieldReportId: detail?.fieldReports?.[0]?.id ?? null,
     };
