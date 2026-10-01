@@ -205,7 +205,7 @@ export default function Profile() {
           <MenuRow
             icon="pricetags-outline"
             label="카테고리 관리"
-            onPress={() => router.push('/(tabs)/fields/categories' as never)}
+            onPress={() => router.push('/(tabs)/profile/categories' as never)}
           />
         </Card>
 

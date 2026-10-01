@@ -9,6 +9,10 @@ export default function ProfileLayout() {
         options={{ title: '내 정보 수정', headerShown: true }}
       />
       <Stack.Screen
+        name="categories"
+        options={{ title: '카테고리 관리', headerShown: true }}
+      />
+      <Stack.Screen
         name="delete-account"
         options={{ title: '계정 삭제', headerShown: true }}
       />
