@@ -11,7 +11,7 @@ import { MapSheetLayout, sheetScrollableStyle, useSheetBottomInset } from '@/com
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { StickyBottomBar } from '@/components/ui/StickyBottomBar';
+import { BottomActionBar, useBottomActionBarHeight } from '@/components/ui/BottomActionBar';
 import { ReorderButtons, reorderA11yProps, swapAt } from '@/components/ui/ReorderButtons';
 import { describeOptimizeAlgorithm, haversineKm } from '@/utils/routeOptimize';
 import { useOptimizeRoute } from '@/components/trips/useOptimizeRoute';
@@ -19,7 +19,7 @@ import { trips as tripsApi } from '@/api';
 import { safeBack } from '@/utils/backNavigation';
 import { fieldDetailLine } from '@/utils/fieldFacets';
 import { colors } from '@/theme/colors';
-import { listBottomInset, radius, spacing } from '@/theme/spacing';
+import { radius, spacing } from '@/theme/spacing';
 
 interface OrderedField {
   id: string;
@@ -53,7 +53,9 @@ function withLegs(list: OrderedField[]): OrderedField[] {
 
 export default function NewTripOrder() {
   const router = useRouter();
-  const listBottomPad = useSheetBottomInset(listBottomInset);
+  // 55% 시트의 화면 밖 부분 + 하단 바 높이만큼 — 마지막 행이 바 뒤로 숨지 않게.
+  const barHeight = useBottomActionBarHeight();
+  const listBottomPad = useSheetBottomInset(barHeight);
   const params = useLocalSearchParams<{ fieldIds?: string }>();
   const userId = useAuthStore((s) => s.user?.id);
   const getField = useFieldStore((s) => s.getById);
@@ -185,7 +187,9 @@ export default function NewTripOrder() {
   );
 
   return (
-    <MapSheetLayout
+    // 하단 바는 시트 **밖**(absolute) — 시트 안에 두면 gorhom pan 이 터치를 가로챈다.
+    <View style={styles.screenRoot}>
+    <MapSheetLayout bottomBarHeight={barHeight}
       title="방문 순서 확인"
       onBack={() => safeBack(router)}
       mapFieldIds={routeFieldIds}
@@ -205,13 +209,10 @@ export default function NewTripOrder() {
         <Text variant="body" weight="semibold">
           위에서부터 순서대로 방문합니다
         </Text>
-        <Text variant="bodySm" color="textMuted" style={styles.hint}>
-          오른쪽 화살표로 순서를 바꿀 수 있습니다
-        </Text>
         <Button
           onPress={() => void handleOptimize()}
           variant="secondary"
-          size="sm"
+          size="md"
           loading={optimizing}
           leftIcon={optimized ? 'checkmark-circle' : 'sparkles'}
           style={[styles.optimizeBtn, optimized && styles.optimizeBtnActive]}
@@ -257,7 +258,8 @@ export default function NewTripOrder() {
         // 55% 시트 + 하단 CTA 뒤로 마지막 행이 숨지 않게(useSheetBottomInset 주석).
         contentContainerStyle={[styles.list, { paddingBottom: listBottomPad }]}
       />
-      <StickyBottomBar>
+    </MapSheetLayout>
+      <BottomActionBar absolute>
         <Button
           onPress={handleConfirm}
           disabled={list.length === 0}
@@ -270,12 +272,13 @@ export default function NewTripOrder() {
             ? '방문할 현장 없음'
             : `외근 시작 (${list.length}곳)`}
         </Button>
-      </StickyBottomBar>
-    </MapSheetLayout>
+      </BottomActionBar>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  screenRoot: { flex: 1 },
   head: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
@@ -287,7 +290,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.successMuted,
     borderColor: colors.success,
   },
-  // paddingBottom 은 렌더에서 useSheetBottomInset(listBottomInset).
+  // paddingBottom 은 렌더에서 useSheetBottomInset(하단 바 높이).
   list: { paddingHorizontal: spacing.lg },
   // 표면은 Card 가 준다 (강령 7). 누를 수 없는 행이라 onPress 는 없다 —
   // DestinationRow(누를 수 있는 목적지 행)와 같은 모양이 되도록 padding 도 md 로 맞춘다.
@@ -308,7 +311,6 @@ const styles = StyleSheet.create({
   rowText: { flex: 1 },
   detail: { marginTop: 2 },
   eta: { marginTop: 4 },
-  hint: { marginTop: 2 },
   summaryCard: {
     flexDirection: 'row',
     alignItems: 'center',

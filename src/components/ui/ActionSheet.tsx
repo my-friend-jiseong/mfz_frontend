@@ -114,7 +114,6 @@ export function ActionSheetHost() {
             },
           ]}
         >
-          <View style={styles.grabber} />
           {pending.title ? (
             <Text variant="caption" color="textMuted" style={styles.title}>
               {pending.title}
@@ -135,7 +134,7 @@ export function ActionSheetHost() {
                   {o.icon ? <Ionicons name={o.icon} size={24} color={tint} /> : null}
                   <Text
                     variant="body"
-                    weight={o.selected ? 'bold' : undefined}
+                    weight={o.selected ? 'bold' : danger ? 'semibold' : undefined}
                     color={danger ? 'danger' : 'text'}
                     style={styles.label}
                     numberOfLines={1}
@@ -161,15 +160,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
     overflow: 'hidden',
-  },
-  grabber: {
-    alignSelf: 'center',
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    marginTop: spacing.sm,
-    marginBottom: spacing.sm,
-    backgroundColor: colors.border,
   },
   title: { paddingHorizontal: spacing.xl, paddingBottom: spacing.xs },
   row: {

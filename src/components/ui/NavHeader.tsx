@@ -56,14 +56,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     minHeight: touchTarget.control,
-    paddingRight: spacing.lg,
+    paddingRight: spacing.xl,
   },
   back: {
     width: touchTarget.control,
     height: touchTarget.control,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: spacing.sm,
+    // Figma navHeader: 터치 영역(44)의 왼쪽 끝이 본문 좌측선(24)에, 제목은 그 뒤 4 (x=72).
+    marginLeft: spacing.xl,
+    marginRight: spacing.xs,
   },
   title: { flex: 1 },
   right: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },

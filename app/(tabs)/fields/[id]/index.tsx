@@ -351,8 +351,9 @@ const styles = StyleSheet.create({
   // 간격을 gap 과 marginTop 으로 이중 관리하고 있었다 — gap(xs) 위에 각 요소가 marginTop 을
   // 덧칠해 실제 간격이 4·6·12·16·20 처럼 tier 밖 값이 됐다(2.1절). gap 을 걷고 요소마다
   // '무엇과 무엇 사이인가' 로 토큰을 준다: 정체성 블록 안은 xs, 블록 사이는 md.
+  // 좌우 여백은 목록(contentContainer)이 준다 — 여기서 또 주면 헤더 블록만 32 로 들어가
+  // 방문 카드(16)와 어긋났다. Figma 470:4968 은 전부 24 선.
   summary: {
-    paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
     paddingBottom: spacing.md,
   },
@@ -384,7 +385,7 @@ const styles = StyleSheet.create({
   empty: { marginTop: spacing.xs },
   memoList: { marginTop: spacing.sm, gap: spacing.xs },
   memoMeta: { marginTop: spacing.xs },
-  list: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
+  list: { paddingHorizontal: spacing.xl, paddingBottom: spacing.xxl },
   visitCard: { marginBottom: spacing.xs },
   visitHead: {
     flexDirection: 'row',

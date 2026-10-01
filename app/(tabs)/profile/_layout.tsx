@@ -10,7 +10,7 @@ export default function ProfileLayout() {
       />
       <Stack.Screen
         name="delete-account"
-        options={{ title: '회원 탈퇴', headerShown: true }}
+        options={{ title: '계정 삭제', headerShown: true }}
       />
     </Stack>
   );

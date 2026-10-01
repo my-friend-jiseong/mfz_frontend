@@ -177,7 +177,7 @@ export default function ComposeReport() {
   };
 
   return (
-    <SafeScreen>
+    <SafeScreen edges={['top', 'bottom']}>
       <NavHeader title="보고서 작성" onBack={() => safeBack(router, '/(tabs)/reports')} />
       <KeyboardAvoid style={styles.flex}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
@@ -204,17 +204,15 @@ export default function ComposeReport() {
                 {' · 방문 '}
                 {tripVisits.length}곳
               </Text>
-              {!params.tripId ? (
-                <Button
-                  onPress={openTripPicker}
-                  variant="ghost"
-                  size="sm"
-                  leftIcon="swap-horizontal"
-                  style={styles.changeBtn}
-                >
-                  외근 변경
-                </Button>
-              ) : null}
+              {/* Figma 5051 — 외근 정리·체크인에서 tripId 를 받아 들어와도 바꿀 수 있게 항상 둔다. */}
+              <Button
+                onPress={openTripPicker}
+                variant="ghost"
+                leftIcon="swap-horizontal"
+                style={styles.changeBtn}
+              >
+                외근 변경
+              </Button>
             </Card>
           ) : noTripsAtAll ? (
             <Card padding="md" style={styles.noTripsCard}>
@@ -283,31 +281,34 @@ export default function ComposeReport() {
             </>
           ) : null}
 
-          {error ? (
-            <Text variant="bodySm" color="danger" style={styles.message}>
-              {error}
-            </Text>
-          ) : blockedReason ? (
-            <Text variant="caption" color="textMuted" style={styles.message}>
-              {blockedReason}
-            </Text>
-          ) : ordered.length > 0 ? (
-            <Text variant="caption" color="textMuted" style={styles.message}>
-              보고서를 만들면 위 순서대로 현장 보고 {ordered.length}건이 만들어집니다.
-            </Text>
-          ) : null}
+          {/* 안내문·버튼은 화면 하단에 붙인다(Figma 5051). 내용이 길면 스크롤 끝. */}
+          <View style={styles.footer}>
+            {error ? (
+              <Text variant="bodySm" color="danger" style={styles.message}>
+                {error}
+              </Text>
+            ) : blockedReason ? (
+              <Text variant="caption" color="textMuted" style={styles.message}>
+                {blockedReason}
+              </Text>
+            ) : ordered.length > 0 ? (
+              <Text variant="caption" color="textMuted" style={styles.message}>
+                보고서를 만들면 위 순서대로 현장 보고 {ordered.length}건이 만들어집니다.
+              </Text>
+            ) : null}
 
-          <Button
-            onPress={() => void handleSubmit()}
-            disabled={!tripId || !title.trim() || submitting || tripHydrating || noTripsAtAll}
-            loading={submitting}
-            size="lg"
-            fullWidth
-            leftIcon="document-text"
-            style={styles.submit}
-          >
-            보고서 만들기
-          </Button>
+            <Button
+              onPress={() => void handleSubmit()}
+              disabled={!tripId || !title.trim() || submitting || tripHydrating || noTripsAtAll}
+              loading={submitting}
+              size="lg"
+              fullWidth
+              leftIcon="document-text"
+              style={styles.submit}
+            >
+              보고서 만들기
+            </Button>
+          </View>
         </ScrollView>
       </KeyboardAvoid>
     </SafeScreen>
@@ -316,7 +317,8 @@ export default function ComposeReport() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  scroll: { padding: spacing.xl, paddingBottom: spacing.xxl * 2 },
+  scroll: { flexGrow: 1, padding: spacing.xl },
+  footer: { marginTop: 'auto' },
   sectionGap: { marginTop: spacing.xl },
   tripCard: { gap: spacing.xs },
   tripCardHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },

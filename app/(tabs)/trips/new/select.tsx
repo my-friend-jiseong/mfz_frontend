@@ -13,10 +13,10 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { safeBack } from '@/utils/backNavigation';
 import { colors } from '@/theme/colors';
-import { listBottomInset, radius, spacing } from '@/theme/spacing';
+import { radius, spacing } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
 import { FilterChip } from '@/components/ui/FilterChip';
-import { StickyBottomBar } from '@/components/ui/StickyBottomBar';
+import { BottomActionBar, useBottomActionBarHeight } from '@/components/ui/BottomActionBar';
 import { FieldCard } from '@/components/FieldCard';
 import { FieldFilterBar } from '@/components/fields/FieldFilterBar';
 import { type Field, type FieldStatus } from '@/types/entities';
@@ -26,7 +26,9 @@ import { TRIP_MAX_PLANNED_FIELDS } from '@/api';
 
 export default function NewTripSelect() {
   const router = useRouter();
-  const listBottomPad = useSheetBottomInset(listBottomInset);
+  // 55% 시트의 화면 밖 부분 + 하단 바 높이만큼 — 마지막 행이 바 뒤로 숨지 않게.
+  const barHeight = useBottomActionBarHeight();
+  const listBottomPad = useSheetBottomInset(barHeight);
   const userId = useAuthStore((s) => s.user?.id);
   const allFields = useFieldStore((s) => s.fields);
   const activeTripId = useTripStore((s) => s.activeTripId);
@@ -168,7 +170,9 @@ export default function NewTripSelect() {
   );
 
   return (
-    <MapSheetLayout
+    // 하단 바는 시트 **밖**(absolute) — 시트 안에 두면 gorhom pan 이 터치를 가로챈다.
+    <View style={styles.screenRoot}>
+    <MapSheetLayout bottomBarHeight={barHeight}
       title="방문할 현장 선택"
       onBack={() => safeBack(router)}
       // 진입 시 시트를 55%(index 1)로 — 위 절반에 지도가 보여 마커 탭으로 바로 선택 가능.
@@ -184,7 +188,7 @@ export default function NewTripSelect() {
             weight="bold"
             color={atLimit ? 'danger' : 'primary'}
           >
-            {selectedIds.length}/{myFields.length}개 선택
+            {selectedIds.length} / {myFields.length}개 선택
             {/* 상한에 닿았을 때만 알린다 — 평소엔 200 이라는 숫자가 의미 없는 노이즈다. */}
             {atLimit ? ` · 최대 ${TRIP_MAX_PLANNED_FIELDS}곳` : ''}
           </Text>
@@ -195,7 +199,7 @@ export default function NewTripSelect() {
               active={false}
               dashed
               leftIcon={
-                visibleAllSelected ? 'remove-circle-outline' : 'checkbox-outline'
+                visibleAllSelected ? 'remove-circle-outline' : 'square-outline'
               }
               onPress={toggleSelectAll}
             />
@@ -294,22 +298,24 @@ export default function NewTripSelect() {
           />
         }
       />
-      <StickyBottomBar>
+    </MapSheetLayout>
+      <BottomActionBar absolute>
         <Button
           onPress={handleNext}
           disabled={selectedIds.length === 0}
           size="lg"
           fullWidth
-          rightIcon="arrow-forward"
+          rightIcon="chevron-forward"
         >
           다음 ({selectedIds.length})
         </Button>
-      </StickyBottomBar>
-    </MapSheetLayout>
+      </BottomActionBar>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  screenRoot: { flex: 1 },
   head: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
@@ -335,6 +341,6 @@ const styles = StyleSheet.create({
     maxWidth: 200,
   },
   selectedChipLabel: { flexShrink: 1 },
-  // paddingBottom 은 렌더에서 useSheetBottomInset(listBottomInset).
+  // paddingBottom 은 렌더에서 useSheetBottomInset(하단 바 높이).
   list: { paddingHorizontal: spacing.lg },
 });

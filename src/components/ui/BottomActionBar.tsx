@@ -14,6 +14,11 @@ interface Props {
    * 시트 **밖**에 마운트해야 한다 — 시트 안에 두면 gorhom pan 이 터치를 가로챈다.
    */
   absolute?: boolean;
+  /**
+   * 홈 인디케이터만큼 아래 여백을 더할지. 탭 루트 화면(외근 내역·현장 목록)은 바 아래에 탭바가
+   * 있어 그쪽이 inset 을 먹으므로 false.
+   */
+  safeArea?: boolean;
 }
 
 // 버튼 52 + 위 12 + 아래 최소 12. 스크롤 콘텐츠가 바 뒤로 숨지 않게 하단 여백 계산에 쓴다.
@@ -21,9 +26,9 @@ interface Props {
 export const BOTTOM_ACTION_BAR_HEIGHT = 52 + spacing.md * 2;
 
 /** 이 기기에서 바의 실제 높이(버튼 + 위 여백 + max(safe area, 12)). */
-export function useBottomActionBarHeight(): number {
+export function useBottomActionBarHeight(safeArea = true): number {
   const insets = useSafeAreaInsets();
-  return 52 + spacing.md + Math.max(insets.bottom, spacing.md);
+  return 52 + spacing.md + (safeArea ? Math.max(insets.bottom, spacing.md) : spacing.md);
 }
 
 /**
@@ -31,13 +36,13 @@ export function useBottomActionBarHeight(): number {
  * 보조 버튼은 왼쪽(내용 너비), 주 버튼은 오른쪽(남은 너비).
  * 떠 있는 CTA(`StickyBottomBar`)와 달리 화면 바닥에 붙어 콘텐츠와 경계를 만든다.
  */
-export function BottomActionBar({ children, secondary, absolute }: Props) {
+export function BottomActionBar({ children, secondary, absolute, safeArea = true }: Props) {
   const insets = useSafeAreaInsets();
   return (
     <View
       style={[
         styles.bar,
-        { paddingBottom: Math.max(insets.bottom, spacing.md) },
+        { paddingBottom: safeArea ? Math.max(insets.bottom, spacing.md) : spacing.md },
         absolute && styles.absolute,
       ]}
     >

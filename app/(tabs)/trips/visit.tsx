@@ -168,7 +168,8 @@ const styles = StyleSheet.create({
   photoRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   photo: {
     width: '31%',
-    aspectRatio: 1,
+    // Figma photoGrid 칸 114×100.
+    aspectRatio: 114 / 100,
     borderRadius: radius.md,
     backgroundColor: colors.surfaceMuted,
   },

@@ -22,10 +22,9 @@ import { ReviewVisitCard } from '@/components/trips/ReviewVisitCard';
 import { memoForVisit } from '@/utils/visitRecord';
 import { visitInReport } from '@/utils/visitGuards';
 import { safeBack } from '@/utils/backNavigation';
-import { fieldDetailLine } from '@/utils/fieldFacets';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
-import { fmtDate, fmtDateTime, fmtDuration } from '@/utils/datetime';
+import { fmtDate, fmtDateTime, fmtDuration, fmtTime } from '@/utils/datetime';
 
 // 외근 상세 — 종료된 외근 전용. 진행 중인 외근은 activeTripId === id 가드로 active 화면에 위임.
 // 명세 v2 §4.3: 방문 카드는 읽기 전용 요약(펼침)이고, 고치는 곳은 방문 수정 화면이다.
@@ -263,7 +262,7 @@ export default function TripDetail() {
 
   return (
     <View style={styles.screenRoot}>
-      <MapSheetLayout
+      <MapSheetLayout bottomBarHeight={barHeight}
         title="외근 정리"
         onBack={() => safeBack(router)}
         initialIndex={2}
@@ -286,8 +285,15 @@ export default function TripDetail() {
           <View style={styles.metaRow}>
             <Ionicons name="time-outline" size={14} color={colors.textMuted} />
             <Text variant="bodySm" color="textMuted">
+              {/* Figma: "2026-08-28 09:00 ~ 14:20 · 5시간 20분" — 같은 날 종료면 시각만. */}
               {fmtDateTime(trip.startedAt)}
-              {trip.endedAt ? ` ~ ${fmtDateTime(trip.endedAt)}` : ' · 진행 중'}
+              {trip.endedAt
+                ? ` ~ ${
+                    fmtDate(trip.endedAt) === fmtDate(trip.startedAt)
+                      ? fmtTime(trip.endedAt)
+                      : fmtDateTime(trip.endedAt)
+                  }`
+                : ' · 진행 중'}
               {trip.endedAt
                 ? ` · ${fmtDuration(trip.startedAt, trip.endedAt)}`
                 : ''}
@@ -387,12 +393,6 @@ export default function TripDetail() {
                           <Text variant="body" weight="semibold" numberOfLines={1}>
                             {field?.address ?? '알 수 없는 현장'}
                           </Text>
-                          {/* 주소가 이미 상세주소로 끝나면 중복이다 (fieldFacets 규칙). */}
-                          {field && fieldDetailLine(field) ? (
-                            <Text variant="caption" color="textMuted" numberOfLines={1}>
-                              {fieldDetailLine(field)}
-                            </Text>
-                          ) : null}
                         </View>
                         {/* 결과는 미정 — 체크인 없이 건너뛴 방문(명세 §1.4·수락 기준 7). */}
                         <Badge
@@ -441,7 +441,9 @@ const styles = StyleSheet.create({
   // 방문 숫자만 아래로 더 자란다 — 그게 위계로 읽힌다. 바닥을 맞추면(flex-end) 반대로
   // 작은 열의 라벨이 6px 내려앉아 어긋난 것처럼 보인다(실측).
   // 열을 flex 로 늘리지 않고 왼쪽에 모아 두고 오른쪽은 비운다 — 여백이 divider 를 대신한다.
+  // Figma statsCard 는 내용 폭(전체 폭으로 늘리지 않는다).
   statsCard: {
+    alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.xl,

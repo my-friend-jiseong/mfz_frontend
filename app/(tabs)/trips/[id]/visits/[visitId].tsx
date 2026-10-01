@@ -4,7 +4,7 @@ import { KeyboardAvoid } from '@/components/ui/KeyboardAvoid';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Text } from '@/components/ui/Text';
 import { Card } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
+import { Ionicons } from '@expo/vector-icons';
 import { Button } from '@/components/ui/Button';
 import { BottomActionBar } from '@/components/ui/BottomActionBar';
 import { NavHeader } from '@/components/ui/NavHeader';
@@ -16,8 +16,6 @@ import { VisitRecordForm } from '@/components/trips/VisitRecordForm';
 import { useVisitStore } from '@/stores/visitStore';
 import { useFieldStore } from '@/stores/fieldStore';
 import { useTripStore } from '@/stores/tripStore';
-import { VISIT_STATUS_BADGE } from '@/theme/statusBadge';
-import { VISIT_STATUS_LABEL } from '@/types/entities';
 import { fieldDetailLine } from '@/utils/fieldFacets';
 import { safeBack } from '@/utils/backNavigation';
 import {
@@ -94,7 +92,6 @@ export default function VisitEdit() {
     );
   }
 
-  const badge = VISIT_STATUS_BADGE[visit.status];
   const blocked = value ? otherReasonShort(value) : true;
 
   const handleSave = async () => {
@@ -150,7 +147,13 @@ export default function VisitEdit() {
         style={styles.flex}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <Card padding="lg" style={styles.header}>
-            <Badge label={VISIT_STATUS_LABEL[visit.status]} tone={badge.tone} shape={badge.shape} size="sm" />
+            {/* Figma 방문 수정 header — 체크인을 마친 방문이라는 표시. 결과 상태는 아래 칩에서 고른다. */}
+            <View style={styles.doneRow}>
+              <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+              <Text variant="bodySm" weight="bold" color="primary">
+                방문 완료
+              </Text>
+            </View>
             <Text variant="body" weight="semibold">
               {field?.address ?? '알 수 없는 현장'}
             </Text>
@@ -177,7 +180,7 @@ export default function VisitEdit() {
               onPress={() => void handleDelete()}
               variant="dangerSecondary"
               size="lg"
-              leftIcon="trash-outline"
+              leftIcon="trash"
               loading={busy === 'delete'}
               disabled={busy !== null}
             >
@@ -211,5 +214,6 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     alignItems: 'flex-start',
   },
+  doneRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   loading: { paddingVertical: spacing.xl, alignItems: 'center' },
 });

@@ -62,7 +62,7 @@ export function EditableTitle({ value, onSubmit, maxLength = 100, label }: Props
         accessibilityHint="눌러서 제목을 수정합니다"
         style={({ pressed }) => [styles.display, pressed && { opacity: opacity.pressed }]}
       >
-        <Text variant="h2" numberOfLines={2}>
+        <Text variant="h2" weight="heavy" numberOfLines={2}>
           {value}
         </Text>
       </Pressable>

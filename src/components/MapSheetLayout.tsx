@@ -55,6 +55,12 @@ interface Props {
   collapseOnScopeChange?: boolean;
   // 스코프가 걸려도 지도 검색창·레이어 패널·표시 설정을 유지(메인 탭 안의 임시 포커스용).
   keepGlobalChrome?: boolean;
+  /**
+   * 시트 밖 화면 바닥에 붙은 하단 액션 바 높이(`useBottomActionBarHeight`). 주면 가장 낮은 detent 가
+   * 그만큼 올라가 핸들이 바 위에 남는다 — 안 주면 시트를 끝까지 내렸을 때 핸들이 바 뒤로 숨어
+   * 다시 올릴 수 없다(웹 실측, 외근 내역).
+   */
+  bottomBarHeight?: number;
   children: ReactNode;
 }
 
@@ -94,6 +100,7 @@ export function MapSheetLayout({
   routeVertexes,
   collapseOnScopeChange = false,
   keepGlobalChrome = false,
+  bottomBarHeight = 0,
   children,
 }: Props) {
   const { height: screenHeight } = useWindowDimensions();
@@ -136,13 +143,14 @@ export function MapSheetLayout({
   //   진짜 창 크기 변경뿐이다(그때는 재조정이 맞는 동작).
   const measuredHeight =
     containerHeight != null && containerHeight > 0 ? containerHeight : null;
+  const peekHeight = PEEK_HEIGHT + bottomBarHeight;
   const maxSheetHeight = Math.max(
-    PEEK_HEIGHT + 1,
+    peekHeight + 1,
     (measuredHeight ?? screenHeight) - topGap,
   );
   const snapPoints = useMemo(
-    () => [PEEK_HEIGHT, '55%', maxSheetHeight],
-    [maxSheetHeight],
+    () => [peekHeight, '55%', maxSheetHeight],
+    [peekHeight, maxSheetHeight],
   );
 
   // 지도 스코프 전환 → 시트 내림(55%). 해제되면 다시 initialIndex 로 복귀.
@@ -174,7 +182,7 @@ export function MapSheetLayout({
     <View style={styles.root} onLayout={onRootLayout}>
       <MapDashboard
         scopeFieldIds={mapFieldIds}
-        legendBottomInset={PEEK_HEIGHT}
+        legendBottomInset={peekHeight}
         selectedFieldIds={selectedFieldIds}
         onSelectField={onSelectField}
         routeFieldIds={routeFieldIds}
@@ -217,12 +225,11 @@ export function MapSheetLayout({
             {onBack ? (
               <Pressable
                 onPress={onBack}
-                hitSlop={8}
                 accessibilityRole="button"
                 accessibilityLabel="뒤로 가기"
                 style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
               >
-                <Ionicons name="chevron-back" size={22} color={colors.text} />
+                <Ionicons name="chevron-back" size={24} color={colors.text} />
               </Pressable>
             ) : null}
             <Text variant="h3" style={styles.headerTitle}>
@@ -262,8 +269,12 @@ const styles = StyleSheet.create({
   },
   // 제목이 남는 폭을 먹어 headerRight 가 오른쪽 끝에 붙는다.
   headerTitle: { flex: 1 },
+  // Figma 시트 헤더: 터치 44 · 아이콘 24, 헤더 높이 60(위아래 8).
   backBtn: {
-    padding: 2,
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   pressed: { opacity: 0.6 },
   content: { flex: 1 },

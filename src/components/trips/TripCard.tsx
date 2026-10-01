@@ -5,9 +5,9 @@ import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Text } from '@/components/ui/Text';
 import { colors } from '@/theme/colors';
-import { spacing, radius } from '@/theme/spacing';
+import { spacing, radius, touchTarget } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
-import { fmtDayLabel, fmtDuration, fmtTime } from '@/utils/datetime';
+import { fmtMonthDay, fmtDuration, fmtTime } from '@/utils/datetime';
 import type { Trip } from '@/types/entities';
 
 interface Props {
@@ -86,7 +86,7 @@ export const TripCard = memo(function TripCard({
           {hasReport ? <Badge label="보고서" tone="info" shape="diamond" /> : null}
         </View>
         <Text variant="caption" weight="semibold" color="textMuted">
-          {fmtDayLabel(trip.startedAt)}
+          {fmtMonthDay(trip.startedAt)}
         </Text>
       </View>
 
@@ -123,7 +123,6 @@ export const TripCard = memo(function TripCard({
               onFocusMap(trip.id);
             }}
             disabled={mapLoading}
-            hitSlop={8}
             accessibilityRole="button"
             accessibilityState={{ selected: !!mapFocused }}
             accessibilityLabel={
@@ -169,9 +168,10 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   trackSpacer: { flex: 1 },
+  // Figma TripCard mapBtn — 44×44 회색 정사각(터치 타깃 그대로가 보이는 크기).
   mapBtn: {
-    width: 28,
-    height: 28,
+    width: touchTarget.control,
+    height: touchTarget.control,
     borderRadius: radius.sm,
     alignItems: 'center',
     justifyContent: 'center',

@@ -13,6 +13,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useAuthStore } from '@/stores/authStore';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { confirm } from '@/components/ui/ConfirmDialog';
 import { Text } from '@/components/ui/Text';
 import { GroupLabel } from '@/components/ui/GroupLabel';
 import { SafeScreen } from '@/components/SafeScreen';
@@ -38,7 +39,7 @@ const AVATAR_SIZE = 56;
 
 // MenuRow 아이콘 크기 — divider 들여쓰기 계산이 이 값에 걸려 있어 상수로 묶는다.
 // (이전엔 Ionicons size={18} 과 divider 의 `+ 18` 이 따로 적혀 있어 한쪽만 바꾸면 어긋났다.)
-const MENU_ICON = 18;
+const MENU_ICON = 20;
 
 function initialOf(name: string | undefined): string {
   if (!name) return '?';
@@ -122,17 +123,14 @@ export default function Profile() {
     router.replace('/(auth)/login' as never);
   };
 
-  const handleLogout = () => {
-    const message = '정말 로그아웃하시겠습니까?';
-
-    if (Platform.OS === 'web') {
-      if (confirm(message)) void performLogout();
-    } else {
-      Alert.alert('로그아웃', message, [
-        { text: '취소', style: 'cancel' },
-        { text: '로그아웃', style: 'destructive', onPress: () => void performLogout() },
-      ]);
-    }
+  // 확인 창은 웹·네이티브 같은 모양의 ConfirmDialog — 로그아웃은 되돌릴 수 있어 destructive 가 아니다.
+  const handleLogout = async () => {
+    const ok = await confirm({
+      title: '로그아웃',
+      message: '정말 로그아웃하시겠습니까?',
+      confirmLabel: '로그아웃',
+    });
+    if (ok) void performLogout();
   };
 
   const openExternal = (url: string, fallbackTitle: string) => {
@@ -193,7 +191,7 @@ export default function Profile() {
           <MenuRow
             icon="calendar-outline"
             label="가입일"
-            value={fmtDate(user?.createdAt)}
+            value={fmtDate(user?.createdAt).replace(/-/g, '.') /* Figma 5517: 2025.03.15 */}
           />
           <View style={styles.divider} />
           {/* backend-backlog §15 — 이름·비밀번호 변경. 이전엔 '관리자 문의' 안내뿐이었다. */}
@@ -201,6 +199,13 @@ export default function Profile() {
             icon="create-outline"
             label="내 정보 수정"
             onPress={() => router.push('/(tabs)/profile/edit' as never)}
+          />
+          <View style={styles.divider} />
+          {/* 명세 v2 FE-ME-02·FE-SITE-08 — 카테고리 관리는 내 정보에서 진입한다(Figma 5517). */}
+          <MenuRow
+            icon="pricetags-outline"
+            label="카테고리 관리"
+            onPress={() => router.push('/(tabs)/fields/categories' as never)}
           />
         </Card>
 
@@ -248,7 +253,7 @@ export default function Profile() {
             채움)라 화면에서 가장 강한 신호를 되돌릴 수 있는 동작이 쓰고 있었고, 정작 되돌릴 수
             없는 탈퇴는 목록 안 한 줄이었다. Button.tsx 의 '빨강 = 파괴' 규칙과도 어긋난다. */}
         <Button
-          onPress={handleLogout}
+          onPress={() => void handleLogout()}
           loading={loggingOut}
           variant="secondary"
           fullWidth
@@ -266,7 +271,6 @@ export default function Profile() {
           <Button
             onPress={() => router.push('/(tabs)/profile/delete-account' as never)}
             variant="dangerGhost"
-            size="sm"
             fullWidth
             leftIcon="person-remove-outline"
           >
@@ -316,8 +320,9 @@ const styles = StyleSheet.create({
     marginLeft: spacing.lg + MENU_ICON + spacing.md,
   },
   logout: { marginTop: spacing.xl },
+  // Figma 5517 — 로그아웃 아래 sm 띄우고 구분선, 그 아래 md.
   dangerZone: {
-    marginTop: spacing.xxl,
+    marginTop: spacing.sm,
     paddingTop: spacing.md,
     borderTopWidth: 1,
     borderTopColor: colors.borderMuted,

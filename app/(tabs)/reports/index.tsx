@@ -19,7 +19,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { colors } from '@/theme/colors';
 import { listBottomInset, spacing } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
-import { fmtDate, fmtTime } from '@/utils/datetime';
+import { fmtDate, fmtMonthDay, fmtTime, wasEdited } from '@/utils/datetime';
 import type { Report, Trip } from '@/types/entities';
 
 // 새 양식(2026-05-31 결정 §2): 외근 없이 작성 그룹 폐지. 모든 보고서는 tripId 필수.
@@ -170,7 +170,7 @@ export default function ReportsIndex() {
                 <Ionicons name="briefcase-outline" size={16} color={colors.primary} />
                 <View style={styles.tripHeaderTextWrap}>
                   <Text variant="bodySm" weight="bold" color="primary">
-                    외근 · {fmtDate(item.trip.startedAt)}
+                    외근 · {fmtMonthDay(item.trip.startedAt)}
                   </Text>
                   <Text variant="caption" color="textMuted" style={styles.tripHeaderMeta}>
                     {fmtTime(item.trip.startedAt)}
@@ -178,7 +178,8 @@ export default function ReportsIndex() {
                       ? `–${fmtTime(item.trip.endedAt)}`
                       : ' · 진행 중'}
                     {' · 방문 '}
-                    {visitsByTrip(item.trip.id).length}건
+                    {/* 외근 탭(trips/index visitsOf)과 같은 순서 — 불러온 방문이 있으면 그 수, 없으면(상세를 연 적 없음) 서버 visitCount. */}
+                    {visitsByTrip(item.trip.id).length || item.trip.visitCount || 0}건
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
@@ -210,13 +211,13 @@ export default function ReportsIndex() {
                 style={styles.reportCard}
               >
                 <View style={styles.reportHead}>
-                  <Text variant="body" weight="bold" numberOfLines={2} style={styles.reportTitle}>
+                  <Text variant="body" weight="bold" numberOfLines={1} style={styles.reportTitle}>
                     {r.title}
                   </Text>
                   {/* updatedAt 존재만 보면 배지가 모든 카드에 붙는다 — 백엔드가 생성
                       시각에도 updated_at 을 채우기 때문. 전부에 붙는 배지는 신호가 아니라
                       배경이라 3중 인코딩 어휘만 소모한다. 실제로 바뀐 것만 표시한다. */}
-                  {r.updatedAt && r.updatedAt !== r.createdAt ? (
+                  {wasEdited(r.createdAt, r.updatedAt) ? (
                     <Badge label="수정됨" tone="primary" />
                   ) : null}
                 </View>

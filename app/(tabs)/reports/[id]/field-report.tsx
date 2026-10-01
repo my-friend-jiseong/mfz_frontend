@@ -369,15 +369,14 @@ function FieldReportEditor() {
   // 보고서 수정 — 보고서의 현장 목록에서 고르면 그 현장으로 전환(FE-RPT-08).
   const openFieldSwitch = () =>
     showActionSheet(
+      // Figma 6628 — 시트 제목 없이, 지금 현장은 라벨 뒤 ' (현재)'.
       fieldReports.map((fr) => ({
-        label: getField(fr.fieldId)?.address ?? '알 수 없는 현장',
-        selected: fr.id === frId,
+        label: `${getField(fr.fieldId)?.address ?? '알 수 없는 현장'}${fr.id === frId ? ' (현재)' : ''}`,
         onPress: async () => {
           if (fr.id === frId || !(await confirmLeave())) return;
           router.replace(`/(tabs)/reports/${reportId}/field-report?frId=${fr.id}` as never);
         },
       })),
-      '현장 선택',
     );
 
   // 현장 보고 추가 — 이 보고서에 아직 없는 현장, 외근에서 방문한 현장 우선.
@@ -399,7 +398,6 @@ function FieldReportEditor() {
         selected: fid === fieldId,
         onPress: () => setFieldId(fid),
       })),
-      visited.length > 0 ? '이 외근에서 방문한 현장' : '현장 선택',
     );
   };
 
@@ -513,7 +511,6 @@ function FieldReportEditor() {
               >
                 {selectedField?.address ?? '현장을 선택하세요'}
               </Text>
-              <Ionicons name="chevron-down" size={18} color={colors.textMuted} />
             </Pressable>
           )}
 
@@ -600,7 +597,7 @@ function FieldReportEditor() {
             {primaryLabel}
           </Button>
           {mode === 'edit' ? (
-            <Button onPress={() => void leaveEdit()} variant="ghost" size="sm" fullWidth>
+            <Button onPress={() => void leaveEdit()} variant="ghost" fullWidth>
               취소
             </Button>
           ) : null}
@@ -652,15 +649,15 @@ const styles = StyleSheet.create({
   },
   laterText: { fontSize: fontSize.xs },
   readonly: { borderColor: colors.borderMuted },
+  // Figma 5408·5479 — 마법사의 읽기 전용 카드와 같은 모양. 탭하면 현장 선택 시트.
   fieldPick: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
     minHeight: 48,
-    paddingHorizontal: spacing.md,
+    padding: spacing.md,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.borderMuted,
     backgroundColor: colors.surface,
   },
   tabs: {

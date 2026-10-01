@@ -16,15 +16,13 @@ import { EmptyState } from '@/components/EmptyState';
 import { Text } from '@/components/ui/Text';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { confirm } from '@/components/ui/ConfirmDialog';
 import type { Category } from '@/types/entities';
 import { colors } from '@/theme/colors';
 import { fontFamily } from '@/theme/typography';
 import { spacing, radius, fontSize, touchTarget } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
 
-// 아이콘 버튼(18px 아이콘 + padding xs = 26px)이 Direction 의 '터치 타깃 44 이상' 에 못 미친다.
-// 보이는 크기를 키우면 목록 행이 통째로 두꺼워지므로 hitSlop 으로 채운다 — Button sm 과 같은 방법.
-const ICON_HIT_SLOP = (touchTarget.control - 26) / 2;
 
 // 카테고리(분류) 관리 — 추가·이름변경·삭제. 진실원은 서버(/api/categories, 백로그 §25).
 // AsyncStorage 는 오프라인 표시용 캐시라, 서버 실패 시 store 가 화면 변경을 되돌린다.
@@ -81,23 +79,17 @@ export default function CategoriesManage() {
     }
   };
 
-  const confirmDelete = (c: Category) => {
-    Alert.alert(
-      '카테고리 삭제',
-      `"${c.name}" 을(를) 삭제할까요?\n이미 이 분류가 붙은 현장의 값은 그대로 남습니다.`,
-      [
-        { text: '취소', style: 'cancel' },
-        {
-          text: '삭제',
-          style: 'destructive',
-          // 서버가 진실원이라 실패 시 store 가 목록을 되돌린다 — 사용자에게 이유를 알려준다.
-          onPress: () =>
-            void remove(c.id).then((r) => {
-              if (!r.ok) Alert.alert('카테고리 삭제 실패', r.error);
-            }),
-        },
-      ],
-    );
+  // 삭제 확인 — v2 확인 창은 ConfirmDialog(ui-v2 스킬 §3). 서버가 진실원이라 실패 시 store 가 목록을 되돌린다.
+  const confirmDelete = async (c: Category) => {
+    const ok = await confirm({
+      title: '카테고리 삭제',
+      message: `"${c.name}" 을(를) 삭제할까요?\n이미 이 분류가 붙은 현장의 값은 그대로 남습니다.`,
+      confirmLabel: '삭제',
+      destructive: true,
+    });
+    if (!ok) return;
+    const r = await remove(c.id);
+    if (!r.ok) Alert.alert('카테고리 삭제 실패', r.error);
   };
 
   const renderItem = ({ item }: { item: Category }) => {
@@ -119,7 +111,6 @@ export default function CategoriesManage() {
               onPress={() => void saveEdit()}
               accessibilityRole="button"
               accessibilityLabel="이름 저장"
-              hitSlop={ICON_HIT_SLOP}
               style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
             >
               <Ionicons name="checkmark" size={20} color={colors.primary} />
@@ -131,7 +122,6 @@ export default function CategoriesManage() {
               }}
               accessibilityRole="button"
               accessibilityLabel="편집 취소"
-              hitSlop={ICON_HIT_SLOP}
               style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
             >
               <Ionicons name="close" size={20} color={colors.textMuted} />
@@ -139,27 +129,25 @@ export default function CategoriesManage() {
           </>
         ) : (
           <>
-            <Ionicons name="pricetag-outline" size={16} color={colors.textMuted} />
-            <Text variant="body" style={styles.name} numberOfLines={1}>
-              {item.name}
-            </Text>
+            {/* 행 탭 = 인라인 수정, × = 삭제 (명세 FE-SITE-08, Figma 470:4795). */}
             <Pressable
               onPress={() => startEdit(item)}
               accessibilityRole="button"
               accessibilityLabel={`${item.name} 이름 변경`}
-              hitSlop={ICON_HIT_SLOP}
-              style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
+              style={({ pressed }) => [styles.nameTap, pressed && styles.pressed]}
             >
-              <Ionicons name="pencil" size={18} color={colors.textMuted} />
+              <Ionicons name="pricetag-outline" size={16} color={colors.textMuted} />
+              <Text variant="body" style={styles.name} numberOfLines={1}>
+                {item.name}
+              </Text>
             </Pressable>
             <Pressable
-              onPress={() => confirmDelete(item)}
+              onPress={() => void confirmDelete(item)}
               accessibilityRole="button"
               accessibilityLabel={`${item.name} 삭제`}
-              hitSlop={ICON_HIT_SLOP}
               style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
             >
-              <Ionicons name="trash-outline" size={18} color={colors.danger} />
+              <Ionicons name="close" size={16} color={colors.textMuted} />
             </Pressable>
           </>
         )}
@@ -251,7 +239,19 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.regular,
     color: colors.text,
   },
-  // 18px 아이콘 + padding xs = 26px 로 Direction 의 '터치 타깃 44 이상' 을 못 맞춘다.
-  // 보이는 크기는 두고 hitSlop 으로 채운다(Button sm 과 같은 방법) — 아래 ICON_HIT_SLOP.
-  iconBtn: { padding: spacing.xs },
+  // 아이콘 버튼 터치 영역 44 (Figma touch/close·touch/checkmark 44×44).
+  iconBtn: {
+    width: touchTarget.control,
+    height: touchTarget.control,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // 이름 영역 전체가 탭 대상 — 높이도 44 이상.
+  nameTap: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    minHeight: touchTarget.control,
+  },
 });

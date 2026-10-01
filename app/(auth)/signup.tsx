@@ -17,7 +17,7 @@ import { safeBack } from '@/utils/backNavigation';
 import { LEGAL_DOCS, LOCATION_TERMS_AVAILABLE, TERMS_URL } from '@/utils/contact';
 import { checkPasswordPolicy, PASSWORD_HINT } from '@/utils/password';
 import { colors } from '@/theme/colors';
-import { radius, spacing } from '@/theme/spacing';
+import { radius, spacing, touchTarget } from '@/theme/spacing';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Text } from '@/components/ui/Text';
@@ -336,7 +336,8 @@ export default function Signup() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   // 제목이 NavHeader 로 올라가 본문 위 큰 여백(xxl×2)은 필요 없다.
-  scroll: { padding: spacing.xl, paddingTop: spacing.md },
+  // Figma 4205 — 헤더 ↔ 폼 24.
+  scroll: { padding: spacing.xl },
   form: { gap: spacing.md },
   termsBox: {
     marginTop: spacing.md,
@@ -348,10 +349,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     gap: spacing.xs,
   },
+  // 약관 행 터치 영역 44 (명세 FE-AUTH-02, Figma termRow h44).
   agreeAllRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.xs,
+    minHeight: touchTarget.control,
     gap: spacing.sm,
   },
   agreeText: { flex: 1 },
@@ -364,12 +366,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: spacing.xs,
+    minHeight: touchTarget.control,
     gap: spacing.sm,
   },
+  // 체크 영역이 행 높이(44)를 다 차지해야 터치 영역이 44 가 된다.
   termCheck: {
     flexDirection: 'row',
     alignItems: 'center',
+    alignSelf: 'stretch',
     gap: spacing.sm,
     flex: 1,
   },

@@ -43,6 +43,7 @@ import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { FilterChip } from '@/components/ui/FilterChip';
 import { SafeScreen } from '@/components/SafeScreen';
+import { NavHeader } from '@/components/ui/NavHeader';
 
 // 중복 주소 미리보기 — 본인 fields 중 같은 roadAddress 매칭, alert message 에 fmt.
 // 백엔드 응답 details 는 duplicateCount 만 주므로 (backend-backlog 별도 항목 아님 — 로컬로 충분),
@@ -394,6 +395,9 @@ export default function NewField() {
 
   return (
     <SafeScreen>
+    {/* Figma 470:4884 navHeader — 모달(headerShown:false)이라 화면이 직접 뒤로가기를 둔다.
+        웹·딥링크처럼 히스토리가 없으면 현장 목록으로. */}
+    <NavHeader title="현장 등록" onBack={() => safeBack(router, '/(tabs)/fields')} />
     <KeyboardAvoid
       style={styles.container}>
       {placeSearchBridge}
@@ -402,9 +406,6 @@ export default function NewField() {
         keyboardShouldPersistTaps="handled"
         scrollEnabled={!mapBusy}
       >
-        <Text variant="h3" style={styles.title}>
-          현장 등록
-        </Text>
 
         {/* Quick Photo 이관 사진 — 등록 완료 시 자동 첨부됨을 미리 안내 */}
         {entry.photo ? (
@@ -434,7 +435,7 @@ export default function NewField() {
           <Button
             onPress={() => void startFromCurrentLocation(false)}
             variant="secondary"
-            size="sm"
+            size="md"
             leftIcon="locate"
             style={styles.locateBtn}
           >
@@ -643,7 +644,6 @@ export default function NewField() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   scroll: { padding: spacing.xl, paddingBottom: spacing.xxl * 2 },
-  title: { marginBottom: spacing.lg },
   fieldGap: { marginTop: spacing.md },
   hint: { marginTop: spacing.sm },
   loadingRow: { marginTop: spacing.sm },

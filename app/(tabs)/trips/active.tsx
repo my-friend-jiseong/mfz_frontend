@@ -526,7 +526,6 @@ export default function ActiveTrip() {
         variant={allDone ? 'primary' : 'dangerGhost'}
         size="lg"
         fullWidth
-        leftIcon="stop-circle"
       >
         {allDone ? '외근 종료' : `외근 종료 (미완료 ${pendingDests.length}곳)`}
       </Button>
@@ -570,7 +569,7 @@ export default function ActiveTrip() {
   return (
     <View style={styles.screenRoot}>
       <MapSheetLayout
-        title="진행 중 외근"
+        title="진행 중인 외근"
         onBack={() => safeBack(router)}
         // 55% — 이동 중 쓰는 화면이라 위 절반에 지도를 남긴다. 최대(2)로 열면 지도가 60dp 만
         // 남아 순번 마커·경로선을 정작 이 화면에서 못 본다. select·order 와 같은 값.

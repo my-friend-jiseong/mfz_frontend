@@ -10,7 +10,7 @@ import { openKakaoRouteTo } from '@/utils/kakaoMap';
 import { requestUserLocation, type LatLng } from '@/utils/geolocation';
 import { safeBack } from '@/utils/backNavigation';
 import { colors } from '@/theme/colors';
-import { spacing, radius } from '@/theme/spacing';
+import { spacing, radius, touchTarget } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
 import { SafeScreen } from '@/components/SafeScreen';
 
@@ -68,12 +68,11 @@ export default function TripNavigate() {
       <View style={styles.header}>
         <Pressable
           onPress={() => safeBack(router)}
-          hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel="뒤로 가기"
           style={({ pressed }) => [styles.backBtn, pressed && { opacity: opacity.pressed }]}
         >
-          <Ionicons name="chevron-back" size={22} color={colors.text} />
+          <Ionicons name="chevron-back" size={24} color={colors.text} />
         </Pressable>
         <Text variant="body" weight="bold" numberOfLines={1} style={styles.title}>
           {name}
@@ -108,13 +107,14 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.md,
+    // Figma 4728: 터치 44 가 x=16, 제목 x=64.
+    paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
-    gap: spacing.sm,
+    gap: spacing.xs,
   },
-  backBtn: { padding: 2 },
+  backBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   title: { flex: 1 },
   web: { flex: 1 },
   fallbackChip: {
@@ -125,7 +125,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    // Figma fallbackChip 높이 44 — 터치 타깃 그대로.
+    height: touchTarget.control,
     borderRadius: radius.pill,
     backgroundColor: colors.surface,
     borderWidth: 1,

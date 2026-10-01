@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Animated, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSegments } from 'expo-router';
+import { BOTTOM_ACTION_BAR_HEIGHT } from './BottomActionBar';
 import { Text } from './Text';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
@@ -17,8 +19,16 @@ interface ToastItem {
 
 // 명세 v2: 토스트는 2초 뒤 사라진다 (현장 등록·나중에 다시 작성·체크인 저장).
 const VISIBLE_MS = 2000;
-// 탭바(56) 위. 탭 루트에선 탭바 위로 24, 하단 액션 바(76)가 있는 푸시 화면에선 바 바로 위에 뜬다.
-const TAB_BAR_CLEARANCE = 56 + spacing.xl;
+// 하단 액션 바(76) 바로 위에 뜬다. 탭 루트에선 그 아래 탭바(56)까지 비킨다.
+// 외근 내역·현장 목록은 탭 루트이면서 하단 바를 가진다(Figma 개선본) — 둘 다 비켜야 겹치지 않는다.
+const TAB_BAR_H = 56;
+const ROOTS_WITH_BAR = new Set(['trips', 'fields']);
+function useToastClearance(): number {
+  const segments = useSegments() as string[];
+  const tabRoot = segments[0] === '(tabs)' && segments.length <= 2;
+  if (!tabRoot) return BOTTOM_ACTION_BAR_HEIGHT + spacing.sm;
+  return TAB_BAR_H + (ROOTS_WITH_BAR.has(segments[1] ?? 'trips') ? BOTTOM_ACTION_BAR_HEIGHT + spacing.sm : spacing.xl);
+}
 
 let show: ((item: ToastItem) => void) | null = null;
 let seq = 0;
@@ -26,12 +36,13 @@ let seq = 0;
 // 호스트가 아직 마운트되지 않았으면 조용히 버린다 — 토스트는 부가 피드백이라
 // 못 띄웠다고 흐름을 막지 않는다. 실패 안내는 토스트가 아니라 Alert 로 한다(명세 FE-RPT-12).
 export function toast(message: string, opts?: { icon?: IonName }) {
-  show?.({ id: ++seq, message, icon: opts?.icon ?? 'checkmark' });
+  show?.({ id: ++seq, message, icon: opts?.icon ?? 'checkmark-circle' });
 }
 
 // 앱 루트에 1회 마운트. 화면 전환(router.replace) 직후 호출해도 살아남도록 화면 밖에 둔다.
 export function ToastHost() {
   const insets = useSafeAreaInsets();
+  const clearance = useToastClearance();
   const [item, setItem] = useState<ToastItem | null>(null);
   const anim = useRef(new Animated.Value(0)).current;
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -62,7 +73,7 @@ export function ToastHost() {
   return (
     <View
       pointerEvents="none"
-      style={[styles.wrap, { bottom: insets.bottom + TAB_BAR_CLEARANCE }]}
+      style={[styles.wrap, { bottom: insets.bottom + clearance }]}
     >
       <Animated.View
         accessibilityRole="alert"

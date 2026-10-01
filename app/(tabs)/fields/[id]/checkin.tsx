@@ -214,9 +214,9 @@ export default function FieldCheckin() {
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <Card padding="lg" style={styles.header}>
             <View style={styles.headerCap}>
-              <Ionicons name="location" size={16} color={colors.primary} />
+              <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
               <Text variant="bodySm" weight="bold" color="primary">
-                체크인
+                체크인 완료
               </Text>
             </View>
             <Text variant="body" weight="semibold">

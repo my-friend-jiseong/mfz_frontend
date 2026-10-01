@@ -29,7 +29,7 @@ import { BottomActionBar, useBottomActionBarHeight } from '@/components/ui/Botto
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
-import { fmtDateTime } from '@/utils/datetime';
+import { fmtDateTime, wasEdited } from '@/utils/datetime';
 import type { Field, FieldReport } from '@/types/entities';
 
 // 현장별 전·중·후 사진 카드 (명세 v2 FE-RPT-06·13).
@@ -117,7 +117,8 @@ export default function ReportDetail() {
   const overviewMapRef = useRef<View>(null);
   const [tilesReady, setTilesReady] = useState(false);
   const detailStatus = useReportStore((s) => s.detailStatus[reportId]);
-  const bottomPad = useSheetBottomInset(useBottomActionBarHeight());
+  const barHeight = useBottomActionBarHeight();
+  const bottomPad = useSheetBottomInset(barHeight);
   const fetchedRef = useRef<string | null>(null);
 
   // 진입 시 백엔드에서 detail 페치 (목록은 fieldReports 없음).
@@ -193,6 +194,9 @@ export default function ReportDetail() {
   }
 
   const isOwner = userId === report.creatorId;
+  const edited = wasEdited(report.createdAt, report.updatedAt);
+  // 하단 바를 그리는 조건과 같아야 한다 — 바가 없는데 높이를 넘기면 시트 최저 높이가 빈 띠만큼 뜬다.
+  const hasBottomBar = isOwner ? fieldReports.length > 0 : !!report.outputFileUrl?.trim();
 
   // 위치도 네이티브 캡처 → 업로드(§20) — best-effort. 문서 생성 직전에 찍어 최신 위치도 반영.
   const syncOverviewMap = async () => {
@@ -310,7 +314,7 @@ export default function ReportDetail() {
 
   return (
     <View style={styles.root}>
-      <MapSheetLayout
+      <MapSheetLayout bottomBarHeight={hasBottomBar ? barHeight : 0}
         title="보고서 상세"
         onBack={() => safeBack(router)}
         initialIndex={1}
@@ -337,12 +341,13 @@ export default function ReportDetail() {
                 연결 외근: {trip.title ? `${trip.title} · ` : ''}
                 {fmtDateTime(trip.startedAt)}
               </Text>
+              <Ionicons name="chevron-forward" size={14} color={colors.primary} />
             </Pressable>
           ) : null}
 
           <Text variant="caption" color="textMuted" style={styles.meta}>
             작성: {fmtDateTime(report.createdAt)}
-            {report.updatedAt ? ` · 수정: ${fmtDateTime(report.updatedAt)}` : ''}
+            {edited ? ` · 수정: ${fmtDateTime(report.updatedAt)}` : ''}
           </Text>
 
           {/* 위치도 — 그 외근의 현장 전체를 담는 정적 지도(figure). 시트 pan 과 충돌하지 않게 조작 비활성. */}
@@ -373,7 +378,6 @@ export default function ReportDetail() {
               <Button
                 onPress={() => router.push(`/(tabs)/reports/${report.id}/field-report` as never)}
                 variant="secondary"
-                size="sm"
                 leftIcon="add"
               >
                 현장 보고 추가
@@ -404,7 +408,7 @@ export default function ReportDetail() {
             loading={exporting}
             size="lg"
             fullWidth
-            leftIcon="share-outline"
+            leftIcon="download-outline"
           >
             내보내기
           </Button>

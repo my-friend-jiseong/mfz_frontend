@@ -426,7 +426,7 @@ export default function EditField() {
             onPress={() => void startFromCurrentLocation()}
             disabled={submitting}
             variant="secondary"
-            size="sm"
+            size="md"
             leftIcon="locate"
             style={styles.locateBtn}
           >
@@ -627,7 +627,8 @@ export default function EditField() {
           }}
           editable={!submitting}
           maxLength={DETAIL_MAX}
-          placeholder="예: 101동 1203호"
+          // Figma 470:5021 — 예시는 placeholder 가 아니라 입력칸 아래 도움말.
+          helperText="예: 101동 1203호"
           error={fieldErrors.detailAddress}
         />
 
@@ -665,7 +666,7 @@ export default function EditField() {
           {hasChanges ? '저장' : '변경 사항 없음'}
         </Button>
 
-        <Button onPress={handleCancel} variant="ghost" size="sm" fullWidth>
+        <Button onPress={handleCancel} variant="ghost" size="md" fullWidth>
           취소
         </Button>
 

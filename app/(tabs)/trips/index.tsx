@@ -19,11 +19,10 @@ import {
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
 import { Input } from '@/components/ui/Input';
-import { StickyBottomBar } from '@/components/ui/StickyBottomBar';
-import { LoadingState } from '@/components/ui/LoadingState';
-import { useHideOnScroll } from '@/components/ui/useHideOnScroll';
+import { BottomActionBar, useBottomActionBarHeight } from '@/components/ui/BottomActionBar';
+import { SkeletonCard } from '@/components/ui/SkeletonCard';
 import { colors } from '@/theme/colors';
-import { listBottomInset, spacing } from '@/theme/spacing';
+import { spacing } from '@/theme/spacing';
 import { fmtDate, tripDateGroup } from '@/utils/datetime';
 import type { Destination, Trip, Visit } from '@/types/entities';
 
@@ -158,8 +157,9 @@ export default function TripsList() {
     return out;
   }, [trips, query]);
 
-  // hide-on-scroll — Redirect 분기보다 위에서 호출(훅 순서 고정).
-  const { onScroll, visible } = useHideOnScroll();
+  // 하단 바(외근 시작) 높이 — 목록 끝이 바 뒤로 숨지 않게. Redirect 분기보다 위에서 호출(훅 순서 고정).
+  // 탭 루트라 바 아래는 탭바가 safe area 를 먹는다 → safeArea=false.
+  const barHeight = useBottomActionBarHeight(false);
 
   // === 지도 포커스 ===
   // 목록은 배경 지도에 내 현장 전체를 깔지만, 카드와 지도가 아무 관계도 없어 지도가 장식이었다.
@@ -233,8 +233,9 @@ export default function TripsList() {
   return (
     // 외근 탭 배경 지도도 '현장' 탭과 동일하게 내 현장 전체를 깐다(mapFieldIds 미지정 = 전체).
     // 표시 설정(히트맵 등)은 mapSettingsStore 로 공유되어 탭 간 같은 배경 지도를 유지.
-    // StickyBottomBar 는 '현장' 탭과 동일하게 MapSheetLayout(시트 콘텐츠) 안에 둔다.
-    <MapSheetLayout
+    // 하단 바는 시트 **밖**(absolute) — 시트 안에 두면 gorhom pan 이 터치를 가로챈다.
+    <View style={styles.screenRoot}>
+    <MapSheetLayout bottomBarHeight={barHeight}
       title="외근 내역"
       mapFieldIds={focusFieldIds}
       routeFieldIds={focusFieldIds}
@@ -304,9 +305,7 @@ export default function TripsList() {
           )
         }
         style={sheetScrollableStyle}
-        contentContainerStyle={styles.list}
-        // gorhom 은 onScroll 을 public 타입에서 제외하지만 런타임엔 useScrollHandler 로 전달함.
-        {...({ onScroll } as object)}
+        contentContainerStyle={[styles.list, { paddingBottom: barHeight + spacing.xl }]}
         // 로딩 중·조회 실패·진짜 없음 셋을 갈라 렌더한다 (강령 3).
         // loading/error 는 받아둔 데이터가 없을 때만 이긴다 (필터는 전부 클라이언트라
         // 0건이 곧 실패는 아니다). 재시도는 refreshList 가 아니라 hydrate — 부팅이
@@ -314,25 +313,31 @@ export default function TripsList() {
         // 목록만 되살리면 진행 중 외근이 있는데도 '외근 시작' CTA 가 그대로 뜬다.
         ListEmptyComponent={
           allTrips.length === 0 && listStatus === 'loading' ? (
-            <LoadingState label="외근을 불러오는 중" inline />
+            // Figma `외근 내역 · 로딩`(470:5642) — 스켈레톤 카드 3장.
+            <View style={styles.skeletons}>
+              <SkeletonCard />
+              <SkeletonCard />
+              <SkeletonCard />
+            </View>
           ) : allTrips.length === 0 && listStatus === 'error' ? (
             <ErrorState message={listError} onRetry={() => void hydrateTrips()} />
           ) : (
             <EmptyState
-              icon={query || hasFilter ? 'search-outline' : 'briefcase-outline'}
+              icon={query || hasFilter ? 'search-outline' : 'briefcase'}
               title={
-                query || hasFilter ? '조건에 맞는 외근이 없습니다' : '외근 기록이 없습니다'
+                query || hasFilter ? '조건에 맞는 외근이 없습니다' : '예정된 외근이 없습니다'
               }
               description={
                 query || hasFilter
                   ? '검색어나 필터를 바꿔보세요'
-                  : '아래 버튼을 눌러 첫 외근을 시작하세요'
+                  : '새 외근을 만들면 여기에 표시됩니다'
               }
             />
           )
         }
       />
-      <StickyBottomBar visible={visible}>
+    </MapSheetLayout>
+      <BottomActionBar absolute safeArea={false}>
         <Button
           onPress={() => router.push('/(tabs)/trips/new/select' as never)}
           size="lg"
@@ -341,12 +346,14 @@ export default function TripsList() {
         >
           외근 시작
         </Button>
-      </StickyBottomBar>
-    </MapSheetLayout>
+      </BottomActionBar>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  screenRoot: { flex: 1 },
+  skeletons: { gap: spacing.sm },
   toolbar: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
@@ -360,7 +367,8 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     paddingHorizontal: spacing.xs,
   },
-  list: { padding: spacing.lg, paddingBottom: listBottomInset },
+  // paddingBottom 은 렌더에서 — 하단 바 높이 + 여유.
+  list: { padding: spacing.lg },
   // 날짜 그룹 구분선. 첫 그룹이 목록 맨 위에 붙지 않도록 상단 여백을 조금 더 준다.
   groupHeader: {
     paddingTop: spacing.sm,

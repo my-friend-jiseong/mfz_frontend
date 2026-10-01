@@ -12,9 +12,8 @@ import { MapSheetLayout, sheetScrollableStyle } from '@/components/MapSheetLayou
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
-import { StickyBottomBar } from '@/components/ui/StickyBottomBar';
+import { BottomActionBar, useBottomActionBarHeight } from '@/components/ui/BottomActionBar';
 import { LoadingState } from '@/components/ui/LoadingState';
-import { useHideOnScroll } from '@/components/ui/useHideOnScroll';
 import { FIELD_STATUS_VALUES, type FieldStatus } from '@/types/entities';
 import { collectFieldFacets, applyFieldFilters, mergeCategoryNames } from '@/utils/fieldFacets';
 import { useCategoryStore } from '@/stores/categoryStore';
@@ -27,6 +26,7 @@ import { listBottomInset, spacing } from '@/theme/spacing';
 
 export default function FieldsList() {
   const router = useRouter();
+  const barHeight = useBottomActionBarHeight(false);
   const userId = useAuthStore((s) => s.user?.id);
   const allFields = useFieldStore((s) => s.fields);
   const refresh = useFieldStore((s) => s.refresh);
@@ -128,13 +128,12 @@ export default function FieldsList() {
     [],
   );
 
-  const { onScroll, visible } = useHideOnScroll();
-
   // Quick Photo — 촬영 → 최근접 현장 자동 매칭 등록 (계획 §4-3 진입점).
   const quickPhoto = useQuickPhoto();
 
   return (
-    <MapSheetLayout title="현장">
+    <View style={styles.root}>
+    <MapSheetLayout title="현장" bottomBarHeight={barHeight}>
       <View style={styles.toolbar}>
         <Input
           value={search}
@@ -185,8 +184,6 @@ export default function FieldsList() {
         renderItem={renderItem}
         style={sheetScrollableStyle}
         contentContainerStyle={styles.list}
-        // gorhom 은 onScroll 을 public 타입에서 제외하지만 런타임엔 useScrollHandler 로 전달함.
-        {...({ onScroll } as object)}
         // 목록이 비어 보이는 이유가 셋(로딩 중·조회 실패·진짜 없음)이라 셋을 갈라 렌더한다.
         // 실패를 EmptyState 로 보여주면 사용자가 '배정 없음' 으로 오독한다 (강령 3).
         //
@@ -211,42 +208,10 @@ export default function FieldsList() {
                   ? '검색어 또는 필터를 조정해보세요'
                   : '아래 버튼으로 첫 현장을 등록하세요'
               }
-              action={
-                !search && !hasFilter ? (
-                  <Button
-                    onPress={() => router.push('/(tabs)/fields/new' as never)}
-                    leftIcon="add-circle"
-                  >
-                    새 현장 등록
-                  </Button>
-                ) : undefined
-              }
             />
           )
         }
       />
-      <StickyBottomBar visible={visible}>
-        <View style={styles.bottomBarRow}>
-          <Button
-            onPress={() => router.push('/(tabs)/fields/new' as never)}
-            size="lg"
-            leftIcon="add-circle"
-            style={styles.bottomBarMain}
-          >
-            새 현장
-          </Button>
-          <Button
-            onPress={() => void quickPhoto.start()}
-            variant="secondary"
-            size="lg"
-            leftIcon="camera"
-            loading={quickPhoto.preparing}
-            accessibilityLabel="빠른 촬영 — 가까운 현장에 사진 등록"
-          >
-            촬영
-          </Button>
-        </View>
-      </StickyBottomBar>
       <QuickPhotoSheet
         session={quickPhoto.session}
         uploading={quickPhoto.uploading}
@@ -256,10 +221,34 @@ export default function FieldsList() {
         onClose={quickPhoto.cancel}
       />
     </MapSheetLayout>
+      {/* 하단 액션 바 (명세 §1.2, Figma 470:4963) — 시트 밖에 둔다(gorhom pan 이 시트 안 버튼 터치를 가로챈다).
+          바 아래는 탭바라 safe area 를 더하지 않는다. 배치는 Figma 그대로: 새 현장(넓게) · 촬영. */}
+      <BottomActionBar absolute safeArea={false}>
+        <View style={styles.bottomBarRow}>
+          <Button
+            onPress={() => router.push('/(tabs)/fields/new' as never)}
+            leftIcon="add-circle"
+            style={styles.bottomBarMain}
+          >
+            새 현장
+          </Button>
+          <Button
+            onPress={() => void quickPhoto.start()}
+            variant="secondary"
+            leftIcon="camera"
+            loading={quickPhoto.preparing}
+            accessibilityLabel="빠른 촬영 — 가까운 현장에 사진 등록"
+          >
+            촬영
+          </Button>
+        </View>
+      </BottomActionBar>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  root: { flex: 1 },
   toolbar: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
@@ -274,6 +263,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xs,
   },
   list: { padding: spacing.lg, paddingBottom: listBottomInset },
-  bottomBarRow: { flexDirection: 'row', gap: spacing.md },
+  bottomBarRow: { flexDirection: 'row', gap: spacing.sm },
   bottomBarMain: { flex: 1 },
 });

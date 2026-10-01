@@ -12,7 +12,7 @@ const pad = (n: number) => String(n).padStart(2, '0');
 export function fmtDate(iso: string | undefined | null): string {
   const d = safe(iso);
   if (!d) return '-';
-  return `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())}`;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 export function fmtTime(iso: string | undefined | null): string {
@@ -21,23 +21,31 @@ export function fmtTime(iso: string | undefined | null): string {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+// 'YYYY-MM-DD HH:mm' (Figma 개선본 표기). toLocaleString 은 런타임마다 모양이 다르고 초까지 찍혔다.
 export function fmtDateTime(iso: string | undefined | null): string {
   const d = safe(iso);
   if (!d) return '-';
-  return d.toLocaleString('ko-KR');
+  return `${fmtDate(iso)} ${fmtTime(iso)}`;
 }
 
-const WEEKDAY = ['일', '월', '화', '수', '목', '금', '토'] as const;
+// 생성 후 실제로 고쳤는가. 서버가 생성 시에도 updatedAt 을 채우고(같은 값 또는 수 ms 차이),
+// 생성 직후 현장 보고 스캐폴드가 updated_at 을 건드릴 수 있어 1분 안의 차이는 수정으로 보지 않는다.
+// 보고서 목록의 '수정됨' 배지와 상세의 '· 수정:' 이 같은 판정을 쓰게 하나로 둔다.
+export function wasEdited(createdAt: string | undefined | null, updatedAt: string | undefined | null): boolean {
+  const c = safe(createdAt);
+  const u = safe(updatedAt);
+  if (!c || !u) return false;
+  return u.getTime() - c.getTime() > 60_000;
+}
 
-// 'MM.DD (요일)' — 목록 카드처럼 연도가 문맥상 자명한 자리에서 하루를 특정할 때.
-// 외근 기록은 "무슨 요일이었나" 가 실사용 단서라 요일을 함께 붙인다.
-export function fmtDayLabel(iso: string | undefined | null): string {
+// 'M월 D일' — 외근 카드·보고서 목록의 외근 머리줄처럼 연도가 문맥상 자명한 자리.
+export function fmtMonthDay(iso: string | undefined | null): string {
   const d = safe(iso);
   if (!d) return '-';
-  return `${pad(d.getMonth() + 1)}.${pad(d.getDate())} (${WEEKDAY[d.getDay()]})`;
+  return `${d.getMonth() + 1}월 ${d.getDate()}일`;
 }
 
-// 목록 섹션 헤더용 상대 날짜 그룹 — 오늘 / 어제 / 이번 주 / 지난 주 / 'YYYY년 M월'.
+// 목록 섹션 헤더용 상대 날짜 그룹 — 오늘 / 어제 / 이번 주 / 지난주 / 'YYYY년 M월'.
 // 주 시작은 월요일(업무 앱 관행). 로컬 자정 기준으로만 비교하므로 시각 성분에 영향받지 않는다.
 // ms 산술 대신 Date 생성자 컴포넌트 연산 — 월말/연말 경계를 런타임이 알아서 정규화.
 export function tripDateGroup(iso: string | undefined | null): string {
@@ -67,7 +75,7 @@ export function tripDateGroup(iso: string | undefined | null): string {
     thisWeekStart.getMonth(),
     thisWeekStart.getDate() - 7,
   );
-  if (target.getTime() >= lastWeekStart.getTime()) return '지난 주';
+  if (target.getTime() >= lastWeekStart.getTime()) return '지난주';
 
   return `${target.getFullYear()}년 ${target.getMonth() + 1}월`;
 }

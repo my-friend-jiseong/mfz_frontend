@@ -166,7 +166,6 @@ export default function Login() {
           <Button
             onPress={() => router.push('/(auth)/signup')}
             variant="ghost"
-            size="sm"
             fullWidth
           >
             회원가입

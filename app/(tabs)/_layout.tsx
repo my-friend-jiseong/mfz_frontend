@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Redirect, Tabs, router, useSegments } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/theme/colors';
-import { fontSize } from '@/theme/spacing';
+import { fontSize, lineHeight } from '@/theme/spacing';
 import { fontFamily } from '@/theme/typography';
 import { useAuthStore } from '@/stores/authStore';
 import { useTripStore } from '@/stores/tripStore';
@@ -16,11 +17,26 @@ type IonName = React.ComponentProps<typeof Ionicons>['name'];
 // 잡는데, 그 안에 라벨까지 넣으면 콘텐츠 43px 이 15px 넘쳐 아이콘이 바 위로 삐져나오고
 // 위 여백이 사라진다(웹 실측: 아이콘 top 이 바 top 보다 위). 슬롯 규격에 맞춰 아이콘만 넘기고
 // 라벨·간격은 tabBarLabelStyle 로 다룬다.
+// 선택된 탭만 채운 아이콘, 나머지는 외곽선 (Figma 개선본 BottomTabBar).
 const tabIcon =
   (name: IonName) =>
-  ({ color, size }: { color: string; size: number }) => (
-    <Ionicons name={name} size={size} color={color} />
+  ({ color, size, focused }: { color: string; size: number; focused: boolean }) => (
+    <Ionicons name={focused ? name : (`${name}-outline` as IonName)} size={size} color={color} />
   );
+
+// 라벨 굵기도 선택 여부를 따른다 — tabBarLabelStyle 은 focused 를 모른다.
+const tabLabel = ({ focused, color, children }: { focused: boolean; color: string; children: string }) => (
+  <Text
+    style={{
+      color,
+      fontFamily: focused ? fontFamily.semibold : fontFamily.regular,
+      fontSize: fontSize.xs,
+      lineHeight: lineHeight.xs,
+    }}
+  >
+    {children}
+  </Text>
+);
 
 export default function TabsLayout() {
   // deep-link 새로고침 시 hydrate 가 실패한 케이스 (refresh 토큰 만료·무효 등) 에서
@@ -79,10 +95,7 @@ export default function TabsLayout() {
         },
         tabBarLabelPosition: 'below-icon',
         // 앱 서체(Pretendard)·caption 크기로 맞춤 — Text 컴포넌트를 못 쓰는 자리라 토큰 직접 사용.
-        tabBarLabelStyle: {
-          fontFamily: fontFamily.semibold,
-          fontSize: fontSize.xs,
-        },
+        tabBarLabel: tabLabel,
       }}
     >
       <Tabs.Screen name="index" options={{ href: null }} />
@@ -90,6 +103,8 @@ export default function TabsLayout() {
         name="trips"
         options={{
           title: '외근',
+          // 라벨을 함수로 그리면 React Navigation 이 접근성 라벨을 못 만든다 — 직접 준다.
+          tabBarAccessibilityLabel: '외근',
           tabBarIcon: tabIcon('briefcase'),
         }}
       />
@@ -97,6 +112,7 @@ export default function TabsLayout() {
         name="fields"
         options={{
           title: '현장',
+          tabBarAccessibilityLabel: '현장',
           tabBarIcon: tabIcon('location'),
         }}
         listeners={() => ({
@@ -110,6 +126,7 @@ export default function TabsLayout() {
         name="reports"
         options={{
           title: '보고서',
+          tabBarAccessibilityLabel: '보고서',
           tabBarIcon: tabIcon('document-text'),
         }}
       />
@@ -117,7 +134,8 @@ export default function TabsLayout() {
         name="profile"
         options={{
           title: '내 정보',
-          tabBarIcon: tabIcon('person-circle'),
+          tabBarAccessibilityLabel: '내 정보',
+          tabBarIcon: tabIcon('person'),
         }}
       />
     </Tabs>

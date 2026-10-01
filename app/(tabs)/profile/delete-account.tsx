@@ -14,6 +14,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { confirm } from '@/components/ui/ConfirmDialog';
 import { Text } from '@/components/ui/Text';
 import { GroupLabel } from '@/components/ui/GroupLabel';
 import { SafeScreen } from '@/components/SafeScreen';
@@ -92,16 +93,16 @@ export default function DeleteAccount() {
     Alert.alert('탈퇴 실패', r.error);
   };
 
-  const handleSubmit = () => {
+  // 최종 확인은 ConfirmDialog(명세 FE-UX-03) — destructive 라 스크림 탭으로 닫히지 않는다.
+  const handleSubmit = async () => {
     setPwError(null);
-    Alert.alert(
-      '정말 탈퇴하시겠습니까?',
-      '삭제된 정보는 복구할 수 없습니다.',
-      [
-        { text: '취소', style: 'cancel' },
-        { text: '탈퇴하기', style: 'destructive', onPress: () => void performDelete() },
-      ],
-    );
+    const ok = await confirm({
+      title: '정말 탈퇴하시겠습니까?',
+      message: '삭제된 정보는 복구할 수 없습니다.',
+      confirmLabel: '탈퇴하기',
+      destructive: true,
+    });
+    if (ok) void performDelete();
   };
 
   return (
@@ -174,7 +175,7 @@ export default function DeleteAccount() {
           </Pressable>
 
           <Button
-            onPress={handleSubmit}
+            onPress={() => void handleSubmit()}
             disabled={!canSubmit}
             loading={submitting}
             variant="destructive"
