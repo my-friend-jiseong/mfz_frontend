@@ -24,8 +24,8 @@
 | 파일 | 내용 |
 |---|---|
 | [backend/backend-backlog.md](backend/backend-backlog.md) | **활성 큐의 1차 소스** — 프런트 측 누적 백엔드 요청. 상단이 활성 항목, 하단에 종결 이력·아카이브 |
-| [backend/handoff-2026-07-29-store-release.md](backend/handoff-2026-07-29-store-release.md) | **현행 전달본** — 스토어 출시 차단(§30 A~E). 백로그에서 넘길 것만 뽑은 문서 |
-| [backend/archive/](backend/archive/) | 종결 문서 — 이전 전달본 1건 + 백엔드 결과보고서 3건. [인덱스](backend/archive/README.md) 참조 |
+| [backend/handoff-2026-10-01-ui-v2.md](backend/handoff-2026-10-01-ui-v2.md) | **현행 전달본** — UI v2 개편이 드러낸 방문 단위 API(§35·§36·§40 등) + 이월 항목(§34 TLS·§30-B 약관·§31-B Word). 백로그에서 넘길 것만 뽑은 문서 |
+| [backend/archive/](backend/archive/) | 종결 문서 — 이전 전달본 3건 + 백엔드 결과보고서 5건. [인덱스](backend/archive/README.md) 참조 |
 
 > 백엔드에 넘길 때는 백로그를 통째로 주지 않고 `handoff-*.md` 전달본을 뽑는다.
 > 전달이 끝나면 `archive/` 로 옮기고, 백로그 항목은 「완료 항목(아카이브)」에 한 줄로 압축한다.

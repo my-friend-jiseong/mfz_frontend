@@ -9,7 +9,7 @@
 > **정책**: 프론트가 contract 를 정해 선행 개발 → 백엔드가 보충. 아래 항목은 **프론트 선반영이
 > 끝났거나 프론트가 할 수 있는 일이 없는 것**만 담는다.
 > **응답 contract**: 모든 4xx/5xx 는 Phase 7 단일 shape `{ code, message, fields?, details? }`.
-> **원본 백로그**: [`backend-backlog.md`](./backend-backlog.md) **§30 (A~E)** — 이 문서는 그 전달본이다.
+> **원본 백로그**: [`backend-backlog.md`](../backend-backlog.md) **§30 (A~E)** — 이 문서는 그 전달본이다.
 > **근거**: 운영 OpenAPI·무인증 프로브에 더해 **`mfz_backend` 소스를 직접 확인**했다(2026-07-29, `fa708c0`).
 > 아래 "실측" 은 전부 코드에서 확인한 것이다 — 추측이 아니다.
 
@@ -145,7 +145,7 @@ Play 는 앱 내 삭제 경로와 별개로 **앱 밖에서 접근 가능한 삭
 
 **소스 확인 — 현재 서빙 방식이 이번 작업의 실제 범위를 바꾼다.**
 
-두 페이지는 [`src/legal/registerLegalRoutes.js`](../../../mfz_backend/src/legal/registerLegalRoutes.js) 안에
+두 페이지는 [`src/legal/registerLegalRoutes.js`](../../../../mfz_backend/src/legal/registerLegalRoutes.js) 안에
 **`PRIVACY_HTML`·`TERMS_HTML` 템플릿 리터럴로 하드코딩**돼 있고 `app.get` 이 그대로 `send` 한다.
 파일에서 읽지 않는다. 그래서 아래 두 가지가 **드러나 있다**:
 
@@ -373,7 +373,7 @@ docs/legal/
 
 ## 참조
 
-- 원본 백로그: [`backend-backlog.md`](./backend-backlog.md) §30 (A~E)
-- 프론트 계획서: [`../roadmap/05_legal-docs.md`](../roadmap/05_legal-docs.md)
-- 출시 준비도: [`../roadmap/00_store-release-readiness.md`](../roadmap/00_store-release-readiness.md) ⛔-2·⛔-5
+- 원본 백로그: [`backend-backlog.md`](../backend-backlog.md) §30 (A~E)
+- 프론트 계획서: [`../roadmap/05_legal-docs.md`](../../roadmap/05_legal-docs.md)
+- 출시 준비도: [`../roadmap/00_store-release-readiness.md`](../../roadmap/00_store-release-readiness.md) ⛔-2·⛔-5
 - 약관 원본: Notion 「📄 이용약관 (조성민)」 DB (v1.0, 2026-07-29 작성)

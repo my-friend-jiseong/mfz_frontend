@@ -8,7 +8,7 @@
 > 이 문서는 ① **새로 발견한 장애**와 ② **배치 대조에서 남은 것**만 담는다.
 > **근거**: 운영 OpenAPI(`https://ilgayo.co.kr/api-docs.json`)·정적 페이지·TLS 핸드셰이크
 > **직접 실측** (2026-08-03 19:57 KST). 결과보고서를 그대로 믿지 않고 하나씩 확인했다.
-> **원본 백로그**: [`backend-backlog.md`](./backend-backlog.md) **§33**(신규) · §30 · §28
+> **원본 백로그**: [`backend-backlog.md`](../backend-backlog.md) **§33**(신규) · §30 · §28
 
 ---
 

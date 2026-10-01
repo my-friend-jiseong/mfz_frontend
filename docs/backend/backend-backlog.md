@@ -3,8 +3,11 @@
 > 프론트에서 발견·합의한 백엔드 작업 항목을 누적. 사이클 시작 시점에 우선순위
 > 정해 작업으로 빼는 방식. 본 문서가 **활성 큐의 1차 소스**이고, 백엔드에 실제로
 > 넘길 때는 `handoff-*.md` 전달본을 따로 뽑는다 (현행:
-> [`handoff-2026-08-03-tls-and-verification.md`](./handoff-2026-08-03-tls-and-verification.md)).
+> [`handoff-2026-10-01-ui-v2.md`](./handoff-2026-10-01-ui-v2.md)).
 > 종결된 전달본·백엔드 결과보고서는 [`archive/`](./archive/) 로 옮긴다.
+>
+> **최종 전수 재검증: 2026-10-01** (운영 OpenAPI 9/30 스냅샷과 경로·스키마 완전 동일, 더미계정
+> `demo3` 실호출). 활성 11건 중 **서버 쪽 변화 0건** — 각 항목 머리의 `⏸️ 2026-10-01` 줄 참조.
 >
 > **응답 contract 표준**: 모든 4xx/5xx 는 Phase 7 단일 shape `{ code, message, fields?, details? }`.
 >
@@ -15,95 +18,10 @@
 
 ---
 
-## 28. 🟢 주소검색 `buildingName` — **백엔드 완료.** 남은 건 프론트의 커버리지 대조뿐
-
-> **✅ 백엔드 종결 (2026-08-03 운영 OpenAPI 확인).** `AddressSearchItem.buildingName` 이
-> 스펙에 정식으로 있고 설명까지 붙었다 — *"키워드(장소) 검색: Kakao `place_name`.
-> 주소 검색: `road_address.building_name`(없으면 null)."* 요청한 그대로다.
-> **이 항목에 백엔드가 할 일은 더 없다.**
->
-> 남은 건 프론트 판단 하나 — **서버 응답만으로 클라이언트 카카오 JS SDK 를 걷어낼 수 있는가.**
-> 키워드 몇 개로 서버 결과 집합과 헤드리스 WebView 브리지 결과를 대조해야 하는데,
-> `/api/fields/address/search` 는 인증이 필요해 **로그인 세션에서만** 측정할 수 있다.
-> 그때까지 아래 원문은 착수 근거로 남겨둔다.
-
-§3 으로 백엔드가 `address.json` + `keyword.json` 병합을 배포해 **장소명으로 검색은 된다**.
-그런데 **응답이 장소명을 담아 오지 않아**, 프론트는 여전히 클라이언트 카카오 JS SDK 키워드검색
-(헤드리스 WebView 브리지)을 떼지 못한다. §3 아카이브에 "잔여는 프론트 선택 정리뿐" 이라 적었던 것은
-오판이었다.
-
-### 실측 (2026-07-28, 로그인 세션에서 앱이 실제로 보낸 호출)
-
-`GET /api/fields/address/search?keyword=동아대학교` → 200, **10건**. 매칭은 정상(승학·부민캠퍼스 등).
-
-```json
-{ "roadAddress": "부산 사하구 낙동대로550번길 37",
-  "jibunAddress": "부산 사하구 하단동 840",
-  "sido": null, "sigungu": null,
-  "lat": 35.115446, "lng": 128.967669 }
-```
-
-| 항목 | 결과 |
-|---|---|
-| `buildingName` 키 존재 | **10건 중 0건** (키 자체가 없음) |
-| `sido` / `sigungu` | 전부 `null` (POI 출처라 주소 depth 없음 — 예상된 동작) |
-
-프론트 타입 [`AddressSearchItem`](../../src/api/endpoints/fields.ts#L162) 은 `buildingName: string | null` 로
-선언돼 있으나 실제 응답엔 그 키가 오지 않는다.
-
-> **2026-07-30 재측정 — 값이 오기 시작했다.** `keyword=하단동` 응답 6건 전부에 `buildingName` **키가
-> 있고**, POI 결과 3건은 값까지 채워 온다(예: `"을숙도"`). 위 2026-07-28 측정("10건 중 0건")과 다르다 —
-> 그 사이 서버가 바뀐 것으로 보인다. **이 항목이 막고 있던 조건이 풀렸을 수 있다.**
-> 다만 "클라이언트 SDK 를 걷어낼 수 있는가" 는 **커버리지 비교가 남았다** — 서버 응답만으로
-> 헤드리스 WebView 브리지와 같은 결과 집합이 나오는지 키워드 몇 개로 대조한 뒤 종결한다.
-> (측정 방법: 로그인 상태에서 `window.fetch` 를 래핑해 `/api/fields/address/search` 응답 본문 캡처)
-
-### 왜 막히나
-
-- 클라이언트 SDK 는 `place_name` → `buildingName` 으로 매핑한다
-  ([`useKakaoPlaceSearch.web.tsx:71`](../../src/components/fields/useKakaoPlaceSearch.web.tsx#L71)).
-- [`MapSearchBar`](../../src/components/MapSearchBar.tsx) 의 「새 위치 등록」 목록은
-  `p.buildingName || p.roadAddress || p.jibunAddress` 를 1차 라벨로 쓴다. 서버 결과만 쓰면
-  **"동아대학교" 가 "부산 사하구 낙동대로550번길 37" 로 표시**된다 — 이름으로 장소를 찾는 목록의
-  존재 이유가 사라진다.
-- `fields/new`·`fields/[id]/edit` 도 서버·클라이언트 결과를 `mergeSearchItems` 로 합쳐 쓰는데,
-  이름이 없으면 병합의 의미가 없다.
-
-### 요청
-
-`keyword.json` 출처 item 에 **장소명을 실어 달라.** 필드명은 기존 프론트 타입에 맞춰
-`buildingName` 이면 프론트 변경 0 이다(다른 이름이면 프론트가 매핑 추가).
-주소(`address.json`) 출처 item 은 지금처럼 비워 두면 된다.
-
-### 그러면 프론트가 할 일 (이 요청이 충족된 뒤)
-
-1. `useKakaoPlaceSearch.tsx` / `.web.tsx` 삭제 — 헤드리스 WebView 브리지 제거(약 236줄).
-2. `MapSearchBar` 의 장소 검색을 `fieldsApi.addressSearch` 로 교체.
-3. `fields/new`·`fields/[id]/edit` 에서 클라이언트 검색·`mergeSearchItems` 제거.
-4. 부수 효과: 카카오 **JS 키 도메인 화이트리스트 의존이 검색 경로에서 사라진다**
-   (지도 렌더는 여전히 필요). 개발 포트를 8081 이외로 띄울 때의 제약도 그만큼 줄어든다.
-
-### 우선순위
-
-🟠 중상 — 기능은 지금도 동작하므로 차단은 아니다. 다만 **한 줄 추가로 프론트 코드 236줄과
-런타임 의존(헤드리스 WebView·SDK 준비 경합)이 사라지는** 비용 대비가 크다.
-
-### 발견 시점
-
-2026-07-28, §3 잔여 정리를 착수하려고 범위를 분석하다 발견. 착수 전에 서버 응답을 실측해
-드러났다 — 문서(§3 아카이브)만 믿었으면 회귀를 배포할 뻔했다.
-
-### 관련 코드
-
-- 프론트 타입 [`src/api/endpoints/fields.ts:162`](../../src/api/endpoints/fields.ts#L162) `AddressSearchItem.buildingName`
-- 클라이언트 SDK 훅 [`src/components/fields/useKakaoPlaceSearch.tsx`](../../src/components/fields/useKakaoPlaceSearch.tsx) · [`.web.tsx`](../../src/components/fields/useKakaoPlaceSearch.web.tsx)
-- 병합 [`src/utils/addressSearch.ts`](../../src/utils/addressSearch.ts) `mergeSearchItems`
-- 소비 화면 [`MapSearchBar`](../../src/components/MapSearchBar.tsx)(지도 공용) · `fields/new` · `fields/[id]/edit`
-- 관련 항목: §3(병합 배포, ✅)
-
----
-
 ## 29. 🟡 `GET /api/reports` 목록 item 에 **외근 요약**이 없다 — 그룹 헤더가 로컬 store 에 의존
+
+> ⏸️ **2026-10-01 재검증 — 변화 없음.** 18건 item 키 그대로(`reportId·tripId·title·outputFileUrl·
+> overviewMapUrl·fieldReportCount·createdAt·updatedAt`), `trip` 객체 0/18.
 
 보고서 목록은 외근별로 묶어 보여준다. 그런데 목록 응답에 외근 정보가 없어, 프론트가
 로컬 `tripStore` 에서 trip 을 찾아 헤더(날짜·시간)를 만든다. 외근 목록은 페이지네이션돼
@@ -198,6 +116,9 @@ reportId · tripId · title · outputFileUrl · overviewMapUrl · fieldReportCou
 > 여전히 시행일 `2026-06-18`. 실계정 `GET /api/me` 도 그대로다 — `legal.current` 는 3개 문서
 > 전부 `2026-08-03` 인데 서빙 본문은 그 이전 초안. §33(TLS)·§31(스토리지)처럼 그 사이 조치된
 > 흔적이 없다 — **B 는 스토어 심사 앞두고 아직 순수하게 막혀 있는 유일한 문항이다.**
+>
+> ⏸️ **2026-10-01 재검증 — 변화 없음.** `/location-terms` 404, `/terms`·`/privacy` 시행일 `2026-06-18`,
+> 두 본문 모두 '위치정보' 0회. 8/10 비공개 테스트 트랙 제출 후 **약 2개월째 그대로**다.
 
 **출시 대상은 Google Play 뿐이다** (App Store 는 계획에 없음 — 2026-07-29 확인).
 Play 는 계정 생성을 허용하는 앱에 **계정·데이터 삭제 경로를 요구**하며, 데이터 안전 양식
@@ -365,8 +286,11 @@ cron·스케줄러·`setInterval`·retention/cleanup/purge 코드 0건. 코드�
 > — 2026-07-30 실측과 바이트 단위로 동일한 Express 기본 404. 라우트가 여전히 없다. `reports/[id]/index.tsx`
 > 의 "생성된 Word 다운로드" 버튼은 지금도 죽어 있다. **아래 (A) 절은 해소된 과거 기록으로 남기고,
 > (B) 만 활성 대상이다.**
-
-DB 메타데이터(`fileUrl`·`fileSize`·`mimeType`)는 온전한데 **실제 파일이 하나도 응답되지 않는다.**
+>
+> ⏸️ **2026-10-01 재검증.** (A) 계속 정상 — `/storage/reports/…`·`/storage/visits/…`(UI v2 의 방문 사진)
+> 모두 200 + 바이트 반환. (B) `/output/report-1785496457754.docx` 여전히 Express 기본 404(`text/html`, 171 B).
+> **덤(사소)**: `/storage/*` 200 응답에 **`Content-Type` 헤더가 없다**(`curl` 기준 `null`). 앱 `<Image>`·
+> 브라우저는 스니핑으로 그려 증상은 없지만, `image/jpeg` 를 붙여 주는 게 맞다.
 
 DB 메타데이터(`fileUrl`·`fileSize`·`mimeType`)는 온전한데 **실제 파일이 하나도 응답되지 않는다.**
 현장 사진·보고서 전·중·후 사진·생성된 Word 가 앱 전 화면에서 깨진다. 업로드는 성공하고
@@ -479,6 +403,9 @@ Word 를 못 받아도 PDF 로 대체 시연 가능).
 하필 터진 자리가 **"주소를 아직 못 받았다" 를 잡으려고 둔 가드**다 — 가드가 자기가 막아야 할
 상황에서 먼저 죽는다.
 
+> ⏸️ **2026-10-01 재검증 — 변화 없음.** `keyword=하단동` 10건 중 `roadAddress: null` 3건(동 단위).
+> OpenAPI 스키마도 9/30 과 동일(여전히 `string`). 프론트 경계 정규화로 앱은 안전하다.
+
 ### 실측 (2026-07-30, 로그인 세션에서 앱이 보낸 호출 · fetch 래핑으로 응답 본문 캡처)
 
 `GET /api/fields/address/search?keyword=하단동` → 200, 6건. **두 가지 shape 가 섞여 온다.**
@@ -522,7 +449,13 @@ Word 를 못 받아도 PDF 로 대체 시연 가능).
 
 ---
 
-## 34. 🟡 §33(TLS 만료) 재발 방지가 됐는지 미확인 — 다음 만료 2026-11-02 전 재점검
+## 34. 🟠 §33(TLS 만료) 재발 방지가 됐는지 미확인 — 다음 만료 2026-11-02, **이번 달이 확인 창**
+
+> ⏸️ **2026-10-01 재검증 — 인증서 그대로** (`notBefore=2026-08-04` · `notAfter=2026-11-02` · `YE1`).
+> 아직 갱신 시점 전이라 정상이다. **🟡→🟠 상향** — 만료까지 32일, 이제 밖에서 판정할 수 있는 시기다:
+> certbot 은 **만료 30일 전(≈10/3)부터** 갱신을 시도하므로, **10월 둘째 주에 `notBefore` 가 여전히
+> `2026-08-04` 면 자동 갱신이 돌지 않고 있다**는 뜻이다(§33 과 같은 증상). 확인 명령:
+> `echo | openssl s_client -connect ilgayo.co.kr:443 -servername ilgayo.co.kr 2>/dev/null | openssl x509 -noout -dates`
 
 **즉시 장애는 해소를 실측 확인했다(2026-08-29):** `curl https://ilgayo.co.kr/api-docs.json` 200,
 인증서 `notBefore=2026-08-04` · `notAfter=2026-11-02` · `issuer=Let's Encrypt YE1`(§33 당시
@@ -542,6 +475,10 @@ Word 를 못 받아도 PDF 로 대체 시연 가능).
 ---
 
 ## 35. 🟠 방문 단위 **메모**가 없다 — 명세 v2 방문 수정의 메모 편집이 성립하지 않는다
+
+> ⏸️ **2026-10-01 재검증 — 변화 없음.** `POST /api/visits/:id/memos`·`/memos/text`, `DELETE /api/visits/:id/photos/:id`,
+> `PATCH /api/fields/:id/memos/:id` 전부 Express 기본 HTML 404(라우트 없음). `GET /api/fields/:id` 의 `photos[]` 는
+> 여전히 현장 직접 첨부만이고 `visitId` 를 가진 항목 0건.
 
 명세 v2(`docs/일가요-프론트엔드-요구사항-명세-v2.md` §1.3·§4.4)는 메모·사진을 **방문 단위**로
 쓰고 고친다. 사진은 서버에 있는데 메모는 없다. 로드맵 [`07_ui-v2-redesign.md`](../roadmap/07_ui-v2-redesign.md) §4-A.
@@ -581,6 +518,9 @@ Word 를 못 받아도 PDF 로 대체 시연 가능).
 
 ## 36. 🟠 방문 삭제 API 가 없다 — `DELETE /api/visits/:id`
 
+> ⏸️ **2026-10-01 재검증 — 변화 없음.** `DELETE /api/visits/:id`·`DELETE /api/trips/:tripId/visits/:id`·`PATCH /api/visits/:id`
+> 모두 HTML 404. **UI v2 수락 기준 19개 중 유일한 미충족(9번 방문 삭제)이 이 항목 대기다.**
+
 명세 v2 FE-WRAP-03·FE-VED-04: 외근 정리의 스와이프 삭제와 방문 수정의 `방문 삭제`.
 **현장(마스터)은 남기고 그 방문과 첨부만** 지운다.
 
@@ -605,6 +545,9 @@ UI(스와이프·`방문 삭제` 버튼·확인 대화상자)는 만들고, 호�
 
 ## 37. 🟡 `기타` 결과의 사유 10자 강제 — 명세 v2 "체크인 입력 비강제" 와 충돌
 
+> ⏸️ **2026-10-01 재검증 — 변화 없음.** `{status:'other'}` → 400 `visit_status_reason_required`
+> "기타 상태는 10자 이상 사유가 필요합니다".
+
 명세 v2 FE-CHK-05·FE-UX-04: 체크인·방문 수정의 모든 입력은 선택이다.
 서버는 `PATCH /api/visits/:id/status {status:'other'}` 에 사유가 없으면 **400 `visit_status_reason_required`**(2026-09-30 재확인).
 
@@ -628,6 +571,8 @@ UI(스와이프·`방문 삭제` 버튼·확인 대화상자)는 만들고, 호�
 
 ## 38. 🟢 `from-trip` 이 현장 선택·순서를 받지 않는다 — 프론트 우회로 해결, 정합성 요청만
 
+> ⏸️ **2026-10-01** — OpenAPI 9/30 과 동일(재호출은 데이터를 만들어 생략). 프론트 우회가 APK #40 으로 배포됐다.
+
 명세 v2 FE-RPT-02a: 보고서 작성에서 현장 순서를 ▲▼ 로 바꾸면 현장 보고 순서도 따른다.
 
 ### 실측 (2026-09-30)
@@ -647,6 +592,8 @@ UI(스와이프·`방문 삭제` 버튼·확인 대화상자)는 만들고, 호�
 
 ## 39. 🟡 현장 보고가 어느 **방문**에서 왔는지 모른다 — 방문 삭제 차단 판정 불가
 
+> ⏸️ **2026-10-01** — OpenAPI `FieldReport` 스키마 9/30 과 동일, `visitId` 없음.
+
 명세 v2 FE-WRAP-03·FE-VED-04: "보고서에 반영된 방문이면 차단 안내". `FieldReport` 에는 `fieldId` 만 있고 `visitId` 가 없다.
 
 ### 요청
@@ -661,6 +608,9 @@ UI(스와이프·`방문 삭제` 버튼·확인 대화상자)는 만들고, 호�
 ---
 
 ## 40. 🟠 방문 이력이 있는 현장은 **영원히 삭제할 수 없다** — 명세 v2 FE-SITE-09 와 충돌
+
+> ⏸️ **2026-10-01** — OpenAPI `DELETE /api/fields/{fieldId}` 409 "연관 방문 존재" 그대로(실호출은 데모 현장을
+> 지울 수 있어 생략 — 스펙이 9/30 과 바이트 단위로 같다).
 
 ### 실측 (2026-09-30)
 방문이 1건이라도 있는 현장 `DELETE /api/fields/:id` → **409 `has_related_visits`** `{visitCount}`.
@@ -711,7 +661,7 @@ UI(스와이프·`방문 삭제` 버튼·확인 대화상자)는 만들고, 호�
 - **§2 ✅ `PATCH`/`DELETE /api/trips/:tripId`** (release 2026-06) — PATCH 제목·시간 보정(응답 비의존, 로컬 패치), DELETE 관련 레코드 시 `409 has_related_trip_records`→`?force=true`. `tripStore.update`/`remove`. 커밋 `18414f6`·`10b4cd0`·`ec6ab90`.
 - **§3 ✅ 주소검색 `address.json`+`keyword.json` 병합 — 기구현 확인** (2026-07-26) — 백엔드 `searchFieldAddress` 가 이미 두 API 를 병렬 호출·병합·중복제거하고 있음(추가 커밋 없음). 백엔드 측 요청 충족(매칭 기준). ⚠️ **2026-07-28 정정**: "잔여는 프론트 선택 정리뿐" 은 틀렸다 — 응답에 **장소명이 없어** 프론트가 클라이언트 SDK 를 걷어낼 수 없다. → **§28**.
 - **§4 ✅ `detailAddress` optional 완화** (release 2026-06) — `detail_address_required` 400 제거, point 성 현장(가로수·광장) 등록 OK. 프론트 무변경.
-- **§5 ✅ `POST /trips/navigation/optimize-preview` 404 → 클라이언트 only 확정** (2026-05-31) — `optimizePreview`·관련 타입 삭제, `order.tsx` 는 `nearestNeighborOrder` 만. (외근 시작 후 `/optimize` 는 유지.) ⚠️ **2026-08-29 정정 — 재개.** 백엔드가 `docs/roadmap/06_kakao-routing-api-report.md` 제안을 반영해 endpoint 를 실제로 구현·배포했다(`docs/backend/카카오-라우팅-API-구현-결과보고서-2026-08-18.md`). 경로가 `/api/trips/navigation/optimize-preview` → **`/api/trips/optimize-preview`** 로 바뀌었다. `tripsApi.optimizePreview`·타입 복원, `order.tsx` 는 백엔드 우선 + 실패 시 nearest-neighbor 폴백으로 재통합.
+- **§5 ✅ `POST /trips/navigation/optimize-preview` 404 → 클라이언트 only 확정** (2026-05-31) — `optimizePreview`·관련 타입 삭제, `order.tsx` 는 `nearestNeighborOrder` 만. (외근 시작 후 `/optimize` 는 유지.) ⚠️ **2026-08-29 정정 — 재개.** 백엔드가 `docs/roadmap/06_kakao-routing-api-report.md` 제안을 반영해 endpoint 를 실제로 구현·배포했다(`docs/backend/archive/release-2026-08-18-kakao-routing.md`). 경로가 `/api/trips/navigation/optimize-preview` → **`/api/trips/optimize-preview`** 로 바뀌었다. `tripsApi.optimizePreview`·타입 복원, `order.tsx` 는 백엔드 우선 + 실패 시 nearest-neighbor 폴백으로 재통합.
 - **§7 ✅ 보고서 본문 검증 완화 + 사진 첨부 → 새 양식으로 해소** (2026-06-04) — content·보고서 레벨 사진 개념 제거(본문=`field_reports`), 사진은 `POST /reports/:id/field-reports`.
 - **§8 ✅ 자동 체크인 — 현 반자동 정책 유지(변경 없음)** (2026-05-10) — arrival→Alert→사용자 탭→checkIn confirm 안전망이 의도된 동작. 재개 조건: 현장 작업자 "확인 번거로움" 신호 누적 시.
 - **§9 ✅ visit 단계 모델(phase: 조치 전/중/후)** (release 2026-07-26) — `visit_photos.phase`(`before|during|after|null`), `POST /visits/:visitId/photos` multipart `phase?`, 응답 `attachment.phase` + 파생 `phaseProgress`(trip timeline·visit 상세 포함), `POST /reports/from-trip/:tripId` 이 phase→`beforePhotoUrl`/`pendingPhotoUrl`/`afterPhotoUrl` 자동 매핑. `visit_phase_invalid`(400). 커밋 `5a53b02`. ⚠️ **배포됐으나 프론트에 도달하지 않음** — phase 가 붙은 곳은 visit 사진인데 프론트는 현장 사진 엔드포인트를 쓴다(2026-07-28 OpenAPI 실측). → **§27 로 재요청.**
@@ -734,10 +684,25 @@ UI(스와이프·`방문 삭제` 버튼·확인 대화상자)는 만들고, 호�
 - **§27 ✅ 현장 사진 엔드포인트에 `phase` 추가 — 프론트 변경 0 으로 발화** (release 2026-07-29) — 요청 3안 중 **1번안 채택**: `POST /api/fields/{fieldId}/photos` multipart 에 `phase?`(`before|during|after`), 응답에 `phaseProgress`(+`done`) 와 `photo.phase` echo, `POST /reports/from-trip/:tripId` 이 **field_photos** phase 로 슬롯 매핑. 프론트는 이미 `addPhoto(..., { phase })` 로 보내고 있었으므로 **배포 즉시 동작**했다(코드 변경 없음, 주석만 정정). 잔여: 배포 **이전**에 올린 사진은 `phase: null` 이라 계속 수동 선택(`pickFromField`)이 필요하다 — 소급 백필은 요청하지 않는다(어느 슬롯이었는지 서버가 알 수 없다). `phaseProgress` 는 프론트 미사용(체크인 화면이 슬롯별 사진 유무로 이미 그린다).
 - **§25 ✅ 사용자 커스텀 카테고리 마스터 `categories` CRUD** (release 2026-07-26) — `GET/POST /api/categories`, `PATCH/DELETE /api/categories/:categoryId`, user 스코프 `(user_id, name)` UQ. 에러 `category_name_required`(400)·`category_name_taken`(409)·`category_not_found`(404). `Field.categories: string[]`/`field_categories` **계약 무변경**. 커밋 `8cc8e12`. **프론트 잔여**: `categoryStore` 가 아직 AsyncStorage 진실원(`TODO(backend)`). 후속(별도 결정): `field_categories`→`category_id` FK / rename cascade.
 - **§33 ✅ 운영 TLS 인증서 만료 — 복구 확인** (장애 2026-08-03, 복구 실측 2026-08-29) — 원인: `--manual`/DNS-01 로 발급된 인증서라 `manual-auth-hook` 없이는 비대화식 자동갱신이 불가능했음(certbot.timer 는 90일 내내 정상 실행되며 매번 조용히 건너뜀). 상세·재발 방지안(Cloudflare DNS-01 자동화 등)은 `docs/infra/2026-08-03-tls-expiry-incident.md`. 덤: 같은 진단에서 `mfz-studio` 컨테이너 크래시 루프 발견(장애 무관, 급하지 않음, 미확인 상태로 방치돼 있을 수 있음). **재발 방지 적용 여부는 미확인 → §34.**
+- **§28 ✅ 주소검색 `buildingName`** (백엔드 2026-07-29 배포, 백엔드 종결 확인 2026-08-03, 활성 큐에서 내림 2026-10-01) — 키워드(POI) 출처 item 에 Kakao `place_name` 을 `buildingName` 으로 싣는다. 2026-10-01 실측: `동아대학교`·`다대포` 각 10/10 채움, 동 단위 결과(`하단동`)만 null(정상). **백엔드 할 일 없음.** 남은 건 **프론트 판단** — 서버 응답만으로 클라이언트 카카오 SDK 키워드검색(`useKakaoPlaceSearch`·`mergeSearchItems`, 소비처 `MapSearchBar`·`fields/new`·`fields/[id]/edit`)을 걷어낼 수 있는지 커버리지 대조. 원문(실측 표·제거 범위 약 236줄)은 git 이력 `df09a61` 의 이 파일 §28.
 
 ---
 
 ## 변경 이력
+
+- **2026-10-01**: **활성 큐 전수 재검증 + 문서 정리.** 운영 OpenAPI 를 9/30 스냅샷과 diff 해 경로·스키마
+  **완전 동일**함을 확인하고, 더미계정(`demo3`)으로 §29·§30-B·§31·§32·§34·§35·§36·§37 을 다시 호출했다 —
+  **서버 쪽 변화 0건.** 바뀐 것은 문서 쪽뿐이다.
+  ① **§28 활성 큐에서 내림** — 백엔드 종결(8/3)된 뒤로 남은 일이 프론트 판단(SDK 제거 여부)뿐인데
+  백엔드 요청 큐 맨 위를 차지하고 있었다. 오늘 POI 키워드 2종에서 `buildingName` 10/10 확인 후 아카이브로.
+  ② **§34 🟡→🟠** — 만료 32일 전. certbot 갱신 창(만료 30일 전)이 곧 열리므로 10월 둘째 주
+  `notBefore` 로 자동 갱신 여부를 **밖에서** 판정할 수 있다는 기준을 적었다.
+  ③ **§31 덤** — `/storage/*` 200 응답에 `Content-Type` 헤더가 없다(사소, 증상 없음).
+  ④ 상위 폴더에 활성 문서가 "백로그 1 + 전달본 1" 이어야 하는데 전달본 2·결과보고서 2 가 쌓여 있었다 —
+  `handoff-2026-07-29`·`handoff-2026-08-03`·`release-2026-07-29`·카카오 라우팅 결과보고서(→
+  `release-2026-08-18-kakao-routing.md` 로 개명)를 [`archive/`](./archive/) 로 옮기고, 남은 백엔드 요청 전부를
+  새 전달본 [`handoff-2026-10-01-ui-v2.md`](./handoff-2026-10-01-ui-v2.md) 로 뽑았다.
+  ⑤ §31 본문의 중복 문단 1개 제거.
 
 - **2026-08-29**: **§30-B 재검증 — 변화 없음.** `/location-terms` 404, `/terms`·`/privacy`
   시행일 `2026-06-18` 그대로, 실계정 `legal.current` 는 여전히 `2026-08-03`(서빙 본문과

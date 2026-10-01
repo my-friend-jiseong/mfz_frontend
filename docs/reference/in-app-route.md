@@ -34,7 +34,7 @@
 ## 후속 — 백엔드 하드닝 (2026-08-18)
 `/api/trips/:tripId/route` 가 경유지 POST(1~30개, `v1/waypoints/directions`)·8초 타임아웃·
 5분 캐시·오류 세분화(`kakao_route_unavailable`/`kakao_route_quota_exceeded`/`kakao_route_timeout`)
-로 보강됐다(`docs/backend/카카오-라우팅-API-구현-결과보고서-2026-08-18.md`). 프론트 계약은
+로 보강됐다(`docs/backend/archive/release-2026-08-18-kakao-routing.md`). 프론트 계약은
 그대로라 이 문서의 코드 변경은 없다 — 호출부는 여전히 실패를 구분 없이 직선 폴백으로 삼킨다.
 
 ## 보류 (결정 기록)

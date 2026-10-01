@@ -10,6 +10,10 @@
 | [release-2026-06-backend-backlog.md](./release-2026-06-backend-backlog.md) | 백엔드 → 프론트 결과보고서 | 2026-06-18 | 백로그 일괄 반영 1차 배치 (`6b1d6ea`·`23a771c`) |
 | [release-2026-06-19-destinations-overview.md](./release-2026-06-19-destinations-overview.md) | 〃 | 2026-06-19 | §20 Word 위치도, §24 진행 중 목적지 단건 추가 (`ae4d2b9`) |
 | [release-2026-07-26-backend-backlog.md](./release-2026-07-26-backend-backlog.md) | 〃 | 2026-07-26 | 활성 큐 일괄 처리 — §9·§10·§15·§19·§22·§25 (`af5320e` → `2a97fab`) |
+| [handoff-2026-07-29-store-release.md](./handoff-2026-07-29-store-release.md) | 프론트 → 백엔드 전달본 | 2026-07-29 | 스토어 출시 요건 §30 A~E. A·C 배포로 종결, **잔여 B 는 [`../handoff-2026-10-01-ui-v2.md`](../handoff-2026-10-01-ui-v2.md) 로 이월** |
+| [release-2026-07-29-store-release.md](./release-2026-07-29-store-release.md) | 백엔드 → 프론트 결과보고서 | 2026-07-29 | §26·§27·§28·§30 A·C (`fa708c0` → `ee4c453`) |
+| [handoff-2026-08-03-tls-and-verification.md](./handoff-2026-08-03-tls-and-verification.md) | 프론트 → 백엔드 전달본 | 2026-08-03 | §33 TLS 만료 장애(복구 확인) + `agreedTerms` 검증 질의(실측으로 해소). 재발 방지 확인(§34)·§30-B 는 2026-10-01 전달본으로 이월 |
+| [release-2026-08-18-kakao-routing.md](./release-2026-08-18-kakao-routing.md) | 백엔드 → 프론트 결과보고서 | 2026-08-18 | 카카오 라우팅 — `/api/trips/optimize-preview`·`/route` 보강 (`a01dfb0`). §5 재개·§22 반영 완료. 원래 파일명 `카카오-라우팅-API-구현-결과보고서-2026-08-18.md` |
 
 ## 읽는 순서
 
