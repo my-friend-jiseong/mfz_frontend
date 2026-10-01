@@ -195,8 +195,6 @@ export default function ReportDetail() {
 
   const isOwner = userId === report.creatorId;
   const edited = wasEdited(report.createdAt, report.updatedAt);
-  // 하단 바를 그리는 조건과 같아야 한다 — 바가 없는데 높이를 넘기면 시트 최저 높이가 빈 띠만큼 뜬다.
-  const hasBottomBar = isOwner ? fieldReports.length > 0 : !!report.outputFileUrl?.trim();
 
   // 위치도 네이티브 캡처 → 업로드(§20) — best-effort. 문서 생성 직전에 찍어 최신 위치도 반영.
   const syncOverviewMap = async () => {
@@ -314,7 +312,10 @@ export default function ReportDetail() {
 
   return (
     <View style={styles.root}>
-      <MapSheetLayout bottomBarHeight={hasBottomBar ? barHeight : 0}
+      {/* 바 유무와 무관하게 상수로 준다. 목록에서 들어오면 fieldReports 가 비어 있다가 상세 로드 후
+          채워지는데(0→N), 그때 높이를 바꾸면 마운트 후 snapPoints 가 교체돼 시트가 peek 으로 떨어진다
+          (MapSheetLayout 주석). 바가 없는 드문 경우(현장 보고 0건 등)엔 최저 높이 아래 빈 띠가 남는다. */}
+      <MapSheetLayout bottomBarHeight={barHeight}
         title="보고서 상세"
         onBack={() => safeBack(router)}
         initialIndex={1}

@@ -191,7 +191,7 @@ export default function Profile() {
           <MenuRow
             icon="calendar-outline"
             label="가입일"
-            value={fmtDate(user?.createdAt).replace(/-/g, '.') /* Figma 5517: 2025.03.15 */}
+            value={user?.createdAt ? fmtDate(user.createdAt).replace(/-/g, '.') /* Figma 5517: 2025.03.15 */ : '-'}
           />
           <View style={styles.divider} />
           {/* backend-backlog §15 — 이름·비밀번호 변경. 이전엔 '관리자 문의' 안내뿐이었다. */}

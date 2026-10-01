@@ -161,7 +161,8 @@ const styles = StyleSheet.create({
     borderTopRightRadius: radius.lg,
     overflow: 'hidden',
   },
-  title: { paddingHorizontal: spacing.xl, paddingBottom: spacing.xs },
+  // 손잡이가 없으니 제목이 모서리에 붙지 않게 위 여백을 직접 준다.
+  title: { paddingHorizontal: spacing.xl, paddingTop: spacing.lg, paddingBottom: spacing.xs },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
