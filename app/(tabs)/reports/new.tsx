@@ -25,11 +25,13 @@ import { VISIT_STATUS_LABEL, type Visit } from '@/types/entities';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { fmtDate, fmtTime } from '@/utils/datetime';
+import { useReportDuration } from '@/utils/useReportDuration';
 
 // 보고서 작성 (명세 v2 FE-RPT-02·02a·10).
 // 제목 + 연결 외근 + 보고서에 넣을 현장(= 그 외근의 체크인한 방문, 방문 순서). ▲▼ 로 바꾼 순서가
 // 곧 현장 보고 순서다. 위치도는 없다(상세 화면에 있다). 만들면 현장 보고 마법사(1/N)로 간다.
 export default function ComposeReport() {
+  const recordReportDuration = useReportDuration();
   const router = useRouter();
   const params = useLocalSearchParams<{ tripId?: string }>();
 
@@ -158,6 +160,7 @@ export default function ComposeReport() {
       Alert.alert('보고서 생성 실패', r.error);
       return;
     }
+    recordReportDuration();
     if (r.failedFieldIds.length > 0) {
       const names = r.failedFieldIds
         .slice(0, 5)

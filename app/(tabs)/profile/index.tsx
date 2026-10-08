@@ -24,9 +24,7 @@ import {
   LOCATION_TERMS_AVAILABLE,
   LOCATION_TERMS_URL,
   PRIVACY_URL,
-  SUPPORT_EMAIL,
   TERMS_URL,
-  supportMailto,
 } from '@/utils/contact';
 
 const APP_VERSION = '0.1.0';
@@ -150,20 +148,7 @@ export default function Profile() {
       });
   };
 
-  // 문의하기 — 개인정보 열람·수정·삭제, 회원 탈퇴, 일반 문의 창구.
-  // mailto 는 canOpenURL 로 미리 재지 않는다: Android 11+ 는 매니페스트 <queries> 없이는
-  // 메일 앱이 있어도 false 를 돌려줘, 멀쩡한 기기에서 폴백 안내만 뜨게 된다.
-  const handleContact = () => {
-    const url = supportMailto('[일가요] 문의');
-    if (Platform.OS === 'web') {
-      // 새 탭으로 열면 메일 앱이 뜬 뒤 빈 탭이 남는다 — 현재 문서에서 핸들러를 부른다.
-      window.location.href = url;
-      return;
-    }
-    Linking.openURL(url).catch(() => {
-      Alert.alert('문의하기', `메일 앱을 열 수 없습니다.\n\n${SUPPORT_EMAIL} 로 보내주세요.`);
-    });
-  };
+  const handleContact = () => router.push('/(tabs)/profile/support' as never);
 
   return (
     <SafeScreen>
@@ -238,7 +223,7 @@ export default function Profile() {
           <MenuRow
             icon="chatbubble-ellipses-outline"
             label="문의하기"
-            value={SUPPORT_EMAIL}
+            value="접수 내역·답변 확인"
             onPress={handleContact}
           />
           <View style={styles.divider} />

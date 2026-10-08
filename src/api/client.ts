@@ -154,7 +154,7 @@ async function rawRequest<T>(path: string, init: RequestInit_, accessToken: stri
   return body as T;
 }
 
-export async function request<T>(path: string, init: RequestInit_ = {}): Promise<T> {
+async function authenticatedRequest<T>(path: string, init: RequestInit_ = {}): Promise<T> {
   const token = init.skipAuth ? null : handlers.getAccessToken();
   try {
     return await rawRequest<T>(path, init, token);
@@ -166,5 +166,19 @@ export async function request<T>(path: string, init: RequestInit_ = {}): Promise
       }
     }
     throw e;
+  }
+}
+
+export async function request<T>(path: string, init: RequestInit_ = {}): Promise<T> {
+  const photoPath = /^\/api\/(?:fields\/[^/]+\/photos|visits\/[^/]+\/photos|reports\/[^/]+\/(?:overview-photo|field-reports\/[^/]+\/photos))$/;
+  const tracked = init.method === 'POST' && init.multipart === true && photoPath.test(path);
+  let success = false;
+  try {
+    const result = await authenticatedRequest<T>(path, init);
+    success = true; return result;
+  } finally {
+    // One logical upload (including any auth retry). Never send filenames or IDs.
+    const token = handlers.getAccessToken();
+    if (tracked && token) void rawRequest('/api/analytics/events', { method: 'POST', body: { kind: 'photo_upload', success } }, token).catch(() => {});
   }
 }
