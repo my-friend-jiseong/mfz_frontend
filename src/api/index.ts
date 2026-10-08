@@ -1,6 +1,8 @@
 export { API_BASE_URL, toAbsoluteFileUrl } from './config';
 export { ApiError, NetworkError, localizeError, errorCode, applyFieldErrors } from './errors';
 export { request, configureAuth } from './client';
+export { support } from './endpoints/support';
+export type { SupportCategory, SupportInquiry, SupportInquiryPage, CreateSupportInquiry } from './endpoints/support';
 
 export { auth } from './endpoints/auth';
 export type { ApiUser, AuthSession, SignupBody, LoginBody } from './endpoints/auth';

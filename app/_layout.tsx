@@ -25,11 +25,10 @@ import { initSentry } from '@/utils/sentry';
 import { applyWebAlertPatch } from '@/utils/webAlertPatch';
 import { useAuthStore } from '@/stores/authStore';
 import { useDestinationStore } from '@/stores/destinationStore';
+import { startAnalyticsActivity } from '@/utils/analyticsActivity';
 import { colors } from '@/theme/colors';
 import { FONTS_TO_LOAD } from '@/theme/typography';
 
-// 모듈 로드 시 초기화 (DSN 환경변수 없으면 no-op)
-initSentry();
 // react-native-web 의 Alert.alert no-op 우회 — 전 코드베이스의 alert 가 web 에서 동작.
 applyWebAlertPatch();
 
@@ -45,11 +44,14 @@ export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts(FONTS_TO_LOAD);
 
   useEffect(() => {
+    initSentry();
     void hydrate();
     void useDestinationStore.getState().hydrate();
     startSessionActivity();
+    const stopAnalytics = startAnalyticsActivity();
     return () => {
       stopSessionActivity();
+      stopAnalytics();
     };
   }, [hydrate]);
 
