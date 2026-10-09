@@ -4,6 +4,7 @@ export default function ProfileLayout() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
+      <Stack.Screen name="support" options={{ title: '문의하기', headerShown: true }} />
       <Stack.Screen
         name="edit"
         options={{ title: '내 정보 수정', headerShown: true }}

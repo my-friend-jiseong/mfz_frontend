@@ -10,6 +10,10 @@ yarn-error.*
 .DS_Store
 .env
 .env.local
+.env.*
+!.env.example
+.qa/
+.npm-cache/
 
 # 서명 키·자격증명 — 절대 커밋 금지
 *.jks
