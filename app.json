@@ -2,7 +2,7 @@
   "expo": {
     "name": "일가요",
     "slug": "mfz-frontend",
-    "version": "0.1.0",
+    "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "icon": "./assets/icon.png",
@@ -16,7 +16,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.mfz.ilgayo",
-      "buildNumber": "1",
+      "buildNumber": "2",
       "infoPlist": {
         "NSCameraUsageDescription": "방문 기록에 현장 사진을 찍어 붙이기 위해 카메라를 사용해요.",
         "NSPhotoLibraryUsageDescription": "방문 기록에 사진을 붙이고, '사진으로 여러 곳 등록'에서 사진의 촬영 위치와 시각을 읽어 현장을 만들기 위해 사진 보관함에 접근해요.",
