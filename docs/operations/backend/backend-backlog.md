@@ -1063,4 +1063,4 @@ PR7(2026-10-17): 대기열 항목에 체크인 화면에서 고른 조치 상태
 1. `POST /api/trips/{tripId}/photo-batch` multipart — 묶음 배열 `[{fieldId? | {lat,lng,roadAddress,jibunAddress,sido,sigungu}, photos:[{file, capturedAt}]}]` → 묶음별 `{fieldId, visitId, created, photoIds}`. 묶음 단위로 성공·실패를 돌려주면 앱은 실패한 묶음만 다시 보낸다
 2. 최소안: check-in·현장 생성·사진 올리기에 `clientId`(앱이 만든 id) 멱등 키 — 응답이 유실돼 다시 보내도 하나만 생기게. 방문 사진 응답에 `capturedAt` 포함
 
-Android 10+ 는 앱에 `ACCESS_MEDIA_LOCATION` 이 없으면 사진 위치가 지워져 온다(서버 일 아님, 실기기 확인 항목).
+Android 10+ 는 앱에 `ACCESS_MEDIA_LOCATION` 이 없으면 사진 위치가 지워져 온다(서버 일 아님). PR9 리뷰에서 app.json `android.permissions` 에 선언했지만 이 권한은 실행 중 허용이 필요하고 expo-image-picker 는 요청하지 않는다 — 개발 빌드 실기기에서 위치가 오는지 확인할 것(Expo Go 는 앱 설정을 쓰지 않아 확인 불가).

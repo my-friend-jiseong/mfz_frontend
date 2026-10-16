@@ -32,6 +32,8 @@ interface Props {
   framed?: boolean;
   /** center 모드에서 원래 위치 점선 원을 그릴지(기본 true). 8-8 사진 위치 지정은 원래 위치가 없어 끈다. */
   showOrigin?: boolean;
+  /** 처음 축척(카카오 level). 기본 3. 8-8 은 동네가 보이게 4. */
+  level?: number;
 }
 
 // 마운트 후 임의 시점에 핀 이동 + 역지오코딩을 트리거하는 명령형 핸들
@@ -55,6 +57,7 @@ export const FieldPinMap = forwardRef<FieldPinMapHandle, Props>(function FieldPi
     pinKind = 'pending',
     framed = true,
     showOrigin = true,
+    level = 3,
   },
   ref,
 ) {
@@ -70,6 +73,7 @@ export const FieldPinMap = forwardRef<FieldPinMapHandle, Props>(function FieldPi
   const resolveInitialRef = useRef(resolveInitialAddress);
   const modeRef = useRef(mode);
   const showOriginRef = useRef(showOrigin);
+  const levelRef = useRef(level);
   // 사용자가 지도에서 방금 옮긴 좌표 — 이 값이 prop 으로 되돌아오면 재센터를 건너뛴다.
   // (재센터하면 핀이 항상 화면 중앙으로 튕겨 "안 움직이는" 것처럼 보이는 피드백 루프 차단)
   const lastEmittedRef = useRef<{ lat: number; lng: number } | null>(null);
@@ -82,6 +86,7 @@ export const FieldPinMap = forwardRef<FieldPinMapHandle, Props>(function FieldPi
         resolveInitialRef.current,
         modeRef.current === 'center',
         showOriginRef.current,
+        levelRef.current,
       ),
     [kakaoJsKey],
   );
@@ -179,6 +184,7 @@ function buildHtml(
   resolveInitial: boolean,
   centerMode: boolean,
   showOrigin = true,
+  level = 3,
 ): string {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
@@ -197,7 +203,7 @@ function buildHtml(
   kakao.maps.load(function(){
     var map = new kakao.maps.Map(document.getElementById('map'), {
       center: new kakao.maps.LatLng(${lat}, ${lng}),
-      level: 3,
+      level: ${level},
     });
     var marker = new kakao.maps.Marker({
       position: new kakao.maps.LatLng(${lat}, ${lng}),

@@ -124,6 +124,13 @@ test('picker exif — Android 모양(십진수·유리수 글·ref)', () => {
   assert.ok(near(c.lat, -33.5));
 });
 
+test('유리수 0/0 은 0, 0 이 아닌 수/0 은 버림', () => {
+  const a = metaFromPickerExif({ GPSLatitude: '35/1,6/1,0/0', GPSLongitude: '128/1,58/1,0/0' });
+  assert.ok(near(a.lat, 35.1));
+  const b = metaFromPickerExif({ GPSLatitude: '35/1,6/1,5/0', GPSLongitude: '128/1,58/1,0/1' });
+  assert.equal(b.lat, null);
+});
+
 test('picker exif — 위치 없음·0,0·이상한 값', () => {
   assert.equal(metaFromPickerExif(null).lat, null);
   assert.equal(metaFromPickerExif({ GPSLatitude: 0, GPSLongitude: 0 }).lat, null);

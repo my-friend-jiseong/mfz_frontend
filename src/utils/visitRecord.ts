@@ -24,6 +24,8 @@ export interface CheckinPhoto {
   file?: UploadFile;
   /** 썸네일 시각 배지. 새로 고른 사진은 고른 때, 서버 사진은 올린 때. */
   takenAt: string;
+  /** 찍은 시각을 모른다(8-7 Exif 없는 사진) — capturedAt 을 보내지 않는다. takenAt 은 정렬·표시용 대체값. */
+  noCapturedAt?: boolean;
 }
 
 /** 서버 방문 사진 → 체크인 사진 목록(오래된 것부터). */
@@ -114,7 +116,7 @@ export async function saveVisitRecord(args: {
       photos.push(p);
       continue;
     }
-    const r = await visit.addPhoto(visitId, p.file, { capturedAt: p.takenAt });
+    const r = await visit.addPhoto(visitId, p.file, p.noCapturedAt ? undefined : { capturedAt: p.takenAt });
     if (r.ok) photos.push({ key: p.key, uri: p.uri, takenAt: p.takenAt });
     else {
       failed += 1;

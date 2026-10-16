@@ -83,6 +83,16 @@ test('지정한 위치가 묶음 밖이지만 기존 현장 100m 안이면 그 �
   assert.equal(next[1].key, 'field:far');
 });
 
+test('지정한 위치가 새 묶음과 기존 현장 둘 다 100m 안이면 기존 현장이 먼저', () => {
+  t = 0;
+  // 새 묶음 p3 은 현장에서 150m. 지정 위치 90m 는 p3 에서 60m 지만 현장에서 90m → 현장 묶음.
+  const { groups } = groupPhotos([photo('p3', north(150))], [FIELD]);
+  const next = assignPhotoLocation(groups, 'p6', north(90), [FIELD]);
+  assert.equal(next.length, 2);
+  assert.deepEqual(next[1], { key: 'field:f351', lat: BASE.lat, lng: BASE.lng, fieldId: 'f351', photoKeys: ['p6'] });
+  assert.deepEqual(next[0].photoKeys, ['p3']);
+});
+
 test('uniqueTimes: 같은 시각은 1ms 씩 민다', () => {
   const s = '2025-10-14T01:12:05.000Z';
   assert.deepEqual(uniqueTimes([s, s, s]), [s, '2025-10-14T01:12:05.001Z', '2025-10-14T01:12:05.002Z']);

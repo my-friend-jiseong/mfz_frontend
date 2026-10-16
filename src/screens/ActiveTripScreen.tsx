@@ -135,8 +135,31 @@ export default function ActiveTrip() {
   const myDot = origin;
 
   const queuedForTrip = tripQueue.length;
-  // 방문 수: 목적지 도착 + 목적지 아닌 곳에서 체크인한 방문(지금 위치 기록) + 저장 대기.
-  const visitCount = Math.max(arrivedCount, tripVisits.length + tripQueue.filter((q) => !visitByField.has(q.fieldId)).length);
+  // 서버가 센 이 외근의 방문 수 — 기기 기록(visitStore)은 새로 고침·다른 화면(8-7 사진 일괄 등록)에서 빈다.
+  const [serverVisitCount, setServerVisitCount] = useState(0);
+  // 방문 수: 목적지 도착 + 목적지 아닌 곳에서 체크인한 방문(지금 위치 기록) + 저장 대기, 서버 수보다 작지 않게.
+  const visitCount = Math.max(
+    arrivedCount,
+    serverVisitCount,
+    tripVisits.length + tripQueue.filter((q) => !visitByField.has(q.fieldId)).length,
+  );
+  /** 서버 외근 상세로 방문을 맞춘다(방문만 — 목적지는 낙관적 건너뛰기를 되돌리지 않게 건드리지 않는다). 받은 방문 수, 실패면 null. */
+  const syncServerVisits = useCallback(async (id: string): Promise<number | null> => {
+    try {
+      const d = await tripsApi.detail(id);
+      if (d.timeline && d.timeline.length > 0) useVisitStore.getState().syncFromTimeline(id, d.timeline);
+      const n = Math.max(d.visitCount ?? 0, d.timeline?.length ?? 0);
+      setServerVisitCount(n);
+      return n;
+    } catch {
+      return null;
+    }
+  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      if (tripId) void syncServerVisits(tripId);
+    }, [tripId, syncServerVisits]),
+  );
   const noDestination = !next;
 
   // === 시계·위치 ===
@@ -343,7 +366,9 @@ export default function ActiveTrip() {
   };
   const endTripInner = async () => {
     // 방문 0곳이면 7-1(문구는 앱 고정). 1곳 이상이면 바로 종료 → 3 외근 상세.
-    const zero = visitCount === 0 && queuedForTrip === 0;
+    let zero = visitCount === 0 && queuedForTrip === 0;
+    // 기기에 방문이 없어도 서버엔 있을 수 있다(새로 고침·8-7) — 7-1 을 띄우기 전에 서버 수로 확인한다.
+    if (zero && tripId) zero = ((await syncServerVisits(tripId)) ?? 0) === 0;
     if (zero) {
       const ok = await confirm({
         title: '외근을 종료할까요?',

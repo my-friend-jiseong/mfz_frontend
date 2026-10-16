@@ -19,7 +19,8 @@ export interface PickedLocation {
 }
 
 interface Props {
-  photo: { uri: string; takenAt: string };
+  /** takenAt: 찍은 시각. 모르면 null(줄에서 뺀다). */
+  photo: { uri: string; takenAt: string | null };
   /** '2장 중 1' */
   index: number;
   total: number;
@@ -66,6 +67,7 @@ export function PhotoLocationPicker({ photo, index, total, start, onClose, onPic
           pinKind="new"
           framed={false}
           showOrigin={false}
+          level={4}
           resolveInitialAddress
           onDragEnd={(lat, lng, a) =>
             setPos({
@@ -99,7 +101,7 @@ export function PhotoLocationPicker({ photo, index, total, start, onClose, onPic
           <Image source={{ uri: photo.uri }} style={styles.thumb} accessibilityIgnoresInvertColors />
           <View style={styles.flex}>
             <Text v2="caption.regular" tone="tertiary" numeric numberOfLines={1}>
-              {`${fmtMonthDayAmPm(photo.takenAt)} 촬영 · ${total}장 중 ${index}`}
+              {photo.takenAt ? `${fmtMonthDayAmPm(photo.takenAt)} 촬영 · ${total}장 중 ${index}` : `${total}장 중 ${index}`}
             </Text>
             <Text v2="title.xs" numberOfLines={1}>
               {title}

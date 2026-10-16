@@ -70,7 +70,9 @@ function ratio(s: string): number {
   const n = Number(a);
   if (b === undefined) return n;
   const d = Number(b);
-  return d === 0 ? NaN : n / d;
+  // 0/0 은 '값 없음'을 0 으로 채운 기기가 쓴다(분·초 칸) — 0 으로 본다. 0 이 아닌 수/0 만 잘못된 값.
+  if (d === 0) return n === 0 ? 0 : NaN;
+  return n / d;
 }
 
 function signed(deg: number | null, ref: unknown, neg: 'S' | 'W'): number | null {
@@ -232,7 +234,7 @@ function readTiff(t: Uint8Array): PhotoMeta | null {
         num = num | 0;
         den = den | 0;
       }
-      out.push(den === 0 ? NaN : num / den);
+      out.push(den === 0 ? (num === 0 ? 0 : NaN) : num / den);
     }
     return out;
   };

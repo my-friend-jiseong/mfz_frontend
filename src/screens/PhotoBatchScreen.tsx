@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Image, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Image, Platform, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useNavigation, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KakaoMapWebView, type KakaoMapMarker } from '@/components/KakaoMapWebView';
@@ -24,6 +24,7 @@ import { createFieldFromPlace } from '@/utils/placeToField';
 import { findCommittedCheckIn, saveVisitRecord, skipAlreadySaved, type CheckinPhoto } from '@/utils/visitRecord';
 import { fieldTitle } from '@/utils/fieldFacets';
 import { pickedPlaceName } from '@/utils/addressFormat';
+import { fmtMonthDayAmPm } from '@/utils/datetime';
 import { haversineKm } from '@/utils/routeOptimize';
 import { peekUserLocation } from '@/utils/geolocation';
 import { safeBack } from '@/utils/backNavigation';
@@ -37,7 +38,10 @@ interface BatchPhoto {
   key: string;
   uri: string;
   file: UploadFile;
-  takenAt: string;
+  /** Exif 촬영 시각. 모르면 null — 서버에 capturedAt 을 보내지 않는다. */
+  takenAt: string | null;
+  /** 묶음 순서용 시각(촬영 시각, 모르면 고른 시각). */
+  sortAt: string;
   lat: number | null;
   lng: number | null;
 }
@@ -55,6 +59,9 @@ interface GroupRecord {
   /** 현장 만들기·체크인을 보냈는데 실패한 때 — 응답만 못 받고 서버엔 생겼을 수 있어 다시 보내기 전에 서버를 본다. */
   createTriedAt: number | null;
   checkinTriedAt: number | null;
+  /** 묶음 위치 — 응답을 못 받은 새 현장을 다시 찾을 때. */
+  lat: number;
+  lng: number;
 }
 
 // 서버·기기 시계 차이 여유(visitRecord 와 같은 값).
@@ -76,7 +83,8 @@ export function PhotoBatchScreen() {
   const fields = useFieldStore((s) => s.fields);
   const { reverse, element: placeBridge } = useKakaoPlaceSearch();
 
-  const [phase, setPhase] = useState<'picking' | 'reading' | 'ready' | 'empty'>('picking');
+  // 웹은 사용자가 누르지 않으면 파일 창을 열 수 없어(브라우저가 막음) [사진 고르기]부터 보여 준다. 앱은 바로 갤러리를 연다.
+  const [phase, setPhase] = useState<'picking' | 'reading' | 'ready' | 'empty'>(Platform.OS === 'web' ? 'empty' : 'picking');
   const [photos, setPhotos] = useState<Record<string, BatchPhoto>>({});
   const [groups, setGroups] = useState<PhotoGroup[]>([]);
   const [unlocated, setUnlocated] = useState<string[]>([]);
@@ -87,6 +95,7 @@ export function PhotoBatchScreen() {
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
 
   const recordsRef = useRef<Record<string, GroupRecord>>({});
+  const uriRef = useRef<string[]>([]);
   // 묶을 때 이미 있던 현장 — 다시 보낼 때 이 화면이 만든 현장을 가려낸다.
   const knownFieldIds = useRef<Set<string>>(new Set());
   const savingRef = useRef(false);
@@ -111,8 +120,14 @@ export function PhotoBatchScreen() {
   const pick = useCallback(
     async (auto: boolean) => {
       setPhase('picking');
-      const assets = await pickPhotos(MAX_PHOTOS);
+      const picked = await pickPhotos(MAX_PHOTOS);
       if (!mountedRef.current) return;
+      // 웹·일부 안드로이드는 selectionLimit 을 무시한다 — 앞의 MAX_PHOTOS 장만 쓴다.
+      const assets = picked ? picked.slice(0, MAX_PHOTOS) : null;
+      if (picked && picked.length > MAX_PHOTOS) {
+        await notice(`사진은 한 번에 ${MAX_PHOTOS}장까지 등록할 수 있어요`, `고른 ${picked.length}장 중 앞의 ${MAX_PHOTOS}장만 넣었어요.`);
+        if (!mountedRef.current) return;
+      }
       if (!assets) {
         // 처음 열 때 고르지 않고 닫으면 화면도 닫는다.
         if (auto) leave();
@@ -137,14 +152,19 @@ export function PhotoBatchScreen() {
         key: `p${stamp}-${i}`,
         uri: a.uri,
         file: assetToUploadFile(a),
-        takenAt: metas[i].takenAt ?? now,
+        takenAt: metas[i].takenAt,
+        sortAt: metas[i].takenAt ?? now,
         lat: metas[i].lat,
         lng: metas[i].lng,
       }));
+      uriRef.current = list.map((p) => p.uri);
       const byKey = Object.fromEntries(list.map((p) => [p.key, p]));
       const fieldsNow = useFieldStore.getState().fields;
       knownFieldIds.current = new Set(fieldsNow.map((f) => f.id));
-      const g = groupPhotos(list, fieldsNow);
+      const g = groupPhotos(
+        list.map((p) => ({ key: p.key, lat: p.lat, lng: p.lng, takenAt: p.sortAt })),
+        fieldsNow,
+      );
       setPhotos(byKey);
       setGroups(g.groups);
       setUnlocated(g.unlocated);
@@ -152,14 +172,22 @@ export function PhotoBatchScreen() {
     },
     [leave],
   );
-  // 처음 한 번만 — 개발 중 빠른 새로 고침이 효과를 다시 돌려도 갤러리를 또 열지 않게 ref 로 막는다.
+  // 처음 한 번만(앱) — 개발 중 빠른 새로 고침이 효과를 다시 돌려도 갤러리를 또 열지 않게 ref 로 막는다.
   const startedRef = useRef(false);
   useEffect(() => {
-    if (startedRef.current) return;
+    if (startedRef.current || Platform.OS === 'web') return;
     startedRef.current = true;
     void pick(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // 웹: 고른 사진의 blob: 주소는 화면을 떠날 때 놓아 준다.
+  useEffect(
+    () => () => {
+      if (Platform.OS !== 'web') return;
+      for (const u of uriRef.current) if (u.startsWith('blob:')) URL.revokeObjectURL(u);
+    },
+    [],
+  );
 
   // 새 묶음 이름(주소 '당리동 312-7 부근') — 좌표를 주소로 바꾼다. 8-8 에서 주소를 받아 온 묶음은 건너뛴다.
   const asked = useRef(new Set<string>());
@@ -208,7 +236,7 @@ export function PhotoBatchScreen() {
   const sheetTop = Math.max(220, Math.round(winH * (300 / 844)));
   const headerTop = insets.top + space[2];
   const fitPadding = useMemo<[number, number, number, number]>(
-    () => [headerTop + 44 + space[16], space[32], space[24] + radius2['2xl'], space[32]],
+    () => [headerTop + 44 + space[32], space[32], space[24] + radius2['2xl'], space[32]],
     [headerTop],
   );
 
@@ -222,7 +250,7 @@ export function PhotoBatchScreen() {
       for (const k of g.photoKeys) {
         const p = photos[k];
         const at = p?.lat !== null && p?.lng !== null ? { lat: p.lat as number, lng: p.lng as number } : { lat: g.lat, lng: g.lng };
-        const dt = Math.abs(new Date(p?.takenAt ?? 0).getTime() - new Date(target?.takenAt ?? 0).getTime());
+        const dt = Math.abs(new Date(p?.sortAt ?? 0).getTime() - new Date(target?.sortAt ?? 0).getTime());
         if (dt < bestDt) {
           bestDt = dt;
           best = at;
@@ -252,6 +280,7 @@ export function PhotoBatchScreen() {
         if (allowLeave.current) return;
         if (savingRef.current) {
           e.preventDefault();
+          void notice('저장하고 있어요', '저장이 끝나면 닫을 수 있어요.');
           return;
         }
         if (photoCount === 0) return;
@@ -274,10 +303,33 @@ export function PhotoBatchScreen() {
     [navigation, photoCount, states],
   );
 
+  /**
+   * 현장 만들기 응답을 못 받은 묶음 — 서버엔 생겼을 수 있다. 현장 목록을 다시 받아 그 자리(10m)에 새로 생긴 현장을 찾는다.
+   * 목록을 못 받으면 ok:false(모르는 채 다시 만들면 현장이 둘 생긴다).
+   */
+  const findCreatedField = async (rec: GroupRecord): Promise<{ ok: true; id: string | null } | { ok: false }> => {
+    await useFieldStore.getState().refresh();
+    const st = useFieldStore.getState();
+    if (st.listStatus !== 'ready') return { ok: false };
+    const made = st.fields.find(
+      (f) => !knownFieldIds.current.has(f.id) && haversineKm({ lat: f.latitude, lng: f.longitude }, rec) * 1000 <= SAME_SPOT_M,
+    );
+    return { ok: true, id: made?.id ?? null };
+  };
+
   // 새 현장은 만들었는데 체크인을 못 한 묶음 — 방문 없는 빈 현장이 남지 않게 지운다(8-13 체크인 그만두기와 같음).
+  // 만들기 응답을 못 받은 묶음도 서버에서 찾아 지운다. force 없이 — 방문이 붙어 있으면 서버가 거절하고 남긴다.
   const dropOrphanFields = async () => {
     for (const rec of Object.values(recordsRef.current)) {
-      if (!rec.created || rec.visitId || !rec.fieldId) continue;
+      if (rec.visitId) continue;
+      if (!rec.fieldId && rec.createTriedAt) {
+        const found = await findCreatedField(rec);
+        if (found.ok && found.id) {
+          rec.fieldId = found.id;
+          rec.created = true;
+        }
+      }
+      if (!rec.created || !rec.fieldId) continue;
       const r = await useFieldStore.getState().remove(rec.fieldId);
       if (!r.ok && !('needsConfirm' in r)) {
         await notice('새 현장을 지우지 못했어요', '현장 검색에서 직접 지워 주세요.');
@@ -291,15 +343,25 @@ export function PhotoBatchScreen() {
     const existing = recordsRef.current[g.key];
     if (existing) return existing;
     const list = g.photoKeys.map((k) => photos[k]).filter((p): p is BatchPhoto => !!p);
-    const times = uniqueTimes(list.map((p) => p.takenAt));
+    // 촬영 시각을 아는 사진만 capturedAt 을 보낸다(겹치지 않게 1ms 씩 민다).
+    const known = list.filter((p) => p.takenAt);
+    const unique = uniqueTimes(known.map((p) => p.takenAt as string));
+    const times = new Map(known.map((p, i) => [p.key, unique[i]]));
     const rec: GroupRecord = {
       fieldId: g.fieldId,
       created: false,
       visitId: null,
       visitedAt: null,
-      photos: list.map((p, i) => ({ key: p.key, uri: p.uri, file: p.file, takenAt: times[i] })),
+      photos: list.map((p) => {
+        const at = times.get(p.key);
+        return at
+          ? { key: p.key, uri: p.uri, file: p.file, takenAt: at }
+          : { key: p.key, uri: p.uri, file: p.file, takenAt: p.sortAt, noCapturedAt: true };
+      }),
       createTriedAt: null,
       checkinTriedAt: null,
+      lat: g.lat,
+      lng: g.lng,
     };
     recordsRef.current[g.key] = rec;
     return rec;
@@ -310,22 +372,20 @@ export function PhotoBatchScreen() {
     const rec = recordFor(g);
     // 앞서 현장 만들기가 실패했다 — 응답만 끊겼으면 서버에 이미 있다. 그 자리(10m)에 새로 생긴 현장이 있으면 그것을 쓴다.
     if (!rec.fieldId && rec.createTriedAt) {
-      await useFieldStore.getState().refresh();
-      const made = useFieldStore
-        .getState()
-        .fields.find(
-          (f) => !knownFieldIds.current.has(f.id) && haversineKm({ lat: f.latitude, lng: f.longitude }, g) * 1000 <= SAME_SPOT_M,
-        );
-      if (made) {
-        rec.fieldId = made.id;
+      const found = await findCreatedField(rec);
+      if (!found.ok) return '새 현장: 서버에서 앞선 기록을 확인하지 못했어요';
+      if (found.id) {
+        rec.fieldId = found.id;
         rec.created = true;
       }
     }
     if (!rec.fieldId) {
+      // 현장명은 묶음 이름('신평동 481 부근'), 주소는 주소 칸에.
+      const a = addresses[g.key] ?? (await reverse(g.lat, g.lng));
       rec.createTriedAt = Date.now();
-      const a = addresses[g.key];
       const r = await createFieldFromPlace(
         {
+          name: a ? pickedPlaceName(a.jibunAddress, a.roadAddress) : null,
           roadAddress: a?.roadAddress ?? '',
           jibunAddress: a?.jibunAddress ?? '',
           sido: a?.sido || undefined,
@@ -357,14 +417,15 @@ export function PhotoBatchScreen() {
       if (!r.ok) return `체크인: ${r.error}`;
       rec.visitId = r.visit.id;
       rec.visitedAt = r.visit.visitedAt;
-      const ds = useDestinationStore.getState();
-      const dest = ds.findByTripField(tripId, fieldId);
-      if (dest && dest.status === 'pending') ds.markArrived(dest.id);
     } else {
       // 앞서 응답 없이 끊긴 사진이 서버에 이미 있으면 다시 올리지 않는다(capturedAt 대조).
       const seen = await skipAlreadySaved({ tripId, visitId: rec.visitId, fieldId, visitedAt: rec.visitedAt, photos: sendPhotos, memo: null });
       sendPhotos = seen.photos;
     }
+    // 방문이 생겼다(새로 했든 앞선 것을 찾았든) — 이 현장이 목적지면 도착으로.
+    const ds = useDestinationStore.getState();
+    const dest = ds.findByTripField(tripId, fieldId);
+    if (dest && dest.status === 'pending') ds.markArrived(dest.id);
     const res = await saveVisitRecord({
       visitId: rec.visitId,
       fieldId,
@@ -395,7 +456,6 @@ export function PhotoBatchScreen() {
     setSaving(true);
     const total = todo.length;
     let done = 0;
-    const errors: string[] = [];
     let next = { ...states };
     setProgress({ done, total });
     // 서버에 일괄 API 가 없어 묶음마다 차례로 보낸다(백로그 2차 J). 한 묶음 실패로 나머지를 멈추지 않는다.
@@ -404,9 +464,12 @@ export function PhotoBatchScreen() {
       if (mountedRef.current) setStates(next);
       const err = await saveGroup(tripId, g);
       next = { ...next, [g.key]: err ? 'failed' : 'done' };
-      if (err) errors.push(`${groupTitle(g)}: ${err}`);
+      // 단계·서버 문구는 개발 로그에만. 사용자에게는 현장 이름만 보여 준다.
+      if (err && __DEV__) console.warn('[photo-batch]', groupTitle(g), err);
       done += 1;
-      if (mountedRef.current) {
+      const allDone = done === total && groups.every((x) => next[x.key] === 'done');
+      // 다 저장했으면 마지막 상태는 그리지 않고 떠난다(떠나는 화면을 같은 틱에 바꾸지 않는다).
+      if (mountedRef.current && !allDone) {
         setStates(next);
         setProgress({ done, total });
       }
@@ -415,19 +478,22 @@ export function PhotoBatchScreen() {
     if (!mountedRef.current) return;
     const savedAll = groups.every((g) => next[g.key] === 'done');
     if (savedAll) {
-      // 떠나는 화면은 바꾸지 않는다(같은 틱 setState + 이동 금지).
       allowLeave.current = true;
-      toast(`${groups.length}곳을 저장했어요`);
-      safeBack(router);
-      requestAnimationFrame(() => goToTabRoot('trips'));
+      const n = groups.length;
+      requestAnimationFrame(() => {
+        toast(`${n}곳을 저장했어요`);
+        safeBack(router);
+        requestAnimationFrame(() => goToTabRoot('trips'));
+      });
       return;
     }
     setSaving(false);
     setProgress(null);
-    const failed = groups.filter((g) => next[g.key] === 'failed').length;
+    const failedGroups = groups.filter((g) => next[g.key] === 'failed');
+    const names = failedGroups.map((g) => groupTitle(g));
     await notice(
-      `${failed}곳을 저장하지 못했어요`,
-      `${errors.slice(0, 3).join('\n')}\n\n저장한 곳은 그대로 두고, [저장]을 다시 누르면 남은 곳만 보내요.`,
+      `${failedGroups.length}곳을 저장하지 못했어요`,
+      `${names.slice(0, 5).join(', ')}${names.length > 5 ? ` 외 ${names.length - 5}곳` : ''}\n\n[남은 ${failedGroups.length}곳 저장]을 누르면 남은 곳만 보내요.`,
     );
   };
 
@@ -496,6 +562,8 @@ export function PhotoBatchScreen() {
                     <UnlocatedRow
                       key={k}
                       first={i === 0}
+                      index={i + 1}
+                      takenAt={photos[k]?.takenAt ?? null}
                       thumb={photos[k]?.uri}
                       disabled={locked || saving}
                       onAssign={() => setAssigning(k)}
@@ -530,7 +598,7 @@ export function PhotoBatchScreen() {
         <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, space[20]) }]}>
           {unlocated.length > 0 ? (
             <Text v2="caption.regular" tone="tertiary" style={styles.footerHint}>
-              위치 없는 사진은 지정하지 않으면 빼고 등록돼요
+              {locked ? '저장을 시작해 위치를 더 지정할 수 없어요' : '위치 없는 사진은 지정하지 않으면 빼고 등록돼요'}
             </Text>
           ) : null}
           <Button2 fullWidth onPress={() => void save()} loading={saving && !progress} disabled={remaining === 0 || saving}>
@@ -573,8 +641,13 @@ function GroupRow({
   state?: GroupState;
 }) {
   const sub = `${existing ? '기존 현장에 사진 추가' : '새 현장'} · ${count}장`;
+  const stateText = state === 'saving' ? '저장하고 있어요' : state === 'done' ? '저장했어요' : state === 'failed' ? '저장하지 못했어요' : null;
   return (
-    <View style={[styles.row, !first && styles.rowLine]} accessible accessibilityLabel={`${order}번, ${title}, ${sub}`}>
+    <View
+      style={[styles.row, !first && styles.rowLine]}
+      accessible
+      accessibilityLabel={`${order}번, ${title}, ${sub}${stateText ? `, ${stateText}` : ''}`}
+    >
       <View style={styles.badge}>
         <Text v2="caption.extrabold" tone="inverse" numeric>
           {order}
@@ -586,14 +659,28 @@ function GroupRow({
           {title}
         </Text>
         <Text v2="caption.regular" tone={state === 'failed' ? 'warning' : state === 'done' ? 'success' : 'tertiary'} numeric numberOfLines={1}>
-          {state === 'saving' ? '저장하고 있어요' : state === 'done' ? '저장했어요' : state === 'failed' ? '저장하지 못했어요' : sub}
+          {stateText ?? sub}
         </Text>
       </View>
     </View>
   );
 }
 
-function UnlocatedRow({ first, thumb, disabled, onAssign }: { first: boolean; thumb?: string; disabled: boolean; onAssign: () => void }) {
+function UnlocatedRow({
+  first,
+  index,
+  takenAt,
+  thumb,
+  disabled,
+  onAssign,
+}: {
+  first: boolean;
+  index: number;
+  takenAt: string | null;
+  thumb?: string;
+  disabled: boolean;
+  onAssign: () => void;
+}) {
   return (
     <View style={[styles.row, !first && styles.rowLine]}>
       <Thumb uri={thumb} size={48} />
@@ -604,7 +691,7 @@ function UnlocatedRow({ first, thumb, disabled, onAssign }: { first: boolean; th
         onPress={onAssign}
         disabled={disabled}
         accessibilityRole="button"
-        accessibilityLabel="지도에서 지정"
+        accessibilityLabel={`위치 없는 사진 ${index}${takenAt ? `, ${fmtMonthDayAmPm(takenAt)} 촬영` : ''}, 지도에서 지정`}
         accessibilityState={{ disabled }}
         style={[styles.assign, disabled && styles.dim]}
       >

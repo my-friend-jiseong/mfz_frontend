@@ -109,8 +109,8 @@ export function groupPhotos(
 }
 
 /**
- * 위치 없는 사진을 지도에서 지정했다(8-8 [이 위치로 지정]). 이미 있는 묶음 100m 안이면 그 묶음에 합치고(그 묶음이 기존 현장이든 새 현장이든),
- * 아니면 100m 안의 기존 현장 묶음 또는 새 묶음을 맨 뒤에 붙인다(8-14).
+ * 위치 없는 사진을 지도에서 지정했다(8-8 [이 위치로 지정]). 처음 묶을 때와 같은 규칙:
+ * 100m 안 기존 현장이 먼저(그 현장 묶음에 합치거나 새로 붙임), 아니면 100m 안 새 묶음에 합치고, 없으면 새 묶음을 맨 뒤에(8-14).
  */
 export function assignPhotoLocation(
   groups: readonly PhotoGroup[],
@@ -119,8 +119,6 @@ export function assignPhotoLocation(
   fields: readonly GroupField[],
   radiusM = PHOTO_GROUP_RADIUS_M,
 ): PhotoGroup[] {
-  const near = nearestGroup(pos, groups, radiusM);
-  if (near) return groups.map((g) => (g === near ? { ...g, photoKeys: [...g.photoKeys, photoKey] } : g));
   return place([...groups], { key: photoKey, ...pos }, fields, radiusM);
 }
 

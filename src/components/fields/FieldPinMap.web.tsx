@@ -30,6 +30,8 @@ interface Props {
   framed?: boolean;
   /** center 모드에서 원래 위치 점선 원을 그릴지(기본 true). 8-8 사진 위치 지정은 원래 위치가 없어 끈다. */
   showOrigin?: boolean;
+  /** 처음 축척(카카오 level). 기본 3. 8-8 은 동네가 보이게 4. */
+  level?: number;
 }
 
 // 마운트 후 임의 시점에 핀 이동 + 역지오코딩을 트리거하는 명령형 핸들
@@ -139,7 +141,7 @@ function loadKakaoSdk(appkey: string): Promise<void> {
 }
 
 export const FieldPinMap = forwardRef<FieldPinMapHandle, Props>(function FieldPinMap(
-  { lat, lng, onDragEnd, resolveInitialAddress = false, height = 220, mode = 'drag', pinKind = 'pending', framed = true, showOrigin = true },
+  { lat, lng, onDragEnd, resolveInitialAddress = false, height = 220, mode = 'drag', pinKind = 'pending', framed = true, showOrigin = true, level = 3 },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -161,6 +163,7 @@ export const FieldPinMap = forwardRef<FieldPinMapHandle, Props>(function FieldPi
   const pendingResolveRef = useRef<{ lat: number; lng: number } | null>(null);
   const modeRef = useRef(mode);
   const showOriginRef = useRef(showOrigin);
+  const levelRef = useRef(level);
   // center 모드: 코드로 지도를 옮길 때(주소 검색·내 위치) 가운데 좌표도 함께 맞춘다.
   const setCenterRef = useRef<((la: number, ln: number) => void) | null>(null);
 
@@ -174,7 +177,7 @@ export const FieldPinMap = forwardRef<FieldPinMapHandle, Props>(function FieldPi
       if (!k) return;
       const map = new k.maps.Map(containerRef.current, {
         center: new k.maps.LatLng(initialLatRef.current, initialLngRef.current),
-        level: 3,
+        level: levelRef.current,
       });
       mapRef.current = map;
       const initial = new k.maps.LatLng(initialLatRef.current, initialLngRef.current);
