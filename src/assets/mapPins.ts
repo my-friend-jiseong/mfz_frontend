@@ -19,11 +19,14 @@ export const PIN_TIP_Y_RATIO = 40.8 / H;
 //   sm: 1.19배(38×52) + 바닥 타원 58×20 — 8 체크인 지도 카드(120)·전체 지도
 //   lg: 1.44배(46×63) + 바닥 타원 60×22 — 5 현장 상세 지도 카드(132)
 // 타원 중심은 핀 끝보다 sm 2px, lg 7px 위(Figma 프레임 좌표 그대로).
-export type PinSelectedSize = 'sm' | 'lg';
-const SELECTED: Record<PinSelectedSize, { scale: number; gw: number; gh: number; lift: number }> = {
+//   next: 1.19배(38×52), 바닥 타원 없음 — 6 외근 준비·7 외근 진행의 다음 목적지 순번 핀(Figma 6·7 '1번째 목적지, 다음').
+export type PinSelectedSize = 'sm' | 'lg' | 'next';
+const SELECTED: Record<PinSelectedSize, { scale: number; gw: number; gh: number; lift: number } | { scale: number; gw: 0 }> = {
   sm: { scale: 1.19, gw: 58, gh: 20, lift: 2 },
   lg: { scale: 1.4375, gw: 60, gh: 22, lift: 7 },
+  next: { scale: 1.19, gw: 0 },
 };
+const SELECTED_SIZES: PinSelectedSize[] = ['sm', 'lg', 'next'];
 
 const BODY =
   'M19.2 41C17.6 37.2 6.2 28.2 6.2 16.5C6.2 13.05 7.57 9.75 10.01 7.31C12.45 4.87 15.75 3.5 19.2 3.5C22.65 3.5 25.95 4.87 28.39 7.31C30.83 9.75 32.2 13.05 32.2 16.5C32.2 28.2 20.8 37.2 19.2 41Z';
@@ -71,6 +74,8 @@ export function buildPinHtml(
   kind: MapPinKind,
   order?: number | string | null,
   selected?: PinSelectedSize | null,
+  /** 핀 아래 이름표(Figma 6 '낙동대로 351'). 웹만 — 네이티브 템플릿은 아직 이름 자리가 없다. */
+  nameTag?: string | null,
 ): string {
   const sel = selected ? SELECTED[selected] : null;
   const s = sel ? sel.scale : 1;
@@ -83,15 +88,23 @@ export function buildPinHtml(
   const inner = order != null && order !== '' ? numberText(kind, String(order)) : glyph(kind);
   const tipY = h * PIN_TIP_Y_RATIO;
   const groundAlpha = kind === 'new' || kind === 'search' ? [0.1, 0.35] : [0.22, 0.55];
-  const ground = sel
+  const ground = sel && 'gh' in sel
     ? `<div style="position:absolute;left:${(w - sel.gw) / 2}px;top:${tipY - sel.lift - sel.gh / 2}px;width:${sel.gw}px;height:${sel.gh}px;border-radius:${sel.gh / 2}px;box-sizing:border-box;background:${hexA(FILL[kind === 'skipped' ? 'visited' : kind], groundAlpha[0])};border:2px solid ${hexA(FILL[kind === 'skipped' ? 'visited' : kind], groundAlpha[1])};"></div>`
+    : '';
+  const tag = nameTag
+    ? `<div style="position:absolute;left:50%;top:${Math.round(tipY) + 3}px;transform:translateX(-50%);white-space:nowrap;padding:2px 8px;border-radius:10px;background:${c2.bg.canvas};color:${c2.text.primary};font-family:Pretendard,-apple-system,system-ui,sans-serif;font-size:12px;font-weight:700;line-height:16px;letter-spacing:-0.2px;box-shadow:0 1px 1.5px rgba(15,23,42,0.3),0 2px 6px rgba(15,23,42,0.12);pointer-events:none;">${escapeHtml(nameTag)}</div>`
     : '';
   return (
     `<div style="position:relative;width:${w}px;height:${h}px;cursor:pointer;">` +
     ground +
     `<svg width="${w}" height="${h}" viewBox="${VIEWBOX}" fill="none" style="position:relative;overflow:visible;filter:${pinShadowFilterCss};">${body}${inner}</svg>` +
+    tag +
     `</div>`
   );
+}
+
+function escapeHtml(t: string): string {
+  return t.replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`);
 }
 
 function hexA(hex: string, a: number): string {
@@ -99,11 +112,11 @@ function hexA(hex: string, a: number): string {
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 }
 
-/** 네이티브 HTML 용 템플릿. 키: `${kind}|${numbered?1:0}|${'0'|'sm'|'lg'}` */
+/** 네이티브 HTML 용 템플릿. 키: `${kind}|${numbered?1:0}|${'0'|'sm'|'lg'|'next'}` */
 export const PIN_TEMPLATES: Record<string, string> = Object.fromEntries(
   PIN_KINDS.flatMap((k) =>
     [0, 1].flatMap((num) =>
-      (['0', 'sm', 'lg'] as const).map((sel) => [
+      (['0', ...SELECTED_SIZES] as const).map((sel) => [
         `${k}|${num}|${sel}`,
         buildPinHtml(k, num ? '__N__' : null, sel === '0' ? null : sel),
       ]),

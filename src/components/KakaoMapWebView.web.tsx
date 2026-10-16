@@ -48,6 +48,7 @@ export interface KakaoMapMarker {
   // 2차 핀 — 네이티브와 동일(KakaoMapWebView.tsx 주석).
   pin?: MapPinKind;
   selectedSize?: PinSelectedSize;
+  nameTag?: string;
 }
 
 // KWCAG 1.4.1 — 색 + 형상 + 라벨 3중 인코딩.
@@ -885,7 +886,7 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
           return;
         }
         const content = document.createElement('div');
-        content.innerHTML = buildPinHtml(m.pin, m.order ?? null, m.selected ? m.selectedSize ?? 'sm' : null);
+        content.innerHTML = buildPinHtml(m.pin, m.order ?? null, m.selected ? m.selectedSize ?? 'sm' : null, m.nameTag ?? null);
         (content.firstChild as HTMLElement | null)?.addEventListener('click', () => onMarkerPress?.(m.id));
         overlaysRef.current.push(
           new k.maps.CustomOverlay({

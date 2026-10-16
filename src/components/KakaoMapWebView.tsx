@@ -63,8 +63,10 @@ export interface KakaoMapMarker {
    * order 가 있으면 순번 핀, selected 면 1.19배 + 바닥 타원. color 는 무시된다(종류가 색을 정한다).
    */
   pin?: MapPinKind;
-  /** 선택된 핀 크기. sm 1.19배(기본·체크인 카드), lg 1.44배(현장 상세 카드). */
+  /** 선택된 핀 크기. sm 1.19배(기본·체크인 카드), lg 1.44배(현장 상세 카드), next 1.19배 타원 없음(6·7 다음 목적지). */
   selectedSize?: PinSelectedSize;
+  /** 핀 아래 이름표(6 외근 준비의 다음 목적지). 지금은 웹만 그린다 — 네이티브 템플릿에 이름 자리가 없다. */
+  nameTag?: string;
 }
 
 interface Props {

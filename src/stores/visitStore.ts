@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { Visit, VisitStatus } from '@/types/entities';
 import { normalizeVisitStatus } from '@/types/entities';
-import { visits as visitsApi, localizeError, ApiError } from '@/api';
+import { visits as visitsApi, localizeError, ApiError, NetworkError } from '@/api';
 import type { UploadFile } from '@/utils/media';
 import type { VisitPhoto, VisitPhotoPhase } from '@/api';
 
@@ -14,7 +14,9 @@ import type { VisitPhoto, VisitPhotoPhase } from '@/api';
 
 type CheckInResult =
   | { ok: true; visit: Visit }
-  | { ok: false; error: string };
+  // network: 서버에 닿지 못함(오프라인·시간 초과) — 저장 대기열(checkinQueueStore)로 보낼 수 있다.
+  // status: 서버가 돌려준 HTTP 상태(401 이면 로그인 전·세션 만료 — 대기열은 실패로 두지 않는다).
+  | { ok: false; error: string; network?: boolean; status?: number };
 
 type GenericResult =
   | { ok: true }
@@ -153,7 +155,12 @@ export const useVisitStore = create<VisitState>((set, get) => ({
       set((s) => ({ visits: mergeVisits(s.visits, [v]) }));
       return { ok: true, visit: v };
     } catch (e) {
-      return { ok: false, error: describeError(e) };
+      return {
+        ok: false,
+        error: describeError(e),
+        network: e instanceof NetworkError,
+        status: e instanceof ApiError ? e.status : undefined,
+      };
     }
   },
 

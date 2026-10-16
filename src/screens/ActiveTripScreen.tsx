@@ -1,611 +1,799 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, StyleSheet, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AppState, ScrollView, StyleSheet, View } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { KakaoMapWebView, type KakaoMapHandle, type KakaoMapMarker, type MapPath } from '@/components/KakaoMapWebView';
+import { Icon } from '@/components/icons';
+import { STATUS_PIN_COLOR } from '@/components/shell/pinColors';
+import { checkinHref } from '@/components/shell/TripMiniBar';
+import { useRealSafeAreaInsets } from '@/components/shell/realInsets';
+import { useSharedMapSettings } from '@/components/map/useSharedMapSettings';
+import { RecordMenu } from '@/components/trips/RecordMenu';
+import { STATUS_TONE } from '@/components/trips/TripStopRow';
+import { Button2 } from '@/components/ui/Button2';
+import { confirm, notice } from '@/components/ui/ConfirmDialog';
+import { MapButton } from '@/components/ui/MapButton';
+import { SheetHandle } from '@/components/ui/AppSheet';
+import { snackbar } from '@/components/ui/Snackbar';
+import { STATUS_LABEL } from '@/components/ui/StatusMark';
 import { Text } from '@/components/ui/Text';
-import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
-import { useRouter } from 'expo-router';
-import { useTripStore } from '@/stores/tripStore';
+import { Touchable } from '@/components/ui/Touchable';
+import { trips as tripsApi } from '@/api';
+import { useBottomChromeStore } from '@/stores/bottomChromeStore';
+import { useCheckinQueueStore } from '@/stores/checkinQueueStore';
 import { useDestinationStore } from '@/stores/destinationStore';
 import { useFieldStore } from '@/stores/fieldStore';
+import { useTripStore } from '@/stores/tripStore';
 import { useVisitStore } from '@/stores/visitStore';
-import { MapSheetLayout, sheetScrollableStyle, useSheetBottomInset } from '@/components/MapSheetLayout';
-import { Button } from '@/components/ui/Button';
-import { OverflowButton } from '@/components/ui/NavHeader';
-import { showActionSheet } from '@/components/ui/ActionSheet';
-import { confirm } from '@/components/ui/ConfirmDialog';
-import { toast } from '@/components/ui/Toast';
-import {
-  VISIT_STATUS_BADGE,
-  DESTINATION_STATUS_BADGE,
-} from '@/theme/statusBadge';
-import type { Visit } from '@/types/entities';
-import { TripProgressStrip } from '@/components/trips/TripProgressStrip';
-import { CurrentDestCard } from '@/components/trips/CurrentDestCard';
-import { AllDoneCard } from '@/components/trips/AllDoneCard';
-import { DestinationRow } from '@/components/trips/DestinationRow';
-import { AddDestinationModal } from '@/components/trips/AddDestinationModal';
-import { useQuickPhoto } from '@/components/fields/useQuickPhoto';
-import { QuickPhotoSheet } from '@/components/fields/QuickPhotoSheet';
-import { navigateToTripDetail } from '@/utils/postTripFlow';
 import { runAfterNextPush } from '@/utils/afterPush';
-import { trips as tripsApi, ROUTE_MAX_WAYPOINTS } from '@/api';
-import { VISIT_STATUS_LABEL } from '@/types/entities';
-import { describeOptimizeAlgorithm } from '@/utils/routeOptimize';
-import { useOptimizeRoute } from '@/components/trips/useOptimizeRoute';
-import { spacing } from '@/theme/spacing';
-import type { Destination } from '@/types/entities';
+import { deferSkip, flushDeferredSkips, undoSkip, UNDO_WINDOW_MS } from '@/utils/deferredSkip';
+import { fieldActionStatus } from '@/utils/fieldStatus';
+import { fieldTitle } from '@/utils/fieldFacets';
+import { peekUserLocation, type LatLng } from '@/utils/geolocation';
+import { withObjectJosa } from '@/utils/josa';
+import { openRouteTo } from '@/utils/navigation';
+import { formatDistanceM } from '@/utils/nearestField';
+import { navigateToTripDetail } from '@/utils/postTripFlow';
+import { haversineKm } from '@/utils/routeOptimize';
+import { fmtSpan } from '@/utils/tripFormat';
+import { loadTripStartPoint } from '@/utils/tripStartPoint';
+import { c2, elevation2, radius2, space } from '@/theme/v2';
+import type { Destination, Field } from '@/types/entities';
+import type { MapPinKind } from '@/components/KakaoMapWebView';
 
-// ----- backend-backlog §22 헬퍼 -----
-// 목적지 배열 → 경로 좌표열. 좌표가 없는 현장(0,0)은 건너뛴다.
-function pointsOfDestinations(
-  dests: readonly Destination[],
-  getField: (id: string) => { latitude: number; longitude: number } | undefined,
-): { lat: number; lng: number }[] {
-  const pts: { lat: number; lng: number }[] = [];
-  for (const d of dests) {
-    const f = getField(d.fieldId);
-    if (!f) continue;
-    if (f.latitude === 0 && f.longitude === 0) continue;
-    pts.push({ lat: f.latitude, lng: f.longitude });
-  }
-  return pts;
-}
+// Figma 7(538:2149): 아래 패널 200(탭 바 위), 지도 버튼은 패널 위 16, 경고 줄(60)이 있으면 그 위로.
+const PANEL_H = 200;
+const ROW_H = 60;
+// '도착'으로 보는 거리(7-6). 인수인계 v135·결정: 목적지 100m 안.
+const ARRIVE_M = 100;
+const LOCATION_REFRESH_MS = 30_000;
+const CLOCK_MS = 30_000;
+// 펼친 목적지 목록의 최대 높이(화면 높이 비율).
+const LIST_MAX_RATIO = 0.4;
 
-/** 좌표열의 동일성 키 — 재요청 판단과 중복 호출 차단에 공유. */
-function routeKeyOf(pts: readonly { lat: number; lng: number }[]): string {
-  return pts.map((p) => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`).join('|');
-}
+const hasCoords = (f: Pick<Field, 'latitude' | 'longitude'> | undefined): f is Field =>
+  !!f && Number.isFinite(f.latitude) && Number.isFinite(f.longitude) && !(f.latitude === 0 && f.longitude === 0);
+const ll = (f: Field): LatLng => ({ lat: f.latitude, lng: f.longitude });
 
 /**
- * 실도로 경로 요청. 실패(503 kakao_provider_unavailable 등)는 null 로 삼킨다 —
- * 호출 측은 직선 폴리라인·직선 ETA 로 폴백하면 되고, 지도는 계속 쓸모 있으므로
- * 사용자를 Alert 로 막지 않는다.
+ * 7 외근 진행(외근 탭 첫 화면, 외근 중). 상태: 7-1 종료 확인 · 7-2 오프라인 저장 · 7-3 저장 실패 · 7-6 도착 ·
+ * 7-7 목적지 없음 · 7-8 1곳 방문 후 · 7-9 건너뛴 뒤 · 8-6 기록 메뉴. 7-5 길 안내는 카카오맵 앱(utils/navigation).
  */
-async function requestRoute(
-  tripId: string,
-  pts: { lat: number; lng: number }[],
-): Promise<{ vertexes?: { lat: number; lng: number }[]; distance?: number; duration?: number } | null> {
-  if (pts.length < 2) return null;
-  if (pts.length - 2 > ROUTE_MAX_WAYPOINTS) return null;
-  try {
-    return await tripsApi.route(tripId, {
-      origin: pts[0],
-      destination: pts[pts.length - 1],
-      waypoints: pts.slice(1, -1),
-    });
-  } catch (e) {
-    if (__DEV__) console.warn('[trips/route] 실도로 경로 실패, 직선 폴백', e);
-    return null;
-  }
-}
-
 export default function ActiveTrip() {
   const router = useRouter();
-
-  // 종료 직후(endingTripId)에도 그 외근을 계속 그린다 — 이동이 끝나기 전에 화면이 비거나 목록으로
-  // 바뀌지 않게(tripStore.endingTripId 주석).
-  const activeTripId = useTripStore((s) => s.activeTripId ?? s.endingTripId);
-  const clearEnding = useTripStore((s) => s.clearEnding);
-  const endTrip = useTripStore((s) => s.end);
-  const tripBusy = useTripStore((s) => s.busy);
-
+  // 종료 직후(endingTripId)에도 그 외근을 계속 그린다 — 이동이 끝나기 전에 화면이 비거나 목록으로 바뀌지 않게.
+  const tripId = useTripStore((s) => s.activeTripId ?? s.endingTripId);
+  const trip = useTripStore((s) => (tripId ? s.trips.find((t) => t.id === tripId) : undefined));
+  const busy = useTripStore((s) => s.busy);
   const allDestinations = useDestinationStore((s) => s.destinations);
-  const markSkipped = useDestinationStore((s) => s.markSkipped);
-  const removeByTrip = useDestinationStore((s) => s.removeByTrip);
-  const reorderDestinations = useDestinationStore((s) => s.reorder);
-  const fetchDestinations = useDestinationStore((s) => s.fetchForTrip);
-
-  const getField = useFieldStore((s) => s.getById);
-  const loadFieldDetail = useFieldStore((s) => s.loadDetail);
+  // getById 는 참조가 고정이라 현장이 늦게 와도 다시 그려지지 않는다 — 배열을 구독한다.
+  const fields = useFieldStore((s) => s.fields);
   const allVisits = useVisitStore((s) => s.visits);
+  const queue = useCheckinQueueStore((s) => s.items);
+  const tabBarH = useBottomChromeStore((s) => s.tabBar);
+  const realInsets = useRealSafeAreaInsets();
 
-  const allTrips = useTripStore((s) => s.trips);
-  const activeTrip = useMemo(
-    () => (activeTripId ? allTrips.find((t) => t.id === activeTripId) : null),
-    [allTrips, activeTripId],
-  );
+  const mapRef = useRef<KakaoMapHandle>(null);
+  const plusRef = useRef<View>(null);
+  const [containerH, setContainerH] = useState(0);
+  const [liveLoc, setLiveLoc] = useState<LatLng | null>(null);
+  const [startPoint, setStartPoint] = useState<LatLng | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  const [expanded, setExpanded] = useState(false);
+  const [menuAnchor, setMenuAnchor] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  // 스낵바(7-6·7-9)가 떠 있는 동안 지도 버튼을 그 위로 올린다(Figma 7-9).
+  const [snackUntil, setSnackUntil] = useState(0);
+  // 길찾기를 연 목적지 — 앱으로 돌아왔을 때 그 근처면 7-6 도착 스낵바.
+  const navTargetRef = useRef<string | null>(null);
 
-  const { optimizing, run: runOptimize } = useOptimizeRoute();
-  // 55% 시트에서 목록 끝(외근 종료 버튼)까지 스크롤되게 — useSheetBottomInset 주석.
-  const listBottomPad = useSheetBottomInset(spacing.xl);
-  const [addOpen, setAddOpen] = useState(false);
+  const fieldById = useMemo(() => new Map(fields.map((f) => [f.id, f])), [fields]);
 
-  // Quick Photo — 외근 중 현장 도착 → 촬영이 주 사용처 (계획 §4-3 진입점 확장).
-  // 훅 호출은 아래 activeTripId early return 보다 위에 — hook 순서 고정.
-  const quickPhoto = useQuickPhoto();
-
-  // 진입 시 서버에서 목적지 하이드레이트 — 다른 기기/세션/캐시정리 후 콜드스타트 대비
-  // (backend-backlog §11). 로컬 캐시가 비었을 때만 fetch:
-  //   - 방금 start 하이드레이트했거나 진행 중 낙관적 skip/reorder 가 있는 경우, in-flight GET 가
-  //     이를 stale 서버 스냅샷으로 되돌리는 race 를 차단하고 중복 GET 도 제거.
-  //   - 캐시가 비면(콜드스타트·크로스 기기) 그때만 서버에서 받아온다.
+  // 진입 시 목적지·현장 하이드레이트(콜드스타트·다른 기기). 로컬 캐시가 있으면 그대로 쓴다 —
+  // 진행 중인 낙관적 건너뛰기를 늦게 온 서버 응답이 되돌리지 않게.
   useEffect(() => {
-    if (!activeTripId) return;
-    if (useDestinationStore.getState().byTrip(activeTripId).length > 0) return;
-    void fetchDestinations(activeTripId);
-  }, [activeTripId, fetchDestinations]);
+    if (!tripId) return;
+    if (useDestinationStore.getState().byTrip(tripId).length === 0) void useDestinationStore.getState().fetchForTrip(tripId);
+    if (useFieldStore.getState().listStatus === 'idle') void useFieldStore.getState().hydrate();
+    void loadTripStartPoint(tripId).then(setStartPoint);
+  }, [tripId]);
 
-  const destinations = useMemo<Destination[]>(() => {
-    if (activeTripId === null) return [];
-    return allDestinations
-      .filter((d) => d.tripId === activeTripId)
-      .sort((a, b) => a.order - b.order);
-  }, [allDestinations, activeTripId]);
-
-  // 지도 배경엔 진행 중 외근의 현장만. 다른 현장은 흐림.
-  const tripFieldIds = useMemo(
-    () => destinations.map((d) => d.fieldId),
-    [destinations],
+  const destinations = useMemo<Destination[]>(
+    () => (tripId ? allDestinations.filter((d) => d.tripId === tripId).sort((a, b) => a.order - b.order) : []),
+    [allDestinations, tripId],
   );
-
-  // 진입 시 destination field 별 detail upsert — 새 세션/재진입 후 fieldStore 가
-  // 비어있어 지도 마커가 0개로 보이던 회로 차단. tripFieldIds 가 변할 때만 재실행 (memo),
-  // 이미 store 에 있는 field 는 건너뜀 (사이클 내 중복 호출도 자연스럽게 차단).
-  // 이전 sort+join+split 우회·ref Set 방식 제거 — Set 이 영원히 누적되어
-  // 같은 id 가 reorder/재추가됐을 때 stale 데이터가 박히던 회로도 함께 차단.
   useEffect(() => {
-    for (const fid of tripFieldIds) {
-      if (!fid) continue;
-      if (useFieldStore.getState().getById(fid)) continue;
-      void loadFieldDetail(fid);
+    for (const d of destinations) {
+      if (!useFieldStore.getState().getById(d.fieldId)) void useFieldStore.getState().loadDetail(d.fieldId);
     }
-  }, [tripFieldIds, loadFieldDetail]);
-
-  // ----- backend-backlog §22: 실도로 차량 경로 -----
-  // 지도의 점선은 지금까지 목적지를 직선으로 이었다(1단계). 백엔드 프록시가 배포돼
-  // 실제 도로 좌표열로 바꾼다. 순서는 직선과 동일하게 destinations 순 — 두 표현이 어긋나면
-  // 순번 마커와 선이 다른 이야기를 하게 된다.
-  const routePoints = useMemo(
-    () => pointsOfDestinations(destinations, getField),
-    [destinations, getField],
-  );
-
-  // 좌표열이 실제로 바뀔 때만 재요청 — destinations 객체 정체성 변화로 매 렌더 호출되는 걸 막는다.
-  const routeKey = useMemo(() => routeKeyOf(routePoints), [routePoints]);
-
-  const [routeVertexes, setRouteVertexes] = useState<
-    { lat: number; lng: number }[] | undefined
-  >(undefined);
-  // 이미 요청을 마친 좌표열 — 재최적화가 직접 경로를 받아오면 여기에 기록해
-  // 곧이은 이펙트의 중복 호출을 막는다. 카카오모빌리티 무료 쿼터가 유한하다(백로그 §22).
-  const fetchedRouteKeyRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (!activeTripId || routePoints.length < 2) {
-      setRouteVertexes(undefined);
-      return;
-    }
-    if (fetchedRouteKeyRef.current === routeKey) return;
-    // 경유지 상한(스펙 30). 초과분을 잘라내면 실제로 가지 않는 지름길이 그려지므로
-    // 아예 요청하지 않고 직선 폴백을 유지한다.
-    if (routePoints.length - 2 > ROUTE_MAX_WAYPOINTS) {
-      setRouteVertexes(undefined);
-      return;
-    }
-    let cancelled = false;
-    void (async () => {
-      const res = await requestRoute(activeTripId, routePoints);
-      if (cancelled) return;
-      fetchedRouteKeyRef.current = routeKey;
-      setRouteVertexes(res?.vertexes && res.vertexes.length >= 2 ? res.vertexes : undefined);
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // routeKey 가 좌표열의 진짜 변화를 대표한다 — routePoints 자체는 매 렌더 새 배열.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTripId, routeKey]);
-
-  // 진행률 통계 — arrived + skipped 가 처리됨, pending 만 남음.
-  const progress = useMemo(() => {
-    const total = destinations.length;
-    const arrived = destinations.filter((d) => d.status === 'arrived').length;
-    const skipped = destinations.filter((d) => d.status === 'skipped').length;
-    const resolved = arrived + skipped;
-    return { total, arrived, skipped, resolved };
   }, [destinations]);
 
-  // O(1) visit lookup. 매 row 마다 allVisits.find 풀스캔하던 회로 차단.
-  const visitByFieldId = useMemo(() => {
-    const map = new Map<string, Visit>();
-    if (!activeTripId) return map;
-    for (const v of allVisits) {
-      if (v.tripId === activeTripId) map.set(v.fieldId, v);
-    }
-    return map;
-  }, [allVisits, activeTripId]);
+  const tripVisits = useMemo(() => (tripId ? allVisits.filter((v) => v.tripId === tripId) : []), [allVisits, tripId]);
+  const visitByField = useMemo(() => new Map(tripVisits.map((v) => [v.fieldId, v])), [tripVisits]);
+  // 이 외근의 저장 대기·실패(7-2·7-3). 다른 외근의 항목은 여기서 보이지 않는다.
+  const tripQueue = useMemo(() => queue.filter((q) => q.tripId === tripId), [queue, tripId]);
+  // 체크인 시각: 서버 방문 + 저장 대기 중인 체크인(기기 시각).
+  const checkedAt = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const v of tripVisits) m.set(v.fieldId, v.visitedAt);
+    for (const q of tripQueue) if (!m.has(q.fieldId)) m.set(q.fieldId, q.visitedAt);
+    return m;
+  }, [tripVisits, tripQueue]);
 
-  // 시작 시각만 — 경과 시간·진행률(%)은 표시하지 않는다(명세 FE-OUT-04).
-  const startedAtLabel = useMemo(() => {
-    if (!activeTrip) return null;
-    const start = new Date(activeTrip.startedAt);
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${pad(start.getHours())}:${pad(start.getMinutes())} 시작`;
-  }, [activeTrip]);
-
-  const currentDest = useMemo(
-    () => destinations.find((d) => d.status === 'pending'),
-    [destinations],
-  );
-
-  const allDone =
-    activeTripId !== null && destinations.length > 0 && !currentDest;
-
-  const pendingDests = useMemo(
-    () => destinations.filter((d) => d.status === 'pending'),
-    [destinations],
-  );
-  const lastArrivedDest = useMemo(() => {
+  const next = useMemo(() => destinations.find((d) => d.status === 'pending'), [destinations]);
+  const nextField = next ? fieldById.get(next.fieldId) : undefined;
+  const arrivedCount = destinations.filter((d) => d.status === 'arrived').length;
+  // 마지막으로 체크인한 목적지 — 7-8: 내 위치·다음 목적지 거리는 그 현장 기준(v135).
+  const lastArrived = useMemo(() => {
     const arrived = destinations.filter((d) => d.status === 'arrived');
-    return arrived.length > 0 ? arrived[arrived.length - 1] : null;
-  }, [destinations]);
+    if (arrived.length === 0) return null;
+    const at = (d: Destination) => checkedAt.get(d.fieldId) ?? '';
+    return [...arrived].sort((a, b) => at(a).localeCompare(at(b)) || a.order - b.order)[arrived.length - 1];
+  }, [destinations, checkedAt]);
+  const lastArrivedField = lastArrived ? fieldById.get(lastArrived.fieldId) : undefined;
+  // v135: 체크인한 뒤에는 내 위치를 방금 체크인한 현장으로 보고, 다음 목적지 거리도 그 현장 기준.
+  // 실제 위치(liveLoc)는 7-6 도착 판단에만 쓴다.
+  const origin: LatLng | null = hasCoords(lastArrivedField) ? ll(lastArrivedField) : liveLoc;
+  const myDot = origin;
 
-  // 외근 탭 첫 화면(app/(tabs)/trips/index.tsx)이 진행 중·종료 직후에만 이 화면을 그리므로 여기 올 일은 없다.
-  if (activeTripId === null) return null;
+  const queuedForTrip = tripQueue.length;
+  // 방문 수: 목적지 도착 + 목적지 아닌 곳에서 체크인한 방문(지금 위치 기록) + 저장 대기.
+  const visitCount = Math.max(arrivedCount, tripVisits.length + tripQueue.filter((q) => !visitByField.has(q.fieldId)).length);
+  const noDestination = !next;
 
-  const handleNavigate = () => {
-    if (!currentDest) return;
-    const field = getField(currentDest.fieldId);
-    if (!field) return;
-    // 백엔드 분석/사이드이펙트(handoff §6c — 길찾기 트리거 시 destination 전이·감사 로그)
-    // 보존을 위해 fire-and-forget POST. 응답은 사용하지 않음 (인앱 길안내는 아래 router.push).
-    if (activeTripId) {
-      void tripsApi
-        .navigationDeepLinks(activeTripId, {
-          fieldId: field.id,
-          destinationName: field.address,
-          destinationLat: field.latitude,
-          destinationLng: field.longitude,
-        })
-        .catch(() => {
-          // 분석 호출 실패는 사용자 흐름 차단 X.
+  // === 시계·위치 ===
+  useFocusEffect(
+    useCallback(() => {
+      let alive = true;
+      const readLoc = () => void peekUserLocation().then((p) => alive && p && setLiveLoc(p));
+      readLoc();
+      setNow(Date.now());
+      const locTimer = setInterval(readLoc, LOCATION_REFRESH_MS);
+      const clock = setInterval(() => setNow(Date.now()), CLOCK_MS);
+      return () => {
+        alive = false;
+        clearInterval(locTimer);
+        clearInterval(clock);
+        // 화면을 떠나면 되돌리기 창을 기다리지 않고 건너뛰기를 보낸다.
+        void flushDeferredSkips();
+      };
+    }, []),
+  );
+
+  // 앱이 뒤로 가면 건너뛰기를 보낸다. 앞으로 오면 위치를 다시 읽고, 길찾기를 열었던 목적지 근처면 7-6.
+  const nextRef = useRef<{ dest?: Destination; field?: Field }>({});
+  nextRef.current = { dest: next, field: nextField };
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (st) => {
+      // inactive(알림 센터·전화 수신 등 잠깐)는 떠난 것으로 보지 않는다.
+      if (st === 'background') {
+        void flushDeferredSkips();
+        return;
+      }
+      if (st !== 'active') return;
+      setNow(Date.now());
+      void peekUserLocation().then((p) => {
+        if (!p) return;
+        setLiveLoc(p);
+        const { dest, field } = nextRef.current;
+        if (!dest || !hasCoords(field) || navTargetRef.current !== dest.fieldId) return;
+        if (haversineKm(p, ll(field)) * 1000 > ARRIVE_M) return;
+        navTargetRef.current = null;
+        // 버튼이 지도 버튼 위치를 되돌리는 상태 변경과 화면 이동을 한 배치에 섞지 않는다.
+        showSnack(`${fieldTitle(field)}에 도착했어요`, {
+          label: '체크인',
+          onPress: () => setTimeout(() => router.push(checkinHref(dest.fieldId) as never), 0),
         });
-    }
-    // 인앱 카카오 길안내 — 외부 앱 강제 분기 차단.
-    router.push({
-      pathname: '/(tabs)/trips/navigate',
-      params: {
-        name: field.address,
-        lat: String(field.latitude),
-        lng: String(field.longitude),
-      },
-    } as never);
-  };
-
-  const handleCheckIn = () => {
-    if (!currentDest) return;
-    router.push(`/(tabs)/trips/fields/${currentDest.fieldId}/checkin` as never);
-  };
-
-  // 건너뛰기 — 되돌릴 수 없어 한 번 확인한다. 결과는 미정 유지(FE-OUT-07).
-  const handleSkip = async () => {
-    if (!currentDest) return;
-    const target = currentDest;
-    const ok = await confirm({
-      title: '이 방문을 건너뛸까요?',
-      message: '결과는 미정으로 남고 다음 목적지로 넘어갑니다.',
-      confirmLabel: '건너뛰기',
+      });
     });
-    if (!ok) return;
-    markSkipped(target.id);
-    toast('이 방문을 건너뛰었습니다');
+    return () => sub.remove();
+    // showSnack 은 ref·setState 만 쓴다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router]);
+
+  // === 지도 ===
+  const settings = useSharedMapSettings(fields, 'baseMap');
+  const markers = useMemo<KakaoMapMarker[]>(() => {
+    const out: KakaoMapMarker[] = [];
+    destinations.forEach((d, i) => {
+      const f = fieldById.get(d.fieldId);
+      if (!hasCoords(f)) return;
+      const kind: MapPinKind = d.status === 'arrived' ? 'visited' : d.status === 'skipped' ? 'skipped' : fieldActionStatus(f);
+      out.push({
+        id: f.id,
+        lat: f.latitude,
+        lng: f.longitude,
+        label: fieldTitle(f),
+        color: STATUS_PIN_COLOR[kind],
+        pin: kind,
+        order: i + 1,
+        selected: d.id === next?.id,
+        selectedSize: d.id === next?.id ? 'next' : undefined,
+      });
+    });
+    // 건너뛴·방문한 핀을 먼저 그려 남은 목적지가 위에 오게 한다.
+    return out.sort((a, b) => Number(a.pin === 'visited' || a.pin === 'skipped') > Number(b.pin === 'visited' || b.pin === 'skipped') ? -1 : 0);
+  }, [destinations, fieldById, next?.id]);
+
+  const paths = useMemo<MapPath[]>(() => {
+    const out: MapPath[] = [];
+    // 지나온 길(회색 실선): 출발 → 방문한 목적지(체크인 순).
+    const visited = destinations
+      .filter((d) => d.status === 'arrived')
+      .sort((a, b) => (checkedAt.get(a.fieldId) ?? '').localeCompare(checkedAt.get(b.fieldId) ?? ''))
+      .map((d) => fieldById.get(d.fieldId))
+      .filter(hasCoords)
+      .map(ll);
+    // 출발 → 방문한 곳 → 지금 위치(Figma 7: 방문 0곳이면 출발에서 내 위치까지).
+    const done = [...(startPoint ? [startPoint] : []), ...visited];
+    const last = done[done.length - 1];
+    if (myDot && (!last || last.lat !== myDot.lat || last.lng !== myDot.lng)) done.push(myDot);
+    if (done.length >= 2) out.push({ points: done, tone: 'muted' });
+    // 남은 길(파랑 점선): 지금 기준점 → 남은 목적지 순서대로. 건너뛴 곳(되돌리기 대기 포함)은 빼고 잇는다.
+    const rest = destinations
+      .filter((d) => d.status === 'pending')
+      .map((d) => fieldById.get(d.fieldId))
+      .filter(hasCoords)
+      .map(ll);
+    const remain = [...(origin ? [origin] : []), ...rest];
+    if (remain.length >= 2) out.push({ points: remain, tone: 'brand', dotted: true });
+    return out;
+  }, [destinations, fieldById, checkedAt, startPoint, origin?.lat, origin?.lng]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // === 저장 대기·실패(7-2·7-3) ===
+  const pendingQ = tripQueue.filter((q) => q.state === 'pending');
+  const failedQ = tripQueue.filter((q) => q.state === 'failed');
+  const warning: 'failed' | 'offline' | null = failedQ.length > 0 ? 'failed' : pendingQ.length > 0 ? 'offline' : null;
+  const retry = () => void useCheckinQueueStore.getState().flush({ retryFailed: true });
+
+  // === 동작 ===
+  const showSnack = (message: string, action: { label: string; onPress: () => void }) => {
+    // 탭 바 + 아래 패널 + 16 위(Figma 7-6·7-9 스낵바 484~544). bottomOffset 은 창 safe area 를 뺀 값이고
+    // 탭 바 실측 높이(tabBarH)는 safe area 를 포함한다.
+    const bottomOffset = Math.max(0, tabBarH - realInsets.bottom) + PANEL_H + space[16];
+    snackbar.show({
+      message,
+      action: {
+        label: action.label,
+        onPress: () => {
+          setSnackUntil(0);
+          action.onPress();
+        },
+      },
+      duration: UNDO_WINDOW_MS,
+      bottomOffset,
+    });
+    setSnackUntil(Date.now() + UNDO_WINDOW_MS);
+    setTimeout(() => setSnackUntil((u) => (u <= Date.now() ? 0 : u)), UNDO_WINDOW_MS + 50);
   };
 
-  // `···` — 촬영 / 이 방문 건너뛰기 / 현장 추가 (명세 FE-OUT-06).
-  // '순서 다시 추천' 은 명세에 없지만 기존 재최적화 기능을 잃지 않도록 같은 시트 끝에 둔다.
-  const openMore = () => {
-    showActionSheet([
-      { label: '촬영', icon: 'camera', onPress: () => void quickPhoto.start() },
-      ...(currentDest
-        ? [{ label: '이 방문 건너뛰기', icon: 'play-skip-forward' as const, onPress: () => void handleSkip() }]
-        : []),
-      { label: '현장 추가', icon: 'add', onPress: () => setAddOpen(true) },
-      ...(pendingDests.length >= 2
-        ? [
-            {
-              label: '남은 순서 다시 추천',
-              icon: 'sparkles-outline' as const,
-              onPress: () => void handleReoptimize(),
-            },
-          ]
-        : []),
-    ]);
-  };
-
-  const applyOptimizedOrder = async (
-    pendingOrderedIds: string[],
-    summary: {
-      algorithm: string;
-      totalDistanceKm: number;
-      totalEtaMinutes: number;
-      // 백엔드 호출이 실패해 클라이언트 계산으로 대체됐을 때만 채운다 — algorithm 자체는
-      // 항상 실제 알고리즘 코드로 유지하고, 대체 사유는 별도 줄로 보여준다.
-      offlineReason?: string;
-    },
-  ) => {
-    if (!activeTripId) return;
-    const resolvedIds = destinations
-      .filter((d) => d.status !== 'pending')
-      .map((d) => d.id);
-    const nextOrder = [...resolvedIds, ...pendingOrderedIds];
-
-    // backend-backlog §22 — 새 순서의 **실도로** 거리·소요를 받아 직선 추정치를 대체한다.
-    // 여기서 받은 결과를 지도 폴리라인에도 물려 경로 이펙트가 같은 순서를 또 요청하지 않게 한다.
-    //
-    // 순서가 중요하다: reorderDestinations 가 리렌더를 유발하면 경로 이펙트가 **먼저** 발화한다.
-    // 그래서 키를 미리 선점해 둬야 이펙트가 건너뛴다. 실측(2026-07-28): 선점 없이 두면
-    // 재최적화 한 번에 /route 가 2회 호출됐다 — 카카오모빌리티 쿼터가 유한하다.
-    const byId = new Map(destinations.map((d) => [d.id, d]));
-    const orderedDests = nextOrder
-      .map((id) => byId.get(id))
-      .filter((d): d is Destination => d !== undefined);
-    const pts = pointsOfDestinations(orderedDests, getField);
-    fetchedRouteKeyRef.current = routeKeyOf(pts);
-    reorderDestinations(activeTripId, nextOrder);
-
-    const road = await requestRoute(activeTripId, pts);
-    const vertexes =
-      road?.vertexes && road.vertexes.length >= 2 ? road.vertexes : undefined;
-    // 실패하면 새 순서의 직선으로 폴백한다 — 이전 순서의 실도로 선을 남겨두면
-    // 지도가 실제와 다른 동선을 보여준다.
-    setRouteVertexes(vertexes);
-    // 못 받았으면 선점을 풀어 다음 기회(재마운트·순서 변경)에 다시 시도하게 둔다.
-    if (!road) fetchedRouteKeyRef.current = null;
-
-    const km =
-      road?.distance != null ? road.distance / 1000 : summary.totalDistanceKm;
-    const min =
-      road?.duration != null
-        ? Math.max(1, Math.round(road.duration / 60))
-        : summary.totalEtaMinutes;
-    // 실도로 값인지 직선 추정인지 밝힌다 — 숫자만 바뀌면 사용자가 오차를 오해한다.
-    const basis = road?.distance != null ? '실도로 기준' : '직선거리 추정';
-    const offlineLine = summary.offlineReason
-      ? `\n(서버 계산 실패 — 기기에서 계산: ${summary.offlineReason})`
-      : '';
-    Alert.alert(
-      '경로 재최적화 완료',
-      `알고리즘: ${describeOptimizeAlgorithm(summary.algorithm)}\n총 거리: ${km.toFixed(1)} km (${basis})\n예상 ETA: ${min}분${offlineLine}`,
-    );
-  };
-
-  const handleReoptimize = async () => {
-    if (!activeTripId || pendingDests.length < 2) return;
-
-    const pendingFields = pendingDests
-      .map((d) => {
-        const f = getField(d.fieldId);
-        if (!f) return null;
-        return {
-          destId: d.id,
-          fieldId: f.id,
-          name: f.address,
-          lat: f.latitude,
-          lng: f.longitude,
-        };
-      })
-      .filter((x): x is NonNullable<typeof x> => x !== null);
-
-    if (pendingFields.length < 2) {
-      Alert.alert('재최적화 불가', '좌표가 있는 남은 목적지가 2개 이상 필요합니다.');
-      return;
+  const openRoute = () => {
+    if (!next || !hasCoords(nextField)) return;
+    navTargetRef.current = next.fieldId;
+    // 서버 기록용(길찾기 트리거 감사 로그). 응답은 쓰지 않는다.
+    if (tripId) {
+      void tripsApi
+        .navigationDeepLinks(tripId, {
+          fieldId: nextField.id,
+          destinationName: nextField.address,
+          destinationLat: nextField.latitude,
+          destinationLng: nextField.longitude,
+        })
+        .catch(() => {});
     }
-
-    const startSource = lastArrivedDest ? getField(lastArrivedDest.fieldId) : null;
-    const start = startSource
-      ? { lat: startSource.latitude, lng: startSource.longitude }
-      : { lat: pendingFields[0].lat, lng: pendingFields[0].lng };
-
-    // useOptimizeRoute 는 fieldId 공간에서 동작한다 — 로컬 전용인 destId 는 별도 프로퍼티로
-    // 실어 보내고, 결과에서 그대로 꺼내 쓴다(예전엔 fieldToDest Map 을 따로 만들었다).
-    const nodes = pendingFields.map((f) => ({
-      id: f.fieldId,
-      destId: f.destId,
-      name: f.name,
-      lat: f.lat,
-      lng: f.lng,
-    }));
-    const result = await runOptimize(start, nodes, (body) =>
-      tripsApi.optimizeNavigation(activeTripId, body),
-    );
-    const orderedDestIds = result.ordered.map((n) => n.destId);
-    await applyOptimizedOrder(
-      orderedDestIds,
-      result.source === 'fallback'
-        ? { ...result.summary, offlineReason: result.fallbackReason }
-        : result.summary,
-    );
+    void openRouteTo({ name: fieldTitle(nextField), lat: nextField.latitude, lng: nextField.longitude }, liveLoc);
   };
 
-  const finalizeEnd = (endedTripId: string, originalTripId: string | null) => {
-    // 종료 직후 외근 상세(detail) 로 단일 진입 — 보고서 작성 prompt 는 detail footer CTA 가 가져감.
-    // 먼저 이동하고, 이 화면을 바꾸는 정리(목적지 비우기·종료 표식 해제 → 첫 화면이 목록으로)는
-    // 전환이 끝난 뒤에 한다 — 같은 배치에서 떠나는 화면을 바꾸지 않는다.
-    // 순서: 맡겨 두고 → 이동. 상세의 push 전환이 끝나면(transitionEnd) 실행된다.
+  const checkIn = () => {
+    if (!next) return;
+    router.push(checkinHref(next.fieldId) as never);
+  };
+
+  // 지금 위치 기록(8-6·7-7) — TODO(PR7): 체크인 화면이 '지금 위치' 모드(가까운 현장 자동 연결 8-4 · 새 현장 8-3)를 구현한다.
+  const recordHere = () => router.push({ pathname: '/(tabs)/trips/fields/[id]/checkin', params: { id: 'here', mode: 'here' } } as never);
+  // 사진으로 여러 곳 등록(8-7) — TODO(PR9): 화면 구현.
+  const photoBatch = () => router.push('/photo-batch' as never);
+  const addDestination = () => router.push('/(tabs)/trips/fields' as never);
+
+  const skip = () => {
+    if (!next) return;
+    const dest = next;
+    const name = nextField ? fieldTitle(nextField) : '이 현장';
+    deferSkip(dest.id);
+    showSnack(`${withObjectJosa(name)} 건너뛰었어요`, { label: '되돌리기', onPress: () => void undoSkip(dest.id) });
+  };
+
+  const openMenu = () => {
+    plusRef.current?.measureInWindow((x, y, w, h) => setMenuAnchor({ x, y, w, h }));
+  };
+
+  const finalizeEnd = (endedTripId: string) => {
+    // 먼저 이동하고, 이 화면을 바꾸는 정리(목적지 비우기·종료 표식 해제 → 첫 화면이 1 로)는 전환이 끝난 뒤에.
     runAfterNextPush(() => {
-      if (originalTripId !== null) removeByTrip(originalTripId);
-      clearEnding();
+      useDestinationStore.getState().removeByTrip(endedTripId);
+      useTripStore.getState().clearEnding();
     });
     navigateToTripDetail(router, endedTripId);
   };
 
-  const handleEnd = async () => {
-    if (tripBusy) {
-      console.warn('[trips/end] busy — ignoring click');
-      return;
+  const endingRef = useRef(false);
+  const endTrip = async () => {
+    // 두 번 누름 막기 — busy 는 서버 요청 동안만 켜져 확인 창·대기열 보내기 사이가 빈다.
+    if (busy || endingRef.current) return;
+    endingRef.current = true;
+    try {
+      await endTripInner();
+    } finally {
+      endingRef.current = false;
     }
-    const tripId = activeTripId;
-    const r = await endTrip();
-    if (r.ok) {
-      finalizeEnd(r.trip.id, tripId);
-      return;
-    }
-    if ('needsConfirm' in r) {
+  };
+  const endTripInner = async () => {
+    // 방문 0곳이면 7-1(문구는 앱 고정). 1곳 이상이면 바로 종료 → 3 외근 상세.
+    const zero = visitCount === 0 && queuedForTrip === 0;
+    if (zero) {
       const ok = await confirm({
-        title: '외근 종료 확인',
-        message: r.message,
+        title: '외근을 종료할까요?',
+        message: '아직 방문한 현장이 없어요. 종료하면 방문 0곳으로 기록되고, 이 외근으로는 보고서를 만들 수 없어요.',
+        cancelLabel: '계속하기',
         confirmLabel: '종료',
         destructive: true,
       });
       if (!ok) return;
-      const force = await endTrip(true);
-      if (force.ok) {
-        finalizeEnd(force.trip.id, tripId);
-        return;
-      }
-      // force=true 가 또 needsConfirm 이면 서버가 forceEndWithoutVisit 를 못 받은 것 — 침묵하지 않는다.
-      Alert.alert(
-        '외근 종료 실패',
-        'needsConfirm' in force
-          ? '외근 종료가 처리되지 않았습니다. 잠시 후 다시 시도해주세요.'
-          : force.error,
-      );
+    }
+    snackbar.hide();
+    // 건너뛰기·저장 대기 체크인을 먼저 보낸다. 끝낸 뒤에는 이 외근에 붙일 수 없다(backlog 2차 H).
+    await Promise.all([flushDeferredSkips(), useCheckinQueueStore.getState().flush({ retryFailed: true })]);
+    const left = useCheckinQueueStore.getState().items.filter((q) => q.tripId === tripId).length;
+    if (left > 0) {
+      const ok = await confirm({
+        title: '저장하지 못한 기록이 있어요',
+        message: `지금 끝내면 체크인 ${left}건은 이 외근에 저장되지 않아요.`,
+        cancelLabel: '계속하기',
+        confirmLabel: '종료',
+        destructive: true,
+      });
+      if (!ok) return;
+    }
+    const end = useTripStore.getState().end;
+    let r = await end(zero);
+    // 앱은 방문이 있다고 보는데 서버는 0곳(저장 대기 등) — 이미 사용자가 종료를 골랐으니 그대로 끝낸다.
+    if (!r.ok && 'needsConfirm' in r) r = await end(true);
+    if (r.ok) {
+      finalizeEnd(r.trip.id);
       return;
     }
-    Alert.alert('오류', r.error);
+    await notice('외근을 종료하지 못했어요', 'needsConfirm' in r ? '잠시 뒤에 다시 해 주세요.' : r.error);
   };
 
-  // 함수 컴포넌트 (`() => JSX`) 형태로 ListHeaderComponent 에 넘기면 매 render 마다
-  // 새 컴포넌트 reference → FlatList 가 헤더 서브트리를 unmount/remount.
-  // React element 로 넘겨 일반 children 재조정만 받도록 함.
-  const currentDestField = currentDest ? getField(currentDest.fieldId) : undefined;
-  const listHeader = (
-    <View style={styles.header}>
-      <TripProgressStrip
-        startedAtLabel={startedAtLabel}
-        arrived={progress.arrived}
-        skipped={progress.skipped}
-        total={progress.total}
-      />
-      {currentDest ? (
-        <CurrentDestCard
-          // 상대 위치 — "전체 K곳 중 M번째" — order 가 갑자기 3 으로 점프하는 사용자 혼란 방지.
-          positionLabel={`${progress.total}곳 중 ${progress.resolved + 1}번째`}
-          address={currentDestField?.address ?? '알 수 없는 현장'}
-          addressDetail={currentDestField?.addressDetail ?? undefined}
-          onNavigate={handleNavigate}
-          onCheckIn={handleCheckIn}
-        />
-      ) : (
-        <AllDoneCard />
-      )}
-      <View style={styles.sectionTitleRow}>
-        <Text variant="bodySm" weight="bold" color="textMuted">
-          목적지 ({destinations.length})
-        </Text>
-      </View>
-    </View>
-  );
+  if (!tripId) return null;
 
-  // 종료는 외근당 한 번 — 목록 맨 아래에 둔다. 상시 고정 바에 두면 매 순간 주 CTA(길찾기·
-  // 체크인)와 자리를 다툰다. 파괴적 액션을 하단으로 내리는 건 이 저장소의 기존 패턴이다
-  // (ec6ab90 — 외근 삭제를 수정 화면 하단 위험 구역으로).
-  // 미완료가 남았으면 dangerGhost, 전부 처리되면 그때가 종료할 때이므로 destructive 로 승격.
-  const listFooter = (
-    <View style={styles.footer}>
-      <Button
-        onPress={handleEnd}
-        disabled={tripBusy}
-        loading={tripBusy}
-        // 전부 처리되면 종료가 다음 할 일이라 주 버튼으로, 남았으면 빨강 텍스트(종료를 막지는 않는다 — FE-OUT-09).
-        variant={allDone ? 'primary' : 'dangerGhost'}
-        size="lg"
-        fullWidth
-      >
-        {allDone ? '외근 종료' : `외근 종료 (미완료 ${pendingDests.length}곳)`}
-      </Button>
-    </View>
-  );
-
-  const renderItem = ({ item, index }: { item: Destination; index: number }) => {
-    const field = getField(item.fieldId);
-    const isCurrent = item.id === currentDest?.id;
-    // arrived 인 경우 visit 결과 라벨 우선 노출 (정상/부재/거절 등).
-    const visit = item.status === 'arrived' ? visitByFieldId.get(item.fieldId) ?? null : null;
-
-    const m = visit
-      ? { ...VISIT_STATUS_BADGE[visit.status], label: VISIT_STATUS_LABEL[visit.status] }
-      : DESTINATION_STATUS_BADGE[item.status];
-
-    const onPress = () => {
-      if (visit) {
-        router.push(
-          `/(tabs)/trips/visit?tripId=${visit.tripId}&visitId=${visit.id}` as never,
-        );
-      } else if (field) {
-        router.push(`/(tabs)/trips/fields/${field.id}` as never);
-      }
-    };
-
-    return (
-      <DestinationRow
-        order={index + 1}
-        address={field?.address ?? '알 수 없는 현장'}
-        addressDetail={field?.addressDetail ?? undefined}
-        statusLabel={m.label}
-        statusTone={m.tone}
-        statusShape={m.shape}
-        isCurrent={isCurrent}
-        onPress={onPress}
-      />
-    );
-  };
+  // === 표시 값 ===
+  const elapsed = `${fmtSpan(trip?.startedAt, new Date(now).toISOString()) || '0분'}째`;
+  const progressText = noDestination
+    ? `방문 ${visitCount} · ${elapsed}`
+    : `${arrivedCount}/${destinations.length} 방문 · ${elapsed}`;
+  const nextIndex = next ? destinations.findIndex((d) => d.id === next.id) + 1 : 0;
+  const nextKind = nextField ? fieldActionStatus(nextField) : 'pending';
+  const fromOrigin = hasCoords(nextField) && origin ? haversineKm(origin, ll(nextField)) * 1000 : null;
+  const fromLive = hasCoords(nextField) && liveLoc ? haversineKm(liveLoc, ll(nextField)) * 1000 : null;
+  const arrived = fromLive != null && fromLive <= ARRIVE_M;
+  const bottomStack = warning || snackUntil > now ? ROW_H + space[16] : 0;
+  const listMax = Math.max(120, containerH * LIST_MAX_RATIO);
 
   return (
-    <View style={styles.screenRoot}>
-      <MapSheetLayout
-        title="진행 중인 외근"
-        // 55% — 이동 중 쓰는 화면이라 위 절반에 지도를 남긴다. 최대(2)로 열면 지도가 60dp 만
-        // 남아 순번 마커·경로선을 정작 이 화면에서 못 본다. select·order 와 같은 값.
-        initialIndex={1}
-        // 예외 동작(촬영·건너뛰기·현장 추가)은 `···` 시트로 — 첫 화면의 상시 CTA 는 길찾기·체크인뿐(수락 기준 1).
-        headerRight={<OverflowButton onPress={openMore} label="진행 중 외근 더보기" />}
-        mapFieldIds={tripFieldIds}
-        // 목적지 순서 그대로 — 배경 지도에 순번 마커 + 점선 동선.
-        routeFieldIds={tripFieldIds}
-        routeVertexes={routeVertexes}
-      >
-        <BottomSheetFlatList
-          data={destinations}
-          keyExtractor={(d) => String(d.id)}
-          renderItem={renderItem}
-          ListHeaderComponent={listHeader}
-          ListFooterComponent={listFooter}
-          style={sheetScrollableStyle}
-          contentContainerStyle={[styles.list, { paddingBottom: listBottomPad }]}
+    <View style={styles.root} onLayout={(e) => setContainerH(e.nativeEvent.layout.height)}>
+      <KakaoMapWebView
+        ref={mapRef}
+        markers={markers}
+        paths={paths}
+        startPoint={startPoint}
+        myLocation={myDot}
+        baseMapType={settings.baseMapType}
+        fitToMarkers={markers.length > 0}
+        fitPadding={FIT_PADDING}
+        center={markers.length === 0 ? (myDot ?? undefined) : undefined}
+        initialLevel={5}
+      />
+
+      {/* 다음 목적지(7) · 목적지 없음(7-7) */}
+      <SafeTop>
+        <View style={styles.card}>
+          {next ? (
+            <>
+              <View style={styles.flex}>
+                <Text v2="caption.bold" tone="link">
+                  다음 · {nextIndex}/{destinations.length}
+                </Text>
+                <Text v2="title.m" numberOfLines={1}>
+                  {nextField ? fieldTitle(nextField) : ' '}
+                </Text>
+                <Text v2="bodyS.regular" tone="secondary" numberOfLines={1}>
+                  {arrived ? (
+                    <Text v2="bodyS.bold" tone="success">
+                      도착
+                    </Text>
+                  ) : fromOrigin != null ? (
+                    <>
+                      <Text v2="bodyS.bold">{formatDistanceM(fromOrigin)}</Text> 남음
+                    </>
+                  ) : null}
+                  {arrived || fromOrigin != null ? ' · ' : ''}
+                  <Text v2="bodyS.semibold" tone={STATUS_TONE[nextKind]}>
+                    {STATUS_LABEL[nextKind]}
+                  </Text>
+                </Text>
+              </View>
+              <Touchable
+                onPress={openRoute}
+                disabled={!hasCoords(nextField)}
+                accessibilityRole="button"
+                accessibilityLabel="길찾기"
+                style={styles.routeBtn}
+              >
+                <Icon name="navigation" size={22} color={c2.text.brand} />
+                <Text v2="small.bold" tone="brand">
+                  길찾기
+                </Text>
+              </Touchable>
+            </>
+          ) : (
+            <View style={styles.flex}>
+              <Text v2="caption.bold" tone="link">
+                목적지 없이 외근 중
+              </Text>
+              <Text v2="title.m">가는 곳에서 바로 기록해요</Text>
+              <Text v2="bodyS.regular" tone="secondary">
+                + 로 지금 위치를 기록할 수 있어요.
+              </Text>
+            </View>
+          )}
+        </View>
+        <MapButton
+          icon="layers"
+          dot={settings.changed}
+          accessibilityLabel="지도 설정"
+          onPress={settings.openSettings}
+          style={styles.layers}
         />
-      </MapSheetLayout>
-      {/* 화면 하단에 떠 있는 바를 두지 않는다 — 시트를 55% 로 내리면 그 바가 현재 목적지
-          카드의 주 CTA 를 덮는다(실측). 종료는 목록 하단(listFooter), 촬영은 시트 헤더 우측. */}
-      <QuickPhotoSheet
-        session={quickPhoto.session}
-        uploading={quickPhoto.uploading}
-        onUpload={(f) => void quickPhoto.upload(f)}
-        onFallback={quickPhoto.toFallback}
-        onCreateNew={quickPhoto.createNew}
-        onClose={quickPhoto.cancel}
+      </SafeTop>
+
+      {/* 지도 버튼: 내 위치 · + (8-6) */}
+      <View pointerEvents="box-none" style={[styles.fabs, { bottom: PANEL_H + space[16] + bottomStack }]}>
+        <MapButton icon="locate" accessibilityLabel="내 위치" onPress={() => mapRef.current?.recenter(myDot ?? undefined)} />
+        <MapButton ref={plusRef} icon="plus" accessibilityLabel="기록 메뉴" onPress={openMenu} />
+      </View>
+
+      {/* 7-2 · 7-3 화면 안 경고 줄 */}
+      {warning ? (
+        <View
+          accessibilityRole="alert"
+          accessibilityLiveRegion="polite"
+          style={[styles.warn, warning === 'failed' ? styles.warnFailed : styles.warnOffline, { bottom: PANEL_H + space[16] }]}
+        >
+          <Icon name="info" size={20} color={warning === 'failed' ? c2.text.dangerDeep : c2.text.warningStrong} />
+          <Text v2="bodyS.regular" tone={warning === 'failed' ? 'dangerDeep' : 'warningStrong'} style={styles.flex}>
+            {warning === 'failed'
+              ? failedQ.length === 1
+                ? `${failedQ[0].label} 기록을 저장하지 못했어요.`
+                : `${failedQ[0].label} 외 ${failedQ.length - 1}곳 기록을 저장하지 못했어요.`
+              : '인터넷 연결이 없어 휴대폰에 임시 저장했어요.\n연결되면 자동으로 저장돼요.'}
+          </Text>
+          {warning === 'failed' ? (
+            <Touchable onPress={retry} accessibilityRole="button" style={styles.warnAction}>
+              <Text v2="bodyM.bold" tone="danger">
+                다시 시도
+              </Text>
+            </Touchable>
+          ) : null}
+        </View>
+      ) : null}
+
+      {/* 아래 패널 */}
+      <View style={styles.panel}>
+        <Touchable
+          onPress={() => setExpanded((v) => !v)}
+          accessibilityRole="button"
+          accessibilityLabel={expanded ? '목적지 목록 접기' : '목적지 목록 펼치기'}
+          noAutoHitSlop
+          style={styles.handleTap}
+        >
+          <SheetHandle />
+        </Touchable>
+        <View style={styles.headRow}>
+          <Text v2="bodyS.bold" tone="body" numeric>
+            {progressText}
+          </Text>
+          {pendingQ.length > 0 ? (
+            <View style={[styles.chip, styles.chipMuted]}>
+              <Icon name="cloud-off" size={14} color={c2.text.secondary} />
+              <Text v2="small.bold" tone="secondary" numeric>
+                저장 대기 {pendingQ.length}
+              </Text>
+            </View>
+          ) : null}
+          {failedQ.length > 0 ? (
+            <Touchable
+              onPress={retry}
+              accessibilityRole="button"
+              accessibilityLabel={`저장 실패 ${failedQ.length}건, 다시 시도`}
+              style={[styles.chip, styles.chipDanger]}
+            >
+              <Icon name="alert" size={14} color={c2.text.danger} />
+              <Text v2="small.bold" tone="danger" numeric>
+                저장 실패 {failedQ.length}
+              </Text>
+            </Touchable>
+          ) : null}
+          <View style={styles.flex} />
+          <Touchable onPress={() => void endTrip()} disabled={busy} accessibilityRole="button" style={styles.endBtn}>
+            <Text v2="bodyS.bold" tone="danger">
+              외근 종료
+            </Text>
+          </Touchable>
+        </View>
+        {!noDestination ? (
+          <View
+            style={styles.progress}
+            accessibilityRole="progressbar"
+            accessibilityLabel="방문 진행"
+            accessibilityValue={{ min: 0, max: destinations.length, now: arrivedCount, text: `${destinations.length}곳 중 ${arrivedCount}곳 방문` }}
+          >
+            {destinations.map((d) => (
+              <View
+                key={d.id}
+                style={[
+                  styles.seg,
+                  d.status === 'arrived'
+                    ? styles.segDone
+                    : d.status === 'skipped'
+                      ? styles.segSkipped
+                      : d.id === next?.id
+                        ? styles.segNext
+                        : styles.segTodo,
+                ]}
+              />
+            ))}
+          </View>
+        ) : null}
+        <View style={styles.actions}>
+          {noDestination ? (
+            <>
+              <Button2 icon="place-record" onPress={recordHere} fullWidth>
+                지금 위치 기록
+              </Button2>
+              <Button2 variant="secondary" size="M" icon="search" onPress={addDestination} fullWidth>
+                목적지 추가
+              </Button2>
+            </>
+          ) : (
+            <>
+              <Button2 icon="check" onPress={checkIn} fullWidth>
+                체크인
+              </Button2>
+              <View style={styles.row2}>
+                <Button2 variant="secondary" size="M" icon="search" onPress={addDestination} style={styles.flex}>
+                  목적지 추가
+                </Button2>
+                <Button2 variant="secondary" size="M" onPress={skip} style={styles.flex}>
+                  이 현장 건너뛰기
+                </Button2>
+              </View>
+            </>
+          )}
+        </View>
+        {expanded ? (
+          <ScrollView style={{ maxHeight: listMax }} contentContainerStyle={styles.list}>
+            <Text v2="bodyS.bold" tone="secondary" style={styles.listTitle}>
+              목적지 {destinations.length}
+            </Text>
+            {destinations.length === 0 ? (
+              <Text v2="bodyS.regular" tone="tertiary">
+                담은 목적지가 없어요.
+              </Text>
+            ) : (
+              destinations.map((d, i) => (
+                <DestRow
+                  key={d.id}
+                  order={i + 1}
+                  dest={d}
+                  field={fieldById.get(d.fieldId)}
+                  isNext={d.id === next?.id}
+                  visitedAt={visitByField.get(d.fieldId)?.visitedAt}
+                  divider={i > 0}
+                  onPress={() => {
+                    const v = visitByField.get(d.fieldId);
+                    // 방문한 목적지는 3-7 방문 기록 수정, 아니면 5 현장 상세.
+                    if (v) router.push(`/(tabs)/trips/${v.tripId}/visits/${v.id}` as never);
+                    else router.push({ pathname: '/(tabs)/trips/fields/[id]', params: { id: d.fieldId } } as never);
+                  }}
+                />
+              ))
+            )}
+          </ScrollView>
+        ) : null}
+      </View>
+
+      <RecordMenu
+        anchor={menuAnchor}
+        onClose={() => setMenuAnchor(null)}
+        items={[
+          { label: '지금 위치 기록', icon: 'place', onPress: recordHere },
+          { label: '사진으로 여러 곳 등록', icon: 'image', onPress: photoBatch },
+        ]}
       />
-      <AddDestinationModal
-        visible={addOpen}
-        tripId={activeTripId}
-        onClose={() => setAddOpen(false)}
-        onCreateNew={() => router.push('/(tabs)/trips/fields/new' as never)}
-      />
+      {settings.sheet}
     </View>
   );
 }
 
+// 핀 맞춤 여백: 위 다음 목적지 카드(48+98+16), 아래 패널(200+여유).
+const FIT_PADDING: [number, number, number, number] = [176, 72, PANEL_H + 40, 48];
+
+function SafeTop({ children }: { children: React.ReactNode }) {
+  return (
+    <View pointerEvents="box-none" style={styles.top}>
+      {children}
+    </View>
+  );
+}
+
+function DestRow({
+  order,
+  dest,
+  field,
+  isNext,
+  visitedAt,
+  divider,
+  onPress,
+}: {
+  order: number;
+  dest: Destination;
+  field: Field | undefined;
+  isNext: boolean;
+  visitedAt?: string;
+  divider: boolean;
+  onPress: () => void;
+}) {
+  const kind = fieldActionStatus(field);
+  const title = field ? fieldTitle(field) : '알 수 없는 현장';
+  const hm = visitedAt ? new Date(visitedAt) : null;
+  const sub =
+    dest.status === 'arrived'
+      ? hm && !Number.isNaN(hm.getTime())
+        ? `체크인 ${String(hm.getHours()).padStart(2, '0')}:${String(hm.getMinutes()).padStart(2, '0')}`
+        : '체크인'
+      : dest.status === 'skipped'
+        ? '체크인 없음'
+        : null;
+  return (
+    <Touchable onPress={onPress} accessibilityRole="button" style={[styles.destRow, divider && styles.divider]}>
+      <View
+        style={[
+          styles.orderDot,
+          dest.status === 'arrived'
+            ? { backgroundColor: c2.status.visited }
+            : dest.status === 'skipped'
+              ? styles.orderSkipped
+              : { backgroundColor: STATUS_PIN_COLOR[kind] },
+        ]}
+      >
+        <Text v2="bodyS.extrabold" tone={dest.status === 'skipped' ? 'tertiary' : 'inverse'} numeric>
+          {order}
+        </Text>
+      </View>
+      <View style={styles.flex}>
+        <Text v2="bodyL.semibold" numberOfLines={1} tone={dest.status === 'pending' ? 'primary' : 'tertiary'}>
+          {title}
+        </Text>
+        <Text v2="caption.regular" tone="tertiary" numberOfLines={1}>
+          {sub ?? (
+            <Text v2="caption.semibold" tone={STATUS_TONE[kind]}>
+              {STATUS_LABEL[kind]}
+            </Text>
+          )}
+        </Text>
+      </View>
+      {dest.status === 'skipped' ? (
+        <Text v2="caption.semibold" tone="tertiary">
+          건너뜀
+        </Text>
+      ) : isNext ? (
+        <Text v2="caption.bold" tone="link">
+          다음
+        </Text>
+      ) : null}
+    </Touchable>
+  );
+}
+
 const styles = StyleSheet.create({
-  screenRoot: { flex: 1 },
-  // paddingBottom 은 렌더에서 useSheetBottomInset 으로 준다(예전 240 고정값은 탭바를 숨기자 모자랐다).
-  list: { paddingHorizontal: spacing.lg },
-  // 간격 리듬 — 진행률·현재 목적지는 한 덩어리(md), 목적지 목록과 종료 버튼은 다른
-  // 그룹이라 xl 로 벌린다. 전부 lg 로 균일하면 무엇이 한 덩어리인지 눈이 못 읽는다.
-  footer: { marginTop: spacing.xl },
-  header: { paddingTop: spacing.md, gap: spacing.md },
-  sectionTitleRow: {
+  root: { flex: 1, backgroundColor: c2.bg.muted },
+  flex: { flex: 1 },
+  top: { position: 'absolute', left: space[12], right: space[12], top: 48 },
+  card: {
+    minHeight: 98,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: spacing.xl,
+    gap: space[12],
+    paddingLeft: 18,
+    paddingRight: space[14],
+    paddingVertical: space[12],
+    borderRadius: radius2['2xl'],
+    backgroundColor: c2.bg.canvas,
+    ...elevation2.card,
   },
+  routeBtn: {
+    width: 59,
+    height: 52,
+    borderRadius: radius2.lg,
+    backgroundColor: c2.bg.brandSubtle,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  layers: { alignSelf: 'flex-end', marginTop: 22, marginRight: space[4] },
+  fabs: { position: 'absolute', right: space[16], gap: space[12] },
+  warn: {
+    position: 'absolute',
+    left: space[12],
+    right: space[12],
+    minHeight: ROW_H,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space[8],
+    paddingLeft: space[16],
+    paddingRight: space[12],
+    paddingVertical: space[8],
+    borderRadius: radius2.lg,
+    borderWidth: 1,
+    ...elevation2.card,
+  },
+  warnOffline: { backgroundColor: c2.bg.warningSubtle, borderColor: c2.border.warning },
+  warnFailed: { backgroundColor: c2.bg.dangerSubtle, borderColor: c2.border.danger },
+  warnAction: { height: 44, justifyContent: 'center', paddingLeft: space[12], paddingRight: space[4] },
+  panel: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    minHeight: PANEL_H,
+    paddingBottom: space[12],
+    borderTopLeftRadius: radius2['2xl'],
+    borderTopRightRadius: radius2['2xl'],
+    backgroundColor: c2.bg.canvas,
+    ...elevation2.sheet,
+  },
+  handleTap: { alignItems: 'center' },
+  headRow: {
+    height: 40,
+    marginTop: -6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space[10],
+    paddingLeft: space[20],
+    paddingRight: space[16],
+  },
+  chip: {
+    height: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space[4],
+    paddingLeft: 9,
+    paddingRight: space[8],
+    borderRadius: radius2.md,
+  },
+  chipMuted: { backgroundColor: c2.bg.muted },
+  chipDanger: { backgroundColor: c2.bg.dangerSubtle },
+  endBtn: { height: 40, justifyContent: 'center', paddingHorizontal: space[4] },
+  progress: { flexDirection: 'row', gap: space[4], paddingHorizontal: space[20], marginTop: space[4] },
+  seg: { flex: 1, height: 6, borderRadius: 3 },
+  segDone: { backgroundColor: c2.bg.brand },
+  segNext: { backgroundColor: c2.bg.brand, opacity: 0.35 },
+  segSkipped: { backgroundColor: c2.bg.strong },
+  segTodo: { backgroundColor: c2.bg.placeholder },
+  actions: { paddingHorizontal: space[16], paddingTop: space[14], gap: space[8] },
+  row2: { flexDirection: 'row', gap: space[8] },
+  list: { paddingHorizontal: space[20], paddingTop: space[16], paddingBottom: space[8] },
+  listTitle: { paddingBottom: space[4] },
+  destRow: { minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: space[14] },
+  divider: { borderTopWidth: 1, borderTopColor: c2.border.subtle },
+  orderDot: { width: 28, height: 28, borderRadius: radius2.full, alignItems: 'center', justifyContent: 'center' },
+  orderSkipped: { backgroundColor: c2.bg.canvas, borderWidth: 1.5, borderStyle: 'dashed', borderColor: c2.status.visited },
 });

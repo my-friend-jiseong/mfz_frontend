@@ -26,14 +26,64 @@ import {
   type VisitRecordValue,
 } from '@/utils/visitRecord';
 import { openReportForTripField } from '@/utils/reportEntry';
+import { requestUserLocation } from '@/utils/geolocation';
+import { findNearbyFields } from '@/utils/nearestField';
+import { LoadingState } from '@/components/ui/LoadingState';
+import { notice } from '@/components/ui/ConfirmDialog';
+import { isKnownOffline, useCheckinQueueStore } from '@/stores/checkinQueueStore';
+import { fieldTitle } from '@/utils/fieldFacets';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 
 
+// 저장 대기열에 넣었음(방문 id 없음).
+const QUEUED = '__queued__';
+
 // 체크인 (명세 v2 §4.1).
 // 방문은 **`체크인 완료` 를 눌러야** 만든다 — 예전엔 화면 진입과 동시에 만들어서 뒤로가기해도
 // 방문이 남았다(FE-CHK-01 위반). 사진도 고르기만 하고 완료 시점에 올린다.
-export default function FieldCheckin() {
+// 7-7·8-6 '지금 위치 기록' — /trips/fields/here/checkin?mode=here.
+// TODO(PR7): 체크인 화면에 지금 위치 모드(8-3 새 현장·8-4 가까운 현장 자동 연결)를 넣는다. 지금은 100m 안에서
+// 가장 가까운 내 현장의 체크인으로 바꿔 열고, 없으면 새 현장 등록(지금 좌표)으로 보낸다.
+export default function CheckinRoute() {
+  const { id, mode } = useLocalSearchParams<{ id: string; mode?: string }>();
+  if (id === 'here' || mode === 'here') return <CheckinHere />;
+  return <FieldCheckin />;
+}
+
+function CheckinHere() {
+  const router = useRouter();
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      // 현장 목록을 받기 전이면 가까운 현장을 못 찾는다 — 먼저 받는다.
+      const fs = useFieldStore.getState();
+      const listing = fs.listStatus === 'ready' ? Promise.resolve() : fs.hydrate();
+      const [pos] = await Promise.all([requestUserLocation({ high: true }), listing]);
+      if (!alive) return;
+      const near = pos ? findNearbyFields(pos, useFieldStore.getState().fields)[0] : undefined;
+      if (near) {
+        router.replace(`/(tabs)/trips/fields/${near.field.id}/checkin` as never);
+        return;
+      }
+      router.replace({
+        pathname: '/(tabs)/trips/fields/new',
+        params: pos ? { lat: String(pos.lat), lng: String(pos.lng) } : {},
+      } as never);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [router]);
+  return (
+    <SafeScreen>
+      <NavHeader title="체크인" onBack={() => goToTabRoot('trips')} />
+      <LoadingState />
+    </SafeScreen>
+  );
+}
+
+function FieldCheckin() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const fieldId = id ?? '';
   const router = useRouter();
@@ -152,7 +202,20 @@ export default function FieldCheckin() {
   const persistInner = async (): Promise<string | null> => {
     let visitId = createdVisitId.current;
     if (!visitId) {
-      const r = await checkIn(activeTripId, fieldId);
+      // 인터넷이 없으면 저장 대기열에 두고 7 외근 진행으로 돌아간다(7-2). 연결되면 대기열이 보낸다.
+      const r = (await isKnownOffline())
+        ? ({ ok: false, error: '', network: true } as const)
+        : await checkIn(activeTripId, fieldId);
+      if (!r.ok && r.network) {
+        if (!useCheckinQueueStore.getState().enqueue({ tripId: activeTripId, fieldId, label: fieldTitle(field) })) {
+          Alert.alert('체크인 실패', r.error || '인터넷 연결을 확인해 주세요.');
+          return null;
+        }
+        const extra = value.memo.trim() !== saved.current.memoText || value.status !== null || Object.values(value.photos).some(Boolean);
+        // TODO(PR7): 사진·메모·조치 상태도 대기열에 싣는다. 지금은 체크인만 남는다.
+        if (extra) await notice('체크인만 임시 저장했어요', '사진·메모는 연결된 뒤 방문 기록 수정에서 다시 넣어 주세요.');
+        return QUEUED;
+      }
       if (!r.ok) {
         Alert.alert('체크인 실패', r.error);
         return null;
@@ -190,8 +253,13 @@ export default function FieldCheckin() {
       setSaving(null);
       return;
     }
+    if (visitId === QUEUED) {
+      completed.current = true;
+      goToTabRoot('trips');
+      return;
+    }
     completed.current = true;
-    toast('체크인을 저장했습니다');
+    toast('체크인을 저장했어요');
     // 성공하면 저장 중 표시를 되돌리지 않고 떠난다 — 떠나는 화면을 이동과 같은 배치에서 바꾸지 않는다.
     // safeBack 대신 — 미니 바(다른 탭)에서 들어온 경우 canGoBack 기준이 엉뚱하다.
     // 돌아갈 곳이 정해져 있으니 외근 탭 첫 화면(외근 진행)으로 직행한다.
@@ -204,6 +272,12 @@ export default function FieldCheckin() {
     const visitId = await persist();
     if (!visitId) {
       setSaving(null);
+      return;
+    }
+    // 서버에 아직 방문이 없어 보고서를 만들 수 없다 — 외근 진행으로 돌아간다.
+    if (visitId === QUEUED) {
+      completed.current = true;
+      goToTabRoot('trips');
       return;
     }
     await openReportForTripField(router, activeTripId, fieldId);

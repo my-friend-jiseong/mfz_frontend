@@ -39,7 +39,7 @@ export const Icon = memo(function Icon({
         const fillOnly = flags.includes('F');
         const tint = flags.includes('t');
         const filled = fillOnly || tint || flags.includes('f');
-        const stroke = fillOnly ? undefined : flags.includes('w') ? c2.text.inverse : color;
+        const stroke = fillOnly ? undefined : flags.includes('w') ? c2.text.inverse : flags.includes('k') ? c2.text.primary : color;
         return (
           <Path
             key={i}

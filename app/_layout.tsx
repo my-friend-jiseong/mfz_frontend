@@ -16,6 +16,9 @@ import { initSentry } from '@/utils/sentry';
 import { applyWebAlertPatch } from '@/utils/webAlertPatch';
 import { useAuthStore } from '@/stores/authStore';
 import { useDestinationStore } from '@/stores/destinationStore';
+import { useTripPrepStore } from '@/stores/tripPrepStore';
+import { startCheckinQueue, useCheckinQueueStore } from '@/stores/checkinQueueStore';
+import { useTripStore } from '@/stores/tripStore';
 import { startAnalyticsActivity } from '@/utils/analyticsActivity';
 import { colors } from '@/theme/colors';
 import { FONTS_TO_LOAD } from '@/theme/typography';
@@ -38,11 +41,37 @@ export default function RootLayout() {
     initSentry();
     void hydrate();
     void useDestinationStore.getState().hydrate();
+    // 외근 전에 담은 목적지(6 외근 준비)·체크인 저장 대기열(7-2·7-3)도 부팅 때 읽는다.
+    void useTripPrepStore.getState().hydrate();
+    const stopCheckinQueue = startCheckinQueue({
+      getUserId: () => {
+        const a = useAuthStore.getState();
+        return a.isAuthenticated ? (a.user?.id ?? null) : null;
+      },
+      getActiveTripId: () => {
+        const t = useTripStore.getState();
+        return t.activeResolved ? t.activeTripId : undefined;
+      },
+    });
+    // 로그인 사용자가 바뀌면 다른 사용자의 대기열을 지우고, 진행 중 외근을 알게 되면 대기열을 보낸다.
+    const unsubAuth = useAuthStore.subscribe((a, prev) => {
+      const id = a.isAuthenticated ? (a.user?.id ?? null) : null;
+      const prevId = prev.isAuthenticated ? (prev.user?.id ?? null) : null;
+      if (id !== prevId) useCheckinQueueStore.getState().onUserChange(id);
+    });
+    const unsubTrip = useTripStore.subscribe((t, prev) => {
+      if (t.activeResolved && (!prev.activeResolved || t.activeTripId !== prev.activeTripId)) {
+        void useCheckinQueueStore.getState().flush();
+      }
+    });
     startSessionActivity();
     const stopAnalytics = startAnalyticsActivity();
     return () => {
       stopSessionActivity();
       stopAnalytics();
+      stopCheckinQueue();
+      unsubAuth();
+      unsubTrip();
     };
   }, [hydrate]);
 

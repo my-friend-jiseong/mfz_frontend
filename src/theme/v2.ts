@@ -26,6 +26,9 @@ export const c2 = {
     warning: palette.amber[700],
     success: palette.green[700],
     inverseAccent: palette.blue[300],
+    // 7-2·7-3 화면 안 경고 줄 글자·아이콘. Figma 에 변수 없이 hex 로 박혀 있어 이름만 붙였다.
+    warningStrong: palette.amber[900],
+    dangerDeep: palette.red[900],
   },
   bg: {
     canvas: palette.white,
@@ -47,6 +50,8 @@ export const c2 = {
     hint: 'rgba(15, 23, 42, 0.78)',
     // 5-5 위치 보정 중 핀 아래 그림자 타원. Figma 에 변수 없이 ink 0.28.
     pinShadow: 'rgba(15, 23, 42, 0.28)',
+    // 8-6 기록 메뉴 뒤 어둡게. Figma 에 변수 없이 ink 0.38.
+    menuScrim: 'rgba(15, 23, 42, 0.38)',
   },
   border: {
     default: palette.slate[200],
@@ -57,6 +62,9 @@ export const c2 = {
     brandMuted: palette.blue[300],
     brandSubtle: palette.blue[200],
     inverse: palette.white,
+    // 7-2·7-3 경고 줄 테두리(Figma hex).
+    warning: palette.amber[300],
+    danger: palette.red[300],
   },
   // 현장 조치 상태(색+모양 3중 인코딩) · 방문함(회색 핀) · 새 현장(검은 핀)
   status: {
@@ -182,6 +190,10 @@ export const shadowCss = {
   fab: '0px 2px 4px rgba(37, 99, 235, 0.25), 0px 8px 20px rgba(37, 99, 235, 0.32)',
   // 효과 스타일은 아니지만 Figma 프레임에 박힌 값: 지도 카드 [크게 보기] 알약(5·8).
   chip: '0px 2px 8px rgba(15, 23, 42, 0.10), 0px 1px 2px rgba(15, 23, 42, 0.12)',
+  // 8-6 기록 메뉴 알약.
+  menuPill: '0px 8px 24px rgba(15, 23, 42, 0.16), 0px 2px 6px rgba(15, 23, 42, 0.12)',
+  // 7 외근 진행 위 '다음 목적지' 카드, 7-2·7-3 경고 줄.
+  card: '0px 6px 18px rgba(15, 23, 42, 0.12), 0px 1px 2px rgba(15, 23, 42, 0.10)',
   // 작은 목적지 버튼(44)의 흰 배지.
   badge: '0px 2px 6px rgba(15, 23, 42, 0.18)',
 } as const;

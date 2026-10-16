@@ -34,6 +34,11 @@ export interface MapSettingsProps {
 interface Props extends MapSettingsProps {
   open: boolean;
   onClose: () => void;
+  /**
+   * 보일 부분. all(기본)=1 지도, filters=표시 방식 빼고(6 외근 준비 — 목적지 번호 핀을 히트맵으로 가리지 않게),
+   * baseMap=배경 지도만(7 외근 진행 — 목적지 핀만 있어 필터가 걸 것이 없다).
+   */
+  sections?: 'all' | 'filters' | 'baseMap';
 }
 
 const DISPLAY: { mode: DisplayMode; label: string }[] = [
@@ -62,7 +67,9 @@ const BASE_MAPS: { type: BaseMapType; label: string; thumb: ImageSourcePropType 
 const CARD_RADIUS = radius2.xl;
 
 /** 1-3 지도 설정 시트(Figma 537:1775). 고르는 즉시 지도에 반영되고, 아래 버튼은 닫기다. */
-export function MapSettingsSheet({ open, onClose, ...p }: Props) {
+export function MapSettingsSheet({ open, onClose, sections = 'all', ...p }: Props) {
+  const showDisplay = sections === 'all';
+  const showFilters = sections !== 'baseMap';
   const statusOn = (s: FieldStatus) => p.selectedStatuses.length === 0 || p.selectedStatuses.includes(s);
   const toggleStatus = (s: FieldStatus) => {
     const current = p.selectedStatuses.length === 0 ? STATUSES : p.selectedStatuses;
@@ -83,66 +90,72 @@ export function MapSettingsSheet({ open, onClose, ...p }: Props) {
         </Touchable>
       </View>
 
-      <Section label="표시 방식">
-        <View style={styles.row3}>
-          {DISPLAY.map(({ mode, label }) => {
-            const on = p.displayMode === mode;
-            return (
-              <Touchable
-                key={mode}
-                onPress={() => p.onChangeDisplayMode(mode)}
-                accessibilityRole="button"
-                accessibilityState={{ selected: on }}
-                style={[styles.modeCard, on ? styles.modeOn : styles.modeOff]}
-              >
-                <ModeGlyph mode={mode} />
-                <Text v2={on ? 'bodyS.bold' : 'bodyS.semibold'} tone={on ? 'brand' : 'body'}>
-                  {label}
-                </Text>
-              </Touchable>
-            );
-          })}
-        </View>
-      </Section>
-
-      <Section label="최근 조치 상태">
-        <View style={styles.chips}>
-          {STATUSES.map((s) => (
-            <FilterChip2 key={s} label={STATUS_LABEL[s]} status={s} selected={statusOn(s)} onPress={() => toggleStatus(s)} />
-          ))}
-        </View>
-      </Section>
-
-      {p.availableTags.length > 0 ? (
-        <Section label="분류" bleed>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tagRow}>
-            {p.availableTags.map((tag) => (
-              <FilterChip2 key={tag} label={tag} selected={p.selectedTags.includes(tag)} onPress={() => p.onToggleTag(tag)} />
-            ))}
-          </ScrollView>
+      {showDisplay ? (
+        <Section label="표시 방식">
+          <View style={styles.row3}>
+            {DISPLAY.map(({ mode, label }) => {
+              const on = p.displayMode === mode;
+              return (
+                <Touchable
+                  key={mode}
+                  onPress={() => p.onChangeDisplayMode(mode)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: on }}
+                  style={[styles.modeCard, on ? styles.modeOn : styles.modeOff]}
+                >
+                  <ModeGlyph mode={mode} />
+                  <Text v2={on ? 'bodyS.bold' : 'bodyS.semibold'} tone={on ? 'brand' : 'body'}>
+                    {label}
+                  </Text>
+                </Touchable>
+              );
+            })}
+          </View>
         </Section>
       ) : null}
 
-      <Section label="최근 방문일">
-        <View style={styles.segment}>
-          {RANGES.map(({ value, label }) => {
-            const on = p.rangePreset === value;
-            return (
-              <Touchable
-                key={value}
-                onPress={() => p.onChangeRangePreset(value)}
-                accessibilityRole="button"
-                accessibilityState={{ selected: on }}
-                style={[styles.segItem, on && styles.segOn]}
-              >
-                <Text v2={on ? 'bodyS.bold' : 'bodyS.semibold'} tone={on ? 'inverse' : 'secondary'}>
-                  {label}
-                </Text>
-              </Touchable>
-            );
-          })}
-        </View>
-      </Section>
+      {showFilters ? (
+        <>
+          <Section label="최근 조치 상태">
+            <View style={styles.chips}>
+              {STATUSES.map((s) => (
+                <FilterChip2 key={s} label={STATUS_LABEL[s]} status={s} selected={statusOn(s)} onPress={() => toggleStatus(s)} />
+              ))}
+            </View>
+          </Section>
+
+          {p.availableTags.length > 0 ? (
+            <Section label="분류" bleed>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tagRow}>
+                {p.availableTags.map((tag) => (
+                  <FilterChip2 key={tag} label={tag} selected={p.selectedTags.includes(tag)} onPress={() => p.onToggleTag(tag)} />
+                ))}
+              </ScrollView>
+            </Section>
+          ) : null}
+
+          <Section label="최근 방문일">
+            <View style={styles.segment}>
+              {RANGES.map(({ value, label }) => {
+                const on = p.rangePreset === value;
+                return (
+                  <Touchable
+                    key={value}
+                    onPress={() => p.onChangeRangePreset(value)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: on }}
+                    style={[styles.segItem, on && styles.segOn]}
+                  >
+                    <Text v2={on ? 'bodyS.bold' : 'bodyS.semibold'} tone={on ? 'inverse' : 'secondary'}>
+                      {label}
+                    </Text>
+                  </Touchable>
+                );
+              })}
+            </View>
+          </Section>
+        </>
+      ) : null}
 
       <Section label="배경 지도">
         <View style={styles.row3}>

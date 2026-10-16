@@ -6,6 +6,8 @@ import { useTripPrepStore } from '@/stores/tripPrepStore';
 import { goToTabRoot } from '@/components/shell/tabNav';
 import { notice } from '@/components/ui/ConfirmDialog';
 
+export const PREP_HREF = '/(tabs)/trips/prep';
+
 /**
  * '외근 목적지' 담기 — 4 현장 검색의 '+'·5 현장 상세의 [외근 목적지에 추가]·머리의 목적지 버튼.
  * 외근 중이면 그 외근의 목적지(destinationStore, 서버 POST), 외근 전이면 6 외근 준비에 담을 목록(tripPrepStore).
@@ -35,7 +37,7 @@ export function useDestinationCart() {
     (fieldIds: string[]) => {
       if (activeTripId) {
         // 이 외근에서 건너뛴 목적지는 다시 담지 못한다 — 서버가 pending 으로 되돌리는 PATCH 를 받지 않는다
-        // (arrived·skipped 만). 조용히 무시하지 않고 알린다. TODO(PR6): 7-9 [되돌리기] 와 함께 정리.
+        // (arrived·skipped 만). 7-9 [되돌리기]는 서버에 보내기 전 4초 안에만 된다(utils/deferredSkip).
         const ds = useDestinationStore.getState();
         let skipped = 0;
         for (const id of fieldIds) {
@@ -67,8 +69,8 @@ export function useDestinationCart() {
       goToTabRoot('trips');
       return;
     }
-    // TODO(PR6): 6 외근 준비로 바꾼다. 지금은 기존 현장 고르기 화면에 담은 목록을 미리 골라 둔다.
-    router.push('/(tabs)/trips/new/select' as never);
+    // 6 외근 준비가 스택에 있으면(6 → 4 검색) 거기까지 닫고, 없으면 이 화면을 6 으로 바꾼다.
+    router.dismissTo(PREP_HREF as never);
   }, [activeTripId]);
 
   /** 외근 중이면 목적지를 뺄 수 없다(✓ 를 다시 눌러도 그대로). */

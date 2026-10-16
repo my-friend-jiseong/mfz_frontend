@@ -104,9 +104,9 @@ export default function TripsListScreen() {
 
   // 외근 시작 — 위치 권한이 꺼져 있으면 1-2 를 한 번 보인다. 위치는 외근의 필수 조건이 아니라(결정)
   // 허용하든 [나중에]·닫기든 이어서 시작한다.
-  // TODO(PR6): 6 외근 준비로 바꾼다. 지금은 기존 현장 고르기 화면.
   const pendingStartRef = useRef(false);
-  const goStart = useCallback(() => router.push('/(tabs)/trips/new/select' as never), [router]);
+  // 6 외근 준비.
+  const goStart = useCallback(() => router.push('/(tabs)/trips/prep' as never), [router]);
   const startTrip = async () => {
     if (isGeolocationDisabled()) {
       goStart();

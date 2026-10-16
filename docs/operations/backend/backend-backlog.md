@@ -996,3 +996,18 @@ PATCH /api/reports/{id} { "status": "completed" }
 프론트 선조치: 앱이 이름 변경·삭제 뒤 그 이름을 가진 내 현장마다 `PATCH /api/fields/{id}` `{categories}` 를 보낸다(`src/utils/categoryCascade.ts`). 현장이 많으면 느리고, 중간에 실패하면 일부 현장만 바뀐다(실패 수는 세지만 다시 보내지 않음). 다른 기기에서 만든 현장 목록이 덜 받아진 상태면 빠질 수 있다.
 
 요청: `PATCH /api/categories/{id}` 가 같은 사용자의 `field_categories` 이름도 함께 바꾸고, `DELETE /api/categories/{id}` 가 그 분류를 현장에서 함께 빼기(또는 `field_categories` 를 `category_id` FK 로 바꾸기). 응답에 바뀐 현장 수 `{ affectedFields }` 가 있으면 좋다(선택). 서버가 해 주면 프론트의 현장 PATCH 반복은 뺀다.
+
+### H. 🟠 체크인 body 에 `visitedAt`·`tripId` — 오프라인 저장·외근 종료 뒤 도착한 체크인 (7-2·7-3, 결정 v133)
+
+7-2: 인터넷 없이 체크인하면 앱이 기기에 저장해 두고(`src/stores/checkinQueueStore.ts`), 연결되거나 앱이 앞으로 오면 `POST /api/visits/check-in` 을 다시 보낸다. 서버가 거부하면(4xx·5xx) 7-3 '저장 실패'로 두고 [다시 시도]를 기다린다. 정책(v133): 저장 대기·실패가 남은 채 외근을 끝내도 막지 않고, 서버가 받아 그 외근에 붙인다.
+
+지금 계약(운영 OpenAPI): body 는 `{fieldId, siteName?, location?}` 뿐이고, 진행 중 외근이 없으면 409. 그래서
+- 다시 보낸 시각이 방문 시각이 된다(실제 체크인 시각과 다름)
+- 외근을 끝낸 뒤 연결되면 409 로 실패한다(방문이 사라짐)
+
+요청: check-in body 에 선택 칸
+- `visitedAt` (ISO, 기기 시각) — 있으면 그 시각으로 저장
+- `tripId` — 있으면 그 외근(끝난 외근이어도 본인 외근이면)에 붙여 저장. 같은 (외근, 현장) 은 지금처럼 멱등
+- (선택) `clientId` — 앱이 만든 대기열 id. 응답이 유실돼 다시 보내도 방문이 두 번 생기지 않게
+
+앱은 대기열 항목에 `visitedAt`·`tripId` 를 이미 들고 있다(지금은 보내지 않음). 서버가 받으면 body 에 붙인다.

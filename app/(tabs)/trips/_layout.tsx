@@ -20,9 +20,7 @@ export default function TripsLayout() {
       <Stack.Screen name="index" />
       <Stack.Screen name="[id]" />
       <Stack.Screen name="active" />
-      <Stack.Screen name="navigate" />
-      <Stack.Screen name="new/select" />
-      <Stack.Screen name="new/order" />
+      <Stack.Screen name="prep" />
       <Stack.Screen name="[id]/visits/[visitId]" />
       <Stack.Screen name="fields/index" />
       <Stack.Screen name="fields/new" options={{ presentation: 'modal' }} />

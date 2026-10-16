@@ -51,6 +51,11 @@ interface DestinationState {
     fieldId: string,
   ) => Destination | undefined;
   markArrived: (id: string) => void;
+  /**
+   * 서버에 보내지 않고 화면 상태만 바꾼다(7-9 건너뛰기 되돌리기 창, utils/deferredSkip).
+   * 기기에도 저장하지 않는다 — 앱이 그사이 꺼지면 보내지 않은 건너뛰기는 없던 일이 된다.
+   */
+  setLocalStatus: (id: string, status: Destination['status']) => void;
   /** 서버 반영까지 기다리려면 await — 성공(또는 로컬 행)이면 true. */
   markSkipped: (id: string) => Promise<boolean>;
   reorder: (tripId: string, orderedIds: string[]) => void;
@@ -205,21 +210,30 @@ export const useDestinationStore = create<DestinationState>((set, get) => ({
     void persist(next);
   },
 
+  setLocalStatus: (id, status) => {
+    set({ destinations: get().destinations.map((d) => (d.id === id ? { ...d, status } : d)) });
+  },
+
   markSkipped: (id) => {
     const target = get().destinations.find((d) => d.id === id);
-    const next = get().destinations.map((d) =>
-      d.id === id ? { ...d, status: 'skipped' as const } : d,
+    const prevStatus = target?.status;
+    set({ destinations: get().destinations.map((d) => (d.id === id ? { ...d, status: 'skipped' as const } : d)) });
+    // 로컬(미영속) 행은 서버에 보낼 것이 없다.
+    if (!target || target.local) {
+      void persist(get().destinations);
+      return Promise.resolve(true);
+    }
+    // 서버가 받은 뒤에만 기기에 저장한다. 실패하면 화면도 원래 상태로 되돌린다(호출부가 알린다).
+    return tripsApi.updateDestination(target.tripId, target.id, { status: 'skipped' }).then(
+      () => {
+        void persist(get().destinations);
+        return true;
+      },
+      () => {
+        if (prevStatus) get().setLocalStatus(id, prevStatus);
+        return false;
+      },
     );
-    set({ destinations: next });
-    void persist(next);
-    // 서버 영속 — 로컬(미영속) 행은 제외. 기다리지 않는 호출부는 실패를 무시한다(다음 fetch 정정).
-    if (!target || target.local) return Promise.resolve(true);
-    return tripsApi
-      .updateDestination(target.tripId, target.id, { status: 'skipped' })
-      .then(
-        () => true,
-        () => false,
-      );
   },
 
   reorder: (tripId, orderedIds) => {
