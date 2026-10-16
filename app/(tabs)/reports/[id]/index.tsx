@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { goToTabRoot } from '@/components/shell/tabNav';
 import { Alert, Image, Linking, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { Ionicons } from '@expo/vector-icons';
@@ -279,7 +280,8 @@ export default function ReportDetail() {
     const r = await remove(report.id);
     if (r.ok || /이미 삭제|찾을 수 없는/.test(r.error ?? '')) {
       toast('보고서를 삭제했습니다');
-      router.replace('/(tabs)/reports' as never);
+      // replace 는 보고서 스택에 목록을 하나 더 쌓는다 — 스택을 첫 화면(9)으로 되돌린다.
+      goToTabRoot('reports');
       return;
     }
     setDeleting(false);

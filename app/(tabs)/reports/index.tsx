@@ -18,6 +18,7 @@ import { Input } from '@/components/ui/Input';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { colors } from '@/theme/colors';
 import { listBottomInset, spacing } from '@/theme/spacing';
+import { useMiniBarInset } from '@/stores/bottomChromeStore';
 import { opacity } from '@/theme/motion';
 import { fmtDate, fmtMonthDay, fmtTime, wasEdited } from '@/utils/datetime';
 import type { Report, Trip } from '@/types/entities';
@@ -38,6 +39,8 @@ type Group =
 
 export default function ReportsIndex() {
   const router = useRouter();
+  // 외근 중 미니 바(7-4)가 목록 끝을 가리지 않게.
+  const miniBarInset = useMiniBarInset();
   const userId = useAuthStore((s) => s.user?.id);
   const allReports = useReportStore((s) => s.reports);
   const refresh = useReportStore((s) => s.refresh);
@@ -229,7 +232,7 @@ export default function ReportsIndex() {
             ))}
           </View>
         )}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, miniBarInset > 0 && { paddingBottom: listBottomInset + miniBarInset }]}
         // 로딩 중·조회 실패·진짜 없음 셋을 갈라 렌더한다 (강령 3).
         // loading/error 는 받아둔 데이터가 없을 때만 이긴다 — 이 스토어의 hydrate 는
         // 외근 탭 포커스마다 돌아서(trips/index) 오프라인 한 번이면 listStatus 가 'error'

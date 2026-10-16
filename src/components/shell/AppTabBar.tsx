@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { CommonActions } from '@react-navigation/native';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
@@ -6,7 +6,7 @@ import { Icon, type IconName } from '@/components/icons';
 import { Text } from '@/components/ui/Text';
 import { Touchable } from '@/components/ui/Touchable';
 import { c2, space } from '@/theme/v2';
-import { registerTabsNavigation, resetTabStack } from './tabNav';
+import { registerTabsNavigation } from './tabNav';
 
 // Figma TabBar 534:1228 · TabItem 534:1143. 칸 높이 64 + 아래 safe area(Figma 프레임은 20).
 export const TAB_ITEM_HEIGHT = 64;
@@ -35,10 +35,10 @@ interface Props extends BottomTabBarProps {
 /**
  * 하단 탭 바(외근·보고서·내 정보). React Navigation 기본 바 대신 직접 그려 Figma 칸 규격을 그대로 맞춘다.
  * 같은 탭을 다시 누르면 그 탭 첫 화면(index)으로 — popToTop 은 스택 쪽 리스너가, 스택이 index 로
- * 시작하지 않는 경우(외근 상세만 남은 스택 등)의 reset 은 여기서 한다.
+ * 시작하지 않는 경우(외근 상세만 남은 스택 등)의 reset 은 탭 레이아웃의 tabPress 리스너가 한다.
  */
 export function AppTabBar({ state, navigation, insetBottom }: Props) {
-  registerTabsNavigation(navigation);
+  useEffect(() => registerTabsNavigation(navigation), [navigation]);
   return (
     <View style={[styles.bar, { height: tabBarHeight(insetBottom), paddingBottom: Math.max(insetBottom, TAB_BAR_MIN_BOTTOM) }]}>
       {state.routes.map((route, i) => {
@@ -47,14 +47,15 @@ export function AppTabBar({ state, navigation, insetBottom }: Props) {
         const focused = state.index === i;
         const onPress = () => {
           const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+          // 이벤트를 막은 쪽(탭 레이아웃 리스너)이 이미 처리했다.
           if (event.defaultPrevented) return;
           if (!focused) {
             // 기본 BottomTabBar 와 같은 방식 — 그 탭 스택 상태를 그대로 둔 채 전환한다.
             navigation.dispatch({ ...CommonActions.navigate(route), target: state.key });
             return;
           }
-          // 맨 아래가 index 인 스택은 스택 쪽 tabPress 리스너가 popToTop 한다 — 여기선 reset 이 필요한 경우만.
-          resetTabStack(navigation, route, { skipPopToTop: true });
+          // 같은 탭 다시 누르기: popToTop 은 스택 쪽 tabPress 리스너가 한다. 맨 아래가 index 가 아닌 스택은
+          // 탭 레이아웃의 tabPress 리스너가 기본 동작을 막고 reset 한다(app/(tabs)/_layout.tsx).
         };
         const tone = focused ? 'link' : 'tertiary';
         return (

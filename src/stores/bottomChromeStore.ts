@@ -23,3 +23,9 @@ export const useBottomChromeStore = create<BottomChromeState>((set) => ({
   setMiniBar: (miniBar) => set((s) => (s.miniBar === miniBar ? s : { miniBar })),
   setFooter: (footer) => set((s) => (s.footer === footer ? s : { footer })),
 }));
+
+/**
+ * 미니 바(7-4)가 지금 차지하는 높이. 미니 바가 뜨는 탭 첫 화면(9 보고서 목록·10 내 정보)이 목록 끝 여백에 더한다.
+ * 탭 레이아웃의 sceneStyle 로 화면 전체를 줄이면 푸시·팝·키보드마다 모든 탭 화면 높이가 출렁여서 화면 안에서 처리한다.
+ */
+export const useMiniBarInset = () => useBottomChromeStore((s) => s.miniBar);

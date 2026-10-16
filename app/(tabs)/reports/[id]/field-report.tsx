@@ -318,7 +318,8 @@ function FieldReportEditor() {
       return;
     }
     toast('작성 중인 내용을 저장했어요');
-    if (activeTripId) goToTabRoot('trips');
+    // 외근 탭으로 가면서 보고서 탭 스택도 첫 화면으로 — 다시 보고서 탭을 눌렀을 때 이 입력 화면이 남아 있지 않게.
+    if (activeTripId) goToTabRoot('trips', { resetFrom: 'reports' });
     else goDetail();
   };
 

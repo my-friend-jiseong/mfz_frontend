@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useNavigation } from 'expo-router';
+import { router, useNavigation } from 'expo-router';
 import { CommonActions, StackActions, type NavigationProp, type ParamListBase } from '@react-navigation/native';
 import { goToTabRoot, type TabName } from './tabNav';
 
@@ -12,8 +12,13 @@ import { goToTabRoot, type TabName } from './tabNav';
 export function TabRootRedirect({ tab }: { tab: TabName }) {
   const nav = useNavigation<NavigationProp<ParamListBase>>();
   useEffect(() => {
+    let fallbackId = 0;
     // 마운트 직후(딥 링크 첫 렌더)에는 스택이 아직 액션을 받지 못해 popToTop 이 버려진다 — 한 프레임 뒤에.
     const id = requestAnimationFrame(() => {
+      // 그래도 이 화면에 남아 있으면(액션이 또 버려짐) 주소로 이동한다 — 빈 화면에 갇히지 않게.
+      fallbackId = requestAnimationFrame(() => {
+        if (nav.isFocused()) router.replace(`/(tabs)/${tab}` as never);
+      });
       const state = nav.getState();
       // 이 스택이 어느 탭의 것인지 — 리다이렉트 화면은 지금 보이는 화면이므로 부모(탭)의 포커스 탭이 곧 이 스택이다.
       const parent = nav.getParent()?.getState();
@@ -29,7 +34,10 @@ export function TabRootRedirect({ tab }: { tab: TabName }) {
         nav.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'index' }] }));
       }
     });
-    return () => cancelAnimationFrame(id);
+    return () => {
+      cancelAnimationFrame(id);
+      cancelAnimationFrame(fallbackId);
+    };
   }, [nav, tab]);
   return null;
 }

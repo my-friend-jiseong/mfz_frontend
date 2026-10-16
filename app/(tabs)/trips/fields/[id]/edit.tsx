@@ -270,7 +270,7 @@ export default function EditField() {
           title="현장을 찾을 수 없습니다"
           action={
             <Button
-              onPress={() => router.replace('/(tabs)/trips/fields' as never)}
+              onPress={() => safeBack(router, '/(tabs)/trips/fields')}
               variant="secondary"
               leftIcon="arrow-back"
             >

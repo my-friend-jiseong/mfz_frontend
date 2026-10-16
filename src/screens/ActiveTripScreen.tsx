@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, InteractionManager, StyleSheet, View } from 'react-native';
+import { Alert, StyleSheet, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import { useRouter } from 'expo-router';
@@ -26,6 +26,7 @@ import { AddDestinationModal } from '@/components/trips/AddDestinationModal';
 import { useQuickPhoto } from '@/components/fields/useQuickPhoto';
 import { QuickPhotoSheet } from '@/components/fields/QuickPhotoSheet';
 import { navigateToTripDetail } from '@/utils/postTripFlow';
+import { runAfterNextPush } from '@/utils/afterPush';
 import { trips as tripsApi, ROUTE_MAX_WAYPOINTS } from '@/api';
 import { VISIT_STATUS_LABEL } from '@/types/entities';
 import { describeOptimizeAlgorithm } from '@/utils/routeOptimize';
@@ -419,11 +420,12 @@ export default function ActiveTrip() {
     // 종료 직후 외근 상세(detail) 로 단일 진입 — 보고서 작성 prompt 는 detail footer CTA 가 가져감.
     // 먼저 이동하고, 이 화면을 바꾸는 정리(목적지 비우기·종료 표식 해제 → 첫 화면이 목록으로)는
     // 전환이 끝난 뒤에 한다 — 같은 배치에서 떠나는 화면을 바꾸지 않는다.
-    navigateToTripDetail(router, endedTripId);
-    InteractionManager.runAfterInteractions(() => {
+    // 순서: 맡겨 두고 → 이동. 상세의 push 전환이 끝나면(transitionEnd) 실행된다.
+    runAfterNextPush(() => {
       if (originalTripId !== null) removeByTrip(originalTripId);
       clearEnding();
     });
+    navigateToTripDetail(router, endedTripId);
   };
 
   const handleEnd = async () => {

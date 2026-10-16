@@ -128,7 +128,7 @@ export default function FieldCheckin() {
   if (activeTripId === null) {
     return (
       <SafeScreen>
-        <NavHeader title="체크인" onBack={() => router.replace('/(tabs)/trips' as never)} />
+        <NavHeader title="체크인" onBack={() => goToTabRoot('trips')} />
         <EmptyState
           icon="briefcase-outline"
           title="외근 시작 후 체크인 가능합니다"
@@ -186,10 +186,13 @@ export default function FieldCheckin() {
     if (saving || blocked) return;
     setSaving('done');
     const visitId = await persist();
-    setSaving(null);
-    if (!visitId) return;
+    if (!visitId) {
+      setSaving(null);
+      return;
+    }
     completed.current = true;
     toast('체크인을 저장했습니다');
+    // 성공하면 저장 중 표시를 되돌리지 않고 떠난다 — 떠나는 화면을 이동과 같은 배치에서 바꾸지 않는다.
     // safeBack 대신 — 미니 바(다른 탭)에서 들어온 경우 canGoBack 기준이 엉뚱하다.
     // 돌아갈 곳이 정해져 있으니 외근 탭 첫 화면(외근 진행)으로 직행한다.
     goToTabRoot('trips');

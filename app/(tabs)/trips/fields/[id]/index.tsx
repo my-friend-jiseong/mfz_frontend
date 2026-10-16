@@ -175,7 +175,8 @@ export default function FieldDetail() {
     const r = await removeField(field.id);
     if (r.ok) {
       toast('현장을 삭제했습니다');
-      router.replace('/(tabs)/trips/fields' as never);
+      // replace 는 외근 탭 스택에 현장 목록을 하나 더 쌓는다 — 연 화면으로 돌아간다.
+      safeBack(router, '/(tabs)/trips/fields');
     } else if ('needsConfirm' in r) {
       // 서버는 방문 기록이 있는 현장의 삭제를 거부한다(백로그 §40 — 명세 FE-SITE-09 와 충돌).
       await notice('삭제할 수 없습니다', '방문 기록이 있는 현장은 아직 삭제할 수 없습니다.');

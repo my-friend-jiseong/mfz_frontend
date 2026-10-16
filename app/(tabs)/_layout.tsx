@@ -4,12 +4,12 @@ import { Redirect, Tabs, useSegments } from 'expo-router';
 import { SafeAreaInsetsContext, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppTabBar, tabBarHeight } from '@/components/shell/AppTabBar';
 import { RealSafeAreaInsetsContext } from '@/components/shell/realInsets';
+import { needsStackReset, resetTabStack } from '@/components/shell/tabNav';
 import { TripMiniBar, MINI_BAR_HEIGHT } from '@/components/shell/TripMiniBar';
 import { useAuthStore } from '@/stores/authStore';
 import { useTripStore } from '@/stores/tripStore';
 import { useFieldStore } from '@/stores/fieldStore';
 import { useBottomChromeStore } from '@/stores/bottomChromeStore';
-import { c2 } from '@/theme/v2';
 
 // 미니 바(7-4)를 띄우는 탭. 외근 탭은 첫 화면이 곧 외근 진행(7)이라 띄우지 않는다.
 // 그 탭의 첫 화면(9 보고서 목록·10 내 정보)에서만 — 푸시된 입력 화면(현장 보고·보고서 작성 등)에서는
@@ -93,12 +93,18 @@ export default function TabsLayout() {
         <SafeAreaInsetsContext.Provider value={screenInsets}>
           <Tabs
             initialRouteName="trips"
-            // 미니 바가 뜨는 동안 화면 영역을 그만큼 줄인다 — 목록 끝·하단 버튼 바가 미니 바 뒤로 숨지 않게.
-            // 미니 바의 흰 그라데이션(위 24)만 화면 끝에 겹친다(Figma 7-4 '미니 바 바탕').
-            screenOptions={{
-              headerShown: false,
-              sceneStyle: showMiniBar ? styles.sceneWithMiniBar : undefined,
-            }}
+            screenOptions={{ headerShown: false }}
+            // 같은 탭 다시 누르기에서 스택 맨 아래가 index 가 아니면(외근 종료 뒤 상세만 남은 스택 등) 스택 쪽
+            // popToTop 으로는 첫 화면에 못 가고 개발 경고만 남는다 — 기본 동작을 막고 [index] 로 reset 한다.
+            screenListeners={({ navigation, route }) => ({
+              tabPress: (e) => {
+                if (!navigation.isFocused()) return;
+                const current = navigation.getState().routes.find((r: { key: string }) => r.key === route.key);
+                if (!current || !needsStackReset(current)) return;
+                e.preventDefault();
+                resetTabStack(navigation, current);
+              },
+            })}
             tabBar={(props) => <AppTabBar {...props} insetBottom={insets.bottom} />}
           >
             <Tabs.Screen name="trips" options={{ title: '외근' }} />
@@ -114,5 +120,4 @@ export default function TabsLayout() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  sceneWithMiniBar: { paddingBottom: MINI_BAR_HEIGHT, backgroundColor: c2.bg.canvas },
 });
