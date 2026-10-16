@@ -45,6 +45,8 @@ interface ReportState {
   // 목록을 한 번이라도 받았는가. 포커스마다 다시 받는 동안(loading)에도 이전 목록을 믿고 쓸 수 있다 —
   // 외근 내역의 [보고서 작성]은 이 값이 true 일 때만 보인다(보고서가 있는데 작성 전으로 보이면 중복 생성).
   listLoaded: boolean;
+  // clearAll(로그아웃)마다 1 증가. 그 전에 나간 상세 요청이 늦게 돌아와 다음 계정 캐시에 쓰지 않게 비교한다.
+  generation: number;
   listError: string | null;
   // 상세 화면 진입 시 채워지는 캐시 (fieldReports 포함)
   detailCache: Record<string, Report>;
@@ -134,6 +136,7 @@ export const useReportStore = create<ReportState>((set, get) => ({
   reports: [],
   listStatus: 'idle',
   listLoaded: false,
+  generation: 0,
   listError: null,
   detailCache: {},
   detailStatus: {},
@@ -145,12 +148,28 @@ export const useReportStore = create<ReportState>((set, get) => ({
 
   refresh: async (params) => {
     set({ listStatus: 'loading', listError: null });
+    const gen = get().generation;
     try {
+      // 쪽을 정하지 않은 전체 목록이면 끝까지 받는다(서버 기본 50건) — 외근 내역 배지가 51번째 보고서부터
+      // '작성 전'으로 보이면 같은 외근에 보고서를 또 만들게 된다. 폭주 방지로 20쪽(1,000건)까지.
       const res = await reportsApi.list(params);
+      const all = [...res.items];
+      if (params?.page == null) {
+        let page = 1;
+        let more = res.pagination?.hasNext ?? false;
+        while (more && page < 20) {
+          page += 1;
+          const next = await reportsApi.list({ ...params, page });
+          all.push(...next.items);
+          more = next.pagination?.hasNext ?? false;
+        }
+      }
       const userId = useAuthStore.getState().user?.id ?? '';
-      const items = res.items.map((it) => listItemToReport(it, userId));
+      const items = all.map((it) => listItemToReport(it, userId));
+      if (get().generation !== gen) return;
       set({ reports: items, listStatus: 'ready', listLoaded: true, listError: null });
     } catch (e) {
+      if (get().generation !== gen) return;
       // 삼키지 않는다 — 실패를 무시하면 reports 가 [] 로 남아 EmptyState 가 뜨고,
       // 사용자는 서버 오류를 '보고서 없음' 으로 오독한다 (강령 3).
       set({ listStatus: 'error', listError: localizeError(e) });
@@ -167,9 +186,11 @@ export const useReportStore = create<ReportState>((set, get) => ({
           ? s.detailStatus
           : { ...s.detailStatus, [reportId]: 'loading' },
     }));
+    const gen = get().generation;
     try {
       const res = await reportsApi.detail(reportId);
       const r = detailToReport(res);
+      if (get().generation !== gen) return null;
       set((s) => ({
         detailCache: { ...s.detailCache, [reportId]: r },
         detailStatus: { ...s.detailStatus, [reportId]: 'success' },
@@ -177,6 +198,7 @@ export const useReportStore = create<ReportState>((set, get) => ({
       }));
       return r;
     } catch {
+      if (get().generation !== gen) return null;
       // 이미 success 였으면 missing 으로 격하시키지 않음 — 캐시 사용 계속.
       set((s) => ({
         detailStatus:
@@ -426,7 +448,8 @@ export const useReportStore = create<ReportState>((set, get) => ({
 
   // 로그아웃 시 호출.
   clearAll: () =>
-    set({
+    set((s) => ({
+      generation: s.generation + 1,
       reports: [],
       listStatus: 'idle',
       listLoaded: false,
@@ -434,7 +457,7 @@ export const useReportStore = create<ReportState>((set, get) => ({
       detailCache: {},
       detailStatus: {},
       busy: false,
-    }),
+    })),
 
   getById: (id) => get().reports.find((r) => r.id === id) ?? get().detailCache[id],
 }));

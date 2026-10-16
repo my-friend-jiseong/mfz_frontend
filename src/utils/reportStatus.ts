@@ -22,15 +22,29 @@ function reportsByTrip(reports: Report[]): Map<string, Report> {
 const MAX_INFLIGHT = 4;
 const inflight = new Set<string>();
 let queue: string[] = [];
+// 비우면 1 증가 — 비우기 전에 나간 요청의 완료가 새 줄의 자리를 셈하지 않게.
+let epoch = 0;
+
+/** 요청 줄을 비운다. 로그아웃(reportStore.clearAll → generation 증가)에서 자동으로 불린다. */
+export function resetDetailQueue(): void {
+  epoch += 1;
+  queue = [];
+  inflight.clear();
+}
+useReportStore.subscribe((s, prev) => {
+  if (s.generation !== prev.generation) resetDetailQueue();
+});
 
 function pump() {
   while (inflight.size < MAX_INFLIGHT && queue.length > 0) {
     const id = queue.shift() as string;
+    const myEpoch = epoch;
     inflight.add(id);
     void useReportStore
       .getState()
       .loadDetail(id)
       .finally(() => {
+        if (myEpoch !== epoch) return;
         inflight.delete(id);
         pump();
       });
@@ -93,10 +107,13 @@ export function useTripReportState(tripId: string): TripReportState {
   const detail = useReportStore((s) => (report ? s.detailCache[report.id] : undefined));
   const status = useReportStore((s) => (report ? s.detailStatus[report.id] : undefined));
   const reportId = report?.id;
-  // 외근 상세로 바로 들어오면(딥 링크·새로고침) 보고서 목록을 아직 안 받았다.
-  useEffect(() => {
-    if (!useReportStore.getState().listLoaded) void useReportStore.getState().hydrate();
-  }, []);
+  // 외근 상세로 바로 들어오면(딥 링크·새로고침) 보고서 목록을 아직 안 받았다 — 포커스마다 확인.
+  useFocusEffect(
+    useCallback(() => {
+      const st = useReportStore.getState();
+      if (!st.listLoaded && st.listStatus !== 'loading') void st.hydrate();
+    }, []),
+  );
   useFocusEffect(
     useCallback(() => {
       if (reportId) requestDetails([reportId], true);

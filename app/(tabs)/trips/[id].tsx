@@ -132,6 +132,7 @@ export default function TripDetail() {
   const liveReportState = useTripReportState(id);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const moreRef = useRef<View>(null);
+  const deleteBusyRef = useRef(false);
 
   const fieldById = useMemo(() => new Map(fields.map((f) => [f.id, f])), [fields]);
   const visits = useMemo(() => allVisits.filter((v) => v.tripId === id), [allVisits, id]);
@@ -270,6 +271,17 @@ export default function TripDetail() {
   };
 
   const deleteTrip = async () => {
+    // 확인·삭제가 끝나기 전에 다시 누르면(메뉴를 또 열어) 요청이 겹친다.
+    if (deleteBusyRef.current) return;
+    deleteBusyRef.current = true;
+    try {
+      await runDelete();
+    } finally {
+      deleteBusyRef.current = false;
+    }
+  };
+
+  const runDelete = async () => {
     // 보고서가 있는지는 서버에서 확인한다 — 로컬 목록이 오래됐으면 3-6 경고 없이 보고서를 지우게 된다.
     const reportId = await findTripReportId(id);
     if (reportId === 'error') {
@@ -309,7 +321,11 @@ export default function TripDetail() {
     if (!r.ok && 'needsConfirm' in r) r = await store.remove(id, true);
     if (!r.ok) {
       setDeleting(false);
-      await notice('외근을 삭제하지 못했어요', 'error' in r ? r.error : r.message);
+      const why = 'error' in r ? r.error : r.message;
+      await notice(
+        reportId ? '보고서는 지웠지만 외근을 삭제하지 못했어요. 다시 삭제해 주세요.' : '외근을 삭제하지 못했어요',
+        why,
+      );
       return;
     }
     void useReportStore.getState().refresh();
@@ -318,6 +334,7 @@ export default function TripDetail() {
   };
 
   const openMore = () =>
+    !deleteBusyRef.current &&
     showPopoverMenu(moreRef.current, [
       {
         label: '외근 삭제',
@@ -458,8 +475,26 @@ function Header({
 function ReportFooter({ tripId, state }: { tripId: string; state: TripReportState }) {
   const router = useRouter();
   const report = state.report;
+  const listFailed = useReportStore((s) => s.listStatus === 'error' && !s.listLoaded);
   // 상태를 모르는 동안엔 버튼을 두지 않는다 — 작성 전으로 잘못 보이면 같은 외근에 보고서가 둘 생긴다.
-  if (state.stage === 'checking') return null;
+  if (state.stage === 'checking') {
+    if (!listFailed) return null;
+    return (
+      <BottomActionBar
+        safeArea={false}
+        style={[styles.footer, styles.footerDraft]}
+        header={
+          <Text v2="caption.regular" tone="tertiary" style={styles.center}>
+            보고서 상태를 확인하지 못했어요
+          </Text>
+        }
+      >
+        <Button2 variant="secondary" onPress={() => void useReportStore.getState().hydrate()} fullWidth>
+          다시 시도
+        </Button2>
+      </BottomActionBar>
+    );
+  }
   if (state.stage === 'none' || !report) {
     return (
       <BottomActionBar safeArea={false} style={styles.footer}>

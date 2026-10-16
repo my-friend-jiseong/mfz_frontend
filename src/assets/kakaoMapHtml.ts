@@ -64,6 +64,8 @@ interface MapHtmlOptions {
   fitToMarkers?: boolean;
   // false 면 드래그/줌 비활성 — BottomSheet 안 등 pan 충돌 회피용 정적 위치도(figure).
   interactive?: boolean;
+  // true 면 카카오 축척 막대를 숨긴다(정적 지도 카드 MapPreviewCard 전용 — 보고서 위치도는 축척을 남긴다).
+  hideScale?: boolean;
 }
 
 export function buildKakaoMapHtml({
@@ -73,6 +75,7 @@ export function buildKakaoMapHtml({
   level = 8,
   fitToMarkers = false,
   interactive = true,
+  hideScale = false,
 }: MapHtmlOptions): string {
   // RN WebView와 웹 iframe 양쪽에서 메시지 전송 가능한 브리지 스크립트
   const postMsgFn = `function postMsg(msg){var s=JSON.stringify(msg);if(window.ReactNativeWebView){window.ReactNativeWebView.postMessage(s);}else if(window.parent&&window.parent!==window){window.parent.postMessage(s,'*');}}`;
@@ -152,6 +155,7 @@ MARKERS.forEach(function(m){
   var FIT_TO_MARKERS = ${fitToMarkers ? 'true' : 'false'};
   var FIT_PADDING = null; // [위,오른쪽,아래,왼쪽] — __mfzSetFitPadding 으로 주입(3-8 경로 순서 카드 높이)
   var INTERACTIVE = ${interactive ? 'true' : 'false'};
+  var HIDE_SCALE = ${hideScale ? 'true' : 'false'};
   ${postMsgFn}
   // 조작 불가 지도(interactive=false, 예: 보고서 상세 위치도)는 신호를 보내지 않는다 —
   // 끌 수 없는 지도 때문에 부모 스크롤이 잠기면 손해만 남는다.
@@ -168,7 +172,7 @@ MARKERS.forEach(function(m){
     // 정적 위치도(figure) — 드래그/줌 차단. BottomSheet 등에서 pan 충돌 회피 + 보고서 그림용.
     if (!INTERACTIVE) { map.setDraggable(false); map.setZoomable(false); }
     // 정적 지도 카드에는 축척 막대를 숨긴다(카카오 로고는 남긴다). 웹 KakaoMapWebView.web 의 hideKakaoScale 과 같은 규칙.
-    if (!INTERACTIVE) {
+    if (HIDE_SCALE) {
       var hideScale = function(){
         var divs = container.getElementsByTagName('div');
         for (var i = 0; i < divs.length; i++) {

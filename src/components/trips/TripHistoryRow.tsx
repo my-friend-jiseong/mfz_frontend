@@ -30,30 +30,47 @@ export const TripHistoryRow = memo(function TripHistoryRow({ trip, visitCount, s
   const canWrite = stage === 'none' && visitCount > 0;
   const stageLabel = stage === 'draft' ? '보고서 작성 중' : stage === 'done' ? '보고서 작성 완료' : '';
   return (
-    // 행 전체(상태 표시 포함)가 외근 상세로 가는 버튼. [보고서 작성]만 따로 누른다.
-    <Touchable
-      onPress={() => onPress(trip.id)}
-      accessibilityRole="button"
-      accessibilityLabel={[title, fmtTripSummary(visitCount, trip), stageLabel].filter(Boolean).join(', ')}
-      pressedOpacity={0.6}
-      style={[styles.row, divider && styles.divider]}
-    >
-      <View style={styles.date}>
-        <Text v2="small.semibold" tone="tertiary">
-          {weekdayKo(trip.startedAt)}
-        </Text>
-        <Text v2="title.l" numeric>
-          {dayOfMonth(trip.startedAt)}
-        </Text>
-      </View>
-      <View style={styles.body}>
-        <Text v2="bodyL.semibold" numberOfLines={1}>
-          {title}
-        </Text>
-        <Text v2="caption.regular" tone="tertiary" numberOfLines={1}>
-          {fmtTripSummary(visitCount, trip)}
-        </Text>
-      </View>
+    // 행에서 [보고서 작성]을 뺀 나머지(상태 표시 포함)가 외근 상세로 가는 버튼. 버튼을 버튼 안에 넣지 않는다(스크린리더).
+    <View style={[styles.row, divider && styles.divider]}>
+      <Touchable
+        onPress={() => onPress(trip.id)}
+        accessibilityRole="button"
+        accessibilityLabel={[title, fmtTripSummary(visitCount, trip), stageLabel].filter(Boolean).join(', ')}
+        pressedOpacity={0.6}
+        style={styles.main}
+      >
+        <View style={styles.date}>
+          <Text v2="small.semibold" tone="tertiary">
+            {weekdayKo(trip.startedAt)}
+          </Text>
+          <Text v2="title.l" numeric>
+            {dayOfMonth(trip.startedAt)}
+          </Text>
+        </View>
+        <View style={styles.body}>
+          <Text v2="bodyL.semibold" numberOfLines={1}>
+            {title}
+          </Text>
+          <Text v2="caption.regular" tone="tertiary" numberOfLines={1}>
+            {fmtTripSummary(visitCount, trip)}
+          </Text>
+        </View>
+        {stage === 'draft' ? (
+          <View style={styles.stage}>
+            <Icon name="edit" size={14} color={c2.text.link} />
+            <Text v2="caption.semibold" tone="link">
+              작성 중
+            </Text>
+          </View>
+        ) : stage === 'done' ? (
+          <View style={styles.stage}>
+            <Icon name="check" size={14} color={c2.text.success} />
+            <Text v2="caption.semibold" tone="success">
+              작성 완료
+            </Text>
+          </View>
+        ) : null}
+      </Touchable>
       {canWrite ? (
         <Touchable
           onPress={() => onWriteReport(trip.id)}
@@ -65,27 +82,14 @@ export const TripHistoryRow = memo(function TripHistoryRow({ trip, visitCount, s
             보고서 작성
           </Text>
         </Touchable>
-      ) : stage === 'draft' ? (
-        <View style={styles.stage}>
-          <Icon name="edit" size={14} color={c2.text.link} />
-          <Text v2="caption.semibold" tone="link">
-            작성 중
-          </Text>
-        </View>
-      ) : stage === 'done' ? (
-        <View style={styles.stage}>
-          <Icon name="check" size={14} color={c2.text.success} />
-          <Text v2="caption.semibold" tone="success">
-            작성 완료
-          </Text>
-        </View>
       ) : null}
-    </Touchable>
+    </View>
   );
 });
 
 const styles = StyleSheet.create({
   row: { height: 72, flexDirection: 'row', alignItems: 'center', gap: space[14], marginHorizontal: space[20] },
+  main: { flex: 1, alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: space[14] },
   divider: { borderTopWidth: 1, borderTopColor: c2.border.subtle },
   date: { width: 44, alignItems: 'center' },
   body: { flex: 1, gap: space[2] },

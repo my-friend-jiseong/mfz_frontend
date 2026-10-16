@@ -206,6 +206,8 @@ interface Props {
   fitToMarkers?: boolean;
   // fitToMarkers 여백(위·오른쪽·아래·왼쪽 px). 지도 위를 덮는 카드가 있으면 그만큼(3-8 경로 순서 카드).
   fitPadding?: [number, number, number, number];
+  // 카카오 축척 막대 숨김(정적 지도 카드 MapPreviewCard 전용). 로고는 남는다.
+  hideScale?: boolean;
   // false 면 드래그/줌 비활성 — BottomSheet 안 등 pan 충돌 회피용 정적 위치도.
   interactive?: boolean;
   onMarkerPress?: (fieldId: string) => void;
@@ -390,6 +392,7 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
       startPoint = null,
       fitToMarkers = false,
       fitPadding,
+      hideScale = false,
       interactive = true,
       onMarkerPress,
       onViewChange,
@@ -550,8 +553,8 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
     if (!ready || !mapRef.current) return;
     mapRef.current.setDraggable(interactive);
     mapRef.current.setZoomable(interactive);
-    if (interactive) return;
-    // 정적 지도 카드에는 축척 막대를 숨긴다(카카오 로고는 약관상 남긴다). 축척은 줌이 바뀔 때마다 다시 그려진다.
+    if (!hideScale) return;
+    // 정적 지도 카드(hideScale)에는 축척 막대를 숨긴다(카카오 로고는 남긴다). 축척은 줌이 바뀔 때마다 다시 그려진다.
     const k = getKakao();
     const root = containerRef.current;
     if (!k || !root) return;
@@ -560,7 +563,7 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
     hide();
     k.maps.event.addListener(map, 'idle', hide);
     return () => k.maps.event.removeListener(map, 'idle', hide);
-  }, [ready, interactive]);
+  }, [ready, interactive, hideScale]);
 
   // 베이스 지도 종류(일반/위성/하이브리드) — setMapTypeId 로 베이스 타일만 교체.
   // 마커·히트맵 캔버스·경계 폴리곤은 위에 그대로 유지된다.

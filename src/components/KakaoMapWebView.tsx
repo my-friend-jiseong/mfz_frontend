@@ -94,6 +94,8 @@ interface Props {
   fitToMarkers?: boolean;
   // fitToMarkers 여백(위·오른쪽·아래·왼쪽 px). 지도 위를 덮는 카드가 있으면 그만큼(3-8 경로 순서 카드).
   fitPadding?: [number, number, number, number];
+  // 카카오 축척 막대 숨김(정적 지도 카드 MapPreviewCard 전용). 로고는 남는다.
+  hideScale?: boolean;
   // false 면 드래그/줌 비활성 — BottomSheet 안 등 pan 충돌 회피용 정적 위치도.
   interactive?: boolean;
   onMarkerPress?: (fieldId: string) => void;
@@ -133,6 +135,7 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
       startPoint = null,
       fitToMarkers = false,
       fitPadding,
+      hideScale = false,
       interactive = true,
       onMarkerPress,
       onTilesLoaded,
@@ -203,8 +206,9 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
         level: initialLevelRef.current,
         fitToMarkers,
         interactive,
+        hideScale,
       }),
-    [kakaoJsKey, fitToMarkers, interactive],
+    [kakaoJsKey, fitToMarkers, interactive, hideScale],
   );
 
   // html 이 바뀌면(키/interactive/fitToMarkers) WebView 가 리로드되므로 ready 를 내려, 새 문서에 재주입.

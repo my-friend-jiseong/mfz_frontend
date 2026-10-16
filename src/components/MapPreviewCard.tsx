@@ -53,6 +53,7 @@ export function MapPreviewCard({
           myLocation={myLocation}
           interactive={false}
           fitToMarkers
+          hideScale
         />
       </View>
       <Touchable

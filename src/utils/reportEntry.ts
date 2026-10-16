@@ -1,6 +1,7 @@
 import type { Router } from 'expo-router';
 import { reports as reportsApi } from '@/api';
 import { useReportStore } from '@/stores/reportStore';
+import { notice } from '@/components/ui/ConfirmDialog';
 
 /**
  * 체크인의 `보고서 작성` 분기 (명세 v2 FE-CHK-07).
@@ -58,15 +59,28 @@ export async function findTripReportId(tripId: string): Promise<string | null | 
 /**
  * 외근 내역·외근 상세의 [보고서 작성]. 로컬 목록이 오래됐을 수 있어(다른 기기에서 만든 보고서) 서버에서 한 번 더
  * 확인하고, 이미 있으면 그 보고서로 보낸다 — 같은 외근에 보고서가 두 개 생기지 않게.
+ * 확인하지 못하면 안내만 하고 멈춘다(작성 화면으로 보내면 중복 생성을 막을 수 없다).
+ * 같은 외근으로 확인 중에 다시 누르면 무시한다.
  * TODO(PR8): 9-2 보고서 작성으로 바꾼다.
  */
+const openingTrips = new Set<string>();
 export async function openReportForTrip(router: Router, tripId: string): Promise<void> {
-  const found = await findTripReportId(tripId);
-  if (typeof found === 'string' && found !== 'error') {
-    void useReportStore.getState().refresh();
-    router.push(`/(tabs)/reports/${found}` as never);
-    return;
+  if (openingTrips.has(tripId)) return;
+  openingTrips.add(tripId);
+  try {
+    const found = await findTripReportId(tripId);
+    if (found === 'error') {
+      await notice('보고서를 열지 못했어요', '보고서가 이미 있는지 확인하지 못했어요. 잠시 뒤 다시 해 주세요.');
+      return;
+    }
+    if (found) {
+      router.push(`/(tabs)/reports/${found}` as never);
+      // 목록에 없던 보고서였을 수 있다 — 이동과 같은 틱에 store 를 바꾸지 않고 다음 프레임에 받는다.
+      requestAnimationFrame(() => void useReportStore.getState().refresh());
+      return;
+    }
+    router.push(`/(tabs)/reports/new?tripId=${encodeURIComponent(tripId)}` as never);
+  } finally {
+    openingTrips.delete(tripId);
   }
-  // 조회 실패 시에도 작성 화면으로 — 그 화면이 외근 선택·중복을 다시 다룬다(openReportForTripField 와 같은 규칙).
-  router.push(`/(tabs)/reports/new?tripId=${encodeURIComponent(tripId)}` as never);
 }
