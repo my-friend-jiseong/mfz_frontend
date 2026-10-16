@@ -56,10 +56,12 @@ export const visits = {
     request<VisitDetailResponse>(`/api/trips/${tripId}/visits/${visitId}`),
 
   // 명세 v2 — 체크인·방문 수정의 작업 사진은 방문 단위로 올린다(서버는 JPEG 로 압축 저장).
-  addPhoto: async (visitId: string, file: UploadFile, phase?: VisitPhotoPhase) => {
+  // capturedAt: 찍은(고른) 시각 — 오프라인 대기열로 늦게 올려도 썸네일 시각이 맞게(OpenAPI multipart 칸).
+  addPhoto: async (visitId: string, file: UploadFile, opts?: { phase?: VisitPhotoPhase; capturedAt?: string }) => {
     const fd = new FormData();
     await appendUploadFile(fd, 'file', file);
-    if (phase) fd.append('phase', phase);
+    if (opts?.phase) fd.append('phase', opts.phase);
+    if (opts?.capturedAt) fd.append('capturedAt', opts.capturedAt);
     return request<{ visitId: string; attachment: VisitPhoto }>(`/api/visits/${visitId}/photos`, {
       method: 'POST',
       body: fd,

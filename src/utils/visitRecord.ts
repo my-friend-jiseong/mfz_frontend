@@ -72,30 +72,57 @@ export function memoForVisit(
   return best;
 }
 
+/** 현장의 가장 최근 메모(방금 쓴 메모를 찾는 데 쓴다). */
+function newestMemo(attachments: readonly FieldDirectAttachment[] | undefined): TextMemo | null {
+  let best: TextMemo | null = null;
+  for (const a of attachments ?? []) {
+    if (a.type !== 'text') continue;
+    if (!best || a.createdAt > best.createdAt) best = a;
+  }
+  return best;
+}
+
+export interface VisitRecordResult {
+  errors: string[];
+  /** 조치 상태가 저장됐거나 보낼 필요가 없었다. */
+  statusSaved: boolean;
+  /** 올린 사진은 file 을 뗀다 — file 이 남은 것이 아직 못 올린 사진이다(다시 저장하면 그것만 올린다). */
+  photos: CheckinPhoto[];
+  /** 메모가 저장됐거나 보낼 필요가 없었다. */
+  memoSaved: boolean;
+  /** 저장 뒤 이 방문의 메모 — 다시 저장할 때 initialMemo 로 넘겨 같은 메모를 또 쓰지 않게. */
+  memo: TextMemo | null;
+}
+
 /**
  * 방문 기록을 서버에 반영한다. 방문은 이미 있어야 한다(체크인은 먼저 check-in 을 호출).
  * 부분 실패는 모아서 돌려준다 — 사진 하나 실패로 메모·조치 상태까지 버리지 않는다.
- * 올린 사진은 file 을 뗀 목록으로 돌려준다(다시 저장해도 두 번 올라가지 않게).
+ * 단계마다 끝났는지 돌려주므로, 호출부는 다시 저장할 때 남은 단계만 보낸다(status·memo 에 null → 건너뜀).
  */
 export async function saveVisitRecord(args: {
   visitId: string;
   fieldId: string;
-  /** 고른 조치 상태. 처음 값과 같으면 보내지 않는다. */
+  /** 고른 조치 상태. null 이거나 처음 값과 같으면 보내지 않는다. */
   status: FieldStatus | null;
   initialStatus: FieldStatus | null;
   photos: CheckinPhoto[];
-  memo: string;
+  /** null 이면 메모 단계를 건너뛴다(이미 저장했거나 고칠 수 없는 방문). */
+  memo: string | null;
   /** 이 방문에 연결된 기존 메모 — 바뀌면 지우고 새로 쓴다. 다른 방문의 메모는 넘기지 않는다. */
   initialMemo: TextMemo | null;
-}): Promise<{ errors: string[]; photos: CheckinPhoto[] }> {
+}): Promise<VisitRecordResult> {
   const { visitId, fieldId, status, initialStatus, initialMemo } = args;
   const errors: string[] = [];
   const visit = useVisitStore.getState();
   const field = useFieldStore.getState();
 
+  let statusSaved = true;
   if (status && status !== initialStatus) {
     const r = await field.patchStatus(fieldId, status);
-    if (!r.ok) errors.push(`조치 상태: ${r.error}`);
+    if (!r.ok) {
+      statusSaved = false;
+      errors.push(`조치 상태: ${r.error}`);
+    }
   }
 
   const photos: CheckinPhoto[] = [];
@@ -106,7 +133,7 @@ export async function saveVisitRecord(args: {
       photos.push(p);
       continue;
     }
-    const r = await visit.addPhoto(visitId, p.file);
+    const r = await visit.addPhoto(visitId, p.file, { capturedAt: p.takenAt });
     if (r.ok) photos.push({ key: p.key, uri: p.uri, takenAt: p.takenAt });
     else {
       failed += 1;
@@ -117,18 +144,35 @@ export async function saveVisitRecord(args: {
   if (failed > 0) errors.push(`사진 ${failed}장: ${lastError}`);
 
   // 메모는 수정 API 가 없어 삭제 + 재생성한다(백로그 §35).
-  const nextMemo = args.memo.trim();
-  const prevMemo = (initialMemo?.text ?? '').trim();
-  if (nextMemo !== prevMemo) {
-    if (nextMemo) {
-      const r = await field.addTextMemo(fieldId, nextMemo);
-      if (!r.ok) errors.push(`메모: ${r.error}`);
-      else if (initialMemo) void field.removeTextMemo(fieldId, initialMemo.id);
-    } else if (initialMemo) {
-      const r = await field.removeTextMemo(fieldId, initialMemo.id);
-      if (!r.ok) errors.push(`메모: ${r.error}`);
+  let memoSaved = true;
+  let memo = initialMemo;
+  if (args.memo !== null) {
+    const nextMemo = args.memo.trim();
+    const prevMemo = (initialMemo?.text ?? '').trim();
+    if (nextMemo !== prevMemo) {
+      if (nextMemo) {
+        const r = await field.addTextMemo(fieldId, nextMemo);
+        if (!r.ok) {
+          memoSaved = false;
+          errors.push(`메모: ${r.error}`);
+        } else {
+          if (initialMemo) void field.removeTextMemo(fieldId, initialMemo.id);
+          memo = newestMemo(useFieldStore.getState().directAttachments[fieldId]);
+        }
+      } else if (initialMemo) {
+        const r = await field.removeTextMemo(fieldId, initialMemo.id);
+        if (!r.ok) {
+          memoSaved = false;
+          errors.push(`메모: ${r.error}`);
+        } else memo = null;
+      }
     }
   }
 
-  return { errors, photos };
+  return { errors, statusSaved, photos, memoSaved, memo };
+}
+
+/** 메모를 이 방문의 것으로 볼 수 있는 기간(방문 시각부터). 지나면 3-7 에서 메모를 고칠 수 없다(서버에 방문 메모가 없음). */
+export function visitMemoEditable(visitedAt: string, now = Date.now()): boolean {
+  return now - new Date(visitedAt).getTime() < MEMO_WINDOW_MS;
 }

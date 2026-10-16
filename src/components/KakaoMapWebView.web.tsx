@@ -207,6 +207,8 @@ interface Props {
   startPoint?: { lat: number; lng: number } | null;
   // true 면 모든 마커가 한 화면에 들어오도록 자동 프레이밍 (center 무시). 위치도 미리보기용.
   fitToMarkers?: boolean;
+  // fitToMarkers 로 맞출 때 핀과 함께 화면에 넣을 점(네이티브와 동일).
+  fitExtra?: { lat: number; lng: number }[];
   // fitToMarkers 여백(위·오른쪽·아래·왼쪽 px). 지도 위를 덮는 카드가 있으면 그만큼(3-8 경로 순서 카드).
   fitPadding?: [number, number, number, number];
   // 카카오 축척 막대 숨김(정적 지도 카드 MapPreviewCard 전용). 로고는 남는다.
@@ -397,6 +399,7 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
       circle = null,
       startPoint = null,
       fitToMarkers = false,
+      fitExtra,
       fitPadding,
       hideScale = false,
       interactive = true,
@@ -517,13 +520,14 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
     if (!mapRef.current || !fitToMarkers || markers.length === 0) return;
     const k = getKakao();
     if (!k) return;
-    if (markers.length === 1) {
-      mapRef.current.setCenter(new k.maps.LatLng(markers[0].lat, markers[0].lng));
+    const pts: { lat: number; lng: number }[] = [...markers, ...(fitExtra ?? [])];
+    if (pts.length === 1) {
+      mapRef.current.setCenter(new k.maps.LatLng(pts[0].lat, pts[0].lng));
       mapRef.current.setLevel(5);
       return;
     }
     const bounds = new k.maps.LatLngBounds();
-    markers.forEach((m) => bounds.extend(new k.maps.LatLng(m.lat, m.lng)));
+    pts.forEach((m) => bounds.extend(new k.maps.LatLng(m.lat, m.lng)));
     // 정적 지도 카드(120·132)는 기본 여백(위아래 96)이면 남는 높이가 30여 px 라 몇 배 멀리 보인다 —
     // 2차 핀은 끝이 좌표라 위로만 44 가 솟으므로 위 48·아래 12 로 줄인다.
     const h = containerRef.current?.clientHeight ?? 0;
@@ -535,7 +539,8 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
     if (!ready) return;
     fitRef.current();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, markers, fitToMarkers, fitPadding?.join(',')]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, markers, fitToMarkers, fitPadding?.join(','), JSON.stringify(fitExtra ?? [])]);
 
   // 컨테이너 크기가 바뀌면(첫 레이아웃이 지도 생성보다 늦은 작은 카드 등) 카카오 지도는 스스로 다시 재지
   // 않아 중심이 어긋난다(MapPreviewCard 에서 핀이 카드 아래로 밀려 실측). relayout 후 다시 맞춘다.

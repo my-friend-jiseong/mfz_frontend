@@ -2,6 +2,11 @@ import React, { useMemo } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { KakaoMapWebView, type KakaoMapMarker, type MapPath } from '@/components/KakaoMapWebView';
 import type { AccuracyTone } from '@/assets/mapPins';
+import { haversineKm } from '@/utils/routeOptimize';
+
+// 내 위치가 핀에서 이 거리(m) 안이면 카드에 함께 보이도록 맞추고, 더 멀면 점을 그리지 않는다
+// (멀리 있는 점까지 넣으면 핀이 작아지고, 안 넣으면 점이 카드 밖에 떠서 의미가 없다).
+const MY_LOCATION_NEAR_M = 1000;
 import { Icon } from '@/components/icons';
 import { Text } from '@/components/ui/Text';
 import { Touchable } from '@/components/ui/Touchable';
@@ -39,6 +44,14 @@ export function MapPreviewCard({
   style,
 }: Props) {
   // 선택 핀 크기는 카드 높이로 정해진다: 132(현장 상세) = lg 1.44배, 120(체크인) = sm 1.19배.
+  const nearMe = useMemo(
+    () =>
+      myLocation && markers.some((m) => haversineKm(myLocation, { lat: m.lat, lng: m.lng }) * 1000 <= MY_LOCATION_NEAR_M)
+        ? myLocation
+        : null,
+    [myLocation, markers],
+  );
+  const fitExtra = useMemo(() => (nearMe ? [nearMe] : undefined), [nearMe]);
   const sized = useMemo(
     () => markers.map((m) => (m.selected && !m.selectedSize ? { ...m, selectedSize: height === 132 ? ('lg' as const) : ('sm' as const) } : m)),
     [markers, height],
@@ -51,7 +64,8 @@ export function MapPreviewCard({
           circle={circle}
           paths={paths}
           startPoint={startPoint}
-          myLocation={myLocation}
+          myLocation={nearMe}
+          fitExtra={fitExtra}
           interactive={false}
           fitToMarkers
           hideScale

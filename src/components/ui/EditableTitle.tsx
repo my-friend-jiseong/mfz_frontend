@@ -30,6 +30,8 @@ interface Props {
   placeholder?: string;
   /** 빈 값일 때 placeholder 글자색. 현장명처럼 빈 값이면 주소가 곧 이름인 곳은 'primary'. 기본 흐린 글자. */
   placeholderTone?: 'tertiary' | 'primary';
+  /** 글자 높이(30)만 차지하고 누르는 범위는 hitSlop 으로 44 를 채운다 — 위아래 줄과 Figma 간격대로 붙일 때(8 체크인). */
+  dense?: boolean;
 }
 
 /**
@@ -47,6 +49,7 @@ export function EditableTitle({
   allowEmpty,
   placeholder,
   placeholderTone = 'tertiary',
+  dense,
 }: Props) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
@@ -87,7 +90,8 @@ export function EditableTitle({
         accessibilityRole="button"
         accessibilityLabel={`${label}: ${value || placeholder || ''}`}
         accessibilityHint="눌러서 제목을 수정합니다"
-        style={({ pressed }) => [styles.display2, pressed && { opacity: opacity.pressed }]}
+        hitSlop={dense ? { top: 7, bottom: 7 } : undefined}
+        style={({ pressed }) => [styles.display2, dense && styles.dense, pressed && { opacity: opacity.pressed }]}
       >
         <View style={styles.title2}>
           <Text v2={v2} tone={empty ? placeholderTone : 'primary'} numberOfLines={2}>
@@ -176,6 +180,7 @@ function DottedUnderline() {
 const styles = StyleSheet.create({
   display: { minHeight: touchTarget.control, justifyContent: 'center' },
   display2: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: space[4] },
+  dense: { minHeight: 30 },
   title2: { flexShrink: 1 },
   underline: { height: 2, alignSelf: 'stretch' },
   row: { flexDirection: 'row', alignItems: 'center' },

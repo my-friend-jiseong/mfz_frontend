@@ -34,7 +34,7 @@ interface VisitState {
 
   /** 성공 여부 — 실패는 조용히 삼키되 호출 측이 재시도를 판단할 수 있게. */
   loadPhotos: (tripId: string, visitId: string) => Promise<boolean>;
-  addPhoto: (visitId: string, file: UploadFile, phase?: VisitPhotoPhase) => Promise<GenericResult>;
+  addPhoto: (visitId: string, file: UploadFile, opts?: { phase?: VisitPhotoPhase; capturedAt?: string }) => Promise<GenericResult>;
   remove: (visitId: string) => Promise<RemoveResult>;
 
   checkIn: (tripId: string, fieldId: string) => Promise<CheckInResult>;
@@ -96,9 +96,9 @@ export const useVisitStore = create<VisitState>((set, get) => ({
     }
   },
 
-  addPhoto: async (visitId, file, phase) => {
+  addPhoto: async (visitId, file, opts) => {
     try {
-      const res = await visitsApi.addPhoto(visitId, file, phase);
+      const res = await visitsApi.addPhoto(visitId, file, opts);
       set((s) => ({
         photosByVisit: {
           ...s.photosByVisit,

@@ -240,7 +240,9 @@ MARKERS.forEach(function(m){
       var t = PIN_TPL[m.pin + '|' + (hasN ? 1 : 0) + '|' + sel] || PIN_TPL['pending|0|0'];
       if (hasN) t = t.replace('__N__', String(m.order));
       if (m.nameTag) {
-        var tag = PIN_TAG.replace('__TOP__', String(PIN_TAG_TOP[sel] || PIN_TAG_TOP['0'])).replace('__TAG__', escHtml(m.nameTag));
+        // 바꿀 글은 함수로 넘긴다 — 현장 이름에 '$&' 같은 치환 기호가 있어도 그대로 나오게.
+        var name = escHtml(m.nameTag);
+        var tag = PIN_TAG.replace('__TOP__', String(PIN_TAG_TOP[sel] || PIN_TAG_TOP['0'])).replace('__TAG__', function(){ return name; });
         t = t.slice(0, -6) + tag + '</div>';
       }
       return t;
@@ -526,15 +528,19 @@ MARKERS.forEach(function(m){
 
     // 모든 마커가 한 화면에 들어오도록 자동 프레이밍 — center/level 고정 대신.
     // 1개면 setBounds 가 최대 줌으로 튀어 부적절 → 그 점에 센터 + 적당한 level.
+    // 핀 말고도 화면에 넣을 점(체크인 카드의 가까운 내 위치) — RN 이 __mfzSetFitExtra 로 넣는다.
+    var FIT_EXTRA = [];
+    window.__mfzSetFitExtra = function(a){ FIT_EXTRA = a || []; fitBounds(); };
     function fitBounds(){
       if (!FIT_TO_MARKERS || MARKERS.length === 0) return;
-      if (MARKERS.length === 1) {
-        map.setCenter(new kakao.maps.LatLng(MARKERS[0].lat, MARKERS[0].lng));
+      var pts = MARKERS.concat(FIT_EXTRA);
+      if (pts.length === 1) {
+        map.setCenter(new kakao.maps.LatLng(pts[0].lat, pts[0].lng));
         map.setLevel(5);
         return;
       }
       var bounds = new kakao.maps.LatLngBounds();
-      MARKERS.forEach(function(m){ bounds.extend(new kakao.maps.LatLng(m.lat, m.lng)); });
+      pts.forEach(function(m){ bounds.extend(new kakao.maps.LatLng(m.lat, m.lng)); });
       // padding(px): top,right,bottom,left — 라벨이 마커 아래 떠서 하단 여유 더 줌.
       // 정적 지도 카드(120·132)는 남는 높이가 너무 작아 위 48·아래 12 로 줄인다(웹 KakaoMapWebView 와 같은 규칙).
       if (FIT_PADDING) map.setBounds(bounds, FIT_PADDING[0], FIT_PADDING[1], FIT_PADDING[2], FIT_PADDING[3]);

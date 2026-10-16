@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { router } from 'expo-router';
@@ -47,6 +47,14 @@ function useSilentLocation(enabled: boolean): LatLng | null {
  * 진행 중 외근이 없으면 아무것도 그리지 않는다 — 보일지 여부는 탭 레이아웃이 정한다.
  */
 export function TripMiniBar({ bottom }: { bottom: number }) {
+  // [체크인] 두 번 누름 — 모달이 뜨는 동안 다시 눌러 체크인 화면이 두 겹 쌓이지 않게 잠깐 막는다.
+  const checkinAt = useRef(0);
+  const openCheckin = (fieldId: string) => {
+    const now = Date.now();
+    if (now - checkinAt.current < 1000) return;
+    checkinAt.current = now;
+    router.push(checkinHref(fieldId) as never);
+  };
   const activeTripId = useTripStore((s) => s.activeTripId);
   const trip = useTripStore((s) => (s.activeTripId ? s.trips.find((t) => t.id === s.activeTripId) : undefined));
   const destinations = useDestinationStore((s) => s.destinations);
@@ -116,7 +124,7 @@ export function TripMiniBar({ bottom }: { bottom: number }) {
         </Touchable>
         {next ? (
           <Touchable
-            onPress={() => router.push(checkinHref(next.fieldId) as never)}
+            onPress={() => openCheckin(next.fieldId)}
             accessibilityRole="button"
             accessibilityLabel="체크인"
             style={styles.checkin}

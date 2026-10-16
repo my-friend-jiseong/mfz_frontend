@@ -35,7 +35,7 @@ export function NearbyFieldSheet({ open, onClose, nearby, selectedId, onSelect, 
             key={n.field.id}
             mode="radio"
             title={fieldTitle(n.field)}
-            subtitle={[formatDistanceM(n.distanceM), districtOf(n.field.address)].filter(Boolean).join(' · ')}
+            subtitle={[formatDistanceM(Math.max(1, n.distanceM)), districtOf(n.field.address)].filter(Boolean).join(' · ')}
             selected={n.field.id === selectedId}
             onPress={() => onSelect(n.field.id)}
             first={i === 0}

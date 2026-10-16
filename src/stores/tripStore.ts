@@ -136,7 +136,23 @@ export const useTripStore = create<TripState>((set, get) => ({
       }
       // 자체 trips 항목의 메타 갱신 — visitCount 가 list 응답보다 최신일 수 있음.
       set((s) => ({
-        trips: s.trips.map((t) =>
+        // 목록에 아직 없는 외근(3-7 방문 기록 수정을 바로 연 경우 등)은 상세 응답으로 넣어 둔다 — 안 그러면 화면이
+        // '목록에 없음 → 상세 다시 요청'을 되풀이한다.
+        trips: (s.trips.some((t) => t.id === id)
+          ? s.trips
+          : [
+              ...s.trips,
+              {
+                id: res.tripId,
+                workerId: res.userId,
+                startedAt: res.startedAt,
+                endedAt: res.endedAt,
+                status: res.status as Trip['status'],
+                title: res.title,
+                visitCount: res.visitCount,
+              } as Trip,
+            ]
+        ).map((t) =>
           t.id === id
             ? {
                 ...t,

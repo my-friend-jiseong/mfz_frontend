@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MapPreviewCard } from '@/components/MapPreviewCard';
@@ -38,7 +38,9 @@ import { fieldTitle } from '@/utils/fieldFacets';
 import { districtOf, pickedPlaceName, stripRegion } from '@/utils/addressFormat';
 import { findNearbyFields, formatDistanceM, type NearbyField } from '@/utils/nearestField';
 import { peekUserLocation, requestUserLocation, type UserLocation } from '@/utils/geolocation';
-import { memoForVisit, photosToList, saveVisitRecord, type CheckinPhoto } from '@/utils/visitRecord';
+import { memoForVisit, photosToList, saveVisitRecord, visitMemoEditable, type CheckinPhoto } from '@/utils/visitRecord';
+import { keepQueuedPhotos } from '@/utils/queuePhotos';
+import type { FieldDirectAttachment } from '@/api';
 import { createFieldFromPlace } from '@/utils/placeToField';
 import { reconcileCategories, waitForCategoryCascade } from '@/utils/categoryCascade';
 import { fmtMonthDay, fmtTime } from '@/utils/datetime';
@@ -48,10 +50,10 @@ import { c2, radius2, space } from '@/theme/v2';
 
 /**
  * GPS 오차가 이보다 크면(m) 8-5 'GPS 신호 약함' 경고 줄과 주황 오차 원을 보인다.
- * 50m: 100m 자동 연결 판정의 절반 — 이보다 크면 가까운 현장을 잘못 붙이거나 새 현장 위치가 눈에 띄게 어긋난다.
- * Figma 8-5 예시는 ±48m(경고), iOS kCLLocationAccuracyHundredMeters·Android Balanced 가 ~100m 라 실내·도심 협곡에서 넘는다.
+ * 30m: Figma 8-5 예시 ±48m 가 경고로 보여야 하고(검토 결정), 보통 실외 GPS(High)는 5~20m 라 그 위면 건물 사이·실내다.
+ * 100m 자동 연결 판정에서 30m 넘게 어긋나면 옆 현장에 붙거나 새 현장 위치가 눈에 띄게 틀린다.
  */
-export const WEAK_GPS_ACCURACY_M = 50;
+export const WEAK_GPS_ACCURACY_M = 30;
 // Figma 8: 영역 사이 22, 제목(22) 아래 내용까지 10. 2차 Spacing 변수에 22 가 없어 프레임 값 그대로.
 const SECTION_GAP = 22;
 
@@ -108,16 +110,35 @@ export default function CheckinScreen() {
   const [memoLoaded, setMemoLoaded] = useState(!isEdit);
   // 현장 상세를 한 번 받아 봤는가 — 그래도 없으면 '현장을 찾을 수 없어요'.
   const [detailTried, setDetailTried] = useState(false);
+  // 수정 모드: 방문을 찾으려고 외근 상세를 받아 봤는가 — 그래도 없으면 '방문 기록을 찾을 수 없어요'.
+  const [visitTried, setVisitTried] = useState(false);
+  // 외근 상세 요청은 외근마다 한 번(목록에 없는 외근을 되풀이해 요청하지 않게).
+  const tripRequested = useRef(new Set<string>());
   // 닫기 막기(8-13)·저장 중 표시.
   const allowLeave = useRef(false);
   const savingRef = useRef(false);
   const dirtyRef = useRef(false);
+  // 저장 진행 — 체크인(방문)·새 현장을 이미 만들었으면 다시 [저장]할 때 남은 단계만 보낸다.
+  const createdFieldRef = useRef<Field | null>(null);
+  const progressRef = useRef<{ visitId: string; statusSaved: boolean; memoSaved: boolean } | null>(null);
+  // 한 번 저장한 메모 — 다시 저장할 때 이것을 기준으로 바꾼다(같은 메모를 두 번 쓰지 않게).
+  const savedMemoRef = useRef<FieldDirectAttachment | null | undefined>(undefined);
+  // 새 현장을 만든 뒤 체크인을 못 했다 — 현장 정보 칸을 잠근다(이미 만든 현장과 어긋나지 않게).
+  const [fieldLocked, setFieldLocked] = useState(false);
+  // 체크인은 저장했고 일부 기록만 남았다(닫기 문구가 다르다).
+  const [partialSaved, setPartialSaved] = useState(false);
 
   // === 진입 — 현장·방문을 받는다 ===
   useEffect(() => {
     void useProjectStore.getState().refresh();
     if (isEdit) {
-      if (!useVisitStore.getState().getById(visitId) && editTripId) void useTripStore.getState().loadDetail(editTripId);
+      if (!useVisitStore.getState().getById(visitId) && editTripId) {
+        tripRequested.current.add(editTripId);
+        void useTripStore
+          .getState()
+          .loadDetail(editTripId)
+          .finally(() => setVisitTried(true));
+      } else setVisitTried(true);
       if (editTripId) void useVisitStore.getState().loadPhotos(editTripId, visitId).finally(() => setPhotosLoaded(true));
       else setPhotosLoaded(true);
       return;
@@ -128,18 +149,37 @@ export default function CheckinScreen() {
       return;
     }
     // 지금 위치 기록 — 현장 목록을 받기 전이면 가까운 현장을 못 찾는다. 먼저 받는다.
+    // 목록을 못 받았으면 새 현장으로 넘어가지 않는다(가까운 현장이 있어도 모르고 새로 만들게 된다) — 다시 시도를 묻는다.
     let alive = true;
+    const leave = () => {
+      allowLeave.current = true;
+      safeBack(router);
+    };
+    const loadList = async (): Promise<boolean> => {
+      for (;;) {
+        const fs = useFieldStore.getState();
+        if (fs.listStatus !== 'ready') await fs.hydrate();
+        if (useFieldStore.getState().listStatus === 'ready') return true;
+        if (!alive) return false;
+        const again = await confirm({
+          title: '현장 목록을 받지 못했어요',
+          message: '가까운 현장을 찾으려면 목록이 필요해요. 인터넷 연결을 확인하고 다시 해 주세요.',
+          cancelLabel: '닫기',
+          confirmLabel: '다시 시도',
+        });
+        if (!again || !alive) return false;
+      }
+    };
     void (async () => {
-      const fs = useFieldStore.getState();
-      const listing = fs.listStatus === 'ready' ? Promise.resolve() : fs.hydrate();
-      const [p] = await Promise.all([requestUserLocation({ high: true }), listing]);
+      const [p, listed] = await Promise.all([requestUserLocation({ high: true }), loadList()]);
       if (!alive) return;
+      if (!listed) {
+        leave();
+        return;
+      }
       if (!p) {
         await notice('지금 위치를 알 수 없어요', '위치 권한을 켜고 다시 해 주세요.');
-        if (alive) {
-          allowLeave.current = true;
-          safeBack(router);
-        }
+        if (alive) leave();
         return;
       }
       setPos(p);
@@ -167,8 +207,12 @@ export default function CheckinScreen() {
         setDetailTried(true);
       });
   }, [fieldId]);
+  // 부제의 외근 제목 — 목록에 없는 외근이면 상세를 한 번만 받는다(상세가 목록에 넣는다).
   useEffect(() => {
-    if (isEdit && visit && !trips.some((t) => t.id === visit.tripId)) void useTripStore.getState().loadDetail(visit.tripId);
+    if (!isEdit || !visit || tripRequested.current.has(visit.tripId)) return;
+    if (trips.some((t) => t.id === visit.tripId) || useTripStore.getState().detailStatus[visit.tripId]) return;
+    tripRequested.current.add(visit.tripId);
+    void useTripStore.getState().loadDetail(visit.tripId);
   }, [isEdit, visit, trips]);
   // 화면이 닫히면 새 현장 입력값을 지운다.
   useEffect(() => () => useFieldDraftStore.getState().remove(draftKey), [draftKey]);
@@ -208,21 +252,33 @@ export default function CheckinScreen() {
   }, [baseStatus]);
 
   // === 수정 모드: 기존 사진·메모를 채운다(사진·메모가 도착한 뒤 한 번) ===
-  const initialMemo = useMemo(() => (isEdit && visit ? memoForVisit(attachments, visit.visitedAt) : null), [isEdit, visit, attachments]);
+  const loadedMemo = useMemo(() => (isEdit && visit ? memoForVisit(attachments, visit.visitedAt) : null), [isEdit, visit, attachments]);
+  const initialMemo = savedMemoRef.current !== undefined ? savedMemoRef.current : loadedMemo;
+  // 3-7: 조치 상태는 서버에 방문 단위가 없어 현장 상태로 저장한다 — 그 현장의 가장 최근 방문을 고칠 때만 보이고 보낸다
+  // (지난 방문에서 바꾸면 지금 현장 상태가 엉뚱하게 바뀐다, 백로그 2차 D).
+  const isLatestVisit = useMemo(() => {
+    if (!isEdit || !visit) return true;
+    return !allVisits.some((v) => v.fieldId === visit.fieldId && v.id !== visit.id && v.visitedAt > visit.visitedAt);
+  }, [isEdit, visit, allVisits]);
+  const showStatus = !isEdit || isLatestVisit;
+  // 3-7: 메모는 현장 메모로 저장하고 방문 시각 뒤 24시간 안의 것을 그 방문 메모로 본다 — 지나면 고칠 수 없다(§35).
+  const memoEditable = !isEdit || !visit || visitMemoEditable(visit.visitedAt);
   const filled = useRef(!isEdit);
   useEffect(() => {
     if (filled.current || !visit || !photosLoaded || !memoLoaded) return;
     filled.current = true;
     setPhotos(photosToList(visitPhotos));
-    setMemo(initialMemo?.text ?? '');
-  }, [visit, visitPhotos, initialMemo, photosLoaded, memoLoaded]);
+    setMemo(loadedMemo?.text ?? '');
+  }, [visit, visitPhotos, loadedMemo, photosLoaded, memoLoaded]);
 
   // === 닫기(X·안드로이드 뒤로·웹 뒤로) — 8-13. 체크인은 늘 묻고, 수정은 바꾼 것이 있을 때만. ===
   dirtyRef.current = isEdit
-    ? (status !== null && status !== initialStatusRef.current) ||
-      memo.trim() !== (initialMemo?.text ?? '').trim() ||
+    ? (showStatus && status !== null && status !== initialStatusRef.current) ||
+      (memoEditable && memo.trim() !== (initialMemo?.text ?? '').trim()) ||
       photos.some((p) => p.file)
     : mode !== 'resolving';
+  // 알려진 한계: 웹 브라우저의 뒤로 버튼은 주소만 먼저 바꾸고 화면을 걷어 내서 여기서 막지 못한다(8-13 없이 닫힘).
+  // 앱(X·안드로이드 뒤로·iOS 쓸어 넘기기)은 모두 이 확인을 거친다.
   useEffect(
     () =>
       navigation.addListener('beforeRemove', (e) => {
@@ -233,12 +289,21 @@ export default function CheckinScreen() {
         }
         if (!dirtyRef.current) return;
         e.preventDefault();
-        void confirm(
-          isEdit
-            ? { title: '수정을 그만둘까요?', message: '바꾼 내용은 저장되지 않아요.', cancelLabel: '계속 수정', confirmLabel: '그만두기', destructive: true }
-            : { title: '체크인을 그만둘까요?', message: '이번 방문 기록과 사진은 저장되지 않아요.', cancelLabel: '계속 기록', confirmLabel: '그만두기', destructive: true },
-        ).then((ok) => {
+        const created = createdFieldRef.current && !progressRef.current ? createdFieldRef.current : null;
+        const opts = isEdit
+          ? { title: '수정을 그만둘까요?', message: '바꾼 내용은 저장되지 않아요.', cancelLabel: '계속 수정', confirmLabel: '그만두기', destructive: true }
+          : progressRef.current
+            ? { title: '체크인을 그만둘까요?', message: '체크인은 저장됐어요. 올리지 못한 사진·메모만 저장되지 않아요.', cancelLabel: '계속 기록', confirmLabel: '그만두기', destructive: true }
+            : created
+              ? { title: '체크인을 그만둘까요?', message: '새 현장은 이미 저장됐어요. 그만두면 새 현장도 지워요.', cancelLabel: '계속 기록', confirmLabel: '그만두기', destructive: true }
+              : { title: '체크인을 그만둘까요?', message: '이번 방문 기록과 사진은 저장되지 않아요.', cancelLabel: '계속 기록', confirmLabel: '그만두기', destructive: true };
+        void confirm(opts).then(async (ok) => {
           if (!ok) return;
+          if (created) {
+            // 체크인 없이 남은 새 현장은 지운다(방문이 없어 force 가 필요 없지만, 남은 것이 있어도 지우게 force).
+            const r = await useFieldStore.getState().remove(created.id, true);
+            if (!r.ok) await notice('새 현장을 지우지 못했어요', '현장 검색에서 직접 지워 주세요.');
+          }
           allowLeave.current = true;
           navigation.dispatch(e.data.action);
         });
@@ -268,10 +333,16 @@ export default function CheckinScreen() {
             : `체크인 · ${time}`;
   // 다음에 갈 목적지가 남았으면 '저장하고 다음 현장으로'(Figma 8), 아니면 '저장'.
   const hasNextDest = tripDests.some((d) => d.status === 'pending' && d.fieldId !== fieldId);
-  const saveLabel = mode === 'new' ? '새 현장으로 저장' : mode === 'destination' && hasNextDest ? '저장하고 다음 현장으로' : '저장';
+  const saveLabel = partialSaved ? '저장' : mode === 'new' && !fieldLocked ? '새 현장으로 저장' : mode === 'destination' && hasNextDest ? '저장하고 다음 현장으로' : '저장';
 
+  // 이번 체크인이 이 현장의 몇 번째 방문인가 — 이미 저장된 방문(이번 외근 것 포함) + 1.
+  // 같은 외근·현장은 서버가 같은 방문으로 받으므로(멱등) 이번 외근에 이미 있으면 그 방문이 이번 것이다.
   const visitOrdinal = field
-    ? allVisits.filter((v) => v.fieldId === field.id && v.tripId !== activeTripId).length + 1
+    ? (() => {
+        const mine = allVisits.filter((v) => v.fieldId === field.id);
+        const already = mine.some((v) => v.tripId === activeTripId);
+        return mine.length + (already ? 0 : 1);
+      })()
     : 0;
   const editTrip = isEdit && visit ? trips.find((t) => t.id === visit.tripId) : undefined;
   const subtitle = field
@@ -315,8 +386,6 @@ export default function CheckinScreen() {
   };
 
   // === 저장 ===
-  // 새 현장을 만든 뒤 체크인이 실패하면, 다시 누를 때 현장을 또 만들지 않는다.
-  const createdFieldRef = useRef<Field | null>(null);
   const fail = async (title: string, message?: string) => {
     savingRef.current = false;
     setSaving(false);
@@ -366,49 +435,82 @@ export default function CheckinScreen() {
         return;
       }
       target = r.field;
+      // 새 현장을 만든 뒤 체크인이 실패하면, 다시 누를 때 현장을 또 만들지 않는다. 현장 칸은 잠근다.
       createdFieldRef.current = r.field;
+      setFieldLocked(true);
     }
     // 새 현장은 고른 조치 상태로 만들었다 — 다시 보내지 않는다.
     if (mode === 'new') initialStatus = status;
     if (!target) return;
     const label = fieldTitle(target);
-    const record = { status, initialStatus, memo, photos };
+    const targetId = target.id;
 
     // 서버에 닿지 못하면 기기에 남기고 7 로(7-2). 함께 고른 사진·메모·조치 상태도 싣는다.
-    const queue = () => {
-      useCheckinQueueStore.getState().enqueue({ tripId, fieldId: target.id, label, record });
+    // 사진은 앱 문서 폴더로 옮겨 둔다(캐시는 OS 가 지울 수 있다). 웹은 새로 고치면 사라진다고 알린다.
+    const queue = async (rest: { visitId?: string; statusSaved: boolean; memoSaved: boolean; photos: CheckinPhoto[] }) => {
+      const kept = await keepQueuedPhotos(rest.photos);
+      useCheckinQueueStore.getState().enqueue({
+        tripId,
+        fieldId: targetId,
+        label,
+        visitId: rest.visitId,
+        record: { status, initialStatus, memo, photos: kept, statusSaved: rest.statusSaved, memoSaved: rest.memoSaved },
+      });
+      if (Platform.OS === 'web' && kept.some((p) => p.file)) {
+        await notice('사진은 이 창에 임시로 있어요', '연결되기 전에 페이지를 새로 고치면 사진이 사라져요.');
+      }
       finishCheckin(false);
     };
-    if (await isKnownOffline()) {
-      queue();
-      return;
-    }
-    const r = await useVisitStore.getState().checkIn(tripId, target.id);
-    if (!r.ok) {
-      if (r.network) {
-        queue();
+
+    let progress = progressRef.current;
+    if (!progress) {
+      if (await isKnownOffline()) {
+        await queue({ statusSaved: false, memoSaved: false, photos });
         return;
       }
-      await fail('체크인하지 못했어요', r.error);
-      return;
+      const r = await useVisitStore.getState().checkIn(tripId, targetId);
+      if (!r.ok) {
+        if (r.network) {
+          await queue({ statusSaved: false, memoSaved: false, photos });
+          return;
+        }
+        await fail('체크인하지 못했어요', r.error);
+        return;
+      }
+      const ds = useDestinationStore.getState();
+      const dest = ds.findByTripField(tripId, targetId);
+      if (dest && dest.status === 'pending') ds.markArrived(dest.id);
+      progress = { visitId: r.visit.id, statusSaved: false, memoSaved: false };
+      progressRef.current = progress;
     }
-    const ds = useDestinationStore.getState();
-    const dest = ds.findByTripField(tripId, target.id);
-    if (dest && dest.status === 'pending') ds.markArrived(dest.id);
     const res = await saveVisitRecord({
-      visitId: r.visit.id,
-      fieldId: target.id,
-      status,
+      visitId: progress.visitId,
+      fieldId: targetId,
+      status: progress.statusSaved ? null : status,
       initialStatus,
       photos,
-      memo,
+      memo: progress.memoSaved ? null : memo,
       initialMemo: null,
     });
-    // 방문은 이미 만들어졌다 — 일부만 실패했으면 알리고 진행한다. 외근 상세의 기록 수정에서 다시 넣을 수 있다.
-    if (res.errors.length > 0) {
-      await notice('일부 기록을 저장하지 못했어요', `${res.errors.join('\n')}\n\n외근 상세의 기록 수정에서 다시 넣어 주세요.`);
+    progress = {
+      visitId: progress.visitId,
+      statusSaved: progress.statusSaved || res.statusSaved,
+      memoSaved: progress.memoSaved || res.memoSaved,
+    };
+    progressRef.current = progress;
+    if (res.errors.length === 0) {
+      finishCheckin(true);
+      return;
     }
-    finishCheckin(true);
+    // 체크인(방문)은 저장됐다. 남은 것(못 올린 사진·메모·조치 상태)만 다시 보낸다 — 끊겼으면 대기열로.
+    const left = res.photos.filter((p) => p.file);
+    if (await isKnownOffline()) {
+      await queue({ visitId: progress.visitId, statusSaved: progress.statusSaved, memoSaved: progress.memoSaved, photos: left });
+      return;
+    }
+    setPhotos(left);
+    setPartialSaved(true);
+    await fail('일부 기록을 저장하지 못했어요', `${res.errors.join('\n')}\n\n체크인은 저장됐어요. [저장]을 다시 누르면 남은 것만 보내요.`);
   };
 
   const saveEdit = async () => {
@@ -416,12 +518,15 @@ export default function CheckinScreen() {
     const res = await saveVisitRecord({
       visitId: visit.id,
       fieldId: visit.fieldId,
-      status,
+      status: showStatus ? status : null,
       initialStatus: initialStatusRef.current,
       photos,
-      memo,
+      memo: memoEditable ? memo : null,
       initialMemo,
     });
+    // 저장한 메모가 이 방문의 메모다 — 다시 저장할 때 이것을 고친다(같은 메모를 또 쓰지 않게).
+    if (res.memoSaved) savedMemoRef.current = res.memo;
+    if (res.statusSaved && status) initialStatusRef.current = status;
     if (res.errors.length > 0) {
       // 올린 사진은 다시 올리지 않게 목록을 바꿔 두고 화면에 남는다.
       setPhotos(res.photos);
@@ -465,7 +570,8 @@ export default function CheckinScreen() {
 
   const linked = mode === 'nearby' ? nearby.find((n) => n.field.id === linkedId) : undefined;
   const ready = mode === 'new' ? !!draft : mode === 'edit' ? !!visit && !!field && filled.current : !!field;
-  const missing = !ready && mode !== 'resolving' && mode !== 'new' && detailTried && !field;
+  const visitMissing = mode === 'edit' && visitTried && !visit;
+  const missing = visitMissing || (!ready && mode !== 'resolving' && mode !== 'new' && detailTried && !field);
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -478,7 +584,13 @@ export default function CheckinScreen() {
       {!ready ? (
         <View style={styles.center}>
           <Text v2="bodyS.regular" tone="tertiary">
-            {missing ? '현장을 찾을 수 없어요' : mode === 'resolving' ? '지금 위치를 확인하고 있어요' : '불러오고 있어요'}
+            {visitMissing
+              ? '방문 기록을 찾을 수 없어요'
+              : missing
+                ? '현장을 찾을 수 없어요'
+                : mode === 'resolving'
+                  ? '지금 위치를 확인하고 있어요'
+                  : '불러오고 있어요'}
           </Text>
         </View>
       ) : (
@@ -487,7 +599,7 @@ export default function CheckinScreen() {
             {linked ? (
               <View style={styles.linkRow}>
                 <Text v2="bodyS.regular" tone="info" style={styles.flex}>
-                  {`${formatDistanceM(linked.distanceM)} 거리의 ${fieldTitle(linked.field)}에 연결했어요`}
+                  {`${formatDistanceM(Math.max(1, linked.distanceM))} 거리의 ${fieldTitle(linked.field)}에 연결했어요`}
                 </Text>
                 <Touchable onPress={() => setNearbyOpen(true)} accessibilityRole="button" style={styles.linkAction}>
                   <Text v2="bodyM.bold" tone="link">
@@ -505,6 +617,7 @@ export default function CheckinScreen() {
                 onProject={() => setProjectOpen(true)}
                 onCategory={() => setCategoryOpen(true)}
                 onCorrect={() => router.push({ pathname: '/field-edit', params: { draft: draftKey } } as never)}
+                locked={fieldLocked}
               />
             ) : field ? (
               <>
@@ -535,6 +648,7 @@ export default function CheckinScreen() {
                   allowEmpty
                   placeholder={stripRegion(field.address) || field.address}
                   placeholderTone="primary"
+                  dense
                 />
                 <Text v2="bodyS.regular" tone="tertiary" style={styles.subtitle}>
                   {subtitle}
@@ -552,16 +666,20 @@ export default function CheckinScreen() {
               style={styles.map}
             />
 
-            <Text v2="bodyM.bold" style={styles.sectionTitle}>
-              조치 상태
-            </Text>
-            <StatusOptionGroup
-              value={status}
-              onChange={(s) => {
-                statusTouched.current = true;
-                setStatus(s);
-              }}
-            />
+            {showStatus ? (
+              <>
+                <Text v2="bodyM.bold" style={styles.sectionTitle}>
+                  조치 상태
+                </Text>
+                <StatusOptionGroup
+                  value={status}
+                  onChange={(s) => {
+                    statusTouched.current = true;
+                    setStatus(s);
+                  }}
+                />
+              </>
+            ) : null}
 
             <View style={styles.section}>
               <CheckinPhotos photos={photos} onChange={setPhotos} disabled={saving} />
@@ -570,7 +688,19 @@ export default function CheckinScreen() {
             <Text v2="bodyM.bold" style={styles.sectionTitle}>
               메모
             </Text>
-            <MemoField value={memo} onChangeText={setMemo} maxLength={2000} multiline editable={!saving} accessibilityLabel="메모" />
+            <MemoField
+              value={memo}
+              onChangeText={setMemo}
+              maxLength={2000}
+              multiline
+              editable={!saving && memoEditable}
+              accessibilityLabel="메모"
+            />
+            {!memoEditable ? (
+              <Text v2="caption.regular" tone="tertiary" style={styles.helper}>
+                방문하고 하루가 지나 메모는 고칠 수 없어요.
+              </Text>
+            ) : null}
           </ScrollView>
           <BottomActionBar style={styles.footer}>
             <Button2 onPress={() => void save()} loading={saving} disabled={!ready} fullWidth>
@@ -624,7 +754,10 @@ function NewFieldBlock({
   onProject,
   onCategory,
   onCorrect,
+  locked,
 }: {
+  /** 새 현장을 이미 만들었다(체크인만 실패) — 현장 칸을 바꾸지 못하게 잠근다. */
+  locked?: boolean;
   draft: FieldDraft;
   weakAccuracy: number | null;
   onPatch: (p: Partial<FieldDraft>) => void;
@@ -638,6 +771,7 @@ function NewFieldBlock({
       <View style={styles.metaRow}>
         <Touchable
           onPress={onProject}
+          disabled={locked}
           accessibilityRole="button"
           accessibilityLabel={draft.projectName ? `프로젝트: ${draft.projectName}, 바꾸기` : '프로젝트 선택'}
           style={[styles.project, !draft.projectName && styles.dashed]}
@@ -649,7 +783,7 @@ function NewFieldBlock({
           <Icon name="chevron-down" size={14} color={c2.text.secondary} />
         </Touchable>
         <View style={styles.tags}>
-          <Touchable onPress={onCategory} accessibilityRole="button" accessibilityLabel="분류 고르기" style={styles.categoryBtn}>
+          <Touchable onPress={onCategory} disabled={locked} accessibilityRole="button" accessibilityLabel="분류 고르기" style={styles.categoryBtn}>
             <Icon name="plus" size={12} color={c2.text.secondary} />
             <Text v2="small.semibold" tone="secondary">
               분류
@@ -674,6 +808,7 @@ function NewFieldBlock({
       <MemoField
         value={draft.name}
         onChangeText={(name) => onPatch({ name })}
+        editable={!locked}
         maxLength={100}
         placeholder="예: 하단역 3번 출구 보안등"
         accessibilityLabel="현장명"
@@ -686,7 +821,7 @@ function NewFieldBlock({
         <Text v2="caption.bold" tone="body" style={styles.flex}>
           주소
         </Text>
-        <Touchable onPress={onCorrect} accessibilityRole="button" style={styles.correct}>
+        <Touchable onPress={onCorrect} disabled={locked} accessibilityRole="button" style={styles.correct}>
           <Text v2="bodyS.bold" tone="link">
             위치 보정
           </Text>
@@ -732,7 +867,8 @@ const styles = StyleSheet.create({
     marginBottom: space[2],
   },
   linkAction: { height: 44, justifyContent: 'center', paddingLeft: space[12], paddingRight: space[4] },
-  metaRow: { minHeight: 30, flexDirection: 'row', alignItems: 'center', gap: space[6], marginBottom: space[2] },
+  // Figma 8: 알약 줄(12~42) 아래 6 에 제목 글자(48~78), 2 아래 부제(80~100), 22 아래 지도 카드(122).
+  metaRow: { minHeight: 30, flexDirection: 'row', alignItems: 'center', gap: space[6], marginBottom: space[6] },
   project: {
     height: 30,
     maxWidth: 180,
@@ -765,8 +901,9 @@ const styles = StyleSheet.create({
   labelRow: { flexDirection: 'row', alignItems: 'center', gap: space[6], marginTop: space[12], marginBottom: space[8] },
   recommend: { height: 18, paddingHorizontal: space[6], borderRadius: 9, backgroundColor: c2.bg.brandSubtle, justifyContent: 'center' },
   helper: { marginTop: space[6] },
-  addressHead: { flexDirection: 'row', alignItems: 'center', marginTop: space[6] },
-  correct: { height: 44, justifyContent: 'center', paddingLeft: space[8] },
+  // Figma 8-3: 안내 문구 아래 18 에 '주소'(18), 6 아래 주소 상자. [위치 보정]은 글자 높이만 차지하고 터치는 Touchable 이 48 로 채운다.
+  addressHead: { flexDirection: 'row', alignItems: 'center', marginTop: 18, marginBottom: space[6] },
+  correct: { height: 20, justifyContent: 'center', paddingLeft: space[8] },
   address: {
     minHeight: 44,
     justifyContent: 'center',

@@ -94,6 +94,8 @@ interface Props {
   onViewChange?: (view: { lat: number; lng: number; level: number }) => void;
   // true 면 모든 마커가 한 화면에 들어오도록 자동 프레이밍 (center 무시). 위치도 미리보기용.
   fitToMarkers?: boolean;
+  // fitToMarkers 로 맞출 때 핀과 함께 화면에 넣을 점(체크인 카드의 가까운 내 위치).
+  fitExtra?: { lat: number; lng: number }[];
   // fitToMarkers 여백(위·오른쪽·아래·왼쪽 px). 지도 위를 덮는 카드가 있으면 그만큼(3-8 경로 순서 카드).
   fitPadding?: [number, number, number, number];
   // 카카오 축척 막대 숨김(정적 지도 카드 MapPreviewCard 전용). 로고는 남는다.
@@ -138,6 +140,7 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
       circle = null,
       startPoint = null,
       fitToMarkers = false,
+      fitExtra,
       fitPadding,
       hideScale = false,
       interactive = true,
@@ -333,6 +336,13 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
       `window.__mfzSetRegionFill&&window.__mfzSetRegionFill(${regionFill ? JSON.stringify(regionFill) : 'null'})`,
     );
   }, [ready, regionFill, inject]);
+
+  // fitToMarkers 에 함께 넣을 점.
+  useEffect(() => {
+    if (!ready) return;
+    inject(`window.__mfzSetFitExtra&&window.__mfzSetFitExtra(${JSON.stringify(fitExtra ?? [])})`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, JSON.stringify(fitExtra ?? []), inject]);
 
   // 현재 위치 오버레이.
   useEffect(() => {
