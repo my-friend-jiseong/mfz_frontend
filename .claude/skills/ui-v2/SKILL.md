@@ -1,7 +1,7 @@
 ---
 name: ui-v2
 description: |
-  일가요 UI v2 개편(디자이너 개선안)을 코드로 구현할 때 사용한다. Figma `UI - 개선본`(336:1078) → RN 화면.
+  일가요 UI v2(1차) 개편 전용. 2차 개선본(UI - 2차 개선본, node 480- 이후)은 ilgayo-2nd-ui 스킬을 쓴다. 일가요 UI v2 개편(디자이너 개선안)을 코드로 구현할 때 사용한다. Figma `UI - 개선본`(336:1078) → RN 화면.
   트리거: "UI 개편", "개선본", "v2 화면", "명세 v2", "FE-OUT/FE-CHK/FE-WRAP/FE-VED/FE-SITE/FE-RPT",
   "방문 수정", "외근 정리 펼침", "스와이프 삭제", "토스트", "액션 시트", "인라인 제목",
   figma.com/design/MlfpDS0wOeN90iNl5JCPWp URL 중 node-id 가 470- 또는 336- 로 시작하는 것.
