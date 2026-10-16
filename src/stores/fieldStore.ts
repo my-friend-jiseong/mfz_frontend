@@ -62,7 +62,7 @@ interface FieldState {
 const describeError = localizeError;
 
 // listMine 응답 항목 → Field 정규화.
-// refresh 와 Quick Photo 의 일회성 전체 조회(useQuickPhoto)가 공유.
+// refresh·listMineAll 결과를 같은 모양으로 맞춘다.
 export function listItemToField(it: FieldListItem): Field {
   return {
     id: it.fieldId,

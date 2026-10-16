@@ -36,6 +36,7 @@ export function RecordMenu({ anchor, items, onClose }: Props) {
   const [shown, setShown] = useState(anchor);
   // 닫힌 뒤 실행할 항목 동작.
   const pendingRef = useRef<(() => void) | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (anchor) setShown(anchor);
     Animated.timing(anim, { toValue: anchor ? 1 : 0, duration: duration.fast, useNativeDriver: true }).start(({ finished }) => {
@@ -43,9 +44,16 @@ export function RecordMenu({ anchor, items, onClose }: Props) {
       setShown(null);
       const fn = pendingRef.current;
       pendingRef.current = null;
-      if (fn) setTimeout(fn, AFTER_CLOSE_MS);
+      if (fn) timerRef.current = setTimeout(fn, AFTER_CLOSE_MS);
     });
   }, [anchor, anim]);
+  // 내려간 뒤(외근 종료 등) 늦게 이동하지 않게.
+  useEffect(
+    () => () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    },
+    [],
+  );
 
   if (!shown) return null;
   const fabBottomGap = PILL_TO_FAB;

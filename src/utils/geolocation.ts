@@ -25,8 +25,7 @@ const toUserLocation = (c: { latitude: number; longitude: number; accuracy?: num
 // 백그라운드로는 수집하지 않는다는 점을 먼저 알린다. 개인정보처리방침과 실제 동작을 맞추고,
 // 맥락 없이 뜨는 팝업에 반사적으로 '거부' 를 누르는 것을 줄이려는 목적이다.
 //
-// 안내를 여기(유틸) 안에 둔 이유: 소비처가 5곳(MapDashboard·useQuickPhoto·fields/new·
-// fields/[id]/edit·trips/navigate)이고, 그 중 MapDashboard 는 map 교차 레이어라
+// 안내를 여기(유틸) 안에 둔 이유: 소비처가 여러 곳(MapDashboard·fields/new·체크인 등)이고, 그 중 MapDashboard 는 map 교차 레이어라
 // 호출부를 건드리면 사실상 전 화면을 잠근다. 시그니처를 그대로 두면 소비처는 무변경이다.
 const RATIONALE_TITLE = '위치 권한이 필요합니다';
 const RATIONALE_BODY = [
@@ -91,7 +90,7 @@ let disabledWarned = false;
 
 // 권한 거부·오류는 silent (null 반환) — 지도는 기본 중심으로 fallback.
 // 한 번만 호출하기를 가정 — 캐싱은 호출 측에서 useState/useEffect 로.
-// high: Quick Photo 처럼 수십 m 단위 판정이 필요한 곳만 (Balanced 는 ~100m 오차).
+// high: 지금 위치 기록(100m 안 현장 연결)처럼 수십 m 단위 판정이 필요한 곳만 (Balanced 는 ~100m 오차).
 export async function requestUserLocation(opts?: {
   high?: boolean;
 }): Promise<UserLocation | null> {

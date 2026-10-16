@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
-  Image,
   Keyboard,
   Platform,
   ScrollView,
@@ -33,7 +32,6 @@ import { CategoryChips } from '@/components/fields/CategoryChips';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { ManualCoordinateForm } from '@/components/fields/ManualCoordinateForm';
 import { FieldPinMap, type FieldPinMapHandle } from '@/components/fields/FieldPinMap';
-import { getQuickPhoto } from '@/components/fields/quickPhotoHandoff';
 import { useKakaoPlaceSearch } from '@/components/fields/useKakaoPlaceSearch';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
@@ -75,15 +73,11 @@ export default function NewField() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const createField = useFieldStore((s) => s.create);
-  const addPhoto = useFieldStore((s) => s.addPhoto);
 
-  // Quick Photo "이 위치에 새 현장 등록" 진입 — 촬영 좌표는 params, 사진은 토큰 매칭 핸드오프.
-  // 화면 수명 동안 불변이어야 하므로 초기 1회만 파싱해 고정 (이후 params 변동 무시).
-  // getQuickPhoto 는 idempotent 읽기라 StrictMode 이중 initializer 호출에도 안전.
+  // 좌표를 들고 들어온 진입 — 화면 수명 동안 불변이어야 하므로 초기 1회만 파싱해 고정(이후 params 변동 무시).
   const params = useLocalSearchParams<{
     lat?: string;
     lng?: string;
-    photoToken?: string;
   }>();
   const [entry] = useState(() => {
     const la = Number(params.lat);
@@ -92,10 +86,7 @@ export default function NewField() {
       Number.isFinite(la) && Number.isFinite(ln) && isInKorea(la, ln)
         ? { lat: la, lng: ln }
         : null;
-    const photo = getQuickPhoto(
-      typeof params.photoToken === 'string' ? params.photoToken : undefined,
-    );
-    return { pos, photo };
+    return { pos };
   });
   // 중복 매칭용 — 본인 fields 만.
   // selector 안에서 .filter() 호출하면 매 render 마다 새 array reference → Zustand 가
@@ -257,7 +248,7 @@ export default function NewField() {
     }
   };
 
-  // 진입 시 1회 — 촬영 좌표가 넘어왔으면 그 좌표 직행(자동 측위 생략), 아니면 현 위치 자동 시도.
+  // 진입 시 1회 — 좌표가 넘어왔으면 그 좌표 직행(자동 측위 생략), 아니면 현 위치 자동 시도.
   useEffect(() => {
     if (entry.pos) {
       // 지도 마운트 시 역지오코딩으로 주소를 채운다 (현 위치 직행과 동일 패턴).
@@ -269,7 +260,7 @@ export default function NewField() {
         buildingName: null,
         lat: entry.pos.lat,
         lng: entry.pos.lng,
-        display: '촬영 위치 (주소 확인 중…)',
+        display: '지금 위치 (주소 확인 중…)',
       });
       return;
     }
@@ -277,19 +268,9 @@ export default function NewField() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 생성 성공 공통 후처리 — Quick Photo 에서 넘어온 사진이 있으면 새 현장에 첨부한다.
+  // 생성 성공 공통 후처리.
   // 명세 v2 FE-SITE-01a: 등록 후엔 상세가 아니라 **현장 목록**으로 돌아가고 토스트를 2초 띄운다.
-  const finishCreate = async (field: Field) => {
-    if (entry.photo) {
-      const res = await addPhoto(field.id, entry.photo);
-      if (!res.ok) {
-        // 현장 생성은 이미 성공 — 사진만 실패. 상세 화면에서 재시도 가능하므로 이동은 계속한다.
-        Alert.alert(
-          '사진 등록 실패',
-          `현장은 등록됐지만 사진 업로드에 실패했어요. 체크인할 때 사진을 다시 추가해주세요.\n(${res.error})`,
-        );
-      }
-    }
+  const finishCreate = async (_field: Field) => {
     toast('현장이 등록되었습니다');
     // 등록 화면(모달)을 닫고 들어온 자리로 — 현장 목록에서 왔으면 목록, 외근 중 현장 추가에서
     // 왔으면 그 외근. replace 는 목록 위에 목록을 한 겹 더 쌓았다(리뷰).
@@ -328,8 +309,7 @@ export default function NewField() {
     const result = await createField(baseBody);
 
     if (result.ok) {
-      // 사진 첨부까지 끝날 때까지 submitting 유지 — 버튼 재탭(중복 생성) 차단.
-      // finally: addPhoto 가 향후 reject 하게 바뀌어도 버튼이 영구 로딩에 잠기지 않게.
+      // 후처리가 끝날 때까지 submitting 유지 — 버튼 재탭(중복 생성) 차단.
       try {
         await finishCreate(result.field);
       } finally {
@@ -410,15 +390,6 @@ export default function NewField() {
         scrollEnabled={!mapBusy}
       >
 
-        {/* Quick Photo 이관 사진 — 등록 완료 시 자동 첨부됨을 미리 안내 */}
-        {entry.photo ? (
-          <Card padding="md" style={styles.photoBox}>
-            <Image source={{ uri: entry.photo.uri }} style={styles.photoThumb} />
-            <Text variant="bodySm" color="textMuted" style={styles.photoText}>
-              현장 등록을 마치면 촬영한 사진이 이 현장에 함께 등록돼요
-            </Text>
-          </Card>
-        ) : null}
 
         {/* 검색·현위치·지도 단일 화면 — 주소 재검색과 핀 이동이 서로를 실시간 갱신 */}
         <Input
@@ -666,19 +637,6 @@ const styles = StyleSheet.create({
   manualLink: { marginTop: spacing.md, alignSelf: 'flex-start' },
   locateBtn: { marginTop: spacing.sm, alignSelf: 'flex-start' },
   // 이미 <Card> 다 — Card 가 surface + border + radius 를 주므로 배경을 다시 덮지 않는다.
-  photoBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    marginBottom: spacing.md,
-  },
-  photoThumb: {
-    width: 48,
-    height: 48,
-    borderRadius: radius.md,
-    backgroundColor: colors.background,
-  },
-  photoText: { flex: 1 },
   selectedBox: {
     backgroundColor: colors.primaryMuted,
     marginTop: spacing.md,

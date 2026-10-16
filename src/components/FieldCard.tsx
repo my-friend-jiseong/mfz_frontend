@@ -34,8 +34,7 @@ export function FieldCard({ field, onPress, selected, showCheckbox }: Props) {
   const hasMeta =
     !!field.projectName || (field.categories && field.categories.length > 0);
   // 제목 = name||address, 부제 = 제목이 이미 보여준 것을 뺀 나머지 주소.
-  // 중복 제거 규칙은 fieldFacets 의 단일 출처에 있다 — 같은 주소를 그리는 다른 목록
-  // (QuickPhotoSheet · AddDestinationModal)도 같은 함수를 쓴다.
+  // 중복 제거 규칙은 fieldFacets 의 단일 출처에 있다 — 같은 주소를 그리는 다른 목록도 같은 함수를 쓴다.
   const title = fieldTitle(field);
   const subtitle = fieldSubtitle(field, title);
 

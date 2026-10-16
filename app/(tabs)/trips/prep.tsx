@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KakaoMapWebView, type KakaoMapHandle, type KakaoMapMarker } from '@/components/KakaoMapWebView';
 import { FieldSearchRow } from '@/components/fields/SearchRows';
+import { ErrorState } from '@/components/ErrorState';
 import { useSharedMapSettings } from '@/components/map/useSharedMapSettings';
 import { goToTabRoot } from '@/components/shell/tabNav';
 import { STATUS_PIN_COLOR } from '@/components/shell/pinColors';
@@ -88,6 +89,7 @@ export default function TripPrepScreen() {
   const userId = useAuthStore((s) => s.user?.id);
   const allFields = useFieldStore((s) => s.fields);
   const listReady = useFieldStore((s) => s.listStatus === 'ready');
+  const listError = useFieldStore((s) => (s.listStatus === 'error' ? s.listError : null));
   const prepIds = useTripPrepStore((s) => s.fieldIds);
   const prepHydrated = useTripPrepStore((s) => s.hydrated);
   const startTrip = useTripStore((s) => s.start);
@@ -124,6 +126,9 @@ export default function TripPrepScreen() {
   const selectedSet = useMemo(() => new Set(selected.map((f) => f.id)), [selected]);
   // 현장 목록을 받기 전엔 담은 목록 일부가 안 보일 수 있다 — 그 상태로 순서를 바꾸거나 출발하면 안 보이던 것이 빠진다.
   const ready = prepHydrated && listReady;
+  // 현장 목록을 못 받았어도 담은 것 없이 출발(7-7)하거나 담은 목록을 비울 수는 있다.
+  const canDepart = ready || (prepHydrated && !!listError && prepIds.length === 0);
+  const canClear = ready || (prepHydrated && !!listError);
 
   const recent = useMemo(
     () =>
@@ -237,7 +242,8 @@ export default function TripPrepScreen() {
       ? Math.max(SHEET_COLLAPSED + 1, containerH - (insets.top + space[8] + HEADER_H + space[8]))
       : null;
   const snapPoints = useMemo(() => (maxSheet ? [SHEET_COLLAPSED, maxSheet] : [SHEET_COLLAPSED]), [maxSheet]);
-  const count = selected.length;
+  // 현장 목록을 못 받았으면 담은 id 수로 센다(목록이 비어 보여도 [모두 빼기]로 비울 수 있게).
+  const count = listError && prepHydrated ? prepIds.length : selected.length;
 
   return (
     <View style={styles.root} onLayout={(e) => setContainerH(e.nativeEvent.layout.height)}>
@@ -293,7 +299,7 @@ export default function TripPrepScreen() {
                 <View style={styles.actions}>
                   {reordering ? null : (
                     <>
-                      <HeadAction label="모두 빼기" tone="secondary" disabled={!ready} onPress={() => prep().setOrder([])} />
+                      <HeadAction label="모두 빼기" tone="secondary" disabled={!canClear} onPress={() => prep().setOrder([])} />
                       <View style={styles.sep} />
                       <HeadAction label="가까운 순으로" disabled={!ready} onPress={sortNearest} />
                       <View style={styles.sep} />
@@ -308,6 +314,9 @@ export default function TripPrepScreen() {
               ) : null}
             </View>
             <BottomSheetScrollView style={styles.flex} contentContainerStyle={{ paddingBottom: FOOTER_H + space[16] }}>
+              {listError ? (
+                <ErrorState message={listError} onRetry={() => void useFieldStore.getState().hydrate()} />
+              ) : null}
               {count === 0 ? (
                 // 6-1 담은 현장 없음
                 <Text v2="bodyS.regular" tone="tertiary" style={styles.emptyText}>
@@ -353,10 +362,10 @@ export default function TripPrepScreen() {
                             </Touchable>
                             <Touchable
                               onPress={() => move(i, i + 1)}
-                              disabled={i === count - 1}
+                              disabled={i === selected.length - 1}
                               accessibilityRole="button"
                               accessibilityLabel={`${fieldTitle(f)} 아래로`}
-                              style={[styles.iconBtn, i === count - 1 && styles.dim]}
+                              style={[styles.iconBtn, i === selected.length - 1 && styles.dim]}
                             >
                               <Icon name="chevron-down" size={20} color={c2.text.secondary} />
                             </Touchable>
@@ -408,7 +417,7 @@ export default function TripPrepScreen() {
 
       {/* 시트 밖에 둔다 — 시트 안에 두면 gorhom pan 이 버튼 터치를 가로챈다. */}
       <BottomActionBar absolute safeArea={false} style={styles.footer}>
-        <Button2 icon="navigation" onPress={() => void depart()} loading={starting} disabled={!ready} fullWidth>
+        <Button2 icon="navigation" onPress={() => void depart()} loading={starting} disabled={!canDepart} fullWidth>
           출발
         </Button2>
       </BottomActionBar>

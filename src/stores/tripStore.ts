@@ -33,6 +33,9 @@ interface TripState {
   // 첫 /api/trips/active 응답(성공·실패)을 받았는지. 외근 탭 첫 화면이 진행 중 여부를 모른 채
   // 목록부터 그렸다가 외근 진행으로 바뀌는 깜빡임을 막는다.
   activeResolved: boolean;
+  // 진행 중 외근을 서버에서 실제로 확인했는지(/active 성공·start·end 응답). activeResolved 는 실패해도 true 가 되므로
+  // '진행 중 외근 없음'을 믿어야 하는 곳(체크인 저장 대기열)은 이걸 본다.
+  activeKnown: boolean;
   // 방금 끝낸 외근 id — 종료 직후 이동이 끝날 때까지 외근 탭 첫 화면이 외근 진행 화면을 계속 그리게 한다.
   // activeTripId 가 비는 배치에서 첫 화면이 목록으로 바뀌면서 동시에 화면 이동이 일어나면 Fabric 이
   // 무음 크래시한 전례가 있다(떠나는 화면 폼 플립 금지). 이동 뒤 clearEnding 으로 비운다.
@@ -70,6 +73,7 @@ export const useTripStore = create<TripState>((set, get) => ({
   listError: null,
   activeTripId: null,
   activeResolved: false,
+  activeKnown: false,
   endingTripId: null,
   busy: false,
   detailStatus: {},
@@ -82,7 +86,7 @@ export const useTripStore = create<TripState>((set, get) => ({
     try {
       // ERD v2: official-notice 제거 — 활성 외근 id 만.
       const res = await tripsApi.active();
-      set({ activeTripId: res.isActive ? res.tripId : null, activeResolved: true });
+      set({ activeTripId: res.isActive ? res.tripId : null, activeResolved: true, activeKnown: true });
     } catch {
       // 비로그인 상태에서 호출되는 경우 등 — 무시. 모르는 채로 막아 두지 않고 목록을 보여 준다.
       set({ activeResolved: true });
@@ -176,6 +180,7 @@ export const useTripStore = create<TripState>((set, get) => ({
       set((s) => ({
         trips: [trip, ...s.trips.filter((t) => t.id !== trip.id)],
         activeTripId: trip.id,
+        activeKnown: true,
         busy: false,
       }));
       // 담아 둔 목적지는 이 외근으로 넘어갔다.
@@ -209,6 +214,7 @@ export const useTripStore = create<TripState>((set, get) => ({
           return t;
         }),
         activeTripId: null,
+        activeKnown: true,
         endingTripId: res.tripId,
         busy: false,
       }));
@@ -302,6 +308,7 @@ export const useTripStore = create<TripState>((set, get) => ({
       listError: null,
       activeTripId: null,
       activeResolved: false,
+      activeKnown: false,
       endingTripId: null,
       busy: false,
       detailStatus: {},

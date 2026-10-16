@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import { useVisitStore } from './visitStore';
 import { useDestinationStore } from './destinationStore';
-import { notice } from '@/components/ui/ConfirmDialog';
+import { confirm, notice } from '@/components/ui/ConfirmDialog';
 import type { FieldStatus } from '@/types/entities';
 import { saveVisitRecord, type CheckinPhoto } from '@/utils/visitRecord';
 
@@ -13,8 +13,10 @@ import { saveVisitRecord, type CheckinPhoto } from '@/utils/visitRecord';
 // 서버가 거부하면(4xx·5xx) '실패'로 두고 사용자가 [다시 시도]·칩을 눌러야 다시 보낸다.
 //
 // 지금 서버 계약(check-in body 에 tripId 없음)에서는 서버가 '지금 진행 중인 외근'에 방문을 붙인다. 그래서
-// 대기열 항목은 그 외근이 아직 진행 중일 때만 보낸다 — 외근이 끝났거나 다른 외근이 진행 중이면 엉뚱한 외근에
-// 붙으므로 보내지 않고 알린 뒤 버린다. 끝난 외근에 붙여 저장하는 것은 backlog '2차 H'(visitedAt·tripId).
+// 대기열 항목은 그 외근이 아직 진행 중일 때만 보낸다. 외근이 끝났거나 다른 외근이 진행 중이면 엉뚱한 외근에
+// 붙으므로 보내지 않고 '갈 곳 없음(orphaned)'으로 남긴 뒤, 사용자에게 묻고 [버리기]를 고를 때만 지운다.
+// 진행 중 외근을 서버에서 확인하지 못했으면(getActiveTripId → undefined) 보내지도 옮기지도 않는다.
+// 끝난 외근에 붙여 저장하는 것은 backlog '2차 H'(visitedAt·tripId).
 // 체크인 화면에서 함께 고른 조치 상태·사진·메모도 항목에 싣고, 체크인이 저장되면 이어서 보낸다(record).
 // 사진은 기기 안 파일 경로만 남긴다 — 앱을 지우거나 OS 가 캐시를 비우면(웹은 새로고침하면) 못 올릴 수 있어 그때는 알린다.
 
@@ -32,7 +34,8 @@ export interface QueuedCheckIn {
   label: string;
   /** 체크인한 시각 — 7-8 거리 기준(마지막 체크인 현장) 정렬에 쓰고, 서버가 받게 되면 함께 보낸다(backlog 2차 H). */
   visitedAt: string;
-  state: 'pending' | 'failed';
+  /** orphaned: 그 외근이 끝나(또는 다른 외근이 진행 중이라) 지금 서버로는 보낼 수 없다 — 사용자가 버릴 때까지 남긴다. */
+  state: 'pending' | 'failed' | 'orphaned';
   error?: string;
   /** 체크인과 함께 저장할 방문 기록. 체크인이 저장된 뒤 보낸다. */
   record?: QueuedRecord;
@@ -55,6 +58,8 @@ interface CheckinQueueState {
   enqueue: (input: Pick<QueuedCheckIn, 'tripId' | 'fieldId' | 'label' | 'record'>) => QueuedCheckIn | null;
   /** 대기 중인 것을 보낸다. retryFailed 면 실패한 것도 다시. */
   flush: (opts?: { retryFailed?: boolean }) => Promise<void>;
+  /** 그 외근의 항목을 모두 지운다(외근 종료 확인에서 [종료]를 고른 뒤 — 저장되지 않음을 이미 알렸다). */
+  discardTrip: (tripId: string) => void;
   /** 로그인한 사용자가 바뀌면 — 다른 사용자의 항목은 지운다. */
   onUserChange: (userId: string | null) => void;
   clearAll: () => Promise<void>;
@@ -67,6 +72,11 @@ let getActiveTripId: () => string | null | undefined = () => undefined;
 
 let seq = 0;
 let inflight: Promise<void> | null = null;
+// 이번 실행에서 이미 물어본 갈 곳 없는 항목 — [나중에]를 고르면 앱을 다시 켤 때 다시 묻는다.
+const askedOrphans = new Set<string>();
+// 대기열 안내는 화면 이동(외근 종료 → 3 등)과 같은 틱에 띄우지 않는다.
+const NOTICE_DELAY_MS = 600;
+const later = (fn: () => void) => setTimeout(fn, NOTICE_DELAY_MS);
 
 function persist(items: QueuedCheckIn[]) {
   AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(items)).catch(() => {});
@@ -80,19 +90,31 @@ export const useCheckinQueueStore = create<CheckinQueueState>((set, get) => {
 
   const runOnce = async () => {
     const userId = getUserId();
-    if (!userId || getActiveTripId() === undefined) return;
+    const active = getActiveTripId();
+    if (!userId || active === undefined) return;
+    // 끝난 외근의 대기·실패 항목은 갈 곳 없음으로(지우지 않는다).
+    const stale = get().items.filter((x) => x.userId === userId && x.state !== 'orphaned' && x.tripId !== active);
+    if (stale.length > 0) {
+      const ids = new Set(stale.map((x) => x.id));
+      replace(get().items.map((x) => (ids.has(x.id) ? { ...x, state: 'orphaned' as const, error: undefined } : x)));
+    }
     const todo = get().items.filter((x) => x.state === 'pending' && x.userId === userId);
-    if (todo.length === 0) return;
+    if (todo.length === 0) {
+      askOrphans(userId);
+      return;
+    }
     set({ flushing: true });
-    const dropped: QueuedCheckIn[] = [];
+    // 서버가 다른 외근에 붙여 저장한 체크인(보내는 사이 외근이 바뀜).
+    const elsewhere: QueuedCheckIn[] = [];
     // 체크인은 저장했지만 함께 실은 사진·메모·조치 상태 일부를 못 보낸 현장.
     const partial: string[] = [];
     try {
       for (const item of todo) {
-        // 이 외근이 지금 진행 중이 아니면 서버가 다른 외근(또는 409)에 처리한다 — 보내지 않는다.
-        if (getActiveTripId() !== item.tripId) {
-          dropped.push(item);
-          replace(get().items.filter((x) => x.id !== item.id));
+        // 이 외근이 지금 진행 중이 아니면 서버가 다른 외근(또는 409)에 처리한다 — 보내지 않고 갈 곳 없음으로.
+        const nowActive = getActiveTripId();
+        if (nowActive === undefined) break;
+        if (nowActive !== item.tripId) {
+          replace(get().items.map((x) => (x.id === item.id ? { ...x, state: 'orphaned' as const } : x)));
           continue;
         }
         const r = await useVisitStore.getState().checkIn(item.tripId, item.fieldId);
@@ -101,7 +123,7 @@ export const useCheckinQueueStore = create<CheckinQueueState>((set, get) => {
         if (r.ok) {
           replace(get().items.filter((x) => x.id !== item.id));
           // 보내는 사이 외근이 바뀌었으면 서버가 다른 외근에 붙였다 — 알린다.
-          if (r.visit.tripId && r.visit.tripId !== item.tripId) dropped.push(item);
+          if (r.visit.tripId && r.visit.tripId !== item.tripId) elsewhere.push(item);
           else if (item.record) {
             const rec = item.record;
             const res = await saveVisitRecord({
@@ -122,13 +144,35 @@ export const useCheckinQueueStore = create<CheckinQueueState>((set, get) => {
     } finally {
       set({ flushing: false });
     }
-    if (dropped.length > 0) {
-      const names = dropped.map((d) => d.label).join(', ');
-      void notice('체크인을 저장하지 못했어요', `${names} 기록은 그 외근이 끝난 뒤라 저장하지 못했어요. 방문 기록을 다시 남겨 주세요.`);
+    if (elsewhere.length > 0) {
+      const names = elsewhere.map((d) => d.label).join(', ');
+      later(() => void notice('다른 외근에 기록됐어요', `${names} 체크인은 저장했지만 지금 진행 중인 외근에 붙었어요. 그 외근 상세에서 확인해 주세요.`));
     }
     if (partial.length > 0) {
-      void notice('일부 기록을 저장하지 못했어요', `${partial.join(', ')} 체크인은 저장했지만 사진·메모 일부를 올리지 못했어요. 외근 상세의 기록 수정에서 다시 넣어 주세요.`);
+      later(() => void notice('일부 기록을 저장하지 못했어요', `${partial.join(', ')} 체크인은 저장했지만 사진·메모 일부를 올리지 못했어요. 외근 상세의 기록 수정에서 다시 넣어 주세요.`));
     }
+    askOrphans(userId);
+  };
+
+  // 갈 곳 없는 항목을 한 번 묻는다 — [버리기]면 지우고, [나중에]면 남긴다(다음 실행에서 다시 묻는다).
+  const askOrphans = (userId: string) => {
+    const fresh = get().items.filter((x) => x.userId === userId && x.state === 'orphaned' && !askedOrphans.has(x.id));
+    if (fresh.length === 0) return;
+    fresh.forEach((x) => askedOrphans.add(x.id));
+    const names = fresh.map((x) => x.label).join(', ');
+    later(() => {
+      void confirm({
+        title: '저장하지 못한 체크인이 있어요',
+        message: `${names} 기록은 그 외근이 끝나 지금은 저장할 수 없어요. 버리면 되돌릴 수 없어요.`,
+        cancelLabel: '나중에',
+        confirmLabel: '버리기',
+        destructive: true,
+      }).then((ok) => {
+        if (!ok) return;
+        const ids = new Set(fresh.map((x) => x.id));
+        replace(get().items.filter((x) => !ids.has(x.id)));
+      });
+    });
   };
 
   return {
@@ -189,6 +233,11 @@ export const useCheckinQueueStore = create<CheckinQueueState>((set, get) => {
         inflight = null;
       });
       return inflight;
+    },
+
+    discardTrip: (tripId) => {
+      const next = get().items.filter((x) => x.tripId !== tripId);
+      if (next.length !== get().items.length) replace(next);
     },
 
     onUserChange: (userId) => {

@@ -244,6 +244,15 @@ export default function ActiveTrip() {
   const warning: 'failed' | 'offline' | null = failedQ.length > 0 ? 'failed' : pendingQ.length > 0 ? 'offline' : null;
   const retry = () => void useCheckinQueueStore.getState().flush({ retryFailed: true });
 
+  // 스낵바가 닫힐 때 지도 버튼을 내리는 타이머 — 화면이 내려가면 지운다.
+  const snackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (snackTimerRef.current) clearTimeout(snackTimerRef.current);
+    },
+    [],
+  );
+
   // === 동작 ===
   const showSnack = (message: string, action: { label: string; onPress: () => void }) => {
     // 탭 바 + 아래 패널 + 16 위(Figma 7-6·7-9 스낵바 484~544). bottomOffset 은 창 safe area 를 뺀 값이고
@@ -262,7 +271,8 @@ export default function ActiveTrip() {
       bottomOffset,
     });
     setSnackUntil(Date.now() + UNDO_WINDOW_MS);
-    setTimeout(() => setSnackUntil((u) => (u <= Date.now() ? 0 : u)), UNDO_WINDOW_MS + 50);
+    if (snackTimerRef.current) clearTimeout(snackTimerRef.current);
+    snackTimerRef.current = setTimeout(() => setSnackUntil((u) => (u <= Date.now() ? 0 : u)), UNDO_WINDOW_MS + 50);
   };
 
   const openRoute = () => {
@@ -298,7 +308,13 @@ export default function ActiveTrip() {
     const dest = next;
     const name = nextField ? fieldTitle(nextField) : '이 현장';
     deferSkip(dest.id);
-    showSnack(`${withObjectJosa(name)} 건너뛰었어요`, { label: '되돌리기', onPress: () => void undoSkip(dest.id) });
+    showSnack(`${withObjectJosa(name)} 건너뛰었어요`, {
+      label: '되돌리기',
+      onPress: () => {
+        // 스낵바가 닫히는 순간과 서버 반영이 겹치면 이미 보낸 뒤다 — 말없이 무시하지 않는다.
+        if (!undoSkip(dest.id)) void notice('이미 반영됐어요', '건너뛴 현장은 다시 목적지로 되돌릴 수 없어요.');
+      },
+    });
   };
 
   const openMenu = () => {
@@ -351,6 +367,8 @@ export default function ActiveTrip() {
         destructive: true,
       });
       if (!ok) return;
+      // 저장되지 않는다고 이미 알렸다 — 종료 뒤 대기열이 같은 내용을 또 묻지 않게 이 외근의 항목을 먼저 지운다.
+      if (tripId) useCheckinQueueStore.getState().discardTrip(tripId);
     }
     const end = useTripStore.getState().end;
     let r = await end(zero);

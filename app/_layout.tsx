@@ -50,7 +50,8 @@ export default function RootLayout() {
       },
       getActiveTripId: () => {
         const t = useTripStore.getState();
-        return t.activeResolved ? t.activeTripId : undefined;
+        // 서버에서 확인하지 못했으면(오프라인 부팅 등) 모른다 — 대기열은 기다린다.
+        return t.activeKnown ? t.activeTripId : undefined;
       },
     });
     // 로그인 사용자가 바뀌면 다른 사용자의 대기열을 지우고, 진행 중 외근을 알게 되면 대기열을 보낸다.
@@ -60,7 +61,7 @@ export default function RootLayout() {
       if (id !== prevId) useCheckinQueueStore.getState().onUserChange(id);
     });
     const unsubTrip = useTripStore.subscribe((t, prev) => {
-      if (t.activeResolved && (!prev.activeResolved || t.activeTripId !== prev.activeTripId)) {
+      if (t.activeKnown && (!prev.activeKnown || t.activeTripId !== prev.activeTripId)) {
         void useCheckinQueueStore.getState().flush();
       }
     });
