@@ -1,8 +1,10 @@
 import type { FieldDirectAttachment, VisitPhoto } from '@/api';
+import { trips as tripsApi, ApiError, NetworkError, localizeError } from '@/api';
 import type { FieldStatus } from '@/types/entities';
 import type { UploadFile } from '@/utils/media';
 import { useFieldStore } from '@/stores/fieldStore';
 import { useVisitStore } from '@/stores/visitStore';
+import { findRecentVisit } from '@/utils/findRecentVisit';
 
 // 방문 기록(조치 상태·사진·메모)은 체크인(8 계열)과 방문 기록 수정(3-7)에서만 쓴다.
 // 서버에는 방문 단위 메모가 없어(백로그 §35) 메모는 현장 메모로 저장하고, 방문과의 연결은
@@ -186,4 +188,35 @@ export async function skipAlreadySaved(args: {
 /** 메모를 이 방문의 것으로 볼 수 있는 기간(방문 시각부터). 지나면 3-7 에서 메모를 고칠 수 없다(서버에 방문 메모가 없음). */
 export function visitMemoEditable(visitedAt: string, now = Date.now()): boolean {
   return now - new Date(visitedAt).getTime() < MEMO_WINDOW_MS;
+}
+
+/**
+ * 결과를 모르는 체크인을 다시 보내기 전에 — 앞서 보낸 체크인이 서버에 남았는지 외근 상세 timeline 에서 찾는다.
+ * 서버 체크인은 멱등이 아니라(2026-10-17 실측) 그냥 다시 보내면 방문이 둘 생긴다(backlog 2차 H).
+ * visit: 찾은 방문(없으면 null). 서버를 읽지 못하면 ok:false — 이때는 다시 보내지 않는다(중복 방문이 생길 수 있다).
+ */
+export async function findCommittedCheckIn(args: {
+  tripId: string;
+  fieldId: string;
+  attemptedAt: number;
+  skewMs?: number;
+}): Promise<
+  | { ok: true; visit: { visitId: string; visitedAt: string } | null }
+  | { ok: false; error: string; network?: boolean; status?: number }
+> {
+  try {
+    const d = await tripsApi.detail(args.tripId);
+    const hit = findRecentVisit(d.timeline, args);
+    if (!hit) return { ok: true, visit: null };
+    // 찾은 방문을 스토어에도 넣는다(체크인이 성공했을 때와 같게 — 외근 상세·방문 수에 보이게).
+    useVisitStore.getState().syncFromTimeline(args.tripId, [hit]);
+    return { ok: true, visit: { visitId: hit.visitId, visitedAt: hit.visitedAt } };
+  } catch (e) {
+    return {
+      ok: false,
+      error: localizeError(e),
+      network: e instanceof NetworkError,
+      status: e instanceof ApiError ? e.status : undefined,
+    };
+  }
 }

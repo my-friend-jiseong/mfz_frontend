@@ -1023,8 +1023,12 @@ PATCH /api/reports/{id} { "status": "completed" }
 
 요청: check-in body 에 선택 칸
 - `visitedAt` (ISO, 기기 시각) — 있으면 그 시각으로 저장
-- `tripId` — 있으면 그 외근(끝난 외근이어도 본인 외근이면)에 붙여 저장. 같은 (외근, 현장) 은 지금처럼 멱등
-- (선택) `clientId` — 앱이 만든 대기열 id. 응답이 유실돼 다시 보내도 방문이 두 번 생기지 않게
+- `tripId` — 있으면 그 외근(끝난 외근이어도 본인 외근이면)에 붙여 저장
+- `clientId` — 앱이 만든 체크인 id(멱등 키). 같은 `clientId` 로 다시 보내면 새 방문을 만들지 않고 앞서 만든 방문을 돌려준다. 응답이 유실돼 다시 보내도 방문이 두 번 생기지 않게
+
+실측(2026-10-17): **체크인은 멱등이 아니다** — 같은 외근·같은 현장에 두 번 보내면 방문이 2건 생긴다(visitId 다름, visitCount 증가). 예전에 적은 '같은 (외근, 현장)은 멱등' 전제는 틀렸다.
+그래서 지금 앱은 결과를 모르는 체크인(응답 유실·시간 초과·5xx)을 다시 보내기 전에 외근 상세 `timeline` 에서 그 현장의, 처음 보낸 시각(−2분 여유) 이후 방문을 찾아 있으면 그것을 쓴다
+(`findCommittedCheckIn` — 대기열·체크인 화면·사진 일괄 등록 공통). 조회 한 번이 더 들고, 시계 차이·같은 현장 연속 방문은 어림으로 가린다. `clientId` 가 오면 이 조회를 뺀다.
 
 앱은 대기열 항목에 `visitedAt`·`tripId` 를 이미 들고 있다(지금은 보내지 않음). 서버가 받으면 body 에 붙인다.
 
@@ -1053,7 +1057,7 @@ PR7(2026-10-17): 대기열 항목에 체크인 화면에서 고른 조치 상태
 - 체크인이 실패했으면 외근 상세 timeline 에서 그 현장의 그 뒤 방문을 쓴다
 - 사진은 `skipAlreadySaved`(capturedAt 대조) — 그런데 **방문 상세 사진에 `capturedAt` 이 오지 않는다**(2026-10-17 실측, 응답 칸 없음). 그래서 사진 응답이 유실되면 같은 사진이 두 번 올라갈 수 있다
 
-실측(2026-10-17): **같은 외근·같은 현장에 체크인을 두 번 보내면 방문이 2건 생긴다**(visitId 다름, visitCount 증가). H 의 '지금처럼 멱등' 전제와 다르다 — `visitStore.checkIn` 주석도 옛 동작 기준.
+실측(2026-10-17): **같은 외근·같은 현장에 체크인을 두 번 보내면 방문이 2건 생긴다**(visitId 다름, visitCount 증가). H 에 반영하고 `clientId` 멱등 키를 요청했다. 앱은 다시 보내기 전에 timeline 을 본다(H 참고).
 
 요청(택1):
 1. `POST /api/trips/{tripId}/photo-batch` multipart — 묶음 배열 `[{fieldId? | {lat,lng,roadAddress,jibunAddress,sido,sigungu}, photos:[{file, capturedAt}]}]` → 묶음별 `{fieldId, visitId, created, photoIds}`. 묶음 단위로 성공·실패를 돌려주면 앱은 실패한 묶음만 다시 보낸다

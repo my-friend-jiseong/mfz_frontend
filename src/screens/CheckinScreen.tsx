@@ -39,6 +39,7 @@ import { districtOf, pickedPlaceName, stripRegion } from '@/utils/addressFormat'
 import { findNearbyFields, formatDistanceM, type NearbyField } from '@/utils/nearestField';
 import { peekUserLocation, requestUserLocation, type UserLocation } from '@/utils/geolocation';
 import {
+  findCommittedCheckIn,
   memoForVisit,
   photosToList,
   saveVisitRecord,
@@ -129,6 +130,8 @@ export default function CheckinScreen() {
   const createdFieldRef = useRef<Field | null>(null);
   // statusBase: 서버에 마지막으로 저장된 조치 상태(다르면 다시 보낸다). 메모는 savedMemoRef 가 기준이다.
   const progressRef = useRef<{ visitId: string; visitedAt: string; statusBase: FieldStatus | null } | null>(null);
+  // 체크인을 처음 보낸 시각 — 결과를 모른 채 실패했으면 다시 보내기 전에 서버에 그 뒤 방문이 생겼는지 본다(서버 체크인은 멱등이 아님).
+  const checkinTriedRef = useRef<{ fieldId: string; at: number } | null>(null);
   // 새 현장을 만들 때 넣은 조치 상태 — 잠긴 뒤 상태를 바꾸면 이것과 비교해 PATCH 한다.
   const createdStatusRef = useRef<FieldStatus | null>(null);
   // 한 번 저장한 메모 — 다시 저장할 때 이것을 기준으로 바꾼다(같은 메모를 두 번 쓰지 않게).
@@ -353,13 +356,10 @@ export default function CheckinScreen() {
   const saveLabel = partialSaved ? '저장' : mode === 'new' && !fieldLocked ? '새 현장으로 저장' : mode === 'destination' && hasNextDest ? '저장하고 다음 현장으로' : '저장';
 
   // 이번 체크인이 이 현장의 몇 번째 방문인가 — 이미 저장된 방문(이번 외근 것 포함) + 1.
-  // 같은 외근·현장은 서버가 같은 방문으로 받으므로(멱등) 이번 외근에 이미 있으면 그 방문이 이번 것이다.
+  // 서버는 체크인마다 방문을 새로 만든다(2026-10-17 실측) — 같은 외근에 이미 있어도 이번 것은 새 방문이다.
+  // 일부만 저장된 뒤(partialSaved)에는 이번 방문이 이미 목록에 있어 빼고 센다.
   const visitOrdinal = field
-    ? (() => {
-        const mine = allVisits.filter((v) => v.fieldId === field.id);
-        const already = mine.some((v) => v.tripId === activeTripId);
-        return mine.length + (already ? 0 : 1);
-      })()
+    ? allVisits.filter((v) => v.fieldId === field.id && v.id !== progressRef.current?.visitId).length + 1
     : 0;
   const editTrip = isEdit && visit ? trips.find((t) => t.id === visit.tripId) : undefined;
   const subtitle = field
@@ -472,6 +472,8 @@ export default function CheckinScreen() {
         fieldId: targetId,
         label,
         visitId: rest.visitId,
+        // 체크인을 보냈지만 결과를 모른다 — 대기열이 다시 보내기 전에 서버에 생긴 방문을 찾는다.
+        checkinAttemptedAt: !rest.visitId && checkinTriedRef.current?.fieldId === targetId ? checkinTriedRef.current.at : undefined,
         record: {
           status,
           initialStatus,
@@ -497,19 +499,38 @@ export default function CheckinScreen() {
         await queue({ statusSaved: false, memoSaved: false, photos });
         return;
       }
-      const r = await useVisitStore.getState().checkIn(tripId, targetId);
-      if (!r.ok) {
-        if (r.network) {
-          await queue({ statusSaved: false, memoSaved: false, photos });
+      // 앞서 보낸 체크인이 실패로 끝났지만 서버엔 남았을 수 있다 — 그 뒤 이 현장 방문이 있으면 그것을 쓴다.
+      let committed: { visitId: string; visitedAt: string } | null = null;
+      const tried = checkinTriedRef.current?.fieldId === targetId ? checkinTriedRef.current : null;
+      if (tried) {
+        const found = await findCommittedCheckIn({ tripId, fieldId: targetId, attemptedAt: tried.at });
+        if (!found.ok) {
+          if (found.network) {
+            await queue({ statusSaved: false, memoSaved: false, photos });
+            return;
+          }
+          await fail('체크인하지 못했어요', found.error);
           return;
         }
-        await fail('체크인하지 못했어요', r.error);
-        return;
+        committed = found.visit;
+      }
+      if (!committed) {
+        if (!tried) checkinTriedRef.current = { fieldId: targetId, at: Date.now() };
+        const r = await useVisitStore.getState().checkIn(tripId, targetId);
+        if (!r.ok) {
+          if (r.network) {
+            await queue({ statusSaved: false, memoSaved: false, photos });
+            return;
+          }
+          await fail('체크인하지 못했어요', r.error);
+          return;
+        }
+        committed = { visitId: r.visit.id, visitedAt: r.visit.visitedAt };
       }
       const ds = useDestinationStore.getState();
       const dest = ds.findByTripField(tripId, targetId);
       if (dest && dest.status === 'pending') ds.markArrived(dest.id);
-      progress = { visitId: r.visit.id, visitedAt: r.visit.visitedAt, statusBase: initialStatus };
+      progress = { visitId: committed.visitId, visitedAt: committed.visitedAt, statusBase: initialStatus };
       progressRef.current = progress;
     } else {
       // 다시 [저장] — 앞서 응답 없이 끊긴 사진·메모가 서버에 이미 있으면 보내지 않는다.

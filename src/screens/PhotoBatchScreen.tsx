@@ -21,13 +21,12 @@ import { assetToUploadFile, pickPhotos, type UploadFile } from '@/utils/media';
 import { readPhotoMeta } from '@/utils/photoMeta';
 import { assignPhotoLocation, groupPhotos, uniqueTimes, type PhotoGroup } from '@/utils/photoGroups';
 import { createFieldFromPlace } from '@/utils/placeToField';
-import { saveVisitRecord, skipAlreadySaved, type CheckinPhoto } from '@/utils/visitRecord';
+import { findCommittedCheckIn, saveVisitRecord, skipAlreadySaved, type CheckinPhoto } from '@/utils/visitRecord';
 import { fieldTitle } from '@/utils/fieldFacets';
 import { pickedPlaceName } from '@/utils/addressFormat';
 import { haversineKm } from '@/utils/routeOptimize';
 import { peekUserLocation } from '@/utils/geolocation';
 import { safeBack } from '@/utils/backNavigation';
-import { trips as tripsApi } from '@/api';
 import { c2, elevation2, radius2, space } from '@/theme/v2';
 
 // 한 번에 고를 수 있는 사진 수. 서버에 일괄 API 가 없어 묶음마다 차례로 보낸다(백로그 2차 J).
@@ -345,21 +344,15 @@ export function PhotoBatchScreen() {
     // 체크인은 보낼 때마다 방문이 새로 생긴다(2026-10-17 실측: 같은 외근·현장에 두 번 → 방문 2건).
     // 앞서 실패한 체크인이 서버엔 남았을 수 있어, 그 뒤 시각의 이 현장 방문이 있으면 그것을 쓴다.
     if (!rec.visitId && rec.checkinTriedAt) {
-      try {
-        const d = await tripsApi.detail(tripId);
-        const since = rec.checkinTriedAt - CLOCK_SKEW_MS;
-        const hit = (d.timeline ?? []).find((v) => v.fieldId === fieldId && new Date(v.visitedAt).getTime() >= since);
-        if (hit) {
-          rec.visitId = hit.visitId;
-          rec.visitedAt = hit.visitedAt;
-        }
-      } catch {
-        return '체크인: 서버에서 앞선 기록을 확인하지 못했어요';
+      const found = await findCommittedCheckIn({ tripId, fieldId, attemptedAt: rec.checkinTriedAt, skewMs: CLOCK_SKEW_MS });
+      if (!found.ok) return '체크인: 서버에서 앞선 기록을 확인하지 못했어요';
+      if (found.visit) {
+        rec.visitId = found.visit.visitId;
+        rec.visitedAt = found.visit.visitedAt;
       }
     }
     if (!rec.visitId) {
       rec.checkinTriedAt = Date.now();
-      // 서버 체크인은 (외근, 현장) 기준 멱등 — 응답을 못 받고 다시 보내도 방문이 둘 생기지 않는다.
       const r = await useVisitStore.getState().checkIn(tripId, fieldId);
       if (!r.ok) return `체크인: ${r.error}`;
       rec.visitId = r.visit.id;

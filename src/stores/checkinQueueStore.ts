@@ -6,7 +6,7 @@ import { useVisitStore } from './visitStore';
 import { useDestinationStore } from './destinationStore';
 import { confirm, notice } from '@/components/ui/ConfirmDialog';
 import type { FieldStatus } from '@/types/entities';
-import { saveVisitRecord, skipAlreadySaved, type CheckinPhoto } from '@/utils/visitRecord';
+import { findCommittedCheckIn, saveVisitRecord, skipAlreadySaved, type CheckinPhoto } from '@/utils/visitRecord';
 import { dropQueuedPhotos, queuedPhotoExists } from '@/utils/queuePhotos';
 
 // 체크인 저장 대기열(7-2 오프라인 저장 · 7-3 저장 실패).
@@ -22,6 +22,8 @@ import { dropQueuedPhotos, queuedPhotoExists } from '@/utils/queuePhotos';
 // 사진은 넣을 때 앱 문서 폴더로 복사해 둔 경로를 남기고(utils/queuePhotos), 올렸거나 버리면 지운다. 웹은 blob: 주소라
 // 페이지를 새로 고치면 사라진다 — 그때는 사진만 빼고 알린다.
 // 체크인 → 조치 상태 → 사진 → 메모를 단계마다 기록해(visitId·statusSaved·memoSaved·남은 photos) 다시 보낼 때 남은 단계만 보낸다.
+// 서버 체크인은 멱등이 아니다(2026-10-17 실측: 같은 외근·현장에 두 번 → 방문 2건). 체크인을 처음 보낸 시각(checkinAttemptedAt)을
+// 남기고, 결과를 모른 채 다시 보낼 때는 먼저 외근 상세 timeline 에서 그 뒤 생긴 방문을 찾아 쓴다(findCommittedCheckIn).
 
 const STORAGE_KEY = 'mfz.checkinQueue.v1';
 // 대기 중인 것이 있으면 이 간격으로도 다시 보낸다(NetInfo 이벤트를 못 받는 환경 대비).
@@ -44,6 +46,8 @@ export interface QueuedCheckIn {
   record?: QueuedRecord;
   /** 체크인(방문 생성)이 이미 저장됐으면 그 방문 — 다시 보낼 때 체크인을 건너뛰고 남은 기록만 보낸다. */
   visitId?: string;
+  /** 체크인을 처음 보낸 시각(ms) — 있으면 결과를 모르는 것이라, 다시 보내기 전에 서버에 그 뒤 방문이 생겼는지 본다. */
+  checkinAttemptedAt?: number;
 }
 
 export interface QueuedRecord {
@@ -95,7 +99,7 @@ interface CheckinQueueState {
   /** 지금 보내는 중 */
   flushing: boolean;
   hydrate: () => Promise<void>;
-  enqueue: (input: Pick<QueuedCheckIn, 'tripId' | 'fieldId' | 'label' | 'record' | 'visitId'>) => QueuedCheckIn | null;
+  enqueue: (input: Pick<QueuedCheckIn, 'tripId' | 'fieldId' | 'label' | 'record' | 'visitId' | 'checkinAttemptedAt'>) => QueuedCheckIn | null;
   /** 대기 중인 것을 보낸다. retryFailed 면 실패한 것도 다시. */
   flush: (opts?: { retryFailed?: boolean }) => Promise<void>;
   /** 그 외근의 체크인 대기 항목을 지운다(외근 종료 확인에서 [종료]를 고른 뒤 — 저장되지 않음을 이미 알렸다).
@@ -144,7 +148,18 @@ export const useCheckinQueueStore = create<CheckinQueueState>((set, get) => {
     const active = getActiveTripId();
     if (!userId || active === undefined) return;
     // 끝난 외근의 대기·실패 항목은 갈 곳 없음으로(지우지 않는다).
-    const stale = get().items.filter((x) => x.userId === userId && x.state !== 'orphaned' && x.tripId !== active && !x.visitId);
+    // 체크인을 보냈다가 결과를 모르는 항목은 먼저 서버를 본다 — 저장돼 있었으면 방문 id 로 남은 기록을 보낼 수 있다.
+    // 서버를 읽지 못한 항목은 이번에는 옮기지 않는다(다음 기회에 다시 본다).
+    const unknown = new Set<string>();
+    for (const x of get().items) {
+      if (x.userId !== userId || x.state === 'orphaned' || x.tripId === active || x.visitId || !x.checkinAttemptedAt) continue;
+      const found = await findCommittedCheckIn({ tripId: x.tripId, fieldId: x.fieldId, attemptedAt: x.checkinAttemptedAt });
+      if (!found.ok) unknown.add(x.id);
+      else if (found.visit) update(x.id, { visitId: found.visit.visitId });
+    }
+    const stale = get().items.filter(
+      (x) => x.userId === userId && x.state !== 'orphaned' && x.tripId !== active && !x.visitId && !unknown.has(x.id),
+    );
     if (stale.length > 0) {
       const ids = new Set(stale.map((x) => x.id));
       replace(get().items.map((x) => (ids.has(x.id) ? { ...x, state: 'orphaned' as const, error: undefined } : x)));
@@ -170,11 +185,27 @@ export const useCheckinQueueStore = create<CheckinQueueState>((set, get) => {
         if (nowActive === undefined) break;
         // 체크인을 이미 저장한 항목은 방문 id 로 남은 기록만 보내므로 외근이 끝나도 보낼 수 있다.
         if (nowActive !== item.tripId && !item.visitId) {
+          if (unknown.has(item.id)) continue;
           replace(get().items.map((x) => (x.id === item.id ? { ...x, state: 'orphaned' as const } : x)));
           continue;
         }
-        let visitId = item.visitId;
+        let visitId = get().items.find((x) => x.id === item.id)?.visitId ?? item.visitId;
+        // 앞서 보낸 체크인의 결과를 모른다 — 서버에 이미 생겼으면 그 방문을 쓰고 다시 보내지 않는다.
+        const attemptedAt = get().items.find((x) => x.id === item.id)?.checkinAttemptedAt ?? item.checkinAttemptedAt;
+        if (!visitId && attemptedAt) {
+          const found = await findCommittedCheckIn({ tripId: item.tripId, fieldId: item.fieldId, attemptedAt });
+          if (!found.ok && (found.network || found.status === 401)) break;
+          if (!found.ok) {
+            update(item.id, { state: 'failed', error: found.error });
+            continue;
+          }
+          if (found.visit) {
+            visitId = found.visit.visitId;
+            update(item.id, { visitId });
+          }
+        }
         if (!visitId) {
+          if (!attemptedAt) update(item.id, { checkinAttemptedAt: Date.now() });
           const r = await useVisitStore.getState().checkIn(item.tripId, item.fieldId);
           // 아직 끊김, 또는 세션 만료 — 나머지도 그대로 두고 다음 기회에.
           if (!r.ok && (r.network || r.status === 401)) break;
@@ -355,10 +386,11 @@ export const useCheckinQueueStore = create<CheckinQueueState>((set, get) => {
       }
     },
 
-    enqueue: ({ tripId, fieldId, label, record, visitId }) => {
+    enqueue: ({ tripId, fieldId, label, record, visitId, checkinAttemptedAt }) => {
       const userId = getUserId();
       if (!userId) return null;
-      // 같은 외근·현장은 하나만(서버도 (외근, 현장) 기준 멱등이다) — 앞 항목이 있으면 기록을 합친다.
+      // 같은 외근·현장은 대기열에 하나만 — 앞 항목이 있으면 기록을 합쳐 방문 하나로 보낸다.
+      // (서버는 체크인마다 방문을 새로 만든다. 끊긴 동안 같은 현장을 두 번 체크인해도 방문은 하나로 남긴다.)
       const prev = get().items.find((x) => x.userId === userId && x.tripId === tripId && x.fieldId === fieldId);
       const merged = mergeRecord(prev?.record, record);
       const item: QueuedCheckIn = {
@@ -371,6 +403,8 @@ export const useCheckinQueueStore = create<CheckinQueueState>((set, get) => {
         state: 'pending',
         // 체크인은 이미 저장되고 남은 기록만 넣는 경우(체크인 화면이 저장 중 끊김) — 다시 체크인하지 않는다.
         ...((visitId ?? prev?.visitId) ? { visitId: visitId ?? prev?.visitId } : {}),
+        // 앞서 보낸 체크인(결과 모름)의 처음 시각 — 다시 보내기 전에 서버를 본다.
+        ...((prev?.checkinAttemptedAt ?? checkinAttemptedAt) ? { checkinAttemptedAt: prev?.checkinAttemptedAt ?? checkinAttemptedAt } : {}),
         ...(merged ? { record: merged } : {}),
       };
       replace([...get().items.filter((x) => x !== prev), item]);
