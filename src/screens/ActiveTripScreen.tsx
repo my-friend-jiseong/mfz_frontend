@@ -357,11 +357,16 @@ export default function ActiveTrip() {
     snackbar.hide();
     // 건너뛰기·저장 대기 체크인을 먼저 보낸다. 끝낸 뒤에는 이 외근에 붙일 수 없다(backlog 2차 H).
     await Promise.all([flushDeferredSkips(), useCheckinQueueStore.getState().flush({ retryFailed: true })]);
-    const left = useCheckinQueueStore.getState().items.filter((q) => q.tripId === tripId).length;
+    // 체크인이 이미 저장된 항목(visitId)은 남은 사진·메모를 방문 id 로 이어서 보내므로 '저장되지 않아요'에 넣지 않는다.
+    const leftItems = useCheckinQueueStore.getState().items.filter((q) => q.tripId === tripId);
+    const left = leftItems.filter((q) => !q.visitId).length;
+    const recordsLeft = leftItems.length - left;
     if (left > 0) {
       const ok = await confirm({
         title: '저장하지 못한 기록이 있어요',
-        message: `지금 끝내면 체크인 ${left}건은 이 외근에 저장되지 않아요.`,
+        message:
+          `지금 끝내면 체크인 ${left}건은 이 외근에 저장되지 않아요.` +
+          (recordsLeft > 0 ? ` 체크인이 저장된 사진·메모 ${recordsLeft}건은 연결되면 이어서 저장돼요.` : ''),
         cancelLabel: '계속하기',
         confirmLabel: '종료',
         destructive: true,

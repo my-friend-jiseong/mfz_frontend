@@ -6,7 +6,7 @@ import { useVisitStore } from './visitStore';
 import { useDestinationStore } from './destinationStore';
 import { confirm, notice } from '@/components/ui/ConfirmDialog';
 import type { FieldStatus } from '@/types/entities';
-import { saveVisitRecord, type CheckinPhoto } from '@/utils/visitRecord';
+import { saveVisitRecord, skipAlreadySaved, type CheckinPhoto } from '@/utils/visitRecord';
 import { dropQueuedPhotos, queuedPhotoExists } from '@/utils/queuePhotos';
 
 // 체크인 저장 대기열(7-2 오프라인 저장 · 7-3 저장 실패).
@@ -55,26 +55,38 @@ export interface QueuedRecord {
   photos: CheckinPhoto[];
   statusSaved?: boolean;
   memoSaved?: boolean;
+  /** 한 번이라도 보내 봤다 — 결과를 모르는 재전송이면 보내기 전에 서버에 이미 있는지 본다(skipAlreadySaved). */
+  attempted?: boolean;
 }
 
 const recordDone = (r: QueuedRecord | undefined) => !r || (!!r.statusSaved && !!r.memoSaved && r.photos.every((p) => !p.file));
 
-/** 같은 (외근, 현장)을 다시 넣으면 앞의 기록에 합친다 — 사진은 더하고, 메모는 줄을 바꿔 잇고, 조치 상태는 나중 것. */
+/**
+ * 같은 (외근, 현장)을 다시 넣으면 앞의 기록에 합친다 — 사진은 더하고, 메모는 줄을 바꿔 잇고, 조치 상태는 나중 것.
+ * 새로 넣는 쪽이 이미 저장한 부분(statusSaved·memoSaved — 체크인 화면이 일부 저장한 뒤 끊긴 경우)은 합치지 않는다.
+ */
 function mergeRecord(prev: QueuedRecord | undefined, next: QueuedRecord | undefined): QueuedRecord | undefined {
   if (!prev) return next;
   if (!next) return prev;
-  const status = next.status ?? prev.status;
-  // 앞 메모를 이미 저장했으면 새 메모만 따로 쓴다(같은 메모를 두 번 쓰지 않게).
-  const memo = prev.memoSaved ? next.memo.trim() : [prev.memo.trim(), next.memo.trim()].filter(Boolean).join('\n');
-  return {
-    status,
-    // 앞 조치 상태를 이미 보냈으면 그것이 새 기준선이다.
-    initialStatus: prev.statusSaved ? (prev.status ?? prev.initialStatus) : prev.initialStatus,
-    memo,
-    photos: [...prev.photos, ...next.photos],
-    statusSaved: !!prev.statusSaved && status === prev.status,
-    memoSaved: memo === '',
-  };
+  const statusPart = next.statusSaved
+    ? { status: prev.status, initialStatus: prev.initialStatus, statusSaved: prev.statusSaved }
+    : (() => {
+        const status = next.status ?? prev.status;
+        return {
+          status,
+          // 앞 조치 상태를 이미 보냈으면 그것이 새 기준선이다.
+          initialStatus: prev.statusSaved ? (prev.status ?? prev.initialStatus) : prev.initialStatus,
+          statusSaved: !!prev.statusSaved && status === prev.status,
+        };
+      })();
+  const memoPart = next.memoSaved
+    ? { memo: prev.memo, memoSaved: prev.memoSaved }
+    : (() => {
+        // 앞 메모를 이미 저장했으면 새 메모만 따로 쓴다(같은 메모를 두 번 쓰지 않게).
+        const memo = prev.memoSaved ? next.memo.trim() : [prev.memo.trim(), next.memo.trim()].filter(Boolean).join('\n');
+        return { memo, memoSaved: memo === '' };
+      })();
+  return { ...statusPart, ...memoPart, photos: [...prev.photos, ...next.photos], attempted: prev.attempted };
 }
 
 interface CheckinQueueState {
@@ -86,8 +98,11 @@ interface CheckinQueueState {
   enqueue: (input: Pick<QueuedCheckIn, 'tripId' | 'fieldId' | 'label' | 'record' | 'visitId'>) => QueuedCheckIn | null;
   /** 대기 중인 것을 보낸다. retryFailed 면 실패한 것도 다시. */
   flush: (opts?: { retryFailed?: boolean }) => Promise<void>;
-  /** 그 외근의 항목을 모두 지운다(외근 종료 확인에서 [종료]를 고른 뒤 — 저장되지 않음을 이미 알렸다). */
+  /** 그 외근의 체크인 대기 항목을 지운다(외근 종료 확인에서 [종료]를 고른 뒤 — 저장되지 않음을 이미 알렸다).
+   *  체크인이 이미 저장된 항목(visitId — 남은 사진·메모)은 방문 id 로 계속 보낼 수 있어 남긴다. */
   discardTrip: (tripId: string) => void;
+  /** 체크인은 저장됐고 사진·메모만 실패로 남은 항목을 다시 보낸다(앱이 앞으로 올 때 — 외근이 끝나 7-3 [다시 시도]가 없어도). */
+  retryDetached: () => void;
   /** 로그인한 사용자가 바뀌면 — 다른 사용자의 항목은 지운다. */
   onUserChange: (userId: string | null) => void;
   clearAll: () => Promise<void>;
@@ -142,8 +157,12 @@ export const useCheckinQueueStore = create<CheckinQueueState>((set, get) => {
     set({ flushing: true });
     // 서버가 다른 외근에 붙여 저장한 체크인(보내는 사이 외근이 바뀜).
     const elsewhere: QueuedCheckIn[] = [];
-    // 체크인은 저장했지만 함께 실은 사진·메모·조치 상태 일부를 못 보낸 현장.
+    // 체크인은 저장했지만 함께 실은 사진·메모·조치 상태 일부를 서버가 받지 않은 현장 — [다시 시도]로 남은 것만.
     const partial: string[] = [];
+    // 사진 파일이 기기에서 사라져 올릴 수 없는 현장 — 기록 수정에서 다시 넣어야 한다.
+    const lostFiles: string[] = [];
+    // 보내는 사이 합쳐진 기록이 남았다 — 한 번 더 돈다.
+    let again = false;
     try {
       for (const item of todo) {
         // 이 외근이 지금 진행 중이 아니면 서버가 다른 외근(또는 409)에 처리한다 — 보내지 않고 갈 곳 없음으로.
@@ -173,39 +192,81 @@ export const useCheckinQueueStore = create<CheckinQueueState>((set, get) => {
           // 체크인이 저장됐음을 먼저 남긴다 — 아래 기록 저장 중에 앱이 꺼져도 다시 체크인하지 않는다.
           update(item.id, { visitId });
         }
-        const rec = get().items.find((x) => x.id === item.id)?.record;
-        if (!rec || recordDone(rec)) {
+        const sent = get().items.find((x) => x.id === item.id)?.record;
+        if (!sent || recordDone(sent)) {
           removeItems([item.id]);
           continue;
         }
         // 지워진 사진 파일(OS 정리·웹 새로고침)은 빼고 알린다 — 계속 실패로 남지 않게.
-        const alive: CheckinPhoto[] = [];
-        let lost = 0;
-        for (const p of rec.photos) {
+        let alive: CheckinPhoto[] = [];
+        const lostKeys = new Set<string>();
+        for (const p of sent.photos) {
           if (await queuedPhotoExists(p)) alive.push(p);
-          else lost += 1;
+          else lostKeys.add(p.key);
         }
+        if (lostKeys.size > 0) lostFiles.push(item.label);
+        let memoAlready = false;
+        // 앞서 보내다 결과를 모르고 끊겼으면 서버에 이미 있는 사진·메모는 다시 보내지 않는다.
+        if (sent.attempted) {
+          const seen = await skipAlreadySaved({
+            tripId: item.tripId,
+            visitId,
+            fieldId: item.fieldId,
+            visitedAt: item.visitedAt,
+            photos: alive,
+            memo: sent.memoSaved ? null : sent.memo,
+          });
+          alive = seen.photos;
+          memoAlready = seen.memoSaved;
+        } else update(item.id, { record: { ...sent, attempted: true } });
+        const sentMemo = sent.memoSaved || memoAlready ? null : sent.memo;
         const res = await saveVisitRecord({
           visitId,
           fieldId: item.fieldId,
-          status: rec.statusSaved ? null : rec.status,
-          initialStatus: rec.initialStatus,
+          status: sent.statusSaved ? null : sent.status,
+          initialStatus: sent.initialStatus,
           photos: alive,
-          memo: rec.memoSaved ? null : rec.memo,
+          memo: sentMemo,
           initialMemo: null,
         });
-        const remaining = res.photos.filter((p) => p.file);
-        const remainingKeys = new Set(remaining.map((p) => p.key));
-        dropQueuedPhotos(rec.photos.filter((p) => !remainingKeys.has(p.key)));
+        // 올린 사진 = 보낼 때 file 이 있었는데 결과에서 file 이 빠진 것(이미 서버에 있던 것 포함).
+        const leftKeys = new Set(res.photos.filter((p) => p.file).map((p) => p.key));
+        const uploadedKeys = new Set(sent.photos.filter((p) => p.file && !leftKeys.has(p.key) && !lostKeys.has(p.key)).map((p) => p.key));
+        dropQueuedPhotos(sent.photos.filter((p) => uploadedKeys.has(p.key)));
+        // 보내는 동안 같은 현장 체크인이 더 들어와 합쳐졌을 수 있다 — 지금 항목을 다시 읽어 보낸 것만 뺀다.
+        const cur = get().items.find((x) => x.id === item.id);
+        if (!cur) continue;
+        const curRec = cur.record ?? sent;
+        let memo = curRec.memo;
+        let memoSaved = !!curRec.memoSaved;
+        // 이번에 메모가 저장됐다(보냈거나 서버에 이미 있었다).
+        const memoDone = !sent.memoSaved && (memoAlready || (sentMemo !== null && res.memoSaved));
+        if (!memoSaved && memoDone) {
+          // 보낸 글 그대로면 끝, 뒤에 합쳐진 글이 있으면 그것만 남긴다.
+          if (curRec.memo === sent.memo) memoSaved = true;
+          else if (curRec.memo.startsWith(sent.memo)) {
+            memo = curRec.memo.slice(sent.memo.length).trim();
+            memoSaved = memo === '';
+          }
+        }
+        const statusSaved =
+          !!curRec.statusSaved ||
+          (res.statusSaved && curRec.status === sent.status && curRec.initialStatus === sent.initialStatus);
         const nextRec: QueuedRecord = {
-          ...rec,
-          photos: remaining,
-          statusSaved: !!rec.statusSaved || res.statusSaved,
-          memoSaved: !!rec.memoSaved || res.memoSaved,
+          ...curRec,
+          memo,
+          memoSaved,
+          statusSaved,
+          photos: curRec.photos.filter((p) => !uploadedKeys.has(p.key) && !lostKeys.has(p.key)),
         };
-        if (lost > 0) partial.push(item.label);
         if (recordDone(nextRec)) {
           removeItems([item.id]);
+          continue;
+        }
+        if (res.errors.length === 0) {
+          // 보낸 것은 다 저장됐고 그사이 합쳐진 것만 남았다 — 다음 차례에 보낸다.
+          update(item.id, { record: nextRec, state: 'pending', error: undefined });
+          again = true;
           continue;
         }
         // 남은 단계가 있다 — 끊겨서면 다음 기회에, 서버가 거부했으면 실패로 두고 [다시 시도]에서 남은 것만 보낸다.
@@ -224,9 +285,13 @@ export const useCheckinQueueStore = create<CheckinQueueState>((set, get) => {
       later(() => void notice('다른 외근에 기록됐어요', `${names} 체크인은 저장했지만 지금 진행 중인 외근에 붙었어요. 그 외근 상세에서 확인해 주세요.`));
     }
     if (partial.length > 0) {
-      later(() => void notice('일부 기록을 저장하지 못했어요', `${partial.join(', ')} 체크인은 저장했지만 사진·메모 일부를 올리지 못했어요. 외근 상세의 기록 수정에서 다시 넣어 주세요.`));
+      later(() => void notice('일부 기록을 저장하지 못했어요', `${partial.join(', ')} 체크인은 저장했지만 사진·메모 일부를 올리지 못했어요. [다시 시도]를 눌러 주세요.`));
+    }
+    if (lostFiles.length > 0) {
+      later(() => void notice('사진 일부를 올리지 못했어요', `${lostFiles.join(', ')} 사진 파일이 기기에서 지워졌어요. 외근 상세의 기록 수정에서 다시 넣어 주세요.`));
     }
     askOrphans(userId);
+    if (again) setTimeout(() => void get().flush(), 0);
   };
 
   // 갈 곳 없는 항목을 한 번 묻는다 — [버리기]면 지우고, [나중에]면 남긴다(다음 실행에서 다시 묻는다).
@@ -330,8 +395,17 @@ export const useCheckinQueueStore = create<CheckinQueueState>((set, get) => {
     },
 
     discardTrip: (tripId) => {
-      const ids = get().items.filter((x) => x.tripId === tripId).map((x) => x.id);
+      const ids = get().items.filter((x) => x.tripId === tripId && !x.visitId).map((x) => x.id);
       if (ids.length > 0) removeItems(ids);
+    },
+
+    retryDetached: () => {
+      const active = getActiveTripId();
+      if (active === undefined) return;
+      const ids = get().items.filter((x) => x.state === 'failed' && x.visitId && x.tripId !== active).map((x) => x.id);
+      if (ids.length === 0) return;
+      replace(get().items.map((x) => (ids.includes(x.id) ? { ...x, state: 'pending' as const, error: undefined } : x)));
+      void get().flush();
     },
 
     onUserChange: (userId) => {
@@ -384,7 +458,10 @@ export function startCheckinQueue(deps: {
     if (s.isConnected !== false && s.isInternetReachable !== false) flush();
   });
   const appSub = AppState.addEventListener('change', (st) => {
-    if (st === 'active') flush();
+    if (st !== 'active') return;
+    // 끝난 외근의 남은 사진·메모는 7-3 [다시 시도]가 없으니 앞으로 올 때마다 다시 보내 본다.
+    if (getUserId()) useCheckinQueueStore.getState().retryDetached();
+    flush();
   });
   // 웹: NetInfo 는 navigator.connection 이 있으면 그 change 만 듣는데, 브라우저가 오프라인→온라인을 그쪽으로
   // 알리지 않는 경우가 있다(크롬 실측) — window 'online' 도 듣는다.

@@ -134,31 +134,29 @@ export const useTripStore = create<TripState>((set, get) => ({
       if (res.destinations) {
         useDestinationStore.getState().setFromServer(id, res.destinations);
       }
+      // 진행 상태는 종료 시각(또는 lifecycleStatus)으로 정한다 — 상세의 status 는 다른 값 체계일 수 있다.
+      const lifecycle: Trip['status'] = res.endedAt || res.lifecycleStatus === 'ended' ? 'ended' : 'active';
+      const inserted: Trip = {
+        id: res.tripId,
+        workerId: res.userId,
+        startedAt: res.startedAt,
+        endedAt: res.endedAt,
+        status: lifecycle,
+        title: res.title,
+        visitCount: res.visitCount,
+      };
       // 자체 trips 항목의 메타 갱신 — visitCount 가 list 응답보다 최신일 수 있음.
       set((s) => ({
         // 목록에 아직 없는 외근(3-7 방문 기록 수정을 바로 연 경우 등)은 상세 응답으로 넣어 둔다 — 안 그러면 화면이
         // '목록에 없음 → 상세 다시 요청'을 되풀이한다.
-        trips: (s.trips.some((t) => t.id === id)
-          ? s.trips
-          : [
-              ...s.trips,
-              {
-                id: res.tripId,
-                workerId: res.userId,
-                startedAt: res.startedAt,
-                endedAt: res.endedAt,
-                status: res.status as Trip['status'],
-                title: res.title,
-                visitCount: res.visitCount,
-              } as Trip,
-            ]
+        trips: (s.trips.some((t) => t.id === id) ? s.trips : [...s.trips, inserted]
         ).map((t) =>
           t.id === id
             ? {
                 ...t,
                 visitCount: res.visitCount ?? t.visitCount,
                 endedAt: res.endedAt ?? t.endedAt,
-                status: (res.status as Trip['status']) ?? t.status,
+                status: lifecycle,
                 title: res.title ?? t.title,
               }
             : t,

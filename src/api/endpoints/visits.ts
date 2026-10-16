@@ -37,6 +37,8 @@ export interface VisitPhoto {
   attachmentId: string;
   fileUrl: string;
   phase?: VisitPhotoPhase | null;
+  /** 찍은(고른) 시각 — 올릴 때 보낸 capturedAt. 예전 사진·서버가 안 주면 없다. */
+  capturedAt?: string | null;
   createdAt: string;
 }
 

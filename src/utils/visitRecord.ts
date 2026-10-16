@@ -49,7 +49,7 @@ export interface CheckinPhoto {
 export function photosToList(photos: readonly VisitPhoto[] | undefined): CheckinPhoto[] {
   return [...(photos ?? [])]
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-    .map((p) => ({ key: p.attachmentId, uri: p.fileUrl, takenAt: p.createdAt }));
+    .map((p) => ({ key: p.attachmentId, uri: p.fileUrl, takenAt: p.capturedAt ?? p.createdAt }));
 }
 
 // 현장 첨부 중 type === 'text' 인 것.
@@ -170,6 +170,38 @@ export async function saveVisitRecord(args: {
   }
 
   return { errors, statusSaved, photos, memoSaved, memo };
+}
+
+/**
+ * 결과를 모르는 재전송(응답 전에 끊김)으로 같은 사진·메모가 두 번 올라가지 않게, 다시 보내기 전에 서버를 본다.
+ * - 사진: 서버 방문 사진 중 capturedAt 이 같은 것이 있으면 이미 올라간 것으로 본다
+ * - 메모: 방문 시각 뒤에 같은 글의 현장 메모가 있으면 이미 저장된 것으로 본다
+ * 서버를 못 읽으면 그대로 보낸다(중복보다 유실이 더 나쁘다).
+ */
+export async function skipAlreadySaved(args: {
+  tripId: string;
+  visitId: string;
+  fieldId: string;
+  visitedAt: string | null;
+  photos: CheckinPhoto[];
+  memo: string | null;
+}): Promise<{ photos: CheckinPhoto[]; memoSaved: boolean }> {
+  const { tripId, visitId, fieldId } = args;
+  let photos = args.photos;
+  if (photos.some((p) => p.file) && (await useVisitStore.getState().loadPhotos(tripId, visitId))) {
+    const taken = new Set((useVisitStore.getState().photosByVisit[visitId] ?? []).map((p) => p.capturedAt).filter(Boolean));
+    photos = photos.map((p) => (p.file && taken.has(p.takenAt) ? { key: p.key, uri: p.uri, takenAt: p.takenAt } : p));
+  }
+  let memoSaved = false;
+  const text = args.memo?.trim();
+  if (text) {
+    await useFieldStore.getState().loadDetail(fieldId);
+    const since = args.visitedAt ? new Date(args.visitedAt).getTime() - CLOCK_SKEW_MS : 0;
+    memoSaved = (useFieldStore.getState().directAttachments[fieldId] ?? []).some(
+      (a) => a.type === 'text' && a.text?.trim() === text && new Date(a.createdAt).getTime() >= since,
+    );
+  }
+  return { photos, memoSaved };
 }
 
 /** 메모를 이 방문의 것으로 볼 수 있는 기간(방문 시각부터). 지나면 3-7 에서 메모를 고칠 수 없다(서버에 방문 메모가 없음). */
