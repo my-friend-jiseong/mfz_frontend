@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { useTripPrepStore } from './tripPrepStore';
 import type { User } from '@/types/entities';
 import { auth, configureAuth, localizeError, errorCode, ApiError } from '@/api';
 import {
@@ -322,6 +323,7 @@ async function clearLocalSession(): Promise<void> {
   useReportStore.getState().clearAll();
   useProjectStore.getState().clearAll();
   await useCategoryStore.getState().clearAll();
+  useTripPrepStore.getState().clear();
   useAuthStore.setState({
     user: null,
     accessToken: null,

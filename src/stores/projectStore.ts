@@ -32,6 +32,7 @@ function toProject(it: ProjectItem): Project | null {
     userId: '', // 응답에 userId 없음 — 본인 목록
     name: it.name,
     status: it.status,
+    fieldCount: it.fieldCount,
     createdAt: it.createdAt,
     updatedAt: it.updatedAt,
   };

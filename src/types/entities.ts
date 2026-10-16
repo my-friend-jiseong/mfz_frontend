@@ -147,6 +147,8 @@ export interface Project {
   userId: string;
   name: string;
   status: string;             // enum 값 확정 전 문자열 (계획서 §8)
+  // 서버 집계 현장 수(5-3 '현장 12곳'). 없으면 화면이 내 현장에서 센다.
+  fieldCount?: number;
   createdAt: string;
   updatedAt?: string;
 }

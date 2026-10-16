@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { goToTabRoot } from '@/components/shell/tabNav';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
@@ -24,6 +24,7 @@ import { type Field, type FieldStatus } from '@/types/entities';
 import { collectFieldFacets, applyFieldFilters, mergeCategoryNames } from '@/utils/fieldFacets';
 import { useCategoryStore } from '@/stores/categoryStore';
 import { TRIP_MAX_PLANNED_FIELDS } from '@/api';
+import { useTripPrepStore } from '@/stores/tripPrepStore';
 
 export default function NewTripSelect() {
   const router = useRouter();
@@ -45,7 +46,10 @@ export default function NewTripSelect() {
   const [status, setStatus] = useState<FieldStatus | null>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [category, setCategory] = useState<string | null>(null);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  // 4 현장 검색·5 현장 상세에서 담아 둔 목적지로 시작한다(tripPrepStore). TODO(PR6): 6 외근 준비로 대체.
+  const [selectedIds, setSelectedIds] = useState<string[]>(() =>
+    useTripPrepStore.getState().fieldIds.slice(0, TRIP_MAX_PLANNED_FIELDS),
+  );
 
   const { projects: availableProjects, categories: facetCategories } = useMemo(
     () => collectFieldFacets(myFields),
@@ -84,6 +88,15 @@ export default function NewTripSelect() {
     () => selectedIds.map((id) => fieldById.get(id)).filter((f): f is Field => !!f),
     [selectedIds, fieldById],
   );
+  // 담아 둔 목록에 지금은 없는 현장(지웠거나 다른 계정)이 있으면 목록을 받은 뒤 뺀다.
+  const listReady = useFieldStore((s) => s.listStatus === 'ready');
+  useEffect(() => {
+    if (!listReady) return;
+    setSelectedIds((prev) => {
+      const next = prev.filter((id) => fieldById.has(id));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [listReady, fieldById]);
 
   // 백엔드 plannedFields 상한(200). 여기서 막지 않으면 현장을 다 고르고 순서까지 정한 뒤
   // 마지막 '외근 시작' 에서 400 으로 튕긴다 — 되돌릴 방법도 안내도 없는 막다른 길이었다.

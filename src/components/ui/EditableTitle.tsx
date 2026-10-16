@@ -28,6 +28,8 @@ interface Props {
   allowEmpty?: boolean;
   /** 값이 비었을 때 보여 줄 글(allowEmpty 와 함께). */
   placeholder?: string;
+  /** 빈 값일 때 placeholder 글자색. 현장명처럼 빈 값이면 주소가 곧 이름인 곳은 'primary'. 기본 흐린 글자. */
+  placeholderTone?: 'tertiary' | 'primary';
 }
 
 /**
@@ -44,6 +46,7 @@ export function EditableTitle({
   v2 = 'title.l',
   allowEmpty,
   placeholder,
+  placeholderTone = 'tertiary',
 }: Props) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
@@ -87,7 +90,7 @@ export function EditableTitle({
         style={({ pressed }) => [styles.display2, pressed && { opacity: opacity.pressed }]}
       >
         <View style={styles.title2}>
-          <Text v2={v2} tone={empty ? 'tertiary' : 'primary'} numberOfLines={2}>
+          <Text v2={v2} tone={empty ? placeholderTone : 'primary'} numberOfLines={2}>
             {empty ? placeholder ?? '' : value}
           </Text>
           {appearance === 'pencil-underline' ? <DottedUnderline /> : null}

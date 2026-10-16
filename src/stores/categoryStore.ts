@@ -72,7 +72,10 @@ interface CategoryState {
 }
 
 // 이름 동일성 — trim + 소문자 비교(표기 흔들림 흡수).
-const norm = (s: string) => s.trim().toLowerCase();
+export const norm = (s: string) => s.trim().toLowerCase();
+
+const EMPTY_NAME = '분류 이름을 입력해 주세요';
+export const DUP_NAME = '같은 이름의 분류가 있어요';
 
 export const useCategoryStore = create<CategoryState>((set, get) => ({
   categories: [],
@@ -154,9 +157,9 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
 
   create: async (rawName) => {
     const name = rawName.trim();
-    if (!name) return { ok: false, error: '카테고리 이름을 입력하세요' };
-    const existing = get().categories.find((c) => norm(c.name) === norm(name));
-    if (existing) return { ok: true, category: existing }; // 중복은 기존 것 반환
+    if (!name) return { ok: false, error: EMPTY_NAME };
+    // 같은 이름은 막는다(5-12 '같은 이름은 추가 안 됨'). 예전엔 기존 것을 돌려줬다.
+    if (get().categories.some((c) => norm(c.name) === norm(name))) return { ok: false, error: DUP_NAME };
 
     set({ busy: true });
     // 서버 생성이 정상 경로. 실패해도 로컬 항목(local: true)은 만들어 둔다 —
@@ -165,13 +168,11 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
     try {
       category = serverToCategory(await categoriesApi.create({ name }));
     } catch (e) {
-      // 409: 서버에 같은 이름이 이미 있다. 로컬 목록이 뒤처진 것뿐이므로 실패가 아니다.
+      // 409: 서버에 같은 이름이 이미 있다(로컬 목록이 뒤처짐). 목록을 맞추고 같은 이름으로 막는다.
       if (errorCode(e) === 'category_name_taken') {
         set({ busy: false });
         await get().refresh();
-        const found = get().categories.find((c) => norm(c.name) === norm(name));
-        if (found) return { ok: true, category: found };
-        return { ok: false, error: '같은 이름의 카테고리가 이미 있습니다' };
+        return { ok: false, error: DUP_NAME };
       }
       if (__DEV__) console.warn('[categoryStore.create] 서버 미반영, 로컬 생성', e);
     }
@@ -192,11 +193,11 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
 
   rename: async (id, rawName) => {
     const name = rawName.trim();
-    if (!name) return { ok: false, error: '카테고리 이름을 입력하세요' };
+    if (!name) return { ok: false, error: EMPTY_NAME };
     const dup = get().categories.find(
       (c) => c.id !== id && norm(c.name) === norm(name),
     );
-    if (dup) return { ok: false, error: '같은 이름의 카테고리가 이미 있습니다' };
+    if (dup) return { ok: false, error: DUP_NAME };
 
     // 낙관적 반영 후 서버 확인. 서버가 진실원이므로 실패하면 되돌린다 —
     // 안 그러면 화면엔 바뀐 이름이, 서버엔 옛 이름이 남아 다음 refresh 에 되돌아간다.

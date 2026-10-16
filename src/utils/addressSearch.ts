@@ -1,5 +1,5 @@
 // 카카오 Geocoder 검색 결과를 다루는 공용 헬퍼.
-// fields/new.tsx (현장 등록) 와 fields/[id]/edit.tsx (현장 수정) 가 공유.
+// fields/new.tsx (현장 등록) 와 4 현장 검색·5-5 현장 정보 수정이 공유.
 
 import type { AddressSearchItem } from '@/api';
 

@@ -51,7 +51,8 @@ interface DestinationState {
     fieldId: string,
   ) => Destination | undefined;
   markArrived: (id: string) => void;
-  markSkipped: (id: string) => void;
+  /** 서버 반영까지 기다리려면 await — 성공(또는 로컬 행)이면 true. */
+  markSkipped: (id: string) => Promise<boolean>;
   reorder: (tripId: string, orderedIds: string[]) => void;
   removeByTrip: (tripId: string) => void;
   isAllResolved: (tripId: string) => boolean;
@@ -211,12 +212,14 @@ export const useDestinationStore = create<DestinationState>((set, get) => ({
     );
     set({ destinations: next });
     void persist(next);
-    // 서버 영속 (fire-and-forget) — 로컬(미영속) 행은 제외. 실패는 무시(다음 fetch 정정).
-    if (target && !target.local) {
-      void tripsApi
-        .updateDestination(target.tripId, target.id, { status: 'skipped' })
-        .catch(() => {});
-    }
+    // 서버 영속 — 로컬(미영속) 행은 제외. 기다리지 않는 호출부는 실패를 무시한다(다음 fetch 정정).
+    if (!target || target.local) return Promise.resolve(true);
+    return tripsApi
+      .updateDestination(target.tripId, target.id, { status: 'skipped' })
+      .then(
+        () => true,
+        () => false,
+      );
   },
 
   reorder: (tripId, orderedIds) => {

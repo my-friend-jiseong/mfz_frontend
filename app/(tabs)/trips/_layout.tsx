@@ -26,9 +26,8 @@ export default function TripsLayout() {
       <Stack.Screen name="[id]/visits/[visitId]" />
       <Stack.Screen name="fields/index" />
       <Stack.Screen name="fields/new" options={{ presentation: 'modal' }} />
+      <Stack.Screen name="fields/place" />
       <Stack.Screen name="fields/[id]/index" />
-      <Stack.Screen name="fields/categories" options={{ title: '카테고리 관리', headerShown: true }} />
-      <Stack.Screen name="fields/[id]/edit" options={{ title: '현장 수정', headerShown: true }} />
       <Stack.Screen name="fields/[id]/checkin" />
     </Stack>
   );

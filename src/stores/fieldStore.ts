@@ -42,7 +42,7 @@ interface FieldState {
   create: (body: CreateFieldBody) => Promise<CreateResult>;
   update: (id: string, body: UpdateFieldBody) => Promise<GenericResult>;
   patchStatus: (id: string, status: FieldStatus) => Promise<GenericResult>;
-  remove: (id: string) => Promise<DeleteResult>;
+  remove: (id: string, force?: boolean) => Promise<DeleteResult>;
   addTextMemo: (id: string, text: string) => Promise<GenericResult>;
   addPhoto: (
     id: string,
@@ -216,10 +216,10 @@ export const useFieldStore = create<FieldState>((set, get) => ({
     }
   },
 
-  remove: async (id) => {
+  remove: async (id, force = false) => {
     set({ busy: true });
     try {
-      await fieldsApi.remove(id);
+      await fieldsApi.remove(id, force);
       set((s) => ({
         fields: s.fields.filter((f) => f.id !== id),
         busy: false,
@@ -227,12 +227,12 @@ export const useFieldStore = create<FieldState>((set, get) => ({
       return { ok: true };
     } catch (e) {
       set({ busy: false });
-      // has_related_visits: 단일 Actor 라 force 미사용, details.visitCount 안내만.
+      // has_related_visits: force 없이 지우려 했을 때만 온다. 2차 화면은 force 로 지운다(5-11).
       if (e instanceof ApiError && e.code === 'has_related_visits') {
         const d = (e.details ?? {}) as Partial<HasRelatedVisitsDetails>;
         const count = typeof d.visitCount === 'number' ? d.visitCount : 0;
         const message = count > 0
-          ? `방문 기록이 ${count}건 있어 삭제할 수 없습니다`
+          ? `방문 기록이 ${count}건 있어 삭제할 수 없어요`
           : e.message;
         return { ok: false, needsConfirm: true, message };
       }

@@ -4,6 +4,8 @@ import { WebView } from 'react-native-webview';
 import type { PinAddress } from '@/utils/addressSearch';
 import { KAKAO_WEBVIEW_BASE_URL } from '@/utils/kakaoMap';
 import { colors } from '@/theme/colors';
+import type { MapPinKind } from '@/assets/mapPins';
+import { CenterPinOverlay, ORIGIN_DOT_HTML } from './centerPin';
 import { radius } from '@/theme/spacing';
 
 interface Props {
@@ -23,6 +25,11 @@ interface Props {
   // 안 온다), 터치가 실제로 떨어지는 WebView 내부에서 신호를 올려보낸다.
   // 웹은 카카오 SDK 가 컨테이너에 touch-action:none 을 걸어 경합이 없으므로 호출하지 않는다.
   onInteractionChange?: (active: boolean) => void;
+  /** 'center'(5-5): 핀은 가운데 고정, 지도를 끌어 맞춘다. 원래 위치에 점선 원. 기본 'drag'. (FieldPinMap.web 과 같은 뜻) */
+  mode?: 'drag' | 'center';
+  pinKind?: MapPinKind;
+  /** false 면 테두리·모서리 없이 꽉 채운다. */
+  framed?: boolean;
 }
 
 // 마운트 후 임의 시점에 핀 이동 + 역지오코딩을 트리거하는 명령형 핸들
@@ -35,7 +42,17 @@ export interface FieldPinMapHandle {
 // 현장 등록/수정에서 핀 드래그로 좌표 미세 조정용 단일 마커 지도.
 // 일반 MapDashboard 와 분리 — 필터/그룹/myLocation 등 무관, 단일 마커만 표시.
 export const FieldPinMap = forwardRef<FieldPinMapHandle, Props>(function FieldPinMap(
-  { lat, lng, onDragEnd, resolveInitialAddress = false, height = 220, onInteractionChange },
+  {
+    lat,
+    lng,
+    onDragEnd,
+    resolveInitialAddress = false,
+    height = 220,
+    onInteractionChange,
+    mode = 'drag',
+    pinKind = 'pending',
+    framed = true,
+  },
   ref,
 ) {
   const webRef = useRef<WebView>(null);
@@ -48,6 +65,7 @@ export const FieldPinMap = forwardRef<FieldPinMapHandle, Props>(function FieldPi
   const initialLatRef = useRef(safeLat);
   const initialLngRef = useRef(safeLng);
   const resolveInitialRef = useRef(resolveInitialAddress);
+  const modeRef = useRef(mode);
   // 사용자가 지도에서 방금 옮긴 좌표 — 이 값이 prop 으로 되돌아오면 재센터를 건너뛴다.
   // (재센터하면 핀이 항상 화면 중앙으로 튕겨 "안 움직이는" 것처럼 보이는 피드백 루프 차단)
   const lastEmittedRef = useRef<{ lat: number; lng: number } | null>(null);
@@ -58,6 +76,7 @@ export const FieldPinMap = forwardRef<FieldPinMapHandle, Props>(function FieldPi
         initialLatRef.current,
         initialLngRef.current,
         resolveInitialRef.current,
+        modeRef.current === 'center',
       ),
     [kakaoJsKey],
   );
@@ -114,7 +133,7 @@ export const FieldPinMap = forwardRef<FieldPinMapHandle, Props>(function FieldPi
   if (!kakaoJsKey) return null;
 
   return (
-    <View style={[styles.container, { height }]}>
+    <View style={[framed ? styles.container : styles.bare, { height }]}>
       <WebView
         ref={webRef}
         originWhitelist={['*']}
@@ -143,6 +162,7 @@ export const FieldPinMap = forwardRef<FieldPinMapHandle, Props>(function FieldPi
         }}
         style={styles.web}
       />
+      {mode === 'center' ? <CenterPinOverlay kind={pinKind} /> : null}
     </View>
   );
 });
@@ -152,6 +172,7 @@ function buildHtml(
   lat: number,
   lng: number,
   resolveInitial: boolean,
+  centerMode: boolean,
 ): string {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
@@ -175,8 +196,22 @@ function buildHtml(
     var marker = new kakao.maps.Marker({
       position: new kakao.maps.LatLng(${lat}, ${lng}),
       map: map,
-      draggable: true,
+      draggable: ${centerMode ? 'false' : 'true'},
     });
+    var CENTER_MODE = ${centerMode ? 'true' : 'false'};
+    if (CENTER_MODE) {
+      // 가운데 고정 핀은 RN 이 그린다 — 카카오 마커는 좌표 보관용으로만 두고 숨긴다. 원래 위치엔 점선 원.
+      marker.setMap(null);
+      new kakao.maps.CustomOverlay({ position: new kakao.maps.LatLng(${lat}, ${lng}), content: ${JSON.stringify(ORIGIN_DOT_HTML)}, map: map, xAnchor: 0.5, yAnchor: 0.5 });
+      // idle — 끌기·확대 축소 모두 끝난 뒤 한 번. 코드로 옮긴 곳(마커와 같은 좌표)은 건너뛴다.
+      kakao.maps.event.addListener(map, 'idle', function(){
+        var c = map.getCenter();
+        var m = marker.getPosition();
+        if (Math.abs(c.getLat() - m.getLat()) < 1e-7 && Math.abs(c.getLng() - m.getLng()) < 1e-7) return;
+        marker.setPosition(c);
+        emitMove(c.getLat(), c.getLng());
+      });
+    }
     var geocoder = new kakao.maps.services.Geocoder();
     // 주소만 역지오코딩 후 emit — 초기 1회(resolveInitial)와 이동 후속 공용.
     function emitAddress(la, ln){
@@ -208,8 +243,8 @@ function buildHtml(
       var p = marker.getPosition();
       emitMove(p.getLat(), p.getLng());
     });
-    // 지도 탭으로도 핀을 이동 — 사용자 편의 (drag 미숙해도 한 번에 보정 가능).
-    kakao.maps.event.addListener(map, 'click', function(mouseEvent){
+    // 지도 탭으로도 핀을 이동 — 사용자 편의 (drag 미숙해도 한 번에 보정 가능). center 모드는 끌기만.
+    if (!CENTER_MODE) kakao.maps.event.addListener(map, 'click', function(mouseEvent){
       var p = mouseEvent.latLng;
       marker.setPosition(p);
       emitMove(p.getLat(), p.getLng());
@@ -247,5 +282,6 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.background,
   },
+  bare: { overflow: 'hidden', backgroundColor: colors.background },
   web: { flex: 1, backgroundColor: 'transparent' },
 });

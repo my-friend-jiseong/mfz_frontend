@@ -24,6 +24,8 @@ interface Props extends Omit<TextInputProps, 'style'> {
    * 이때 value 가 있으면 값, 없으면 placeholder 를 보여 준다.
    */
   onPressLauncher?: () => void;
+  /** 입구 모양(onPressLauncher). floating(기본)=흰 바탕·그림자(지도 위), muted=회색 바탕·그림자 없음(5 현장 상세 머리). */
+  launcherLook?: 'floating' | 'muted';
   style?: StyleProp<ViewStyle>;
 }
 
@@ -34,30 +36,39 @@ const WEB_NO_OUTLINE = (Platform.OS === 'web' ? { outlineStyle: 'none' } : null)
  * 지도 위 알약형 검색창(Figma SearchBar 533:1164). 52 높이, 입력 중이면 파란 테두리, 값이 있으면 지우기 버튼.
  */
 export const SearchBar = forwardRef<TextInput, Props>(function SearchBar(
-  { value, onChangeText, onClear, onPressLauncher, placeholder = '현장 이름이나 주소 검색', style, onFocus, onBlur, ...rest },
+  { value, onChangeText, onClear, onPressLauncher, launcherLook = 'floating', placeholder = '현장 이름이나 주소 검색', style, onFocus, onBlur, ...rest },
   ref,
 ) {
   const [focused, setFocused] = useState(false);
   const filled = value.length > 0;
 
   if (onPressLauncher) {
+    // 지우기 버튼은 입구 버튼의 형제로 둔다 — 버튼 안 버튼은 스크린리더가 하나로 읽는다.
     return (
-      <Touchable
-        onPress={onPressLauncher}
-        accessibilityRole="search"
-        accessibilityLabel={filled ? `검색어 ${value}` : placeholder}
-        style={[styles.box, style]}
-      >
-        <Icon name="search" size={20} color={c2.text.primary} />
-        <Text
-          v2={filled ? 'bodyL.semibold' : 'bodyL.regular'}
-          tone={filled ? 'primary' : 'tertiary'}
-          style={styles.flex}
-          numberOfLines={1}
+      <View style={[styles.box, launcherLook === 'muted' && styles.muted, filled && onClear && styles.filled, style]}>
+        <Touchable
+          onPress={onPressLauncher}
+          accessibilityRole="search"
+          accessibilityLabel={filled ? `검색어 ${value}` : placeholder}
+          noAutoHitSlop
+          style={styles.launcher}
         >
-          {filled ? value : placeholder}
-        </Text>
-      </Touchable>
+          <Icon name="search" size={20} color={c2.text.primary} />
+          <Text
+            v2={filled ? 'bodyL.semibold' : 'bodyL.regular'}
+            tone={filled ? 'primary' : 'tertiary'}
+            style={styles.flex}
+            numberOfLines={1}
+          >
+            {filled ? value : placeholder}
+          </Text>
+        </Touchable>
+        {filled && onClear ? (
+          <Touchable onPress={onClear} accessibilityRole="button" accessibilityLabel="검색어 지우기" style={styles.clear}>
+            <Icon name="clear" size={20} color={c2.bg.strong} />
+          </Touchable>
+        ) : null}
+      </View>
     );
   }
 
@@ -115,9 +126,11 @@ const styles = StyleSheet.create({
     ...elevation2.control,
   },
   focused: { borderColor: c2.border.brand },
+  muted: { backgroundColor: c2.bg.muted, boxShadow: [] },
   filled: { paddingRight: space[8] },
-  flex: { flex: 1 },
-  input: { flex: 1, ...inputText, color: c2.text.primary, paddingVertical: 0 },
+  flex: { flex: 1, minWidth: 0 },
+  launcher: { flex: 1, minWidth: 0, alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: space[10] },
+  input: { flex: 1, minWidth: 0, ...inputText, color: c2.text.primary, paddingVertical: 0 },
   inputFilled: inputTextFilled,
   clear: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
 });

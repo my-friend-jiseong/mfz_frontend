@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Icon } from '@/components/icons';
 import { c2, radius2, space } from '@/theme/v2';
@@ -13,8 +13,8 @@ interface Props {
   onPress: () => void;
   /** check = 여러 개(5-6 분류), radio = 하나만(5-3 프로젝트·9-10) */
   mode?: 'check' | 'radio';
-  /** 행 오른쪽 ⋯(5-7 이름 변경·삭제). 넘기면 보인다. */
-  onMore?: () => void;
+  /** 행 오른쪽 ⋯(5-7 이름 변경·삭제). 넘기면 보인다. anchor 는 ⋯ 버튼 — 팝오버 메뉴 위치용. */
+  onMore?: (anchor: View | null) => void;
   /** 목록 첫 행 — 위 구분선을 그리지 않는다. */
   first?: boolean;
   /** 이름 자리에 다른 것을 그릴 때(5-8 행 안 이름 변경 입력칸). */
@@ -23,6 +23,7 @@ interface Props {
 
 /** 시트 안 고르기 행(Figma 5-3·5-6·9-10). 64 높이, 체크 24, 이름 Body L, 보조 Caption. */
 export function SelectRow({ title, subtitle, selected, onPress, mode = 'check', onMore, first, children }: Props) {
+  const moreRef = useRef<View>(null);
   return (
     <View style={[styles.row, !first && styles.divider]}>
       {children ?? (
@@ -55,7 +56,13 @@ export function SelectRow({ title, subtitle, selected, onPress, mode = 'check', 
         </Touchable>
       )}
       {onMore ? (
-        <Touchable onPress={onMore} accessibilityRole="button" accessibilityLabel={`${title} 더보기`} style={styles.more}>
+        <Touchable
+          ref={moreRef}
+          onPress={() => onMore(moreRef.current)}
+          accessibilityRole="button"
+          accessibilityLabel={`${title} 더보기`}
+          style={styles.more}
+        >
           <Icon name="more" size={22} color={c2.text.tertiary} />
         </Touchable>
       ) : null}

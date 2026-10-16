@@ -45,6 +45,8 @@ interface Props {
   snapPoints?: (string | number)[];
   /** 위 모서리. 기본 20(5-6·1-2), 1-3 지도 설정은 24. */
   topRadius?: number;
+  /** scrollable 시트에서 이 값이 바뀌면 맨 아래로 스크롤한다(5-12 새 분류 입력 줄·오류가 보이게). */
+  scrollToEndKey?: string | number | null;
   children: React.ReactNode;
 }
 
@@ -63,8 +65,16 @@ export function AppSheet({
   snapPoints,
   children,
   topRadius,
+  scrollToEndKey,
 }: Props) {
   const ref = useRef<BottomSheetModal>(null);
+  const scrollRef = useRef<{ scrollToEnd: (o?: { animated?: boolean }) => void } | null>(null);
+  useEffect(() => {
+    if (scrollToEndKey == null) return;
+    // 새 줄이 그려진 뒤에.
+    const h = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
+    return () => clearTimeout(h);
+  }, [scrollToEndKey]);
   // 시트는 포털로 창 맨 아래까지 내려온다 — 탭 화면의 bottom 0 덮어쓰기 대신 창 기준 inset.
   const insets = useRealSafeAreaInsets();
   const { height } = useWindowDimensions();
@@ -155,7 +165,7 @@ export function AppSheet({
       style={topRadius != null ? [styles.shadow, { borderTopLeftRadius: topRadius, borderTopRightRadius: topRadius }] : styles.shadow}
     >
       {scrollable ? (
-        <BottomSheetScrollView contentContainerStyle={bottomPad}>
+        <BottomSheetScrollView ref={scrollRef as never} contentContainerStyle={bottomPad}>
           {header}
           {children}
         </BottomSheetScrollView>

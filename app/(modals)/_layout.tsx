@@ -1,4 +1,5 @@
 import { Redirect, Stack } from 'expo-router';
+import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { useAuthStore } from '@/stores/authStore';
 
 // X 로 닫는 모달(인수인계 §2 공통 '탭 바를 가리는 화면'). 루트 스택에 fullScreenModal 로 올라가
@@ -8,5 +9,10 @@ export default function ModalsLayout() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   // 웹에서 /map 등으로 바로 들어온 미인증 사용자 — (tabs) 와 같은 게이트.
   if (!isAuthenticated) return <Redirect href="/(auth)/login" />;
-  return <Stack screenOptions={{ headerShown: false }} />;
+  // iOS 의 네이티브 모달은 별도 창이라 루트 provider 의 포털(AppSheet)이 모달 뒤에 그려진다 — 모달 안에 provider 를 하나 더 둔다.
+  return (
+    <BottomSheetModalProvider>
+      <Stack screenOptions={{ headerShown: false }} />
+    </BottomSheetModalProvider>
+  );
 }

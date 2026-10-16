@@ -123,7 +123,7 @@ MARKERS.forEach(function(m){
 <style>
   html,body{margin:0;padding:0;height:100%;width:100%;}
   #mapwrap{position:relative;height:100%;width:100%;}
-  #map{position:absolute;inset:0;}
+  #map{position:absolute;inset:0;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;}
   /* KDE 히트맵 캔버스 — 지도 위 투명 오버레이. 항상 표시(데이터 없으면 투명)하고
      heatmap 모드가 아닐 땐 빈 데이터로 비운다. display:none 으로 숨기면 생성 시
      getComputedStyle 폭이 auto→NaN 이 되어 캔버스가 깨지므로 토글하지 않는다.
@@ -171,6 +171,34 @@ MARKERS.forEach(function(m){
     window.__mfzMap = map;
     // 정적 위치도(figure) — 드래그/줌 차단. BottomSheet 등에서 pan 충돌 회피 + 보고서 그림용.
     if (!INTERACTIVE) { map.setDraggable(false); map.setZoomable(false); }
+    // 길게 누르기(4-3 지도에서 위치 고르기) — 손가락이 600ms 동안 10px 안에 머물면 그 지점 좌표를 보낸다.
+    // 길게 누른 직후 손을 떼며 생기는 click 은 핀 누르기로 치지 않는다.
+    var lpAt = 0;
+    var lpRecent = function(){ return Date.now() - lpAt < 600; };
+    // 길게 누르면 뜨는 브라우저 메뉴(이미지 저장·텍스트 선택)를 막는다.
+    container.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+    if (INTERACTIVE) {
+      var lpTimer = null, lpX = 0, lpY = 0;
+      var lpCancel = function(){ if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } };
+      container.addEventListener('touchstart', function(e){
+        lpCancel();
+        if (!e.touches || e.touches.length !== 1) return;
+        lpX = e.touches[0].clientX; lpY = e.touches[0].clientY;
+        lpTimer = setTimeout(function(){
+          lpTimer = null;
+          lpAt = Date.now();
+          var rect = container.getBoundingClientRect();
+          var ll = map.getProjection().coordsFromContainerPoint(new kakao.maps.Point(lpX - rect.left, lpY - rect.top));
+          postMsg({ type: 'longPress', lat: ll.getLat(), lng: ll.getLng() });
+        }, 600);
+      }, { passive: true });
+      container.addEventListener('touchmove', function(e){
+        if (!lpTimer || !e.touches || !e.touches[0]) return;
+        if (Math.abs(e.touches[0].clientX - lpX) > 10 || Math.abs(e.touches[0].clientY - lpY) > 10) lpCancel();
+      }, { passive: true });
+      container.addEventListener('touchend', lpCancel, { passive: true });
+      container.addEventListener('touchcancel', lpCancel, { passive: true });
+    }
     // 정적 지도 카드에는 축척 막대를 숨긴다(카카오 로고는 남긴다). 웹 KakaoMapWebView.web 의 hideKakaoScale 과 같은 규칙.
     if (HIDE_SCALE) {
       var hideScale = function(){
@@ -426,7 +454,7 @@ MARKERS.forEach(function(m){
         (function(m){
           var content = document.createElement('div');
           content.innerHTML = pinHtml(m);
-          content.firstChild.addEventListener('click', function(){ postMsg({ type: 'markerPress', fieldId: m.id }); });
+          content.firstChild.addEventListener('click', function(){ if (lpRecent()) return; postMsg({ type: 'markerPress', fieldId: m.id }); });
           markerOverlays.push(new kakao.maps.CustomOverlay({
             position: new kakao.maps.LatLng(m.lat, m.lng),
             content: content,
@@ -444,6 +472,7 @@ MARKERS.forEach(function(m){
         content.innerHTML = buildMarkerHtml(head, cl.count, showLabel && cl.count === 1, cl.minOrder);
         (function(c){
           content.firstChild.addEventListener('click', function(){
+            if (lpRecent()) return;
             if (c.count > 1) {
               postMsg({ type: 'markerGroupPress', groupIds: c.ids });
             } else {

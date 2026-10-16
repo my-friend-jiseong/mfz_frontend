@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { useTripPrepStore } from './tripPrepStore';
 import type { Trip } from '@/types/entities';
 import { trips as tripsApi, ApiError, localizeError } from '@/api';
 import type { TripUpdateBody } from '@/api';
@@ -177,6 +178,8 @@ export const useTripStore = create<TripState>((set, get) => ({
         activeTripId: trip.id,
         busy: false,
       }));
+      // 담아 둔 목적지는 이 외근으로 넘어갔다.
+      useTripPrepStore.getState().clear();
       // destinations 하이드레이트: 서버 응답 우선, 없으면(레거시) 로컬 폴백.
       if (plannedFieldIds?.length) {
         if (res.destinations) {

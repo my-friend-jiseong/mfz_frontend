@@ -9,6 +9,7 @@ import { getFullMapSpec, type FullMapLegendRow } from '@/components/shell/fullMa
 import { useFieldStore } from '@/stores/fieldStore';
 import { STATUS_PIN_COLOR } from '@/components/shell/pinColors';
 import { findNearbyFields } from '@/utils/nearestField';
+import { fieldActionStatus } from '@/utils/fieldStatus';
 import { safeBack } from '@/utils/backNavigation';
 import { c2, elevation2, radius2, space } from '@/theme/v2';
 
@@ -60,8 +61,8 @@ export default function FullMapScreen() {
           lat: f.latitude,
           lng: f.longitude,
           label: f.name?.trim() || f.address,
-          color: STATUS_PIN_COLOR[f.status],
-          pin: f.status,
+          color: STATUS_PIN_COLOR[fieldActionStatus(f)],
+          pin: fieldActionStatus(f),
         });
       }
     }

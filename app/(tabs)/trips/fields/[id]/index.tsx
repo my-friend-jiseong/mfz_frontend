@@ -1,397 +1,328 @@
-import { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Alert, Pressable, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MapPreviewCard } from '@/components/MapPreviewCard';
+import { FieldDetailFooter, FieldDetailHeader } from '@/components/fields/FieldDetailChrome';
+import { FieldVisitRow } from '@/components/fields/FieldVisitRow';
+import { ProjectSheet } from '@/components/fields/ProjectSheet';
+import { EditableTitle } from '@/components/ui/EditableTitle';
+import { Tag } from '@/components/ui/Tag';
 import { Text } from '@/components/ui/Text';
-import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
-import { Ionicons } from '@expo/vector-icons';
-import { useFieldStore } from '@/stores/fieldStore';
-import { safeBack } from '@/utils/backNavigation';
-import { useVisitStore } from '@/stores/visitStore';
-import { EmptyState } from '@/components/EmptyState';
-import { MapSheetLayout, sheetScrollableStyle } from '@/components/MapSheetLayout';
-import { openKakaoRouteTo } from '@/utils/kakaoMap';
-import { PhotoGrid } from '@/components/AttachmentPreview';
-import { OverflowButton } from '@/components/ui/NavHeader';
-import { showActionSheet } from '@/components/ui/ActionSheet';
+import { Touchable } from '@/components/ui/Touchable';
+import { showPopoverMenu } from '@/components/ui/PopoverMenu';
 import { confirm, notice } from '@/components/ui/ConfirmDialog';
 import { toast } from '@/components/ui/Toast';
+import { Button2 } from '@/components/ui/Button2';
+import { Icon } from '@/components/icons';
+import { STATUS_PIN_COLOR } from '@/components/shell/pinColors';
+import { openFullMap } from '@/components/shell/fullMap';
+import { useFieldStore } from '@/stores/fieldStore';
+import { useVisitStore } from '@/stores/visitStore';
 import { useTripStore } from '@/stores/tripStore';
+import { useProjectStore } from '@/stores/projectStore';
 import { useDestinationStore } from '@/stores/destinationStore';
-import { Card } from '@/components/ui/Card';
-import { Badge, BADGE_SHAPE_GLYPH } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { FIELD_STATUS_BADGE, VISIT_STATUS_BADGE } from '@/theme/statusBadge';
-import { fmtDateTime } from '@/utils/datetime';
-import { GroupLabel } from '@/components/ui/GroupLabel';
-import { fieldSubtitle, fieldTitle } from '@/utils/fieldFacets';
-import { colors } from '@/theme/colors';
-import { spacing, radius } from '@/theme/spacing';
-import { opacity } from '@/theme/motion';
-import { withAlpha } from '@/theme/withAlpha';
-import {
-  FIELD_STATUS_VALUES,
-  VISIT_STATUS_LABEL,
-  FIELD_STATUS_LABEL,
-  type Visit,
-} from '@/types/entities';
+import { useTripPrepStore } from '@/stores/tripPrepStore';
+import { fieldActionStatus } from '@/utils/fieldStatus';
+import { fieldTitle } from '@/utils/fieldFacets';
+import { memoForVisit } from '@/utils/visitRecord';
+import { tripTitle } from '@/utils/tripFormat';
+import { districtOf, stripRegion } from '@/utils/addressFormat';
+import { formatDistanceM } from '@/utils/nearestField';
+import { haversineKm } from '@/utils/routeOptimize';
+import { peekUserLocation, type LatLng } from '@/utils/geolocation';
+import { useDestinationCart } from '@/utils/destinationCart';
+import { safeBack } from '@/utils/backNavigation';
+import { c2, space } from '@/theme/v2';
 
-// 현장 상세 (명세 v2 §5). 메모·사진은 **조회 전용** — 쓰는 곳은 체크인과 방문 수정뿐이다(§1.3).
-// 사진은 현장 직접 사진 + 이 현장 방문들의 사진을 최신순으로 합친다(방문 사진은 현장 상세 응답에
-// 없어 방문마다 따로 받는다 — 백로그 §35). 수정·삭제는 헤더 `···` 시트로.
+// 5-4 더보기 메뉴 폭(Figma 707:3527).
+const MORE_MENU_W = 238;
 
+/**
+ * 5 현장 상세(Figma 691:3426). 현장은 이름·주소·좌표·프로젝트·분류만 갖고, 조치 상태·사진·메모는 방문에 있다(v100).
+ * 방문 목록은 가장 최근 방문이 펼쳐진 채 열리고 한 번에 하나만 펼친다(5-1). 프로젝트 → 5-3, ⋯ → 5-4([정보 수정] 5-5, [삭제] 5-11).
+ */
 export default function FieldDetail() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, q } = useLocalSearchParams<{ id: string; q?: string }>();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const fieldId = id ?? '';
 
-  const allFields = useFieldStore((s) => s.fields);
-  const directAttachmentsMap = useFieldStore((s) => s.directAttachments);
-  const loadFieldDetail = useFieldStore((s) => s.loadDetail);
-  const removeField = useFieldStore((s) => s.remove);
-  const patchFieldStatus = useFieldStore((s) => s.patchStatus);
+  const liveField = useFieldStore((s) => s.fields.find((f) => f.id === fieldId));
+  // 삭제하는 동안은 마지막 값으로 그린다 — 스토어에서 빠진 같은 틱에 '찾을 수 없어요'로 바뀌며 떠나는 화면이 뒤집히지 않게.
+  const lastFieldRef = useRef(liveField);
+  const deletingRef = useRef(false);
+  if (liveField) lastFieldRef.current = liveField;
+  const field = liveField ?? (deletingRef.current ? lastFieldRef.current : undefined);
+  const directAttachments = useFieldStore((s) => s.directAttachments[fieldId]);
   const allVisits = useVisitStore((s) => s.visits);
   const photosByVisit = useVisitStore((s) => s.photosByVisit);
-  const loadVisitPhotos = useVisitStore((s) => s.loadPhotos);
-  const activeTripId = useTripStore((s) => s.activeTripId);
+  const trips = useTripStore((s) => s.trips);
+  const cart = useDestinationCart();
 
-  // 진입 시 detail 페치 (directAttachments 채우기)
+  const [loaded, setLoaded] = useState(false);
   useEffect(() => {
-    if (fieldId) void loadFieldDetail(fieldId);
-  }, [fieldId, loadFieldDetail]);
+    if (!fieldId) return;
+    void useFieldStore
+      .getState()
+      .loadDetail(fieldId)
+      .finally(() => setLoaded(true));
+    if (useTripStore.getState().trips.length === 0) void useTripStore.getState().hydrate();
+    // 5-3 시트를 열기 전에 받아 둔다 — 시트가 열리는 중에 목록이 자라면 gorhom 이 높이를 못 맞춘다(AppSheet 주석).
+    void useProjectStore.getState().refresh();
+  }, [fieldId]);
 
-  const field = useMemo(
-    () => allFields.find((f) => f.id === fieldId),
-    [allFields, fieldId],
-  );
-  const directAttachments = directAttachmentsMap[fieldId] ?? [];
-  // 최신순 (FE-SITE-05).
-  const directTextMemos = directAttachments
-    .filter((a) => a.type === 'text')
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const [myLoc, setMyLoc] = useState<LatLng | null>(null);
+  useEffect(() => {
+    void peekUserLocation().then(setMyLoc);
+  }, []);
+
   const visits = useMemo(
-    () =>
-      allVisits
-        .filter((v) => v.fieldId === fieldId)
-        .sort((a, b) => b.visitedAt.localeCompare(a.visitedAt)),
+    () => allVisits.filter((v) => v.fieldId === fieldId).sort((a, b) => b.visitedAt.localeCompare(a.visitedAt)),
     [allVisits, fieldId],
   );
 
-  // 상태 변경 중복 호출 가드. ★ early return **위**에 있어야 한다 —
-  // 아래 `if (!field)` 뒤에 두면 현장이 아직 스토어에 없는 첫 렌더에선 훅이 6개,
-  // loadDetail 이 채운 뒤 렌더에선 7개가 되어 "Rendered more hooks than during the
-  // previous render" 로 화면이 죽는다. URL 직접 진입·콜드스타트에서 재현됐다
-  // (목록에서 눌러 들어가면 이미 하이드레이트돼 있어 안 터진다).
-  const statusBusyRef = useRef(false);
+  // 가장 최근 방문이 펼쳐진 채 열린다 — 방문 목록이 처음 채워질 때 한 번.
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const autoExpanded = useRef(false);
+  useEffect(() => {
+    if (autoExpanded.current || visits.length === 0) return;
+    autoExpanded.current = true;
+    setExpandedId(visits[0].id);
+  }, [visits]);
 
-  // 방문 사진 — 방문마다 한 번. 현장 사진과 합쳐 최신순으로 보여준다.
+  // 방문 사진 — 방문마다 한 번('사진 N' 과 펼친 칸에 쓴다). 실패하면 다음 렌더에서 다시.
   const fetchedRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     for (const v of visits) {
       if (fetchedRef.current.has(v.id)) continue;
       fetchedRef.current.add(v.id);
-      // 실패하면 표시를 지워 다음 렌더(방문 목록 갱신 등)에서 다시 시도한다.
-      void loadVisitPhotos(v.tripId, v.id).then((ok) => {
-        if (!ok) fetchedRef.current.delete(v.id);
-      });
+      void useVisitStore
+        .getState()
+        .loadPhotos(v.tripId, v.id)
+        .then((ok) => {
+          if (!ok) fetchedRef.current.delete(v.id);
+        });
     }
-  }, [visits, loadVisitPhotos]);
+  }, [visits]);
 
-  const photos = useMemo(() => {
-    const all: { id: string; fileUrl: string; createdAt: string }[] = [];
-    for (const a of directAttachments) {
-      if (a.type === 'photo' && a.fileUrl) all.push({ id: a.id, fileUrl: a.fileUrl, createdAt: a.createdAt });
-    }
-    for (const v of visits) {
-      for (const ph of photosByVisit[v.id] ?? []) {
-        all.push({ id: ph.attachmentId, fileUrl: ph.fileUrl, createdAt: ph.createdAt });
-      }
-    }
-    return all.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  }, [directAttachments, visits, photosByVisit]);
+  const tripById = useMemo(() => new Map(trips.map((t) => [t.id, t])), [trips]);
+  const [projectOpen, setProjectOpen] = useState(false);
+  const moreRef = useRef<View>(null);
 
   if (!field) {
     return (
-      <MapSheetLayout title="현장 상세" onBack={() => safeBack(router)}>
-        <EmptyState icon="search-outline" title="현장을 찾을 수 없습니다" />
-      </MapSheetLayout>
+      <View style={[styles.root, { paddingTop: insets.top }]}>
+        <FieldDetailHeader query={q ?? ''} />
+        <View style={styles.missing}>
+          {loaded ? (
+            <>
+              <Text v2="bodyL.bold">현장을 찾을 수 없어요</Text>
+              <Text v2="bodyS.regular" tone="tertiary">
+                삭제됐거나 다른 계정의 현장이에요.
+              </Text>
+              <Button2 variant="outline" size="M" onPress={() => safeBack(router)} style={styles.missingBtn}>
+                돌아가기
+              </Button2>
+            </>
+          ) : null}
+        </View>
+      </View>
     );
   }
 
-  // 상태 변경 — chip tap 시 3개 상태 중 선택. patchStatus 즉시 호출.
-  const applyStatus = async (s: typeof field.status) => {
-    if (statusBusyRef.current) return;
-    statusBusyRef.current = true;
-    try {
-      const r = await patchFieldStatus(field.id, s);
-      if (!r.ok) Alert.alert('상태 변경 실패', r.error);
-    } finally {
-      statusBusyRef.current = false;
+  const title = fieldTitle(field);
+  const status = fieldActionStatus(field);
+  const region = districtOf(field.address);
+  const distance = myLoc ? formatDistanceM(haversineKm(myLoc, { lat: field.latitude, lng: field.longitude }) * 1000) : null;
+  const subtitle = [region, distance ? `현 위치에서 ${distance}` : null, `방문 ${visits.length}건`].filter(Boolean).join(' · ');
+  const added = cart.has(field.id);
+
+  const saveName = async (next: string) => {
+    // 비워 두면 주소가 이름이 된다(인수인계 '현장명: 기본값은 주소, 비우고 저장해도 다시 묻지 않음').
+    const r = await useFieldStore.getState().update(field.id, { name: next });
+    if (!r.ok) {
+      await notice('현장명을 바꾸지 못했어요', r.error);
+      throw new Error(r.error);
     }
-  };
-  // 상태 변경 — 액션 시트에서 고른다. '조치 완료' 는 종결 상태라 한 번 더 확인.
-  const handleStatusTap = () => {
-    if (statusBusyRef.current) return;
-    const others = FIELD_STATUS_VALUES.filter((s) => s !== field.status);
-    showActionSheet(
-      others.map((s) => ({
-        label: FIELD_STATUS_LABEL[s],
-        onPress: async () => {
-          if (s === 'done') {
-            const ok = await confirm({
-              title: '조치 완료 처리',
-              message: '이 현장을 조치 완료로 변경할까요?',
-              confirmLabel: '완료',
-            });
-            if (!ok) return;
-          }
-          void applyStatus(s);
-        },
-      })),
-      `현재 상태: ${FIELD_STATUS_LABEL[field.status]}`,
-    );
   };
 
-  // FE-SITE-06 — 현장 삭제는 이 경로에서만. 진행 중 외근의 목적지면 먼저 막는다.
+  const openMap = () =>
+    openFullMap({
+      title: [title, region].filter(Boolean).join(' · '),
+      pins: [{ id: field.id, lat: field.latitude, lng: field.longitude, kind: status, selected: true, label: title }],
+      nearbyFields: true,
+    });
+
+  // 5-11 — 방문 기록이 있어도 막지 않는다(v127). 서버는 force 로 지운다.
   const handleDelete = async () => {
-    const inActiveTrip =
-      activeTripId !== null &&
-      useDestinationStore.getState().byTrip(activeTripId).some((d) => d.fieldId === field.id);
-    if (inActiveTrip) {
-      await notice('삭제할 수 없습니다', '외근 종료 후 삭제할 수 있습니다.');
-      return;
-    }
-    // 서버는 방문 기록이 있는 현장의 삭제를 거부한다(백로그 §40) — 묻고 나서 거절하지 않게 먼저 알린다.
-    if (visits.length > 0) {
-      await notice('삭제할 수 없습니다', `방문 기록이 ${visits.length}건 있는 현장은 아직 삭제할 수 없습니다.`);
-      return;
-    }
+    const n = visits.length;
     const ok = await confirm({
-      title: '이 현장을 삭제할까요?',
-      message: '되돌릴 수 없습니다.',
+      title: '현장을 삭제할까요?',
+      message: n > 0 ? `방문 기록 ${n}건도 함께 지워지고 되돌릴 수 없어요.` : '되돌릴 수 없어요.',
       confirmLabel: '삭제',
       destructive: true,
     });
-    if (!ok) return;
-    const r = await removeField(field.id);
-    if (r.ok) {
-      toast('현장을 삭제했습니다');
-      // replace 는 외근 탭 스택에 현장 목록을 하나 더 쌓는다 — 연 화면으로 돌아간다.
-      safeBack(router, '/(tabs)/trips/fields');
-    } else if ('needsConfirm' in r) {
-      // 서버는 방문 기록이 있는 현장의 삭제를 거부한다(백로그 §40 — 명세 FE-SITE-09 와 충돌).
-      await notice('삭제할 수 없습니다', '방문 기록이 있는 현장은 아직 삭제할 수 없습니다.');
-    } else {
-      Alert.alert('삭제 실패', r.error);
+    if (!ok || deletingRef.current) return;
+    deletingRef.current = true;
+    const r = await useFieldStore.getState().remove(field.id, true);
+    if (!r.ok) {
+      deletingRef.current = false;
+      await notice('현장을 삭제하지 못했어요', 'error' in r ? r.error : r.message);
+      return;
     }
+    // 서버는 진행 중 외근의 목적지를 그대로 둔다(2026-10-17 실측, 백로그 2차 F) — 남은 목적지는 건너뜀으로 돌린다.
+    const activeTripId = useTripStore.getState().activeTripId;
+    if (activeTripId) {
+      const dest = useDestinationStore.getState().findByTripField(activeTripId, field.id);
+      if (dest && dest.status === 'pending') {
+        const saved = await useDestinationStore.getState().markSkipped(dest.id);
+        if (!saved) {
+          await notice('외근 목적지를 정리하지 못했어요', '외근 진행에서 이 목적지를 건너뛰어 주세요.');
+        }
+      }
+    }
+    useTripPrepStore.getState().remove(field.id);
+    toast('현장을 삭제했어요');
+    // 삭제 후 4 현장 검색으로(인수인계 현장 삭제). 스토어 변경과 화면 이동을 한 틱에 섞지 않는다.
+    setTimeout(() => router.dismissTo({ pathname: '/(tabs)/trips/fields', params: { q: q ?? '' } } as never), 0);
   };
 
   const openMore = () =>
-    showActionSheet([
-      {
-        label: '현장 정보 수정',
-        icon: 'create-outline',
-        onPress: () => router.push(`/(tabs)/trips/fields/${field.id}/edit` as never),
-      },
-      { label: '현장 삭제', icon: 'trash-outline', tone: 'danger', onPress: () => void handleDelete() },
-    ]);
-
-  // 목록 카드와 동일한 규칙 — fieldTitle(name || address) + fieldSubtitle(제목이 안 보여준 나머지).
-  const title = fieldTitle(field);
-  const subtitle = fieldSubtitle(field, title);
-
-  const statusFg = colors.fieldStatus[field.status];
-
-  const renderVisit = ({ item }: { item: Visit }) => {
-    const badge = VISIT_STATUS_BADGE[item.status];
-    return (
-      <Card
-        onPress={() =>
-          router.push(
-            `/(tabs)/trips/visit?tripId=${item.tripId}&visitId=${item.id}` as never,
-          )
-        }
-        padding="md"
-        style={styles.visitCard}
-      >
-        <View style={styles.visitHead}>
-          <Text variant="bodySm">{fmtDateTime(item.visitedAt)}</Text>
-          <Badge label={VISIT_STATUS_LABEL[item.status]} tone={badge.tone} shape={badge.shape} />
-        </View>
-        {item.status === 'other' && item.reason ? (
-          <Text variant="caption" color="textMuted" numberOfLines={2} style={styles.visitReason}>
-            사유: {item.reason}
-          </Text>
-        ) : null}
-      </Card>
+    showPopoverMenu(
+      moreRef.current,
+      [
+        { label: '정보 수정', icon: 'edit', onPress: () => router.push({ pathname: '/field-edit', params: { id: field.id } } as never) },
+        { label: '삭제', icon: 'trash', tone: 'danger', onPress: () => void handleDelete() },
+      ],
+      { width: MORE_MENU_W },
     );
-  };
-
-  const headerElement = (
-    <View style={styles.summary}>
-      <Pressable
-        onPress={handleStatusTap}
-        accessibilityRole="button"
-        accessibilityLabel={`현재 상태: ${FIELD_STATUS_LABEL[field.status]}. 변경하려면 누르세요`}
-        style={({ pressed }) => [
-          styles.statusTap,
-          { backgroundColor: withAlpha(statusFg, 0.13), borderColor: statusFg },
-          pressed && { opacity: opacity.pressed },
-        ]}
-      >
-        {/* 형상 — 목록 카드와 같은 단일 출처를 거친다(6절). 이 칩은 색+라벨뿐이라
-            같은 상태가 목록에선 ●, 상세에선 형상 없이 보이고 있었다(강령 2). */}
-        <Text variant="bodySm" style={{ color: statusFg }}>
-          {BADGE_SHAPE_GLYPH[FIELD_STATUS_BADGE[field.status].shape]}
-        </Text>
-        {/* 이 화면의 focal 은 상태다. 그런데 caption(12)이라 화면에서 가장 작은 축이었고
-            제목(h3 18)보다 작았다 — 가장 중요한 것이 가장 작으면 위계가 없다. bodySm 로 올린다.
-            '변경' 은 보조라 caption 을 유지해 한 칩 안에서도 위계가 남게 한다. */}
-        <Text variant="bodySm" weight="bold" style={{ color: statusFg }}>
-          {FIELD_STATUS_LABEL[field.status]}
-        </Text>
-        <View style={styles.statusDivider} />
-        <Ionicons name="swap-horizontal" size={12} color={statusFg} />
-        <Text variant="caption" weight="semibold" style={{ color: statusFg }}>
-          변경
-        </Text>
-      </Pressable>
-
-      {/* 제목은 목록 카드와 같은 셀렉터를 쓴다 — 이름을 붙였는데 상세에서 안 보이면
-          "저장이 안 됐나" 로 읽힌다(2026-07-30: 이름 입력을 넣고 실제로 그 상태였다).
-          제목이 이름이면 주소는 그 아래로, 제목이 곧 주소면 한 번만 보여준다. */}
-      <Text variant="h3" style={styles.addr}>
-        {title}
-      </Text>
-      {subtitle ? (
-        <Text variant="body" color="textMuted" style={styles.subtitle}>
-          {subtitle}
-        </Text>
-      ) : null}
-      {field.projectName ? (
-        <View style={styles.metaRow}>
-          <Ionicons name="folder-outline" size={14} color={colors.textMuted} />
-          <Text variant="bodySm" color="textMuted">
-            {field.projectName}
-          </Text>
-        </View>
-      ) : null}
-      {field.categories && field.categories.length > 0 ? (
-        <View style={styles.metaRow}>
-          <Ionicons name="pricetags-outline" size={14} color={colors.textMuted} />
-          <Text variant="bodySm" color="textMuted">
-            {field.categories.join(', ')}
-          </Text>
-        </View>
-      ) : null}
-
-      {/* 길찾기만 본문에 — 수정·삭제는 헤더 `···` 로 옮겼다(명세 FE-SITE-06). */}
-      <Button
-        onPress={() => void openKakaoRouteTo(field.address, field.latitude, field.longitude)}
-        variant="secondary"
-        leftIcon="navigate"
-        fullWidth
-        style={styles.navBtn}
-      >
-        길찾기
-      </Button>
-
-      <GroupLabel>메모 ({directTextMemos.length})</GroupLabel>
-      {directTextMemos.length > 0 ? (
-        <View style={styles.memoList}>
-          {directTextMemos.map((m) => (
-            <Card key={m.id} padding="md">
-              <Text variant="bodySm">{m.text}</Text>
-              <Text variant="caption" color="textMuted" style={styles.memoMeta} numeric>
-                {fmtDateTime(m.createdAt)}
-              </Text>
-            </Card>
-          ))}
-        </View>
-      ) : (
-        <Text variant="bodySm" color="textSubtle" style={styles.empty}>
-          체크인에서 남긴 메모가 여기에 보입니다
-        </Text>
-      )}
-
-      <GroupLabel>사진 ({photos.length})</GroupLabel>
-      {photos.length > 0 ? (
-        <PhotoGrid photos={photos} />
-      ) : (
-        <Text variant="bodySm" color="textSubtle" style={styles.empty}>
-          체크인에서 찍은 사진이 여기에 보입니다
-        </Text>
-      )}
-
-      <GroupLabel>방문 이력 ({visits.length})</GroupLabel>
-    </View>
-  );
 
   return (
-    <MapSheetLayout
-      title="현장 상세"
-      onBack={() => safeBack(router)}
-      initialIndex={2}
-      headerRight={<OverflowButton onPress={openMore} label="현장 상세 더보기" />}
-    >
-      <BottomSheetFlatList
-        data={visits}
-        keyExtractor={(v) => String(v.id)}
-        renderItem={renderVisit}
-        ListHeaderComponent={headerElement}
-        style={sheetScrollableStyle}
-        contentContainerStyle={styles.list}
-        ListEmptyComponent={
-          <EmptyState icon="footsteps-outline" title="방문 이력이 없습니다" />
-        }
+    <View style={[styles.root, { paddingTop: insets.top }]}>
+      <FieldDetailHeader query={q ?? ''} />
+      <ScrollView contentContainerStyle={styles.content}>
+        <View style={styles.metaRow}>
+          <Touchable
+            onPress={() => setProjectOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel={`프로젝트: ${field.projectName ?? '없음'}, 바꾸기`}
+            style={styles.project}
+          >
+            <Icon name="folder" size={15} color={c2.text.secondary} />
+            <Text v2="caption.bold" numberOfLines={1} style={styles.projectName}>
+              {field.projectName ?? '프로젝트 없음'}
+            </Text>
+            <Icon name="chevron-down" size={14} color={c2.text.secondary} />
+          </Touchable>
+          <View style={styles.tags}>
+            {(field.categories ?? []).map((c) => (
+              <Tag key={c} label={c} />
+            ))}
+          </View>
+          <Touchable ref={moreRef} onPress={openMore} accessibilityRole="button" accessibilityLabel="현장 더보기 (정보 수정, 삭제)" style={styles.more}>
+            <Icon name="more" size={22} color={c2.text.secondary} />
+          </Touchable>
+        </View>
+
+        <EditableTitle
+          value={field.name?.trim() === field.address ? '' : (field.name ?? '')}
+          onSubmit={saveName}
+          label="현장명"
+          appearance="pencil"
+          allowEmpty
+          placeholder={stripRegion(field.address) || field.address}
+          placeholderTone="primary"
+        />
+        <Text v2="bodyS.regular" tone="tertiary" style={styles.subtitle}>
+          {subtitle}
+        </Text>
+
+        <MapPreviewCard
+          markers={[
+            {
+              id: field.id,
+              lat: field.latitude,
+              lng: field.longitude,
+              label: title,
+              color: STATUS_PIN_COLOR[status],
+              pin: status,
+              selected: true,
+            },
+          ]}
+          onExpand={openMap}
+          accessibilityLabel="현장 위치 지도 크게 보기"
+          style={styles.map}
+        />
+
+        <Text v2="bodyM.bold" style={styles.sectionTitle}>
+          {'방문 '}
+          <Text v2="bodyM.semibold" tone="tertiary">
+            {visits.length}
+          </Text>
+        </Text>
+        {visits.length === 0 ? (
+          <Text v2="bodyS.regular" tone="tertiary" style={styles.noVisit}>
+            아직 방문 기록이 없어요.
+          </Text>
+        ) : null}
+        {visits.map((v, i) => {
+          const trip = tripById.get(v.tripId);
+          return (
+            <FieldVisitRow
+              key={v.id}
+              visitedAt={v.visitedAt}
+              tripTitle={trip ? tripTitle(trip) : '외근'}
+              // 방문 단위 조치 상태가 서버에 없다 — 가장 최근 방문만 현장의 최근 조치 상태로 보인다(백로그 2차 D).
+              status={i === 0 ? status : null}
+              photos={photosByVisit[v.id] ?? []}
+              memo={memoForVisit(directAttachments, v.visitedAt)?.text}
+              expanded={expandedId === v.id}
+              onToggle={() => setExpandedId((cur) => (cur === v.id ? null : v.id))}
+              // TODO(PR7): 3-7 방문 기록 수정(체크인 수정 모드)으로 바꾼다.
+              onEdit={() => router.push(`/(tabs)/trips/${v.tripId}/visits/${v.id}` as never)}
+              onOpenTrip={() => router.push(`/(tabs)/trips/${v.tripId}` as never)}
+              divider={i > 0}
+            />
+          );
+        })}
+      </ScrollView>
+      <FieldDetailFooter
+        name={title}
+        lat={field.latitude}
+        lng={field.longitude}
+        added={added}
+        onAdd={() => cart.toggle(field.id)}
       />
-    </MapSheetLayout>
+      <ProjectSheet open={projectOpen} onClose={() => setProjectOpen(false)} field={field} placeName={title} />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  // 간격을 gap 과 marginTop 으로 이중 관리하고 있었다 — gap(xs) 위에 각 요소가 marginTop 을
-  // 덧칠해 실제 간격이 4·6·12·16·20 처럼 tier 밖 값이 됐다(2.1절). gap 을 걷고 요소마다
-  // '무엇과 무엇 사이인가' 로 토큰을 준다: 정체성 블록 안은 xs, 블록 사이는 md.
-  // 좌우 여백은 목록(contentContainer)이 준다 — 여기서 또 주면 헤더 블록만 32 로 들어가
-  // 방문 카드(16)와 어긋났다. Figma 470:4968 은 전부 24 선.
-  summary: {
-    paddingTop: spacing.md,
-    paddingBottom: spacing.md,
-  },
-  statusTap: {
+  root: { flex: 1, backgroundColor: c2.bg.canvas },
+  content: { paddingHorizontal: space[20], paddingTop: space[12], paddingBottom: space[24] },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: space[6], marginBottom: space[2] },
+  project: {
+    height: 30,
+    maxWidth: 180,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    alignSelf: 'flex-start',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.pill,
+    gap: space[4],
+    paddingLeft: space[10],
+    paddingRight: space[8],
+    // 높이 30 의 반(알약). Figma 691:3448.
+    borderRadius: 15,
     borderWidth: 1,
+    borderColor: c2.border.default,
   },
-  statusDivider: {
-    // 1px hairline — 높이는 caption 글자 높이에 맞춘 값이다. 좌우 여백은 칩의 gap(xs)이 준다.
-    width: 1,
-    height: 10,
-    backgroundColor: colors.borderMuted,
-  },
-  addr: { marginTop: spacing.md },
-  subtitle: { marginTop: spacing.xs },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginTop: spacing.xs,
-  },
-  navBtn: { marginTop: spacing.md },
-  empty: { marginTop: spacing.xs },
-  memoList: { marginTop: spacing.sm, gap: spacing.xs },
-  memoMeta: { marginTop: spacing.xs },
-  list: { paddingHorizontal: spacing.xl, paddingBottom: spacing.xxl },
-  visitCard: { marginBottom: spacing.xs },
-  visitHead: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  visitReason: { marginTop: spacing.xs },
+  projectName: { flexShrink: 1, marginLeft: space[2] },
+  tags: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: space[6] },
+  more: { width: 44, height: 44, marginRight: -10, alignItems: 'center', justifyContent: 'center' },
+  subtitle: { marginTop: space[2] },
+  map: { marginTop: space[20] },
+  sectionTitle: { marginTop: space[20], marginBottom: space[2] },
+  noVisit: { paddingVertical: space[16] },
+  missing: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: space[8], paddingHorizontal: space[24] },
+  missingBtn: { marginTop: space[12] },
 });

@@ -284,12 +284,8 @@ async function flowFirstField(page, ctx) {
     };
     page.on('response', onResp);
 
-    // 현장 탭으로 이동 — 탭바가 BottomSheet/지도에 가려져 클릭 안 잡힐 수 있어 URL 로 직접.
-    await page.goto(`${BASE}/trips/fields`);
-    await page.waitForTimeout(1500);
-    // 실제 UI 라벨은 "+ 새 현장" — 시나리오 문서엔 "현장 추가" 라고 적혀있어 불일치 (시나리오 문서 정정 대상).
-    const addBtn = page.getByText('+ 새 현장').first();
-    await addBtn.click();
+    // 2차에서 현장 목록(+ 새 현장)이 없어졌다(4 현장 검색으로 대체) — 현장 등록 화면으로 바로 간다.
+    await page.goto(`${BASE}/trips/fields/new`);
     await page.waitForTimeout(1500);
     const afterAddPath = new URL(page.url()).pathname;
     if (!afterAddPath.includes('/trips/fields/new')) {
@@ -443,10 +439,8 @@ async function flowB3StatusChipModal(page, ctx) {
 
 async function flowSecondField(page, ctx) {
   // 두 번째 현장 — 외근 다중 선택을 위한 전제. 다른 좌표.
-  await page.goto(`${BASE}/trips/fields`);
+  await page.goto(`${BASE}/trips/fields/new`);
   await page.waitForTimeout(1500);
-  await page.getByText('+ 새 현장').first().click();
-  await page.waitForTimeout(1200);
 
   // 카카오 0건 알려져 있으니 곧장 manual.
   const searchBox = page.locator('input[placeholder*="해운대 우동"]').first();

@@ -609,6 +609,8 @@ UI(스와이프·`방문 삭제` 버튼·확인 대화상자)는 만들고, 호�
 
 ## 40. 🟠 방문 이력이 있는 현장은 **영원히 삭제할 수 없다** — 명세 v2 FE-SITE-09 와 충돌
 
+> 🔁 **2026-10-17** — `?force=true` 로는 지워진다(204, 실측). 2차 5-11 은 force 로 지운다. 남은 문제(방문·목적지가 남음)는 아래 '2차 개편 요청 F'.
+
 > ⏸️ **2026-10-01** — OpenAPI `DELETE /api/fields/{fieldId}` 409 "연관 방문 존재" 그대로(실호출은 데모 현장을
 > 지울 수 있어 생략 — 스펙이 9/30 과 바이트 단위로 같다).
 
@@ -966,3 +968,31 @@ PATCH /api/reports/{id} { "status": "completed" }
 외근 상세에서 방문 사진을 펼치면 썸네일이 비어 있다. 운영의 `/storage/...` 파일 URL 이 기존 사진 전부 404(서버 쪽 파일 유실로 보임, 2026-10-17 확인). 프론트는 못 불러온 사진을 사진 아이콘 칸으로 보인다(`TripStopRow` onError).
 
 요청: 기존 첨부 파일 복구(백업이 있으면), 그리고 파일 응답에 올바른 `Content-Type`(image/jpeg 등)을 붙이기 — 브라우저·RN Image 가 확장자 없이도 그릴 수 있게.
+
+### F. 🟠 현장 삭제(force) 범위 — 방문 기록도 함께, 진행 중 외근 목적지 정리 (5-4·5-11, 결정 v127·v129)
+
+5-11 확인 창은 '방문 기록 N건도 함께 지워지고 되돌릴 수 없어요.'라고 알리고, 방문 기록이 있어도 막지 않는다(이전 '방문 기록이 있어 삭제할 수 없어요' 폐기).
+
+실측(2026-10-17, demo3): 새 현장 → 외근 시작(목적지로 담음)·체크인 → `DELETE /api/fields/{id}` 409 `has_related_visits` `{visitCount: 1}`, `?force=true` 204. 그 뒤
+- `GET /api/fields/{id}` 404 — 현장은 지워짐(soft delete)
+- `GET /api/trips/{tripId}` 200 — **방문 기록이 타임라인에 그대로 남는다**(`visitCount: 1`, 지운 fieldId 를 가리킨 채)
+- `GET /api/trips/{tripId}/destinations` — **목적지 행도 남는다**
+- 방문이 없는 진행 중 외근의 목적지 현장은 force 없이도 204 — 목적지는 `pending` 으로 남아 지운 현장을 가리킨다
+
+프론트 선조치: 5-11 은 `?force=true` 로 지운다(`fieldStore.remove(id, true)`). 진행 중 외근의 `pending` 목적지였으면 건너뜀(`PATCH … skipped`)으로 돌리고, 외근 준비에 담아 둔 목록(`tripPrepStore`)에서도 뺀다. 방문 기록은 서버가 남기므로 외근 상세에는 계속 보인다(확인 창 문구와 다름 — 알려진 차이).
+
+요청: `DELETE /api/fields/{id}?force=true` 가 한 트랜잭션에서
+1. 그 현장의 방문 기록(사진·메모 포함)을 지우고(외근의 방문 수도 줄어듦)
+2. 진행 중 외근의 목적지 행을 지우거나 `skipped` 로 바꾸기
+3. 보고서는 그대로(현장 보고 내용·사진이 남아야 함 — 인수인계 §3 '현장 삭제 범위')
+응답에 `{ deletedVisits }` 가 있으면 확인 창의 N 을 서버 값으로 바꿀 수 있다(선택). 지금 N 은 앱이 아는 이 현장의 방문 수다(현장 상세 응답 `recentVisits` + 이미 불러온 외근 타임라인의 방문, `visitStore`). `recentVisits` 가 최근 몇 건만 주면 실제보다 적을 수 있다 — 지우기 전에 방문 수를 주는 API(예: 현장 상세 `visitCount`)가 있으면 그걸 쓰겠다. 목적지를 건너뜀으로 돌리는 PATCH 가 실패하면 앱은 '외근 목적지를 정리하지 못했어요' 안내만 띄운다.
+
+### G. 🟠 분류 이름 변경·삭제가 그 분류가 붙은 현장에 반영 (§25 후속 rename cascade, 5-6~5-9)
+
+5-8 '현장 N곳의 분류 이름도 함께 바뀌어요.', 5-9 '현장 N곳에서 이 분류가 빠져요. 현장은 지워지지 않아요.'
+
+실측(2026-10-17, demo3): 분류 '측정A' 를 붙인 현장 → `PATCH /api/categories/{id}` `{name:'측정B'}` 200 → 현장 `categories` 는 **'측정A' 그대로**. `DELETE /api/categories/{id}` 204 → 현장 `categories` 는 **그대로**(OpenAPI 설명도 'field_categories 문자열은 cascade 하지 않음'). 현장 PATCH 의 `categories` 키는 동작한다(OpenAPI 에는 `tags` 만 적혀 있음). 같은 날 `projectId`(다른 프로젝트·`null`)도 PATCH 200 으로 바뀌고 GET 에 반영됐다(5-3 에서 씀, OpenAPI 에는 `projectId` 가 없음 — 문서에 추가 요청). `jibunAddress` 도 OpenAPI 대로 함께 보낸다(5-5). 이름을 `''` 로 보내면 서버가 주소를 이름으로 저장한다.
+
+프론트 선조치: 앱이 이름 변경·삭제 뒤 그 이름을 가진 내 현장마다 `PATCH /api/fields/{id}` `{categories}` 를 보낸다(`src/utils/categoryCascade.ts`). 현장이 많으면 느리고, 중간에 실패하면 일부 현장만 바뀐다(실패 수는 세지만 다시 보내지 않음). 다른 기기에서 만든 현장 목록이 덜 받아진 상태면 빠질 수 있다.
+
+요청: `PATCH /api/categories/{id}` 가 같은 사용자의 `field_categories` 이름도 함께 바꾸고, `DELETE /api/categories/{id}` 가 그 분류를 현장에서 함께 빼기(또는 `field_categories` 를 `category_id` FK 로 바꾸기). 응답에 바뀐 현장 수 `{ affectedFields }` 가 있으면 좋다(선택). 서버가 해 주면 프론트의 현장 PATCH 반복은 뺀다.

@@ -2,6 +2,8 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 import type { PinAddress } from '@/utils/addressSearch';
 import { colors } from '@/theme/colors';
+import type { MapPinKind } from '@/assets/mapPins';
+import { CenterPinOverlay, ORIGIN_DOT_HTML } from './centerPin';
 import { radius } from '@/theme/spacing';
 
 interface Props {
@@ -17,6 +19,15 @@ interface Props {
   // 드래그를 가로채 이 신호로 스크롤을 잠그지만, 웹은 카카오 SDK 가 컨테이너에
   // touch-action:none 을 걸어 경합이 없다. 여기서 호출하면 오히려 웹 스크롤이 잠긴다.
   onInteractionChange?: (active: boolean) => void;
+  /**
+   * 'center'(5-5 현장 정보 수정): 핀은 화면 가운데에 고정되고 지도를 끌어 위치를 맞춘다. 원래 위치에 점선 원.
+   * 기본 'drag': 핀을 끌거나 지도를 눌러 옮긴다(현장 등록).
+   */
+  mode?: 'drag' | 'center';
+  /** center 모드 핀 종류(현장의 조치 상태). */
+  pinKind?: MapPinKind;
+  /** false 면 테두리·모서리 없이 꽉 채운다(5-5 머리 아래 지도). */
+  framed?: boolean;
 }
 
 // 마운트 후 임의 시점에 핀 이동 + 역지오코딩을 트리거하는 명령형 핸들
@@ -29,7 +40,10 @@ export interface FieldPinMapHandle {
 const SDK_SCRIPT_ID = '__kakao_maps_sdk__';
 
 type Overlay = { setMap: (m: unknown | null) => void; setPosition: (p: unknown) => void; getPosition: () => { getLat: () => number; getLng: () => number } };
-type KakaoMap = { setCenter: (latlng: unknown) => void };
+type KakaoMap = {
+  setCenter: (latlng: unknown) => void;
+  getCenter: () => { getLat: () => number; getLng: () => number };
+};
 type RegionPart = {
   address_name: string;
   region_1depth_name?: string;
@@ -50,6 +64,7 @@ type KakaoGlobal = {
     LatLng: new (lat: number, lng: number) => unknown;
     Map: new (container: HTMLElement, options: { center: unknown; level: number }) => KakaoMap;
     Marker: new (options: { position: unknown; map: unknown; draggable?: boolean }) => Overlay;
+    CustomOverlay: new (options: { position: unknown; content: string; map: unknown; xAnchor?: number; yAnchor?: number }) => unknown;
     event: {
       addListener: (target: unknown, type: string, handler: (e?: { latLng: { getLat: () => number; getLng: () => number } }) => void) => void;
     };
@@ -122,7 +137,7 @@ function loadKakaoSdk(appkey: string): Promise<void> {
 }
 
 export const FieldPinMap = forwardRef<FieldPinMapHandle, Props>(function FieldPinMap(
-  { lat, lng, onDragEnd, resolveInitialAddress = false, height = 220 },
+  { lat, lng, onDragEnd, resolveInitialAddress = false, height = 220, mode = 'drag', pinKind = 'pending', framed = true },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -142,6 +157,9 @@ export const FieldPinMap = forwardRef<FieldPinMapHandle, Props>(function FieldPi
   const emitAddressRef = useRef<((la: number, ln: number) => void) | null>(null);
   // SDK 로드 전에 들어온 resolveAddress 요청 — 로드 완료 직후 flush (silent drop 방지).
   const pendingResolveRef = useRef<{ lat: number; lng: number } | null>(null);
+  const modeRef = useRef(mode);
+  // center 모드: 코드로 지도를 옮길 때(주소 검색·내 위치) 가운데 좌표도 함께 맞춘다.
+  const setCenterRef = useRef<((la: number, ln: number) => void) | null>(null);
 
   // 마운트 1회 — 후속 lat/lng prop 변경은 아래 useEffect 가 in-place 처리.
   useEffect(() => {
@@ -156,12 +174,34 @@ export const FieldPinMap = forwardRef<FieldPinMapHandle, Props>(function FieldPi
         level: 3,
       });
       mapRef.current = map;
-      const marker = new k.maps.Marker({
-        position: new k.maps.LatLng(initialLatRef.current, initialLngRef.current),
-        map,
-        draggable: true,
-      });
+      const initial = new k.maps.LatLng(initialLatRef.current, initialLngRef.current);
+      // center 모드는 카카오 마커 대신 화면 가운데 고정 핀(RN)을 쓴다 — 위치는 지도 가운데. 원래 위치엔 점선 원.
+      // 그래도 좌표 보관·stale 가드는 같은 marker 인터페이스로 한다(지도에 올리지 않는 가짜 마커).
+      let centerPos = { lat: initialLatRef.current, lng: initialLngRef.current };
+      const marker: Overlay =
+        modeRef.current === 'center'
+          ? {
+              setMap: () => {},
+              setPosition: () => {},
+              getPosition: () => ({ getLat: () => centerPos.lat, getLng: () => centerPos.lng }),
+            }
+          : new k.maps.Marker({ position: initial, map, draggable: true });
       markerRef.current = marker;
+      if (modeRef.current === 'center') {
+        new k.maps.CustomOverlay({ position: initial, content: ORIGIN_DOT_HTML, map, xAnchor: 0.5, yAnchor: 0.5 });
+        // idle — 끌기·확대 축소(두 손가락·휠은 가운데가 움직인다) 모두 끝난 뒤 한 번. 코드로 옮긴 곳(같은 좌표)은 건너뛴다.
+        k.maps.event.addListener(map, 'idle', () => {
+          const c = map.getCenter();
+          if (Math.abs(c.getLat() - centerPos.lat) < 1e-7 && Math.abs(c.getLng() - centerPos.lng) < 1e-7) return;
+          centerPos = { lat: c.getLat(), lng: c.getLng() };
+          lastEmittedRef.current = centerPos;
+          onDragEnd(centerPos.lat, centerPos.lng);
+          emitAddressRef.current?.(centerPos.lat, centerPos.lng);
+        });
+        setCenterRef.current = (la, ln) => {
+          centerPos = { lat: la, lng: ln };
+        };
+      }
       const geocoder = new k.maps.services.Geocoder();
       geocoderRef.current = geocoder;
       // 주소만 역지오코딩 후 emit — 초기 1회(resolveInitial)와 이동 후속 공용.
@@ -183,16 +223,20 @@ export const FieldPinMap = forwardRef<FieldPinMapHandle, Props>(function FieldPi
         onDragEnd(la, ln);
         emitAddress(la, ln);
       };
-      k.maps.event.addListener(marker, 'dragend', () => {
-        const p = marker.getPosition();
-        emitMove(p.getLat(), p.getLng());
-      });
-      k.maps.event.addListener(map, 'click', (e) => {
-        const p = e?.latLng;
-        if (!p) return;
-        marker.setPosition(p);
-        emitMove(p.getLat(), p.getLng());
-      });
+      if (modeRef.current !== 'center') {
+        k.maps.event.addListener(marker, 'dragend', () => {
+          const p = marker.getPosition();
+          emitMove(p.getLat(), p.getLng());
+        });
+      }
+      if (modeRef.current !== 'center') {
+        k.maps.event.addListener(map, 'click', (e) => {
+          const p = e?.latLng;
+          if (!p) return;
+          marker.setPosition(p);
+          emitMove(p.getLat(), p.getLng());
+        });
+      }
       // 현 위치 시작 플로우 — 초기 좌표의 주소를 1회 역지오코딩해 채운다.
       if (resolveInitialRef.current) {
         emitAddress(initialLatRef.current, initialLngRef.current);
@@ -203,6 +247,7 @@ export const FieldPinMap = forwardRef<FieldPinMapHandle, Props>(function FieldPi
         pendingResolveRef.current = null;
         const p = new k.maps.LatLng(pending.lat, pending.lng);
         marker.setPosition(p);
+        setCenterRef.current?.(pending.lat, pending.lng);
         map.setCenter(p);
         emitAddress(pending.lat, pending.lng);
       }
@@ -223,6 +268,7 @@ export const FieldPinMap = forwardRef<FieldPinMapHandle, Props>(function FieldPi
     if (!k || !mapRef.current || !markerRef.current) return;
     const p = new k.maps.LatLng(lat, lng);
     markerRef.current.setPosition(p);
+    setCenterRef.current?.(lat, lng);
     mapRef.current.setCenter(p);
   }, [lat, lng]);
 
@@ -238,6 +284,7 @@ export const FieldPinMap = forwardRef<FieldPinMapHandle, Props>(function FieldPi
       if (k && mapRef.current && markerRef.current) {
         const p = new k.maps.LatLng(la, ln);
         markerRef.current.setPosition(p);
+        setCenterRef.current?.(la, ln);
         mapRef.current.setCenter(p);
       }
       emitAddressRef.current(la, ln);
@@ -247,8 +294,9 @@ export const FieldPinMap = forwardRef<FieldPinMapHandle, Props>(function FieldPi
   if (!kakaoJsKey) return null;
 
   return (
-    <View style={[styles.container, { height }]}>
+    <View style={[framed ? styles.container : styles.bare, { height }]}>
       <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+      {mode === 'center' ? <CenterPinOverlay kind={pinKind} /> : null}
     </View>
   );
 });
@@ -261,4 +309,5 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.background,
   },
+  bare: { overflow: 'hidden', backgroundColor: colors.background },
 });

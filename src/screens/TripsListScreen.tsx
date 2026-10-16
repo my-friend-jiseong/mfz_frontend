@@ -164,7 +164,7 @@ export default function TripsListScreen() {
         keepGlobalChrome
         legendBottomInset={SHEET_COLLAPSED}
         v2={{
-          // TODO(PR5): 4 현장 검색으로 바꾼다. 지금은 기존 현장 화면.
+          // 4 현장 검색(지도 위 시트).
           onSearchPress: () => router.push('/(tabs)/trips/fields' as never),
           onLocationOff,
           locateBottom: SHEET_COLLAPSED + space[16],

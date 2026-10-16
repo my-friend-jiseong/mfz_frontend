@@ -29,7 +29,8 @@ import {
 } from '@/utils/addressSearch';
 import { requestUserLocation } from '@/utils/geolocation';
 import { ProjectPicker } from '@/components/ProjectPicker';
-import { CategoryMultiPicker } from '@/components/fields/CategoryMultiPicker';
+import { CategoryChips } from '@/components/fields/CategoryChips';
+import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { ManualCoordinateForm } from '@/components/fields/ManualCoordinateForm';
 import { FieldPinMap, type FieldPinMapHandle } from '@/components/fields/FieldPinMap';
 import { getQuickPhoto } from '@/components/fields/quickPhotoHandoff';
@@ -393,7 +394,9 @@ export default function NewField() {
     trimmedQuery.length >= MIN_KEYWORD_LEN &&
     results.length === 0;
 
+  // presentation: 'modal' — iOS 네이티브 모달 안이라 분류 시트(AppSheet)를 띄울 provider 를 따로 둔다.
   return (
+    <BottomSheetModalProvider>
     <SafeScreen>
     {/* Figma 470:4884 navHeader — 모달(headerShown:false)이라 화면이 직접 뒤로가기를 둔다.
         웹·딥링크처럼 히스토리가 없으면 현장 목록으로. */}
@@ -596,12 +599,10 @@ export default function NewField() {
         <FieldLabel>프로젝트 (선택)</FieldLabel>
         <ProjectPicker value={projectId} onChange={setProjectId} />
 
-        <FieldLabel>분류 (선택)</FieldLabel>
-        <CategoryMultiPicker
-          value={categories}
-          onChange={setCategories}
-          disabled={submitting}
-        />
+        {/* 2차 5-5 와 같은 분류 칩 + 5-6 분류 선택 시트(분류 관리 화면은 없앴다). TODO(PR7): 새 현장은 체크인(8-3)에서 만든다. */}
+        <View style={styles.fieldGap}>
+          <CategoryChips value={categories} onChange={setCategories} placeName={selected ? selected.display : '새 현장'} />
+        </View>
 
         <Input
           label="상세 주소 (동/호수 등)"
@@ -638,6 +639,7 @@ export default function NewField() {
       </ScrollView>
     </KeyboardAvoid>
     </SafeScreen>
+    </BottomSheetModalProvider>
   );
 }
 

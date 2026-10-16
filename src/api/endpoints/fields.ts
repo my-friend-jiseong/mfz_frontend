@@ -134,6 +134,7 @@ export interface CreateFieldResponse {
 export interface UpdateFieldBody {
   name?: string;
   roadAddress?: string;
+  jibunAddress?: string;
   detailAddress?: string;
   sido?: string;
   sigungu?: string;
@@ -170,6 +171,8 @@ export interface AddressSearchItem {
   zonecode?: string;
   lat: number;
   lng: number;
+  // 카카오 장소 검색(클라이언트)으로 찾은 항목만 — 분류 마지막 칸('초등학교'). 4-1 결과 행 이름 옆 회색 글.
+  placeCategory?: string;
 }
 
 export interface AddressSearchResponse {
@@ -233,8 +236,10 @@ export const fields = {
       body: { status },
     }),
 
-  remove: (fieldId: string) =>
-    request<null>(`/api/fields/${fieldId}`, { method: 'DELETE' }),
+  // force: 방문 기록이 있어도 지운다(없으면 409 has_related_visits + details.visitCount).
+  // 2026-10-17 실측: force 는 현장만 지우고(soft delete) 방문 기록·외근 목적지는 남긴다 — 백로그 2차 F.
+  remove: (fieldId: string, force = false) =>
+    request<null>(`/api/fields/${fieldId}`, { method: 'DELETE', query: force ? { force: true } : undefined }),
 
   // 경계에서 정규화한다 — 백엔드가 **지번만 있는 주소에 `roadAddress: null`** 을 보낸다.
   // 타입은 `string` 이라고 말하지만 2026-07-30 실측에서 null 이 왔고, 그대로 흘려보내면

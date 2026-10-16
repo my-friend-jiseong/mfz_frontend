@@ -211,6 +211,7 @@ interface Props {
   // false 면 드래그/줌 비활성 — BottomSheet 안 등 pan 충돌 회피용 정적 위치도.
   interactive?: boolean;
   onMarkerPress?: (fieldId: string) => void;
+  onLongPress?: (p: { lat: number; lng: number }) => void;
   // 지도 뷰(center+level)가 정착할 때마다 보고 — 상위가 기억해 재마운트 시 복원에 사용.
   onViewChange?: (view: { lat: number; lng: number; level: number }) => void;
   // 네이티브 전용 — shape 만 맞춘다(호출하지 않음). 안드로이드는 부모 ScrollView 가 지도
@@ -275,6 +276,7 @@ type CustomOverlayCtor = new (opts: {
 type LatLngBounds = { extend: (latlng: unknown) => void };
 type MapProjection = {
   containerPointFromCoords: (latlng: unknown) => { x: number; y: number };
+  coordsFromContainerPoint: (point: unknown) => { getLat: () => number; getLng: () => number };
 };
 type KakaoMap = {
   setCenter: (latlng: unknown) => void;
@@ -298,6 +300,7 @@ type KakaoGlobal = {
   maps: {
     load: (cb: () => void) => void;
     LatLng: new (lat: number, lng: number) => unknown;
+    Point: new (x: number, y: number) => unknown;
     LatLngBounds: new () => LatLngBounds;
     MapTypeId: MapTypeIdEnum;
     Map: new (container: HTMLElement, options: { center: unknown; level: number }) => KakaoMap;
@@ -395,6 +398,7 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
       hideScale = false,
       interactive = true,
       onMarkerPress,
+      onLongPress,
       onViewChange,
     }: Props,
     ref,
@@ -547,6 +551,71 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
     ro.observe(containerRef.current);
     return () => ro.disconnect();
   }, [ready]);
+
+  // 길게 누르기(4-3 지도에서 위치 고르기) — 600ms 동안 10px 안에 머물면 그 지점 좌표. 네이티브 HTML 과 같은 규칙.
+  const onLongPressRef = useRef(onLongPress);
+  onLongPressRef.current = onLongPress;
+  useEffect(() => {
+    const root = containerRef.current;
+    if (!ready || !root || !interactive) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let sx = 0;
+    let sy = 0;
+    const cancel = () => {
+      if (timer) clearTimeout(timer);
+      timer = null;
+    };
+    const start = (x: number, y: number) => {
+      cancel();
+      if (!onLongPressRef.current) return;
+      sx = x;
+      sy = y;
+      timer = setTimeout(() => {
+        timer = null;
+        const k = getKakao();
+        const map = mapRef.current;
+        if (!k || !map) return;
+        const rect = root.getBoundingClientRect();
+        const ll = map.getProjection().coordsFromContainerPoint(new k.maps.Point(sx - rect.left, sy - rect.top));
+        onLongPressRef.current?.({ lat: ll.getLat(), lng: ll.getLng() });
+      }, 600);
+    };
+    const move = (x: number, y: number) => {
+      if (timer && (Math.abs(x - sx) > 10 || Math.abs(y - sy) > 10)) cancel();
+    };
+    const onMouseDown = (e: MouseEvent) => {
+      if (e.button === 0) start(e.clientX, e.clientY);
+    };
+    const onMouseMove = (e: MouseEvent) => move(e.clientX, e.clientY);
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 1) start(e.touches[0].clientX, e.touches[0].clientY);
+      else cancel();
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches[0]) move(e.touches[0].clientX, e.touches[0].clientY);
+    };
+    // 캡처 단계 — 카카오 지도가 드래그 처리로 이벤트를 멈춰도 받는다.
+    const opts = { capture: true, passive: true } as const;
+    root.addEventListener('mousedown', onMouseDown, opts);
+    root.addEventListener('mousemove', onMouseMove, opts);
+    root.addEventListener('mouseup', cancel, opts);
+    root.addEventListener('mouseleave', cancel, opts);
+    root.addEventListener('touchstart', onTouchStart, opts);
+    root.addEventListener('touchmove', onTouchMove, opts);
+    root.addEventListener('touchend', cancel, opts);
+    root.addEventListener('touchcancel', cancel, opts);
+    return () => {
+      cancel();
+      root.removeEventListener('mousedown', onMouseDown, opts);
+      root.removeEventListener('mousemove', onMouseMove, opts);
+      root.removeEventListener('mouseup', cancel, opts);
+      root.removeEventListener('mouseleave', cancel, opts);
+      root.removeEventListener('touchstart', onTouchStart, opts);
+      root.removeEventListener('touchmove', onTouchMove, opts);
+      root.removeEventListener('touchend', cancel, opts);
+      root.removeEventListener('touchcancel', cancel, opts);
+    };
+  }, [ready, interactive]);
 
   // 정적 위치도(figure) — 드래그/줌 차단. BottomSheet pan 충돌 회피 + 보고서 그림용.
   useEffect(() => {

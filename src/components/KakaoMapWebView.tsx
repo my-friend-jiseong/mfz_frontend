@@ -99,6 +99,8 @@ interface Props {
   // false 면 드래그/줌 비활성 — BottomSheet 안 등 pan 충돌 회피용 정적 위치도.
   interactive?: boolean;
   onMarkerPress?: (fieldId: string) => void;
+  // 빈 곳을 길게 누르면(4-3 지도에서 위치 고르기) 그 지점 좌표. interactive=false 면 오지 않는다.
+  onLongPress?: (p: { lat: number; lng: number }) => void;
   // 지도에 손이 닿아 있는 동안 true — 스크롤 화면 안에 박힌 지도에서 부모 ScrollView 의
   // scrollEnabled 를 끄는 데 쓴다. 안드로이드는 부모가 세로 드래그를 먼저 가로채 지도가
   // pan 을 못 받는데, 터치가 실제로 떨어지는 WebView 내부에서 신호를 올려 이를 푼다.
@@ -138,6 +140,7 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
       hideScale = false,
       interactive = true,
       onMarkerPress,
+      onLongPress,
       onTilesLoaded,
       onViewChange,
       onInteractionChange,
@@ -414,6 +417,8 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
               typeof msg.lng === 'number'
             ) {
               onViewChange?.({ lat: msg.lat, lng: msg.lng, level: msg.level });
+            } else if (msg.type === 'longPress' && typeof msg.lat === 'number' && typeof msg.lng === 'number') {
+              onLongPress?.({ lat: msg.lat, lng: msg.lng });
             } else if (msg.type === 'markerPress' && typeof msg.fieldId === 'string') {
               onMarkerPress?.(msg.fieldId);
             } else if (msg.type === 'markerGroupPress' && Array.isArray(msg.groupIds)) {

@@ -43,6 +43,10 @@ export const c2 = {
     overlay: 'rgba(15, 23, 42, 0.45)',
     // 사진 썸네일 위 시각 배지(3 외근 상세 방문 행). Figma 에 변수 없이 ink 0.7.
     photoBadge: 'rgba(15, 23, 42, 0.7)',
+    // 지도 위 안내 알약(4-3 '현장 핀을 누르거나…', 5-5 '지도를 움직여…'). Figma 에 변수 없이 ink 0.78.
+    hint: 'rgba(15, 23, 42, 0.78)',
+    // 5-5 위치 보정 중 핀 아래 그림자 타원. Figma 에 변수 없이 ink 0.28.
+    pinShadow: 'rgba(15, 23, 42, 0.28)',
   },
   border: {
     default: palette.slate[200],
@@ -155,6 +159,8 @@ export const type2 = {
   'small.regular': t(12, 16, 'regular'),
   'micro.bold': t(11, 16, 'bold'),
   'micro.semibold': t(11, 16, 'semibold'),
+  // 5 현장 상세 방문 행의 요일. 텍스트 스타일 없이 11 Regular·행간 14 로 박혀 있다.
+  'micro.regular': t(11, 14, 'regular'),
   tiny: t(10, 15, 'semibold'),
 } as const satisfies Record<string, TextStyle>;
 
