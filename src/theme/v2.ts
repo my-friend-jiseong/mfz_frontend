@@ -77,6 +77,12 @@ export const c2 = {
     new: palette.slate[900],
   },
   danger: palette.red[600],
+  // 9-5·9-15 공유·내려받기 시트의 파일 형식 배지(Figma hex: HWPX #0369a1, DOCX brand, PDF danger).
+  file: {
+    hwpx: palette.sky[700],
+    docx: palette.blue[600],
+    pdf: palette.red[600],
+  },
   // GPS 오차 원(8-12)·선택 핀 바닥 그림자 — Figma 프레임에 투명도 hex 로만 있는 값.
   accuracy: {
     fill: 'rgba(217, 119, 6, 0.10)',
@@ -113,6 +119,8 @@ export const radius2 = {
   xl: 16,
   '2xl': 20,
   '3xl': 24,
+  // 9 보고서 목록 '작성 중' 카드. 변수 없이 18 로 박혀 있다.
+  card: 18,
   full: 999,
 } as const;
 
@@ -164,6 +172,8 @@ export const type2 = {
   'caption.bold': t(13, 18, 'bold'),
   'caption.semibold': t(13, 18, 'semibold'),
   'caption.regular': t(13, 18, 'regular'),
+  // 9-5·9-15 파일 형식 배지 글자('DOCX'). 텍스트 스타일 없이 12 ExtraBold 로 박혀 있다.
+  'small.extrabold': t(12, 16, 'heavy'),
   'small.bold': t(12, 16, 'bold'),
   'small.semibold': t(12, 16, 'semibold'),
   'small.regular': t(12, 16, 'regular'),
@@ -172,6 +182,8 @@ export const type2 = {
   // 5 현장 상세 방문 행의 요일. 텍스트 스타일 없이 11 Regular·행간 14 로 박혀 있다.
   'micro.regular': t(11, 14, 'regular'),
   tiny: t(10, 15, 'semibold'),
+  // 9-2·9-6 현장 행 전·중·후 작은 칸(36) 안 글자. 텍스트 스타일 없이 9 Bold 로 박혀 있다.
+  nano: t(9, 11, 'bold'),
 } as const satisfies Record<string, TextStyle>;
 
 export type Type2 = keyof typeof type2;

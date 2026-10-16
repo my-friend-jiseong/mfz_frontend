@@ -1,7 +1,7 @@
 // 조사(을/를) 단위 테스트(PR6 7-9 건너뛰기 스낵바). 실행: npm test
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { hasFinalConsonant, withObjectJosa } from '../josa';
+import { hasFinalConsonant, withObjectJosa, withTopicJosa } from '../josa';
 
 test('한글 받침', () => {
   assert.equal(withObjectJosa('당리역'), '당리역을');
@@ -25,4 +25,10 @@ test('영문 끝', () => {
 test('모르면 둘 다', () => {
   assert.equal(hasFinalConsonant(''), null);
   assert.equal(withObjectJosa('★'), '★을(를)');
+});
+
+test('은/는(9-12)', () => {
+  assert.equal(withTopicJosa('당리로 87'), '당리로 87은');
+  assert.equal(withTopicJosa('하신중앙로 12'), '하신중앙로 12는');
+  assert.equal(withTopicJosa('★'), '★은(는)');
 });

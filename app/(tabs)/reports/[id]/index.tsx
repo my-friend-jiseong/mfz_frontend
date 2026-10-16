@@ -1,497 +1,434 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { goToTabRoot } from '@/components/shell/tabNav';
-import { Alert, Image, Linking, Platform, Pressable, StyleSheet, View } from 'react-native';
-import { Text } from '@/components/ui/Text';
-import { Ionicons } from '@expo/vector-icons';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Image, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { toAbsoluteFileUrl } from '@/api';
+import { Icon, type IconName } from '@/components/icons';
+import {
+  OrderBadge,
+  ReportOverviewMap,
+  SLOTS,
+  SLOT_CAPTION,
+  SLOT_URL,
+  fieldName,
+  useReportRows,
+  type ReportRow,
+} from '@/components/reports/ReportParts';
+import { goToTabRoot } from '@/components/shell/tabNav';
+import { AppSheet } from '@/components/ui/AppSheet';
+import { BottomActionBar } from '@/components/ui/BottomActionBar';
+import { Button2 } from '@/components/ui/Button2';
+import { confirm, notice } from '@/components/ui/ConfirmDialog';
+import { showPopoverMenu } from '@/components/ui/PopoverMenu';
+import { Text } from '@/components/ui/Text';
+import { toast } from '@/components/ui/Toast';
+import { Touchable } from '@/components/ui/Touchable';
+import { useAuthStore } from '@/stores/authStore';
+import { useReportCompletionStore } from '@/stores/reportCompletionStore';
 import { useReportStore } from '@/stores/reportStore';
 import { useTripStore } from '@/stores/tripStore';
-import { useFieldStore } from '@/stores/fieldStore';
-import { useVisitStore } from '@/stores/visitStore';
-import { useAuthStore } from '@/stores/authStore';
-import { toAbsoluteFileUrl } from '@/api';
 import { safeBack } from '@/utils/backNavigation';
 import { captureOverviewMap } from '@/utils/captureView';
+import { fmtMonthDay, fmtTime } from '@/utils/datetime';
 import { isFieldReportEmpty } from '@/utils/fieldReport';
-import { EmptyState } from '@/components/EmptyState';
-import { MapSheetLayout, sheetScrollableStyle, useSheetBottomInset } from '@/components/MapSheetLayout';
-import { KakaoMapWebView, fieldsToMarkers } from '@/components/KakaoMapWebView';
-import { Card } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { LoadingState } from '@/components/ui/LoadingState';
-import { EditableTitle } from '@/components/ui/EditableTitle';
-import { OverflowButton } from '@/components/ui/NavHeader';
-import { showActionSheet } from '@/components/ui/ActionSheet';
-import { confirm } from '@/components/ui/ConfirmDialog';
-import { toast } from '@/components/ui/Toast';
-import { BottomActionBar, useBottomActionBarHeight } from '@/components/ui/BottomActionBar';
-import { colors } from '@/theme/colors';
-import { spacing, radius } from '@/theme/spacing';
-import { opacity } from '@/theme/motion';
-import { fmtDateTime, wasEdited } from '@/utils/datetime';
+import { useOverviewMapView } from '@/utils/overviewMapView';
+import { reportEditHref } from '@/utils/reportEntry';
+import { reportFileName, saveReportFile, shareReportFile, type ReportFileFormat } from '@/utils/reportFile';
 import { tripTitle } from '@/utils/tripFormat';
-import type { Field, FieldReport } from '@/types/entities';
+import { c2, radius2, space } from '@/theme/v2';
 
-// 현장별 전·중·후 사진 카드 (명세 v2 FE-RPT-06·13).
-// 카드에 수정·삭제 버튼을 두지 않는다(수락 기준 2) — 카드(›)를 누르면 그 현장의 보고서 수정으로 간다.
-function FieldReportCard({
-  fr,
-  fieldName,
-  onPress,
-}: {
-  fr: FieldReport;
-  fieldName?: string;
-  onPress?: () => void;
-}) {
-  const slots: Array<{ label: string; url?: string | null; caption?: string | null }> = [
-    { label: '전', url: fr.beforePhotoUrl, caption: fr.beforePhotoCaption },
-    { label: '중', url: fr.pendingPhotoUrl, caption: fr.pendingPhotoCaption },
-    { label: '후', url: fr.afterPhotoUrl, caption: fr.afterPhotoCaption },
-  ];
-  const empty = isFieldReportEmpty(fr);
-  return (
-    <Card
-      padding="md"
-      style={styles.frCard}
-      onPress={onPress}
-      accessibilityLabel={`${fieldName ?? '현장 보고'}${empty ? ', 미작성' : ''}. 눌러서 수정`}
-    >
-      <View style={styles.frHead}>
-        <Text variant="bodySm" weight="bold" style={styles.frTitle} numberOfLines={1}>
-          {fieldName || fr.title || '현장 보고'}
-        </Text>
-        {empty ? <Badge label="미작성" tone="warning" size="sm" /> : null}
-        {onPress ? <Ionicons name="chevron-forward" size={16} color={colors.textMuted} /> : null}
-      </View>
-      <View style={styles.frSlots}>
-        {slots.map((s) => (
-          <View key={s.label} style={styles.frSlot}>
-            <Text variant="caption" weight="bold" color="textMuted" style={styles.frSlotLabel}>
-              {s.label}
-            </Text>
-            {s.url ? (
-              <Image
-                source={{ uri: toAbsoluteFileUrl(s.url) }}
-                style={styles.frPhoto}
-                resizeMode="cover"
-                accessibilityLabel={s.caption ? `${s.label} 사진: ${s.caption}` : `${s.label} 사진`}
-              />
-            ) : (
-              <View style={[styles.frPhoto, styles.frPhotoEmpty]}>
-                <Text variant="caption" color="textMuted">
-                  없음
-                </Text>
-              </View>
-            )}
-          </View>
-        ))}
-      </View>
-    </Card>
-  );
-}
+type FileAction = 'share' | 'save';
 
+// 9-5·9-15 형식 줄. HWPX 는 서버에 만드는 API 가 없어 숨긴다(백로그 '2차 개편 요청' I).
+const FORMATS: { key: ReportFileFormat; badge: string; color: string; title: string; sub: string }[] = [
+  { key: 'docx', badge: 'DOCX', color: c2.file.docx, title: '워드 문서', sub: 'DOCX · MS Word에서 편집' },
+  { key: 'pdf', badge: 'PDF', color: c2.file.pdf, title: 'PDF', sub: '편집 없이 보기·인쇄' },
+];
+
+/**
+ * 9-3 보고서 상세(Figma 542:2329). 탭 스택 푸시(탭 바 유지).
+ * ⋯ → 9-4 [공유](9-5) [내려받기](9-15). 하단 [수정](→ 9-6) [삭제](→ 9-13).
+ * 공유·내려받기는 누를 때마다 지금 내용으로 새로 만든다('다시 만들기' 없음, 인수인계 9-4).
+ */
 export default function ReportDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const reportId = id ?? '';
   const router = useRouter();
-
-  const allReports = useReportStore((s) => s.reports);
-  const detailCache = useReportStore((s) => s.detailCache);
-  const loadDetail = useReportStore((s) => s.loadDetail);
-  const remove = useReportStore((s) => s.remove);
-  const update = useReportStore((s) => s.update);
-  const exportWord = useReportStore((s) => s.exportWord);
-  const exportPdf = useReportStore((s) => s.exportPdf);
-  const uploadOverviewPhoto = useReportStore((s) => s.uploadOverviewPhoto);
-  const allTrips = useTripStore((s) => s.trips);
-  const getField = useFieldStore((s) => s.getById);
-  const allFields = useFieldStore((s) => s.fields);
-  const loadFieldDetail = useFieldStore((s) => s.loadDetail);
-  const allVisits = useVisitStore((s) => s.visits);
+  const insets = useSafeAreaInsets();
   const userId = useAuthStore((s) => s.user?.id);
 
-  const [deleting, setDeleting] = useState(false);
-  const [exporting, setExporting] = useState(false);
-  // 위치도 캡처(§20) — 캡처 대상 View ref + 타일 페인트 완료 여부. tilesReady 전에는
-  // 빈 지도를 찍지 않도록 캡처를 건너뛴다. web 은 captureOverviewMap 가 항상 null(taint).
-  const overviewMapRef = useRef<View>(null);
-  const [tilesReady, setTilesReady] = useState(false);
+  const report = useReportStore((s) => s.detailCache[reportId] ?? s.reports.find((r) => r.id === reportId));
   const detailStatus = useReportStore((s) => s.detailStatus[reportId]);
-  const barHeight = useBottomActionBarHeight();
-  const bottomPad = useSheetBottomInset(barHeight);
-  const fetchedRef = useRef<string | null>(null);
-
-  // 진입 시 백엔드에서 detail 페치 (목록은 fieldReports 없음).
   useEffect(() => {
-    if (!reportId || deleting) return;
-    if (fetchedRef.current === reportId) return;
-    fetchedRef.current = reportId;
-    void loadDetail(reportId);
-  }, [reportId, deleting, loadDetail]);
-
-  const report = useMemo(
-    () => detailCache[reportId] ?? allReports.find((r) => r.id === reportId),
-    [detailCache, allReports, reportId],
-  );
-  const trip = useMemo(
-    () => (report ? allTrips.find((t) => t.id === report.tripId) : undefined),
-    [allTrips, report],
-  );
-
-  // fieldReports 안정 reference — 매 render `?? []` 새 array literal 회로 차단 (F9).
-  const fieldReports = useMemo(() => report?.fieldReports ?? [], [report?.fieldReports]);
-  const emptyCount = useMemo(() => fieldReports.filter(isFieldReportEmpty).length, [fieldReports]);
-
-  const overviewFieldIds = useMemo(() => {
-    const set = new Set<string>();
-    fieldReports.forEach((fr) => fr.fieldId && set.add(fr.fieldId));
-    if (set.size === 0 && trip) {
-      for (const v of allVisits) {
-        if (v.tripId === trip.id && v.fieldId) set.add(v.fieldId);
-      }
-    }
-    return Array.from(set);
-  }, [fieldReports, trip, allVisits]);
-
-  const overviewMarkers = useMemo(() => {
-    const byId = new Map(allFields.map((f) => [f.id, f]));
-    const out: Field[] = [];
-    for (const fid of overviewFieldIds) {
-      const f = byId.get(fid);
-      if (f) out.push(f);
-    }
-    return fieldsToMarkers(out);
-  }, [allFields, overviewFieldIds]);
-
+    if (reportId) void useReportStore.getState().loadDetail(reportId);
+  }, [reportId]);
+  const trip = useTripStore((s) => (report?.tripId ? s.trips.find((t) => t.id === report.tripId) : undefined));
   useEffect(() => {
-    for (const fid of overviewFieldIds) {
-      if (useFieldStore.getState().getById(fid)) continue;
-      void loadFieldDetail(fid);
+    if (report?.tripId && !useTripStore.getState().trips.some((t) => t.id === report.tripId)) {
+      void useTripStore.getState().loadDetail(report.tripId);
     }
-  }, [overviewFieldIds, loadFieldDetail]);
+  }, [report?.tripId]);
+
+  const { rows, markers } = useReportRows(report?.fieldReports);
+  const view = useOverviewMapView(reportId);
+
+  // 위치도 캡처(백로그 §20) — 문서를 만들기 직전에 이 카드를 찍어 올린다. 타일이 그려지기 전엔 찍지 않는다. 웹은 못 찍는다.
+  const mapRef = useRef<View>(null);
+  const [tilesReady, setTilesReady] = useState(false);
+  const moreRef = useRef<View>(null);
+  // 시트가 내려가는 동안에도 제목이 바뀌지 않게 종류는 따로 둔다.
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [sheet, setSheetKind] = useState<FileAction>('share');
+  const openSheet = (k: FileAction) => {
+    setSheetKind(k);
+    setSheetOpen(true);
+  };
+  const [busy, setBusy] = useState<ReportFileFormat | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const isOwner = !!report && (!report.creatorId || report.creatorId === userId);
+  const editedTitle = report?.title ?? '';
+
+  const sheetSubtitle = useMemo(() => {
+    const parts = [editedTitle, `현장 ${rows.length}곳`];
+    if (markers.length > 0) parts.push('위치도 포함');
+    return parts.join(' · ');
+  }, [editedTitle, rows.length, markers.length]);
 
   if (!report) {
     return (
-      <MapSheetLayout
-        title="보고서 상세"
-        onBack={() => safeBack(router)}
-        initialIndex={1}
-        mapFieldIds={overviewFieldIds}
-      >
-        {deleting ? (
-          <EmptyState icon="trash-outline" title="보고서를 삭제 중입니다" />
-        ) : detailStatus === 'missing' ? (
-          <EmptyState
-            icon="document-text-outline"
-            title="보고서를 찾을 수 없습니다"
-            description="삭제됐거나 접근 권한이 없는 보고서입니다"
-          />
-        ) : (
-          <LoadingState label="보고서 불러오는 중" />
-        )}
-      </MapSheetLayout>
+      <View style={[styles.root, { paddingTop: insets.top }]}>
+        <Header onBack={() => safeBack(router)} />
+        <View style={styles.center}>
+          {detailStatus === 'missing' ? (
+            <>
+              <Text v2="bodyL.bold">보고서를 찾을 수 없어요</Text>
+              <Text v2="bodyS.regular" tone="tertiary">
+                삭제됐거나 다른 사람의 보고서일 수 있어요.
+              </Text>
+            </>
+          ) : (
+            <ActivityIndicator color={c2.text.tertiary} />
+          )}
+        </View>
+      </View>
     );
   }
 
-  const isOwner = userId === report.creatorId;
-  const edited = wasEdited(report.createdAt, report.updatedAt);
-
-  // 위치도 네이티브 캡처 → 업로드(§20) — best-effort. 문서 생성 직전에 찍어 최신 위치도 반영.
   const syncOverviewMap = async () => {
-    if (overviewMarkers.length === 0 || !tilesReady) return;
-    const file = await captureOverviewMap(overviewMapRef);
-    if (file) await uploadOverviewPhoto(report.id, file);
+    if (Platform.OS === 'web' || markers.length === 0 || !tilesReady) return;
+    const file = await captureOverviewMap(mapRef);
+    if (file) await useReportStore.getState().uploadOverviewPhoto(report.id, file);
   };
 
-  // 생성된 파일 열기 — web 은 새 탭, 네이티브는 OS 공유·저장(외부 앱).
-  const openFileUrl = (rawUrl: string) => {
-    const url = toAbsoluteFileUrl(rawUrl);
-    if (Platform.OS === 'web') {
-      window.open(url, '_blank', 'noopener,noreferrer');
-      return;
-    }
-    Linking.openURL(url).catch(() => {
-      Alert.alert('다운로드 실패', '파일을 열 수 없습니다. 잠시 후 다시 시도해주세요.');
-    });
-  };
-
-  // 내보내기는 매번 새로 만든다 — 만든 뒤 현장 보고를 고쳐도 서버가 outputFileUrl 을 비우지 않아
-  // 예전 파일을 그대로 열면 수정 전 문서가 나간다(리뷰). 이미 파일이 있으면 regenerate 로 덮는다.
-  const exportAsWord = async (explicitRegenerate: boolean) => {
-    if (exporting) return;
-    const regenerate = explicitRegenerate || !!report.outputFileUrl?.trim();
-    setExporting(true);
-    if (explicitRegenerate) toast('Word 파일을 다시 만들고 있어요');
+  const runFile = async (format: ReportFileFormat, action: FileAction) => {
+    if (busy) return;
+    setBusy(format);
     await syncOverviewMap();
-    const r = await exportWord(report.id, regenerate);
-    setExporting(false);
-    if (!r.ok) {
-      Alert.alert('Word 생성 실패', r.error);
+    let url: string | undefined;
+    if (format === 'docx') {
+      const r = await useReportStore.getState().exportWord(report.id, true);
+      if (!r.ok) {
+        setBusy(null);
+        await notice('파일을 만들지 못했어요', r.error);
+        return;
+      }
+      url = useReportStore.getState().detailCache[report.id]?.outputFileUrl?.trim() || undefined;
+    } else {
+      const r = await useReportStore.getState().exportPdf(report.id);
+      if (!r.ok) {
+        setBusy(null);
+        await notice('파일을 만들지 못했어요', r.error);
+        return;
+      }
+      url = r.url;
+    }
+    const abs = url ? toAbsoluteFileUrl(url) : null;
+    if (!abs) {
+      setBusy(null);
+      await notice('파일을 만들지 못했어요', '파일 주소를 받지 못했어요. 잠시 뒤 다시 해 주세요.');
       return;
     }
-    const url = useReportStore.getState().detailCache[report.id]?.outputFileUrl?.trim();
-    if (url && !explicitRegenerate) openFileUrl(url);
-    else if (explicitRegenerate) toast('Word 파일을 다시 만들었어요');
-  };
-
-  // backend-backlog §19 — PDF 는 서버가 URL 을 영속하지 않는다 → 누를 때마다 생성 후 즉시 열기.
-  const exportAsPdf = async () => {
-    if (exporting) return;
-    setExporting(true);
-    await syncOverviewMap();
-    const r = await exportPdf(report.id);
-    setExporting(false);
-    if (!r.ok) {
-      Alert.alert('PDF 생성 실패', r.error);
+    const name = reportFileName(report.title, format);
+    const res = action === 'share' ? await shareReportFile(abs, name, format) : await saveReportFile(abs, name, format);
+    setBusy(null);
+    if (res.ok) {
+      setSheetOpen(false);
+      if (action === 'save' && Platform.OS === 'android') toast('휴대폰에 저장했어요');
       return;
     }
-    openFileUrl(r.url);
+    if (!res.cancelled) await notice(action === 'share' ? '공유하지 못했어요' : '내려받지 못했어요', res.error);
   };
 
-  // FE-RPT-14 — 미작성 현장이 있으면 먼저 묻는다. 동의하면 미작성 칸은 빈칸으로 나간다.
-  const handleExport = async () => {
-    if (emptyCount > 0) {
-      const ok = await confirm({
-        title: '미작성 현장이 있습니다',
-        message: '정말 문서를 내보내시겠습니까?\n미작성 현장은 빈칸으로 내보내집니다.',
-        confirmLabel: '내보내기',
-      });
-      if (!ok) return;
-    }
-    showActionSheet([
-      { label: 'Word 파일 (.docx)', icon: 'document-text-outline', onPress: () => void exportAsWord(false) },
-      { label: 'PDF 파일 (.pdf)', icon: 'document-outline', onPress: () => void exportAsPdf() },
-    ]);
-  };
+  const openMore = () =>
+    showPopoverMenu(
+      moreRef.current,
+      [
+        { label: '공유', icon: 'share', onPress: () => openSheet('share') },
+        { label: '내려받기', icon: 'download', onPress: () => openSheet('save') },
+      ],
+      { width: 216 },
+    );
 
-  const handleDelete = async () => {
-    const losses: string[] = [];
-    if (fieldReports.length > 0) losses.push(`현장 보고 ${fieldReports.length}건`);
-    if (report.outputFileUrl) losses.push('생성된 Word 파일');
+  const remove = async () => {
     const ok = await confirm({
-      title: '이 보고서를 삭제할까요?',
-      message: losses.length > 0 ? `함께 사라지는 항목: ${losses.join(' · ')}` : undefined,
+      title: '보고서를 삭제할까요?',
+      message: '외근 기록은 그대로 남아요.',
       confirmLabel: '삭제',
       destructive: true,
     });
     if (!ok) return;
     setDeleting(true);
-    const r = await remove(report.id);
-    if (r.ok || /이미 삭제|찾을 수 없는/.test(r.error ?? '')) {
-      toast('보고서를 삭제했습니다');
-      // replace 는 보고서 스택에 목록을 하나 더 쌓는다 — 스택을 첫 화면(9)으로 되돌린다.
-      goToTabRoot('reports');
+    const r = await useReportStore.getState().remove(report.id);
+    if (!r.ok && !/이미 삭제|찾을 수 없/.test(r.error)) {
+      setDeleting(false);
+      await notice('보고서를 삭제하지 못했어요', r.error);
       return;
     }
-    setDeleting(false);
-    Alert.alert('보고서 삭제 실패', r.error || '보고서를 삭제하지 못했습니다. 잠시 후 다시 시도해주세요.');
-  };
-
-  const openEdit = (frId: string) =>
-    router.push(`/(tabs)/reports/${report.id}/field-report?frId=${frId}` as never);
-
-  // `···` — 보고서 수정(첫 현장) / Word 다시 생성 / 보고서 삭제 (명세 §2.3).
-  const openMore = () =>
-    showActionSheet([
-      ...(fieldReports.length > 0
-        ? [{ label: '보고서 수정', icon: 'create-outline' as const, onPress: () => openEdit(fieldReports[0].id) }]
-        : []),
-      ...(fieldReports.length > 0
-        ? [{ label: 'Word 다시 생성', icon: 'refresh' as const, onPress: () => void exportAsWord(true) }]
-        : []),
-      { label: '보고서 삭제', icon: 'trash-outline', tone: 'danger', onPress: () => void handleDelete() },
-    ]);
-
-  // FE-RPT-08a — 제목은 상세 상단에서 바로 고친다.
-  const saveTitle = async (title: string) => {
-    const r = await update(report.id, { title });
-    if (!r.ok) {
-      Alert.alert('제목 저장 실패', r.error);
-      throw new Error(r.error);
-    }
+    useReportCompletionStore.getState().forget(report.id);
+    // 스택을 첫 화면(9)으로 되돌린다.
+    goToTabRoot('reports');
   };
 
   return (
-    <View style={styles.root}>
-      {/* 바 유무와 무관하게 상수로 준다. 목록에서 들어오면 fieldReports 가 비어 있다가 상세 로드 후
-          채워지는데(0→N), 그때 높이를 바꾸면 마운트 후 snapPoints 가 교체돼 시트가 peek 으로 떨어진다
-          (MapSheetLayout 주석). 바가 없는 드문 경우(현장 보고 0건 등)엔 최저 높이 아래 빈 띠가 남는다. */}
-      <MapSheetLayout bottomBarHeight={barHeight}
-        title="보고서 상세"
-        onBack={() => safeBack(router)}
-        initialIndex={1}
-        mapFieldIds={overviewFieldIds}
-        headerRight={isOwner ? <OverflowButton onPress={openMore} label="보고서 상세 더보기" /> : undefined}
-      >
-        <BottomSheetScrollView
-          style={sheetScrollableStyle}
-          contentContainerStyle={[styles.scroll, { paddingBottom: bottomPad }]}
-        >
-          {isOwner ? (
-            <EditableTitle value={report.title} onSubmit={saveTitle} maxLength={100} label="보고서 제목" />
-          ) : (
-            <Text variant="h2">{report.title}</Text>
-          )}
-
-          {trip ? (
-            <Pressable
-              onPress={() => router.push(`/(tabs)/trips/${trip.id}` as never)}
-              style={({ pressed }) => [styles.tripLink, pressed && { opacity: opacity.pressed }]}
-            >
-              <Ionicons name="briefcase-outline" size={14} color={colors.primary} />
-              <Text variant="bodySm" weight="semibold" color="primary" numberOfLines={1} style={styles.tripText}>
-                연결 외근: {`${tripTitle(trip)} · `}
-                {fmtDateTime(trip.startedAt)}
-              </Text>
-              <Ionicons name="chevron-forward" size={14} color={colors.primary} />
-            </Pressable>
-          ) : null}
-
-          <Text variant="caption" color="textMuted" style={styles.meta}>
-            작성: {fmtDateTime(report.createdAt)}
-            {edited ? ` · 수정: ${fmtDateTime(report.updatedAt)}` : ''}
-          </Text>
-
-          {/* 위치도 — 그 외근의 현장 전체를 담는 정적 지도(figure). 시트 pan 과 충돌하지 않게 조작 비활성. */}
-          {overviewMarkers.length > 0 ? (
-            <>
-              <Text variant="bodySm" weight="bold" color="textMuted" style={styles.mapLabel}>
-                위치도 — 현장 {overviewMarkers.length}곳
-              </Text>
-              <View ref={overviewMapRef} collapsable={false} style={styles.overviewMap}>
-                <KakaoMapWebView
-                  markers={overviewMarkers}
-                  fitToMarkers
-                  interactive={false}
-                  onTilesLoaded={() => setTilesReady(true)}
-                />
-              </View>
-            </>
-          ) : null}
-
-          <View style={styles.sectionHead}>
-            <View style={styles.sectionTitle}>
-              <Text variant="bodySm" weight="bold" color="textMuted">
-                현장별 전·중·후
-              </Text>
-              {emptyCount > 0 ? <Badge label={`미작성 ${emptyCount}곳`} tone="warning" size="sm" /> : null}
-            </View>
-            {isOwner ? (
-              <Button
-                onPress={() => router.push(`/(tabs)/reports/${report.id}/field-report` as never)}
-                variant="secondary"
-                leftIcon="add"
-              >
-                현장 보고 추가
-              </Button>
-            ) : null}
-          </View>
-          {fieldReports.length === 0 ? (
-            <Text variant="bodySm" color="textMuted" style={styles.emptyFr}>
-              등록된 현장 보고가 없습니다.
+    <View style={[styles.root, { paddingTop: insets.top }]}>
+      <Header onBack={() => safeBack(router)} onMore={isOwner ? openMore : undefined} moreRef={moreRef} />
+      <ScrollView style={styles.flex} contentContainerStyle={styles.scroll}>
+        <Text v2="title.l" accessibilityRole="header">
+          {report.title}
+        </Text>
+        {trip ? (
+          <Touchable
+            onPress={() => router.push(`/(tabs)/trips/${trip.id}` as never)}
+            accessibilityRole="button"
+            accessibilityLabel={`외근 ${tripTitle(trip)} 보기`}
+            style={styles.tripLink}
+          >
+            <Icon name="briefcase-simple" size={16} color={c2.text.link} />
+            <Text v2="bodyS.semibold" tone="link" numberOfLines={1} style={styles.shrink}>
+              {`${tripTitle(trip)} · ${fmtMonthDay(trip.startedAt)} 외근`}
             </Text>
-          ) : (
-            fieldReports.map((fr) => (
-              <FieldReportCard
-                key={fr.id}
-                fr={fr}
-                fieldName={getField(fr.fieldId)?.address}
-                onPress={isOwner ? () => openEdit(fr.id) : undefined}
-              />
-            ))
-          )}
-        </BottomSheetScrollView>
-      </MapSheetLayout>
-      {/* 하단 바는 시트 밖 — gorhom pan 이 시트 안 버튼의 터치를 가로챈다. */}
-      {isOwner && fieldReports.length > 0 ? (
-        <BottomActionBar absolute>
-          <Button
-            onPress={() => void handleExport()}
-            loading={exporting}
-            size="lg"
-            fullWidth
-            leftIcon="download-outline"
-          >
-            내보내기
-          </Button>
+            <Icon name="chevron-right" size={14} color={c2.text.link} />
+          </Touchable>
+        ) : null}
+        <Text v2="caption.regular" tone="tertiary" style={styles.written}>
+          {`작성 ${fmtMonthDay(report.createdAt)} ${fmtTime(report.createdAt)}`}
+        </Text>
+
+        {markers.length > 0 ? (
+          <>
+            <View ref={mapRef} collapsable={false} style={styles.map}>
+              <ReportOverviewMap markers={markers} view={view} onTilesLoaded={() => setTilesReady(true)} />
+            </View>
+            <Text v2="caption.regular" tone="tertiary" style={styles.mapCaption}>
+              {`위치도 · 현장 ${markers.length}곳 (문서 첫 장에 들어가요)`}
+            </Text>
+          </>
+        ) : null}
+
+        <View style={styles.sections}>
+          {rows.map((r) => (
+            <FieldSection key={r.fr.id} row={r} />
+          ))}
+        </View>
+      </ScrollView>
+
+      {isOwner ? (
+        <BottomActionBar safeArea={false} style={styles.footer}>
+          <View style={styles.footerRow}>
+            <Button2 onPress={() => router.push(reportEditHref(report.id, 'edit') as never)} style={styles.flex}>
+              수정
+            </Button2>
+            <Button2 variant="danger" onPress={() => void remove()} loading={deleting}>
+              삭제
+            </Button2>
+          </View>
         </BottomActionBar>
-      ) : !isOwner && report.outputFileUrl?.trim() ? (
-        // 작성자가 아니면 만들 수는 없지만 이미 만들어진 Word 는 받을 수 있어야 한다.
-        <BottomActionBar absolute>
-          <Button
-            onPress={() => openFileUrl(report.outputFileUrl!.trim())}
-            size="lg"
-            fullWidth
-            leftIcon="download-outline"
-          >
-            Word 파일 다운로드
-          </Button>
-        </BottomActionBar>
+      ) : null}
+
+      <AppSheet
+        open={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        title={sheet === 'save' ? '내려받기' : '공유'}
+        subtitle={`${sheetSubtitle}\n${sheet === 'save' ? '형식을 고르면 휴대폰에 저장돼요' : '형식을 고르면 폰의 공유 창이 열려요'}`}
+      >
+        <View style={styles.sheetList}>
+          {FORMATS.map((f, i) => (
+            <FormatRow
+              key={f.key}
+              format={f}
+              icon={sheet === 'save' ? 'download' : 'share'}
+              actionLabel={sheet === 'save' ? '내려받기' : '공유'}
+              busy={busy === f.key}
+              disabled={busy !== null}
+              divider={i > 0}
+              onPress={() => void runFile(f.key, sheet)}
+            />
+          ))}
+        </View>
+      </AppSheet>
+    </View>
+  );
+}
+
+function Header({ onBack, onMore, moreRef }: { onBack: () => void; onMore?: () => void; moreRef?: React.RefObject<View | null> }) {
+  return (
+    <View style={styles.header}>
+      <Touchable onPress={onBack} accessibilityRole="button" accessibilityLabel="보고서 목록으로" style={styles.headerBtn}>
+        <Icon name="arrow-left" size={24} color={c2.text.primary} />
+      </Touchable>
+      {onMore ? (
+        <Touchable ref={moreRef} onPress={onMore} accessibilityRole="button" accessibilityLabel="더보기" style={styles.headerBtn}>
+          <Icon name="more" size={24} color={c2.text.primary} />
+        </Touchable>
       ) : null}
     </View>
   );
 }
 
+/** 9-3 현장 한 묶음: 순번·이름 + 채운 전·중·후 사진(설명은 사진 아래). */
+function FieldSection({ row }: { row: ReportRow }) {
+  const tiles = SLOTS.filter((s) => row.fr[SLOT_URL[s.key]] || row.fr[SLOT_CAPTION[s.key]]?.trim());
+  const empty = isFieldReportEmpty(row.fr);
+  return (
+    <View style={styles.section}>
+      <View style={styles.sectionHead}>
+        <OrderBadge n={row.order} kind={row.kind} />
+        <Text v2="bodyL.bold" numberOfLines={1} style={styles.shrink}>
+          {fieldName(row.field)}
+        </Text>
+      </View>
+      {empty ? (
+        <Text v2="caption.semibold" tone="warning" style={styles.emptySection}>
+          작성 전
+        </Text>
+      ) : (
+        <View style={styles.tiles}>
+          {[0, 1, 2].map((i) => {
+            const s = tiles[i];
+            if (!s) return <View key={`gap-${i}`} style={styles.tile} />;
+            const url = toAbsoluteFileUrl(row.fr[SLOT_URL[s.key]]);
+            const caption = row.fr[SLOT_CAPTION[s.key]]?.trim();
+            return (
+              <View key={s.key} style={styles.tile}>
+                <View style={styles.photo}>
+                  {url ? (
+                    <Image source={{ uri: url }} style={StyleSheet.absoluteFill} resizeMode="cover" accessibilityLabel={`${s.label} 사진`} />
+                  ) : null}
+                  <View style={styles.photoTag}>
+                    <Text v2="micro.bold" tone="inverse">
+                      {s.short}
+                    </Text>
+                  </View>
+                </View>
+                {caption ? (
+                  <Text v2="small.regular" tone="secondary" style={styles.photoCaption}>
+                    {caption}
+                  </Text>
+                ) : null}
+              </View>
+            );
+          })}
+        </View>
+      )}
+    </View>
+  );
+}
+
+function FormatRow({
+  format,
+  icon,
+  actionLabel,
+  busy,
+  disabled,
+  divider,
+  onPress,
+}: {
+  format: (typeof FORMATS)[number];
+  icon: IconName;
+  actionLabel: string;
+  busy: boolean;
+  disabled: boolean;
+  divider: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Touchable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={`${format.title} ${actionLabel}`}
+      accessibilityState={{ busy, disabled }}
+      noAutoHitSlop
+      style={[styles.formatRow, divider && styles.divider]}
+    >
+      <View style={[styles.badge, { backgroundColor: format.color }]}>
+        <Text v2="small.extrabold" tone="inverse">
+          {format.badge}
+        </Text>
+      </View>
+      <View style={styles.flex}>
+        <Text v2="bodyL.bold">{format.title}</Text>
+        <Text v2="caption.regular" tone="tertiary">
+          {format.sub}
+        </Text>
+      </View>
+      <View style={styles.actionCircle}>
+        {busy ? <ActivityIndicator size="small" color={c2.text.link} /> : <Icon name={icon} size={22} color={c2.text.link} />}
+      </View>
+    </Touchable>
+  );
+}
+
 const styles = StyleSheet.create({
-  root: { flex: 1 },
-  // paddingBottom 은 렌더에서 — 55% 시트 + 하단 바(useSheetBottomInset 주석).
-  scroll: { padding: spacing.lg },
-  tripLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginTop: spacing.sm,
-    backgroundColor: colors.primaryMuted,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.md,
-    alignSelf: 'flex-start',
-    maxWidth: '100%',
-  },
-  tripText: { flexShrink: 1 },
-  meta: { marginTop: spacing.sm },
-  mapLabel: { marginTop: spacing.lg, marginBottom: spacing.xs },
-  overviewMap: {
-    height: 220,
-    borderRadius: radius.lg,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  sectionHead: {
+  root: { flex: 1, backgroundColor: c2.bg.canvas },
+  flex: { flex: 1 },
+  shrink: { flexShrink: 1 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: space[6] },
+  header: {
+    height: 48,
+    paddingTop: space[4],
+    paddingHorizontal: space[4],
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: spacing.xl,
-    marginBottom: spacing.sm,
-    gap: spacing.sm,
   },
-  sectionTitle: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexShrink: 1 },
-  emptyFr: { paddingVertical: spacing.lg },
-  frCard: { marginBottom: spacing.md },
-  frHead: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.sm,
-    gap: spacing.sm,
+  headerBtn: { width: 44, height: 44, borderRadius: radius2.full, alignItems: 'center', justifyContent: 'center' },
+  scroll: { paddingHorizontal: space[20], paddingTop: space[4], paddingBottom: space[24] },
+  tripLink: { flexDirection: 'row', alignItems: 'center', gap: space[4], alignSelf: 'flex-start', minHeight: 24, marginTop: space[4] },
+  written: { marginTop: space[2] },
+  map: { marginTop: space[16] },
+  mapCaption: { marginTop: space[6] },
+  sections: { marginTop: space[16] },
+  section: { borderTopWidth: 1, borderTopColor: c2.border.subtle, paddingTop: space[16], paddingBottom: space[16] },
+  sectionHead: { flexDirection: 'row', alignItems: 'center', gap: space[10] },
+  emptySection: { marginTop: space[10] },
+  tiles: { flexDirection: 'row', gap: space[8], marginTop: space[10] },
+  tile: { flex: 1 },
+  photo: { aspectRatio: 1, borderRadius: radius2.md, overflow: 'hidden', backgroundColor: c2.bg.placeholder },
+  photoTag: {
+    position: 'absolute',
+    top: space[6],
+    left: space[6],
+    height: 18,
+    paddingHorizontal: space[6],
+    borderRadius: 8,
+    justifyContent: 'center',
+    backgroundColor: c2.bg.hint,
   },
-  frTitle: { flex: 1 },
-  frSlots: { flexDirection: 'row', gap: spacing.sm },
-  frSlot: { flex: 1, alignItems: 'center' },
-  frSlotLabel: { marginBottom: spacing.xs },
-  frPhoto: {
-    width: '100%',
-    aspectRatio: 1,
-    borderRadius: radius.sm,
-    backgroundColor: colors.surfaceMuted,
-  },
-  frPhotoEmpty: {
+  photoCaption: { marginTop: space[6] },
+  footer: { paddingTop: space[12], borderTopColor: c2.border.default },
+  footerRow: { flexDirection: 'row', gap: space[8] },
+  sheetList: { paddingHorizontal: space[20], paddingTop: space[6] },
+  formatRow: { minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: space[14] },
+  divider: { borderTopWidth: 1, borderTopColor: c2.border.subtle },
+  badge: { width: 44, height: 44, borderRadius: radius2.md, alignItems: 'center', justifyContent: 'center' },
+  actionCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: radius2.full,
+    backgroundColor: c2.bg.brandSubtle,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderStyle: 'dashed',
   },
 });

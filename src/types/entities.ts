@@ -202,16 +202,6 @@ export const VISIT_STATUS_VALUES: VisitStatus[] = [
   'other',
 ];
 
-// 사용자 표시용 한국어 라벨 — 코드 식별자(영문) ↔ 표시값(한국어) 분리.
-export const VISIT_STATUS_LABEL: Record<VisitStatus, string> = {
-  completed: '완료',
-  absent: '부재',
-  refused: '수취거절',
-  unknown_address: '주소불명',
-  revisit_needed: '재방문필요',
-  other: '기타',
-};
-
 // 호환 안전망 — 백엔드가 한글 enum 또는 옛 영문값 ('normal' / 'revisit_required') 으로
 // 응답할 가능성. 'normal' 은 visit.status 의 옛 값 또는 resultStatus 와 충돌 가능 — 문맥상
 // status 자리에선 'completed' 로 정규화.

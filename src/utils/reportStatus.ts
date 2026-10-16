@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo } from 'react';
 import { useFocusEffect } from 'expo-router';
 import type { Report } from '@/types/entities';
 import { useReportStore } from '@/stores/reportStore';
+import { useReportCompletionStore } from '@/stores/reportCompletionStore';
 import { reportStateOf, type TripReportState } from '@/utils/reportStage';
 
 export type { ReportStage, TripReportState } from '@/utils/reportStage';
@@ -73,6 +74,7 @@ export function useTripReportStates(tripIdsInOrder: string[]): Map<string, TripR
   const listLoaded = useReportStore((s) => s.listLoaded);
   const detailCache = useReportStore((s) => s.detailCache);
   const detailStatus = useReportStore((s) => s.detailStatus);
+  const accepted = useReportCompletionStore((s) => s.accepted);
   const byTrip = useMemo(() => reportsByTrip(reports), [reports]);
   const orderedIds = useMemo(
     () => tripIdsInOrder.map((t) => byTrip.get(t)?.id).filter((x): x is string => !!x),
@@ -94,10 +96,17 @@ export function useTripReportStates(tripIdsInOrder: string[]): Map<string, TripR
     const out = new Map<string, TripReportState>();
     for (const t of tripIdsInOrder) {
       const r = byTrip.get(t);
-      out.set(t, reportStateOf(r, r ? detailCache[r.id] : undefined, { listLoaded, detailStatus: r ? detailStatus[r.id] : undefined }));
+      out.set(
+        t,
+        reportStateOf(r, r ? detailCache[r.id] : undefined, {
+          listLoaded,
+          detailStatus: r ? detailStatus[r.id] : undefined,
+          acceptedEmpty: r ? accepted[r.id] : undefined,
+        }),
+      );
     }
     return out;
-  }, [tripIdsInOrder, byTrip, detailCache, detailStatus, listLoaded]);
+  }, [tripIdsInOrder, byTrip, detailCache, detailStatus, listLoaded, accepted]);
 }
 
 /** 외근 하나의 보고서 상태(3 외근 상세). */
@@ -106,6 +115,7 @@ export function useTripReportState(tripId: string): TripReportState {
   const listLoaded = useReportStore((s) => s.listLoaded);
   const detail = useReportStore((s) => (report ? s.detailCache[report.id] : undefined));
   const status = useReportStore((s) => (report ? s.detailStatus[report.id] : undefined));
+  const acceptedEmpty = useReportCompletionStore((s) => (report ? s.accepted[report.id] : undefined));
   const reportId = report?.id;
   // 외근 상세로 바로 들어오면(딥 링크·새로고침) 보고서 목록을 아직 안 받았다 — 포커스마다 확인.
   useFocusEffect(
@@ -120,7 +130,56 @@ export function useTripReportState(tripId: string): TripReportState {
     }, [reportId]),
   );
   return useMemo(
-    () => reportStateOf(report, detail, { listLoaded, detailStatus: status }),
-    [report, detail, listLoaded, status],
+    () => reportStateOf(report, detail, { listLoaded, detailStatus: status, acceptedEmpty }),
+    [report, detail, listLoaded, status, acceptedEmpty],
   );
+}
+
+/**
+ * 보고서별 상태(9 보고서 목록). reportIdsInOrder 는 화면에 보이는 순서 — 그 순서로 상세를 받는다.
+ * 목록 응답엔 현장 보고가 없어 상세가 와야 작성 중·완료를 가른다(그 전엔 checking).
+ */
+export function useReportStates(reportIdsInOrder: string[]): Map<string, TripReportState> {
+  const reports = useReportStore((s) => s.reports);
+  const listLoaded = useReportStore((s) => s.listLoaded);
+  const detailCache = useReportStore((s) => s.detailCache);
+  const detailStatus = useReportStore((s) => s.detailStatus);
+  const accepted = useReportCompletionStore((s) => s.accepted);
+  const key = reportIdsInOrder.join(',');
+
+  useEffect(() => {
+    if (key) requestDetails(key.split(','), false);
+  }, [key]);
+  useFocusEffect(
+    useCallback(() => {
+      if (key) requestDetails(key.split(','), true);
+    }, [key]),
+  );
+
+  return useMemo(() => {
+    const byId = new Map(reports.map((r) => [r.id, r]));
+    const out = new Map<string, TripReportState>();
+    for (const id of reportIdsInOrder) {
+      out.set(
+        id,
+        reportStateOf(byId.get(id), detailCache[id], {
+          listLoaded,
+          detailStatus: detailStatus[id],
+          acceptedEmpty: accepted[id],
+        }),
+      );
+    }
+    return out;
+  }, [reportIdsInOrder, reports, detailCache, detailStatus, listLoaded, accepted]);
+}
+
+/** 상세를 이미 받은 보고서 하나의 상태 — 외근 상세·보고서 작성 진입 판단용(훅 밖). */
+export function reportStateNow(reportId: string): TripReportState {
+  const st = useReportStore.getState();
+  const report = st.getById(reportId);
+  return reportStateOf(report, st.detailCache[reportId], {
+    listLoaded: true,
+    detailStatus: st.detailStatus[reportId],
+    acceptedEmpty: useReportCompletionStore.getState().accepted[reportId],
+  });
 }

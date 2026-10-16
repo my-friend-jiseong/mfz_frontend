@@ -30,7 +30,7 @@ import { visitEditHref } from '@/utils/checkinNav';
 import { fieldActionStatus } from '@/utils/fieldStatus';
 import { useTripReportState, type TripReportState } from '@/utils/reportStatus';
 import { fmtTripDateLine, tripTitle } from '@/utils/tripFormat';
-import { findTripReportId, openReportForTrip } from '@/utils/reportEntry';
+import { findTripReportId, openReportForTrip, reportDetailHref, reportEditHref } from '@/utils/reportEntry';
 import { fmtMonthDay, fmtTime } from '@/utils/datetime';
 import { c2, radius2, space } from '@/theme/v2';
 import type { Field, FieldStatus, Trip, Visit } from '@/types/entities';
@@ -474,6 +474,7 @@ function Header({
 /** 하단 바 — 작성 전 [보고서 작성] · 3-1 작성 중 '현장 N곳 중 M곳 작성했어요' + [이어서 작성] · 3-2 [보고서 보기]. */
 function ReportFooter({ tripId, state }: { tripId: string; state: TripReportState }) {
   const router = useRouter();
+  const [creating, setCreating] = useState(false);
   const report = state.report;
   const listFailed = useReportStore((s) => s.listStatus === 'error' && !s.listLoaded);
   // 상태를 모르는 동안엔 버튼을 두지 않는다 — 작성 전으로 잘못 보이면 같은 외근에 보고서가 둘 생긴다.
@@ -496,17 +497,22 @@ function ReportFooter({ tripId, state }: { tripId: string; state: TripReportStat
     );
   }
   if (state.stage === 'none' || !report) {
+    // 보고서를 만들고 9-2 보고서 작성을 연다(reportEntry). 만드는 동안 버튼을 돌린다.
+    const write = async () => {
+      setCreating(true);
+      await openReportForTrip(router, tripId);
+      setCreating(false);
+    };
     return (
       <BottomActionBar safeArea={false} style={styles.footer}>
-        {/* TODO(PR8): 9-2 보고서 작성으로 바꾼다. 지금은 기존 보고서 만들기 화면. */}
-        <Button2 onPress={() => void openReportForTrip(router, tripId)} fullWidth>
+        <Button2 onPress={() => void write()} loading={creating} fullWidth>
           보고서 작성
         </Button2>
       </BottomActionBar>
     );
   }
-  const open = () => router.push(`/(tabs)/reports/${report.id}` as never);
   if (state.stage === 'draft') {
+    const open = () => router.push(reportEditHref(report.id, 'create') as never);
     return (
       <BottomActionBar
         safeArea={false}
@@ -528,7 +534,7 @@ function ReportFooter({ tripId, state }: { tripId: string; state: TripReportStat
   }
   return (
     <BottomActionBar safeArea={false} style={styles.footer}>
-      <Button2 onPress={open} fullWidth>
+      <Button2 onPress={() => router.push(reportDetailHref(report.id) as never)} fullWidth>
         보고서 보기
       </Button2>
     </BottomActionBar>

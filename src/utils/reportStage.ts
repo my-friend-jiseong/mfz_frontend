@@ -5,6 +5,7 @@ import { isFieldReportEmpty } from './fieldReport';
  * 외근의 보고서 상태 3단계(인수인계 '용어·문구 규칙'): 작성 전 / 작성 중 / 작성 완료.
  * 서버 Report 에 상태 칸이 없어(백로그 '2차 개편 요청' B) 내용으로 계산한다 — 보고서가 있고
  * 빈 현장 보고(isFieldReportEmpty)가 하나라도 있으면 작성 중, 없으면 작성 완료.
+ * 9-12 에서 빈 채로 저장한 현장(acceptedEmpty, reportCompletionStore)은 작성 중 판정에서 뺀다.
  * checking: 아직 모른다(목록 또는 상세를 받는 중) — 배지도 [보고서 작성]도 그리지 않는다.
  */
 export type ReportStage = 'checking' | 'none' | 'draft' | 'done';
@@ -29,12 +30,19 @@ const NONE: TripReportState = { stage: 'none', filled: null, total: null };
 export function reportStateOf(
   report: Report | undefined,
   detail: Report | undefined,
-  opts: { listLoaded: boolean; detailStatus?: 'loading' | 'success' | 'missing' },
+  opts: {
+    listLoaded: boolean;
+    detailStatus?: 'loading' | 'success' | 'missing';
+    /** 9-12 [저장]으로 빈 채 받아들인 현장 보고 id. */
+    acceptedEmpty?: readonly string[];
+  },
 ): TripReportState {
   if (!opts.listLoaded) return CHECKING;
   if (!report) return NONE;
   const frs = detail?.fieldReports ?? report.fieldReports;
   if (!frs) return opts.detailStatus === 'missing' ? { stage: 'done', report, filled: null, total: null } : { ...CHECKING, report };
   const filled = frs.filter((fr) => !isFieldReportEmpty(fr)).length;
-  return { stage: filled < frs.length ? 'draft' : 'done', report, filled, total: frs.length };
+  const accepted = new Set(opts.acceptedEmpty ?? []);
+  const pending = frs.some((fr) => isFieldReportEmpty(fr) && !accepted.has(fr.id));
+  return { stage: pending ? 'draft' : 'done', report, filled, total: frs.length };
 }

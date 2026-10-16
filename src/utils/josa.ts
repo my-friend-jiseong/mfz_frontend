@@ -35,3 +35,10 @@ export function withObjectJosa(word: string): string {
   if (f === null) return `${word}을(를)`;
   return `${word}${f ? '을' : '를'}`;
 }
+
+/** '당리로 87' → '당리로 87은', '하신중앙로 12' → '하신중앙로 12는'(9-12). 모르면 '은(는)'. */
+export function withTopicJosa(word: string): string {
+  const f = hasFinalConsonant(word);
+  if (f === null) return `${word}은(는)`;
+  return `${word}${f ? '은' : '는'}`;
+}

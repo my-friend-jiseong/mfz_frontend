@@ -411,6 +411,8 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
   ) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<KakaoMap | null>(null);
+  // 사용자가 지도를 한 번이라도 끌었는가 — 크기 변화 때 center 로 되돌릴지 정한다.
+  const userMovedRef = useRef(false);
   const overlaysRef = useRef<Overlay[]>([]);
   const myLocOverlayRef = useRef<Overlay | null>(null);
   const beaconOverlayRef = useRef<Overlay | null>(null);
@@ -482,6 +484,9 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
           level: initialLevel ?? 8,
         });
         mapRef.current = map;
+        k.maps.event.addListener(map, 'dragstart', () => {
+          userMovedRef.current = true;
+        });
         // 사용자가 직접 끌거나 줌한 뒤에만 현재 뷰 보고 — 지도 생성 시 자동 발화하는 idle 로
         // 보고하면 안 보이는 탭의 지도가 초기 위치로 값을 덮어쓴다. 상위가 기억해 재마운트 시 복원.
         if (onViewChange) {
@@ -515,6 +520,10 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
 
   // fitToMarkers — 모든 마커가 한 화면에 들어오도록 setBounds. 마커가 비동기로 도착(현장 좌표
   // 로드)하면 다시 맞춤. 1개면 setBounds 가 최대 줌으로 튀어 부적절 → 센터 + 적당한 level.
+  const centerRef = useRef(center);
+  centerRef.current = center;
+  const fitToMarkersRef = useRef(fitToMarkers);
+  fitToMarkersRef.current = fitToMarkers;
   const fitRef = useRef<() => void>(() => {});
   fitRef.current = () => {
     if (!mapRef.current || !fitToMarkers || markers.length === 0) return;
@@ -555,6 +564,10 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
       last = key;
       map.relayout();
       fitRef.current();
+      // 중심을 정해 띄운 지도(보고서 위치도 구도)는 relayout 이 왼쪽 위를 붙잡아 중심이 어긋난다 — 사용자가 끌기 전이면 다시 맞춘다.
+      const c = centerRef.current;
+      const k = getKakao();
+      if (!fitToMarkersRef.current && !userMovedRef.current && c && k) map.setCenter(new k.maps.LatLng(c.lat, c.lng));
     });
     ro.observe(containerRef.current);
     return () => ro.disconnect();

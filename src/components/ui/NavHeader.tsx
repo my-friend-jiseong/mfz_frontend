@@ -9,7 +9,7 @@ import { opacity } from '@/theme/motion';
 interface Props {
   title: string;
   onBack: () => void;
-  /** 오른쪽 액션(`···`, `나중에 다시 작성` 등). 편집 화면에는 `···` 를 두지 않는다(명세 §1.2). */
+  /** 오른쪽 액션(`···` 등). 편집 화면에는 `···` 를 두지 않는다(명세 §1.2). */
   right?: React.ReactNode;
 }
 
