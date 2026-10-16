@@ -24,7 +24,6 @@ import { Text } from '@/components/ui/Text';
 import { toast } from '@/components/ui/Toast';
 import { Touchable } from '@/components/ui/Touchable';
 import { useAuthStore } from '@/stores/authStore';
-import { useReportCompletionStore } from '@/stores/reportCompletionStore';
 import { useReportStore } from '@/stores/reportStore';
 import { useTripStore } from '@/stores/tripStore';
 import { safeBack } from '@/utils/backNavigation';
@@ -32,12 +31,24 @@ import { captureOverviewMap } from '@/utils/captureView';
 import { fmtMonthDay, fmtTime } from '@/utils/datetime';
 import { isFieldReportEmpty } from '@/utils/fieldReport';
 import { useOverviewMapView } from '@/utils/overviewMapView';
-import { reportEditHref } from '@/utils/reportEntry';
+import { confirmDeleteReport, reportEditHref } from '@/utils/reportEntry';
 import { reportFileName, saveReportFile, shareReportFile, type ReportFileFormat } from '@/utils/reportFile';
-import { tripTitle } from '@/utils/tripFormat';
+import { defaultTripTitle, tripTitle } from '@/utils/tripFormat';
+import type { Trip } from '@/types/entities';
 import { c2, radius2, space } from '@/theme/v2';
 
 type FileAction = 'share' | 'save';
+
+// 위치도 캡처 전 타일을 기다리는 시간(최대 3초).
+const TILE_WAIT_MS = 250;
+const TILE_WAIT_STEPS = 12;
+
+/** '{외근 제목} · 10월 8일 외근'. 제목이 기본 제목('10월 8일 외근')이면 한 번만. */
+function tripLinkLabel(trip: Trip): string {
+  const title = tripTitle(trip);
+  const day = defaultTripTitle(trip.startedAt);
+  return title === day ? day : `${title} · ${day}`;
+}
 
 // 9-5·9-15 형식 줄. HWPX 는 서버에 만드는 API 가 없어 숨긴다(백로그 '2차 개편 요청' I).
 const FORMATS: { key: ReportFileFormat; badge: string; color: string; title: string; sub: string }[] = [
@@ -74,8 +85,14 @@ export default function ReportDetail() {
 
   // 위치도 캡처(백로그 §20) — 문서를 만들기 직전에 이 카드를 찍어 올린다. 타일이 그려지기 전엔 찍지 않는다. 웹은 못 찍는다.
   const mapRef = useRef<View>(null);
-  const [tilesReady, setTilesReady] = useState(false);
+  // 구도가 바뀌면 지도를 다시 띄우니 타일도 다시 기다린다.
+  const tilesReady = useRef(false);
+  const viewKey = view ? `${view.lat},${view.lng},${view.level}` : String(view);
+  useEffect(() => {
+    tilesReady.current = false;
+  }, [viewKey, markers.length]);
   const moreRef = useRef<View>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
   // 시트가 내려가는 동안에도 제목이 바뀌지 않게 종류는 따로 둔다.
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheet, setSheetKind] = useState<FileAction>('share');
@@ -115,16 +132,23 @@ export default function ReportDetail() {
     );
   }
 
-  const syncOverviewMap = async () => {
-    if (Platform.OS === 'web' || markers.length === 0 || !tilesReady) return;
+  // 위치도를 찍어 올린다. 실패하면 문서는 지난번 위치도(또는 없이)로 만들어지니 알려 준다. 웹은 찍을 수 없어 건너뛴다.
+  const syncOverviewMap = async (): Promise<boolean> => {
+    if (Platform.OS === 'web' || markers.length === 0) return true;
+    for (let i = 0; i < TILE_WAIT_STEPS && !tilesReady.current; i += 1) {
+      await new Promise((r) => setTimeout(r, TILE_WAIT_MS));
+    }
+    if (!tilesReady.current) return false;
     const file = await captureOverviewMap(mapRef);
-    if (file) await useReportStore.getState().uploadOverviewPhoto(report.id, file);
+    if (!file) return false;
+    const r = await useReportStore.getState().uploadOverviewPhoto(report.id, file);
+    return r.ok;
   };
 
   const runFile = async (format: ReportFileFormat, action: FileAction) => {
     if (busy) return;
     setBusy(format);
-    await syncOverviewMap();
+    const mapOk = await syncOverviewMap();
     let url: string | undefined;
     if (format === 'docx') {
       const r = await useReportStore.getState().exportWord(report.id, true);
@@ -154,45 +178,46 @@ export default function ReportDetail() {
     setBusy(null);
     if (res.ok) {
       setSheetOpen(false);
-      if (action === 'save' && Platform.OS === 'android') toast('휴대폰에 저장했어요');
+      if (!mapOk) void notice('위치도를 새로 넣지 못했어요', '문서에는 전에 넣은 위치도가 들어갔어요. 다시 해 주세요.');
+      else if (action === 'save' && Platform.OS === 'android') toast('휴대폰에 저장했어요');
       return;
     }
-    if (!res.cancelled) await notice(action === 'share' ? '공유하지 못했어요' : '내려받지 못했어요', res.error);
+    if (res.cancelled) return;
+    const title = action === 'share' ? '공유하지 못했어요' : '내려받지 못했어요';
+    if (res.fallback) {
+      // 웹: [파일 열기]를 누른 그 순간에 연다(사용자 동작 안에서만 허용).
+      await confirm({ title, message: res.error, cancelLabel: '닫기', confirmLabel: '파일 열기', onConfirmPress: res.fallback });
+      return;
+    }
+    await notice(title, res.error);
   };
 
-  const openMore = () =>
+  const openMore = () => {
+    setMenuOpen(true);
     showPopoverMenu(
       moreRef.current,
       [
         { label: '공유', icon: 'share', onPress: () => openSheet('share') },
         { label: '내려받기', icon: 'download', onPress: () => openSheet('save') },
       ],
-      { width: 216 },
+      // Figma 9-4: 뒤를 옅게 어둡게, ⋯ 에 회색 원.
+      { width: 216, dim: true, onClose: () => setMenuOpen(false) },
     );
+  };
 
   const remove = async () => {
-    const ok = await confirm({
-      title: '보고서를 삭제할까요?',
-      message: '외근 기록은 그대로 남아요.',
-      confirmLabel: '삭제',
-      destructive: true,
-    });
-    if (!ok) return;
-    setDeleting(true);
-    const r = await useReportStore.getState().remove(report.id);
-    if (!r.ok && !/이미 삭제|찾을 수 없/.test(r.error)) {
+    const done = await confirmDeleteReport(report.id, () => setDeleting(true));
+    if (!done) {
       setDeleting(false);
-      await notice('보고서를 삭제하지 못했어요', r.error);
       return;
     }
-    useReportCompletionStore.getState().forget(report.id);
     // 스택을 첫 화면(9)으로 되돌린다.
     goToTabRoot('reports');
   };
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      <Header onBack={() => safeBack(router)} onMore={isOwner ? openMore : undefined} moreRef={moreRef} />
+      <Header onBack={() => safeBack(router)} onMore={isOwner ? openMore : undefined} moreRef={moreRef} moreOpen={menuOpen} />
       <ScrollView style={styles.flex} contentContainerStyle={styles.scroll}>
         <Text v2="title.l" accessibilityRole="header">
           {report.title}
@@ -206,7 +231,7 @@ export default function ReportDetail() {
           >
             <Icon name="briefcase-simple" size={16} color={c2.text.link} />
             <Text v2="bodyS.semibold" tone="link" numberOfLines={1} style={styles.shrink}>
-              {`${tripTitle(trip)} · ${fmtMonthDay(trip.startedAt)} 외근`}
+              {tripLinkLabel(trip)}
             </Text>
             <Icon name="chevron-right" size={14} color={c2.text.link} />
           </Touchable>
@@ -218,7 +243,9 @@ export default function ReportDetail() {
         {markers.length > 0 ? (
           <>
             <View ref={mapRef} collapsable={false} style={styles.map}>
-              <ReportOverviewMap markers={markers} view={view} onTilesLoaded={() => setTilesReady(true)} />
+              <ReportOverviewMap markers={markers} view={view} onTilesLoaded={() => {
+                  tilesReady.current = true;
+                }} />
             </View>
             <Text v2="caption.regular" tone="tertiary" style={styles.mapCaption}>
               {`위치도 · 현장 ${markers.length}곳 (문서 첫 장에 들어가요)`}
@@ -271,14 +298,24 @@ export default function ReportDetail() {
   );
 }
 
-function Header({ onBack, onMore, moreRef }: { onBack: () => void; onMore?: () => void; moreRef?: React.RefObject<View | null> }) {
+function Header({
+  onBack,
+  onMore,
+  moreRef,
+  moreOpen,
+}: {
+  onBack: () => void;
+  onMore?: () => void;
+  moreRef?: React.RefObject<View | null>;
+  moreOpen?: boolean;
+}) {
   return (
     <View style={styles.header}>
       <Touchable onPress={onBack} accessibilityRole="button" accessibilityLabel="보고서 목록으로" style={styles.headerBtn}>
         <Icon name="arrow-left" size={24} color={c2.text.primary} />
       </Touchable>
       {onMore ? (
-        <Touchable ref={moreRef} onPress={onMore} accessibilityRole="button" accessibilityLabel="더보기" style={styles.headerBtn}>
+        <Touchable ref={moreRef} onPress={onMore} accessibilityRole="button" accessibilityLabel="더보기" style={[styles.headerBtn, moreOpen && styles.headerBtnOpen]}>
           <Icon name="more" size={24} color={c2.text.primary} />
         </Touchable>
       ) : null}
@@ -394,6 +431,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   headerBtn: { width: 44, height: 44, borderRadius: radius2.full, alignItems: 'center', justifyContent: 'center' },
+  headerBtnOpen: { backgroundColor: c2.bg.muted },
   scroll: { paddingHorizontal: space[20], paddingTop: space[4], paddingBottom: space[24] },
   tripLink: { flexDirection: 'row', alignItems: 'center', gap: space[4], alignSelf: 'flex-start', minHeight: 24, marginTop: space[4] },
   written: { marginTop: space[2] },

@@ -5,16 +5,14 @@ import { SafeScreen } from '@/components/SafeScreen';
 import { Icon } from '@/components/icons';
 import { goToTabRoot } from '@/components/shell/tabNav';
 import { Button2 } from '@/components/ui/Button2';
-import { confirm, notice } from '@/components/ui/ConfirmDialog';
 import { Text } from '@/components/ui/Text';
 import { Touchable } from '@/components/ui/Touchable';
 import { useAuthStore } from '@/stores/authStore';
 import { useMiniBarInset } from '@/stores/bottomChromeStore';
-import { useReportCompletionStore } from '@/stores/reportCompletionStore';
 import { useReportStore } from '@/stores/reportStore';
 import { useTripStore } from '@/stores/tripStore';
 import { fmtMonthDay } from '@/utils/datetime';
-import { reportDetailHref, reportEditHref } from '@/utils/reportEntry';
+import { confirmDeleteReport, reportDetailHref, reportEditHref } from '@/utils/reportEntry';
 import { useReportStates, type TripReportState } from '@/utils/reportStatus';
 import { c2, radius2, space } from '@/theme/v2';
 import type { Report } from '@/types/entities';
@@ -58,21 +56,7 @@ export default function ReportsIndex() {
   const drafts = mine.filter((r) => states.get(r.id)?.stage === 'draft');
   const rest = mine.filter((r) => states.get(r.id)?.stage !== 'draft');
 
-  const remove = async (r: Report) => {
-    const ok = await confirm({
-      title: '보고서를 삭제할까요?',
-      message: '외근 기록은 그대로 남아요.',
-      confirmLabel: '삭제',
-      destructive: true,
-    });
-    if (!ok) return;
-    const res = await useReportStore.getState().remove(r.id);
-    if (!res.ok) {
-      await notice('보고서를 삭제하지 못했어요', res.error);
-      return;
-    }
-    useReportCompletionStore.getState().forget(r.id);
-  };
+  const remove = (r: Report) => void confirmDeleteReport(r.id);
 
   const loading = !listLoaded && listStatus !== 'error';
   const failed = !listLoaded && listStatus === 'error';
@@ -106,7 +90,7 @@ export default function ReportsIndex() {
             <Text v2="title.s" style={styles.emptyTitle}>
               아직 만든 보고서가 없어요
             </Text>
-            <Text v2="bodyS.regular" tone="tertiary" style={styles.emptyText}>
+            <Text v2="bodyM.regular" tone="tertiary" style={styles.emptyText}>
               {'외근을 마친 뒤 외근 상세에서\n보고서를 작성할 수 있어요.'}
             </Text>
             <Button2 variant="outline" size="M" onPress={() => goToTabRoot('trips')} style={styles.emptyBtn}>
@@ -129,7 +113,7 @@ export default function ReportsIndex() {
                       state={states.get(r.id)}
                       onOpen={() => router.push(reportDetailHref(r.id) as never)}
                       onContinue={() => router.push(reportEditHref(r.id, 'create') as never)}
-                      onDelete={() => void remove(r)}
+                      onDelete={() => remove(r)}
                     />
                   ))}
                 </View>
@@ -245,15 +229,16 @@ const styles = StyleSheet.create({
   },
   // 9-1: 빈 화면 안내는 위아래 가운데보다 조금 위(탭 바 위 여백만큼).
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingBottom: space[32] * 2 },
+  // Figma 9-1: 64 둥근 사각(모서리 20).
   emptyIcon: {
     width: 64,
     height: 64,
-    borderRadius: radius2.full,
+    borderRadius: radius2['2xl'],
     backgroundColor: c2.bg.muted,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  emptyTitle: { marginTop: space[16] },
+  emptyTitle: { marginTop: space[16] + space[2] },
   emptyText: { marginTop: space[8], textAlign: 'center' },
   emptyBtn: { marginTop: space[24] },
 });

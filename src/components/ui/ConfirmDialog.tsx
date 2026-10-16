@@ -20,6 +20,11 @@ export interface ConfirmOptions {
    * 함께 사라지는 것이 있을 때만 쓴다. message 는 그 아래 회색 글로 남는다.
    */
   warning?: string;
+  /**
+   * 확인 버튼을 누른 그 순간(같은 이벤트 안)에 부른다 — 웹에서 새 탭 열기·내려받기처럼 사용자 동작 안에서만
+   * 허용되는 일을 할 때. resolve 는 닫힘 애니메이션 뒤라 브라우저가 막을 수 있다.
+   */
+  onConfirmPress?: () => void;
 }
 
 interface Pending extends ConfirmOptions {
@@ -136,7 +141,10 @@ export function ConfirmDialogHost() {
               <Button2
                 size="M"
                 variant={pending.destructive ? 'danger' : 'primary'}
-                onPress={() => finish(true)}
+                onPress={() => {
+                  pending.onConfirmPress?.();
+                  finish(true);
+                }}
                 style={styles.btn}
               >
                 {pending.confirmLabel ?? '확인'}

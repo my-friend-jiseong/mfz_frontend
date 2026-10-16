@@ -475,6 +475,13 @@ function Header({
 function ReportFooter({ tripId, state }: { tripId: string; state: TripReportState }) {
   const router = useRouter();
   const [creating, setCreating] = useState(false);
+  const mountedRef = useRef(true);
+  useEffect(
+    () => () => {
+      mountedRef.current = false;
+    },
+    [],
+  );
   const report = state.report;
   const listFailed = useReportStore((s) => s.listStatus === 'error' && !s.listLoaded);
   // 상태를 모르는 동안엔 버튼을 두지 않는다 — 작성 전으로 잘못 보이면 같은 외근에 보고서가 둘 생긴다.
@@ -500,8 +507,10 @@ function ReportFooter({ tripId, state }: { tripId: string; state: TripReportStat
     // 보고서를 만들고 9-2 보고서 작성을 연다(reportEntry). 만드는 동안 버튼을 돌린다.
     const write = async () => {
       setCreating(true);
-      await openReportForTrip(router, tripId);
-      setCreating(false);
+      const navigated = await openReportForTrip(router, tripId);
+      // 이동한 틱에는 이 화면 상태를 바꾸지 않는다(Fabric 크래시 이력) — 다음 프레임에, 아직 있을 때만.
+      if (navigated) requestAnimationFrame(() => mountedRef.current && setCreating(false));
+      else if (mountedRef.current) setCreating(false);
     };
     return (
       <BottomActionBar safeArea={false} style={styles.footer}>

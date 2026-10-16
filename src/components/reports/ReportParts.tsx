@@ -29,9 +29,13 @@ export const SLOT_CAPTION = {
   after: 'afterPhotoCaption',
 } as const satisfies Record<Slot, keyof FieldReport>;
 
-/** 보고서 위치도 지도 크기(Figma 9-2·9-3 Map 350×152). 9-7 구도 틀도 이 비율로 그린다 — 캡처가 이 카드를 찍는다. */
+/**
+ * 보고서 위치도 카드(Figma 9-2·9-3 Map 350×152 = 화면 폭 − 좌우 20). 9-7 구도 틀도 이 크기로 그린다 — 캡처가 이 카드를 찍는다.
+ * 자동 맞춤 여백도 9-7 과 같이 쓴다(위 48: 핀이 좌표 위로 44 솟는다).
+ */
 export const OVERVIEW_MAP_HEIGHT = 152;
-export const OVERVIEW_MAP_RATIO = 152 / 350;
+export const OVERVIEW_MAP_SIDE = 20;
+export const OVERVIEW_FIT_PADDING: [number, number, number, number] = [48, 24, 12, 24];
 
 export const fieldName = (f: Pick<Field, 'name' | 'address'> | undefined) =>
   f?.name?.trim() || f?.address || '알 수 없는 현장';
@@ -126,6 +130,8 @@ export function ReportOverviewMap({
           markers={markers}
           interactive={false}
           fitToMarkers={!view}
+          fitPadding={OVERVIEW_FIT_PADDING}
+          holdCenterOnResize
           center={view ? { lat: view.lat, lng: view.lng } : undefined}
           initialLevel={view?.level}
           onTilesLoaded={onTilesLoaded}

@@ -50,10 +50,14 @@ export const c2 = {
     photoBadge: 'rgba(15, 23, 42, 0.7)',
     // 지도 위 안내 알약(4-3 '현장 핀을 누르거나…', 5-5 '지도를 움직여…'). Figma 에 변수 없이 ink 0.78.
     hint: 'rgba(15, 23, 42, 0.78)',
+    // 8-8 사진 위치 지정의 '지도를 움직여…' 알약. Figma 에 변수 없이 ink 0.82.
+    hintStrong: 'rgba(15, 23, 42, 0.82)',
     // 5-5 위치 보정 중 핀 아래 그림자 타원. Figma 에 변수 없이 ink 0.28.
     pinShadow: 'rgba(15, 23, 42, 0.28)',
     // 8-6 기록 메뉴 뒤 어둡게. Figma 에 변수 없이 ink 0.38.
     menuScrim: 'rgba(15, 23, 42, 0.38)',
+    // 9-4 더보기 메뉴 뒤 아주 옅게(탭 바까지). Figma '메뉴 닫기' ink 0.06.
+    popoverScrim: 'rgba(15, 23, 42, 0.06)',
   },
   border: {
     default: palette.slate[200],
@@ -152,6 +156,8 @@ export const type2 = {
   'title.m': t(20, 28, 'heavy', -0.4),
   'title.s': t(19, 27, 'heavy', -0.4),
   'title.xs': t(18, 26, 'heavy', -0.3),
+  // 8-7·8-8 지도 위 제목 알약('사진 7장'). 텍스트 스타일 없이 17 ExtraBold 로 박혀 있다.
+  'title.pill': t(17, 22, 'heavy'),
   heading: t(18, 26, 'bold', -0.3),
   button: t(17, 24, 'bold'),
   'bodyL.bold': t(16, 22, 'bold'),

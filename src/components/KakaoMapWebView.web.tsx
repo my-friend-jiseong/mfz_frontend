@@ -219,6 +219,8 @@ interface Props {
   onLongPress?: (p: { lat: number; lng: number }) => void;
   // 지도 뷰(center+level)가 정착할 때마다 보고 — 상위가 기억해 재마운트 시 복원에 사용.
   onViewChange?: (view: { lat: number; lng: number; level: number }) => void;
+  // 크기가 바뀌면(첫 레이아웃) center 로 다시 맞춘다 — 사용자가 끌기 전까지만. 저장한 구도로 그리는 보고서 위치도 카드 전용.
+  holdCenterOnResize?: boolean;
   // 네이티브 전용 — shape 만 맞춘다(호출하지 않음). 안드로이드는 부모 ScrollView 가 지도
   // 드래그를 가로채 이 신호로 스크롤을 잠그지만, 웹은 카카오 SDK 가 컨테이너에
   // touch-action:none 을 걸어 경합이 없다. 여기서 호출하면 오히려 웹 스크롤이 잠긴다.
@@ -406,6 +408,7 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
       onMarkerPress,
       onLongPress,
       onViewChange,
+      holdCenterOnResize = false,
     }: Props,
     ref,
   ) {
@@ -524,6 +527,8 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
   centerRef.current = center;
   const fitToMarkersRef = useRef(fitToMarkers);
   fitToMarkersRef.current = fitToMarkers;
+  const holdCenterRef = useRef(holdCenterOnResize);
+  holdCenterRef.current = holdCenterOnResize;
   const fitRef = useRef<() => void>(() => {});
   fitRef.current = () => {
     if (!mapRef.current || !fitToMarkers || markers.length === 0) return;
@@ -564,10 +569,12 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
       last = key;
       map.relayout();
       fitRef.current();
-      // 중심을 정해 띄운 지도(보고서 위치도 구도)는 relayout 이 왼쪽 위를 붙잡아 중심이 어긋난다 — 사용자가 끌기 전이면 다시 맞춘다.
+      // holdCenterOnResize: relayout 이 왼쪽 위를 붙잡아 중심이 어긋난다 — 사용자가 끌기 전이면 center 로 다시 맞춘다.
       const c = centerRef.current;
       const k = getKakao();
-      if (!fitToMarkersRef.current && !userMovedRef.current && c && k) map.setCenter(new k.maps.LatLng(c.lat, c.lng));
+      if (holdCenterRef.current && !fitToMarkersRef.current && !userMovedRef.current && c && k) {
+        map.setCenter(new k.maps.LatLng(c.lat, c.lng));
+      }
     });
     ro.observe(containerRef.current);
     return () => ro.disconnect();

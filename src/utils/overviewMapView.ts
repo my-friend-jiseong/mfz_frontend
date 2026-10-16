@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
+import { useReportStore } from '@/stores/reportStore';
 
 // 보고서 위치도의 사용자 지정 구도(center+level, 9-7). 없으면 위치도는 현장 전체 자동 맞춤이다.
 // 서버에 저장할 필드가 없어 기기에만 둔다(backend-backlog §41) — 문서에 들어가는 건 내보내기 때
@@ -63,3 +64,8 @@ export function useOverviewMapView(reportId: string): OverviewMapView | null | u
   }, [reportId]);
   return view;
 }
+
+// 로그아웃(reportStore.clearAll → generation 증가)하면 메모리의 구도를 비운다. 기기 저장은 보고서 id 로만 찾으니 남겨 둔다.
+useReportStore.subscribe((s, prev) => {
+  if (s.generation !== prev.generation) useOverviewMapViewStore.setState({ views: {} });
+});

@@ -79,7 +79,8 @@ export default function FieldReportScreen() {
   }, [fieldId]);
   const tripId = report?.tripId ?? null;
   useEffect(() => {
-    if (tripId && useVisitStore.getState().byTrip(tripId).length === 0) void useTripStore.getState().loadDetail(tripId);
+    // 방문 캐시는 다른 화면이 일부만 채워 두었을 수 있다 — 이 외근의 방문을 늘 다시 받는다.
+    if (tripId) void useTripStore.getState().loadDetail(tripId);
   }, [tripId]);
 
   // 사진·메모를 보여 줄 방문. 9-8 은 이 외근에서 이 현장에 들른 방문, 없으면(다른 외근에서 넣은 현장) 가장 최근 방문.
@@ -214,10 +215,9 @@ export default function FieldReportScreen() {
       }
       const err = await uploadFiles(r.fieldReportId);
       if (err) {
-        // 현장 보고는 이미 들어갔다 — 닫고 9-6 에서 다시 채우게 한다.
-        busy.current = false;
-        if (mounted.current) safeBack(router);
-        void notice('사진 일부를 올리지 못했어요', '현장은 보고서에 넣었어요. 현장 행을 눌러 사진을 다시 넣어 주세요.');
+        // 현장 보고는 이미 들어갔다 — 알린 뒤 닫고 9-6 에서 다시 채우게 한다.
+        await notice('사진 일부를 올리지 못했어요', '현장은 보고서에 넣었어요. 현장 행을 눌러 사진을 다시 넣어 주세요.');
+        done();
         return;
       }
       done();
@@ -343,9 +343,9 @@ export default function FieldReportScreen() {
                         onPress={() => onPhotoPress(p)}
                         accessibilityRole="button"
                         accessibilityLabel={`${fmtTime(p.createdAt)} 사진${short ? `, ${short} 칸에 넣음` : ''}`}
-                        style={styles.thumbBtn}
+                        style={[styles.thumbBtn, used && styles.thumbUsed]}
                       >
-                        <View style={[styles.thumb, used && styles.thumbUsed]}>
+                        <View style={styles.thumb}>
                           <Image source={{ uri: toAbsoluteFileUrl(p.fileUrl) ?? undefined }} style={StyleSheet.absoluteFill} resizeMode="cover" />
                           <View style={styles.timeBadge}>
                             <Text v2="tiny" tone="inverse">
@@ -384,7 +384,7 @@ export default function FieldReportScreen() {
             style={styles.footer}
             secondary={
               adding ? undefined : (
-                <Button2 variant="danger" onPress={() => void removeFromReport()} disabled={saving}>
+                <Button2 variant="danger" onPress={() => void removeFromReport()} disabled={saving} style={styles.removeBtn}>
                   보고서에서 빼기
                 </Button2>
               )
@@ -488,7 +488,7 @@ const styles = StyleSheet.create({
   thumbs: { flexDirection: 'row', flexWrap: 'wrap', gap: space[10], marginTop: space[14] },
   thumbBtn: { width: 64, height: 64 },
   thumb: { width: 64, height: 64, borderRadius: radius2.md, overflow: 'hidden', backgroundColor: c2.bg.placeholder },
-  // Figma 9-8: 칸에 넣은 사진은 흐리게(0.55) + 오른쪽 위 단계 배지.
+  // Figma 9-8: 칸에 넣은 사진은 오른쪽 위 단계 배지와 함께 흐리게(0.55).
   thumbUsed: { opacity: 0.55 },
   usedBadge: {
     position: 'absolute',
@@ -505,4 +505,6 @@ const styles = StyleSheet.create({
   memoLabel: { marginBottom: space[6] },
   memo: { paddingHorizontal: space[14], paddingVertical: space[12], borderRadius: radius2.lg, backgroundColor: c2.bg.subtle },
   footer: { paddingTop: space[12], borderTopColor: c2.border.default },
+  // Figma 9-8 하단: [보고서에서 빼기] 134.9 · [저장] 215.1.
+  removeBtn: { width: 135, paddingHorizontal: space[8] },
 });

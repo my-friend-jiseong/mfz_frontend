@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { InteractionManager, ScrollView, StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '@/components/icons';
@@ -16,7 +16,7 @@ import { ReportModalHeader } from '@/components/reports/ReportModalHeader';
 import { AppSheet } from '@/components/ui/AppSheet';
 import { BottomActionBar } from '@/components/ui/BottomActionBar';
 import { Button2 } from '@/components/ui/Button2';
-import { confirm } from '@/components/ui/ConfirmDialog';
+import { confirm, notice } from '@/components/ui/ConfirmDialog';
 import { FieldMessage, TextField2 } from '@/components/ui/FormField2';
 import { KeyboardAvoid } from '@/components/ui/KeyboardAvoid';
 import { Text } from '@/components/ui/Text';
@@ -54,7 +54,7 @@ interface Candidate {
  * - [저장]: 작성 전 현장이 있으면 9-12 확인. 저장하면 빈 현장은 빈 채로 작성 완료(reportCompletionStore).
  */
 export default function ReportEditScreen() {
-  const { id, mode: modeParam } = useLocalSearchParams<{ id: string; mode?: string }>();
+  const { id, mode: modeParam, failed } = useLocalSearchParams<{ id: string; mode?: string; failed?: string }>();
   const reportId = id ?? '';
   const mode: 'create' | 'edit' = modeParam === 'edit' ? 'edit' : 'create';
   const router = useRouter();
@@ -112,9 +112,25 @@ export default function ReportEditScreen() {
   const tripVisits = useVisitStore((s) => s.visits);
   const fields = useFieldStore((s) => s.fields);
   useEffect(() => {
-    // 외근 방문을 아직 안 받았으면(목록에서 바로 연 경우) 받아 둔다 — 9-10 후보의 첫 묶음.
-    if (tripId && useVisitStore.getState().byTrip(tripId).length === 0) void useTripStore.getState().loadDetail(tripId);
+    // 9-10 후보의 첫 묶음 — 방문 캐시는 다른 화면이 일부만 채워 두었을 수 있어 늘 외근 상세를 받는다.
+    if (tripId) void useTripStore.getState().loadDetail(tripId);
   }, [tripId]);
+  useEffect(() => {
+    // 바로 열거나 새로고침하면 현장 목록이 비어 '최근 방문한 다른 현장'이 안 나온다.
+    const fs = useFieldStore.getState();
+    if (fs.fields.length === 0) void fs.hydrate();
+  }, []);
+
+  // 만들 때 빠진 현장이 있으면(reportEntry ?failed=N) 화면이 다 열린 뒤 한 번 알린다.
+  useEffect(() => {
+    const n = Number(failed);
+    if (!n) return;
+    const task = InteractionManager.runAfterInteractions(() => {
+      router.setParams({ failed: undefined } as never);
+      void notice(`현장 ${n}곳을 넣지 못했어요`, '[현장 추가]로 다시 넣어 주세요.');
+    });
+    return () => task.cancel();
+  }, [failed, router]);
   const candidates = useMemo(() => {
     const inReport = new Set(rows.map((r) => r.fr.fieldId));
     const visits = tripId
@@ -242,6 +258,7 @@ export default function ReportEditScreen() {
             maxLength={TITLE_MAX}
             invalid={!!error && !title.trim()}
             accessibilityLabel="보고서 제목"
+            style={!error ? styles.titleInput : undefined}
           />
           {error ? <FieldMessage message={error} style={styles.message} /> : null}
 
@@ -363,6 +380,8 @@ const styles = StyleSheet.create({
   missing: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   scroll: { paddingHorizontal: space[20], paddingTop: space[8], paddingBottom: space[24] },
   label: { marginBottom: space[8] },
+  // Figma 9-2·9-6: 제목 칸은 파란 테두리(편집 중인 칸).
+  titleInput: { borderWidth: 1, borderColor: c2.border.brand },
   message: { marginTop: space[8] },
   sectionGap: { marginTop: space[20] },
   sectionHead: { height: 36, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

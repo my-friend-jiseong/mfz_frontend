@@ -92,6 +92,8 @@ interface Props {
   startPoint?: { lat: number; lng: number } | null;
   // 지도 뷰(center+level)가 정착할 때마다 보고 — 상위가 기억해 재마운트 시 복원에 사용.
   onViewChange?: (view: { lat: number; lng: number; level: number }) => void;
+  // 웹 전용(KakaoMapWebView.web): 크기가 바뀌면 center 로 다시 맞춘다. 네이티브는 WebView 가 처음부터 제 크기라 쓰지 않는다.
+  holdCenterOnResize?: boolean;
   // true 면 모든 마커가 한 화면에 들어오도록 자동 프레이밍 (center 무시). 위치도 미리보기용.
   fitToMarkers?: boolean;
   // fitToMarkers 로 맞출 때 핀과 함께 화면에 넣을 점(체크인 카드의 가까운 내 위치).

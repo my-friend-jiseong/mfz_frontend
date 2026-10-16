@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Report } from '@/types/entities';
-import { reports as reportsApi, localizeError, errorCode } from '@/api';
+import { reports as reportsApi, localizeError, errorCode, ApiError } from '@/api';
 import type {
   ReportListItem,
   ReportDetailResponse,
@@ -10,8 +10,6 @@ import type {
   FieldReportInput,
 } from '@/api';
 import { useAuthStore } from './authStore';
-import { useVisitStore } from './visitStore';
-import { photosToSlots } from '@/utils/visitRecord';
 
 type CreateResult =
   | { ok: true; report: Report }
@@ -25,6 +23,8 @@ export type CreateWithScaffoldResult =
       report: Report;
       attemptedFieldIds: string[];
       failedFieldIds: string[];
+      /** 실패한 현장별 서버 오류 코드(개발 로그용). */
+      failures: { fieldId: string; code: string | null }[];
       // 스캐폴드 직후 상세(detail) 순서 기준 첫 현장 보고 id — 마법사 진입점.
       // 호출 측이 detailCache 를 직접 피킹하지 않도록 결과로 전달. loadDetail 실패
       // 또는 스캐폴드 0건이면 null (호출 측은 상세 화면으로 폴백).
@@ -62,11 +62,11 @@ interface ReportState {
   // 보고서 생성 + 그 외근 visits 별 빈 FieldReport 자동 스캐폴드 (결정 §3).
   // visits 의 fieldId 가 빈 string 이면 skip (timeline.fieldId 누락 — backlog §16).
   // 부분 실패 시 attempted/failed 카운트 반환, 호출 측이 사용자 안내 (F4).
-  // 명세 v2 FE-RPT-02a — 사용자가 정한 순서대로 현장 보고를 만든다. 각 방문의 단계별 사진을
-  // 슬롯에 미리 채운다(예전엔 from-trip 이 현장 사진 phase 로 서버에서 채웠다).
+  // 정한 순서대로 빈 현장 보고를 만든다. 사진은 미리 채우지 않는다 — 2차 체크인 사진엔 단계가 없어
+  // 9-8 에서 방문 사진을 골라 넣는다(예전 단계별 사진 미리 채우기는 일부 방문만 채워져 없앴다).
   createWithVisitScaffold: (
     body: CreateReportBody,
-    items: ReadonlyArray<{ fieldId: string; visitIds?: string[] }>,
+    items: ReadonlyArray<{ fieldId: string }>,
   ) => Promise<CreateWithScaffoldResult>;
   update: (id: string, body: UpdateReportBody) => Promise<GenericResult>;
   // field_reports → Word 생성/재생성. 성공 시 outputFileUrl 갱신 (다운로드 버튼 노출).
@@ -274,38 +274,17 @@ export const useReportStore = create<ReportState>((set, get) => ({
       return true;
     });
 
-    // 방문 사진 → 슬롯 prefill 재료. 병렬로 받아도 순서와 무관하다.
-    const visitStore = useVisitStore.getState();
-    await Promise.all(
-      targets.flatMap((it) =>
-        (it.visitIds ?? []).map((vid) =>
-          body.tripId && !visitStore.photosByVisit[vid]
-            ? visitStore.loadPhotos(body.tripId, vid)
-            : Promise.resolve(true),
-        ),
-      ),
-    );
-    // 단계별 최신 사진 — 같은 현장을 여러 번 방문했으면 모든 방문의 사진 중에서 고른다.
-    // 고르는 규칙은 방문 수정 폼과 같은 photosToSlots 하나.
-    const photosOf = (visitIds?: string[]) => {
-      const byVisit = useVisitStore.getState().photosByVisit;
-      const slots = photosToSlots((visitIds ?? []).flatMap((vid) => byVisit[vid] ?? []));
-      return {
-        beforePhotoUrl: slots.before?.uri,
-        pendingPhotoUrl: slots.during?.uri,
-        afterPhotoUrl: slots.after?.uri,
-      };
-    };
-
     // 순차 호출 — 병렬이면 도착 순서가 뒤섞여 보고서의 현장 순서가 사용자가 정한 것과 달라진다.
-    const failedFieldIds: string[] = [];
+    const failures: { fieldId: string; code: string | null }[] = [];
     for (const it of targets) {
       try {
-        await reportsApi.addFieldReport(created.id, { fieldId: it.fieldId, ...photosOf(it.visitIds) });
-      } catch {
-        failedFieldIds.push(it.fieldId);
+        await reportsApi.addFieldReport(created.id, { fieldId: it.fieldId });
+      } catch (e) {
+        failures.push({ fieldId: it.fieldId, code: errorCode(e) });
       }
     }
+    if (__DEV__ && failures.length > 0) console.warn('[report] 현장 보고 생성 실패', failures);
+    const failedFieldIds = failures.map((f) => f.fieldId);
     // loadDetail 실패는 보고서/카드 생성 자체엔 영향 X — 별도 catch 후 success 유지 (G6).
     let detail: Report | null = null;
     try {
@@ -319,6 +298,7 @@ export const useReportStore = create<ReportState>((set, get) => ({
       report: created,
       attemptedFieldIds: targets.map((t) => t.fieldId),
       failedFieldIds,
+      failures,
       firstFieldReportId: detail?.fieldReports?.[0]?.id ?? null,
     };
   },
@@ -388,18 +368,23 @@ export const useReportStore = create<ReportState>((set, get) => ({
 
   remove: async (id) => {
     set({ busy: true });
-    try {
-      await reportsApi.remove(id);
+    const drop = () =>
       set((s) => ({
         reports: s.reports.filter((x) => x.id !== id),
-        detailCache: Object.fromEntries(
-          Object.entries(s.detailCache).filter(([k]) => k !== id),
-        ),
+        detailCache: Object.fromEntries(Object.entries(s.detailCache).filter(([k]) => k !== id)),
         detailStatus: { ...s.detailStatus, [id]: 'missing' },
         busy: false,
       }));
+    try {
+      await reportsApi.remove(id);
+      drop();
       return { ok: true };
     } catch (e) {
+      // 이미 지워진 보고서(404)는 지운 것으로 — 목록에 남겨 두면 다시 눌러도 계속 실패한다.
+      if (e instanceof ApiError && e.status === 404) {
+        drop();
+        return { ok: true };
+      }
       set({ busy: false });
       return { ok: false, error: describeError(e) };
     }

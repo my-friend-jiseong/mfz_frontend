@@ -30,6 +30,16 @@ interface Pending {
   anchor: Rect;
   items: PopoverItem[];
   width: number;
+  dim: boolean;
+  onClose?: () => void;
+}
+
+export interface PopoverOptions {
+  width?: number;
+  /** 뒤를 아주 옅게 어둡게(9-4). 3-4·5-4·5-7 은 어둡게 하지 않는다. */
+  dim?: boolean;
+  /** 메뉴가 닫히기 시작할 때(항목을 골랐거나 바깥을 눌렀을 때) — 여는 버튼의 '열림' 모양을 끄는 데 쓴다. */
+  onClose?: () => void;
 }
 
 let open: ((p: Pending) => void) | null = null;
@@ -41,11 +51,17 @@ let open: ((p: Pending) => void) | null = null;
  *   <MapButton ref={moreRef} icon="more" accessibilityLabel="더보기"
  *     onPress={() => showPopoverMenu(moreRef.current, [{ label: '외근 삭제', icon: 'trash', tone: 'danger', onPress }])} />
  * width 는 메뉴마다 Figma 값이 다르다: 기본 202(3-4·5-7), 9-4 는 216, 5-4 는 238.
+ * 9-4 만 뒤를 옅게 어둡게(dim) 하고 ⋯ 버튼에 회색 원을 둔다(onClose 로 끈다). 3-4·5-4 Figma 엔 둘 다 없다.
  */
-export function showPopoverMenu(anchor: Measurable | null, items: PopoverItem[], opts?: { width?: number }) {
-  if (!anchor || !open) return;
+export function showPopoverMenu(anchor: Measurable | null, items: PopoverItem[], opts?: PopoverOptions) {
+  if (!anchor || !open) {
+    opts?.onClose?.();
+    return;
+  }
   const width = opts?.width ?? MENU_W;
-  anchor.measureInWindow((x, y, w, h) => open?.({ anchor: { x, y, w, h }, items, width }));
+  anchor.measureInWindow((x, y, w, h) =>
+    open?.({ anchor: { x, y, w, h }, items, width, dim: !!opts?.dim, onClose: opts?.onClose }),
+  );
 }
 
 const MENU_W = 202;
@@ -59,10 +75,14 @@ export function PopoverMenuHost() {
   const [pending, setPending] = useState<Pending | null>(null);
   const anim = useRef(new Animated.Value(0)).current;
   const closing = useRef(false);
+  const pendingRef = useRef<Pending | null>(null);
 
   useEffect(() => {
     open = (p) => {
       closing.current = false;
+      // 앞 메뉴가 떠 있었으면 그 버튼의 '열림' 모양도 끈다.
+      pendingRef.current?.onClose?.();
+      pendingRef.current = p;
       setPending(p);
       anim.setValue(0);
       Animated.timing(anim, { toValue: 1, duration: duration.fast, useNativeDriver: true }).start();
@@ -76,6 +96,8 @@ export function PopoverMenuHost() {
     (then?: () => void) => {
       if (closing.current) return;
       closing.current = true;
+      pendingRef.current?.onClose?.();
+      pendingRef.current = null;
       Animated.timing(anim, { toValue: 0, duration: duration.fast, useNativeDriver: true }).start(() => {
         closing.current = false;
         setPending(null);
@@ -94,6 +116,7 @@ export function PopoverMenuHost() {
 
   return (
     <Modal transparent visible statusBarTranslucent animationType="none" onRequestClose={() => close()}>
+      {pending.dim ? <Animated.View style={[StyleSheet.absoluteFill, styles.scrim, { opacity: anim }]} pointerEvents="none" /> : null}
       <Pressable style={StyleSheet.absoluteFill} onPress={() => close()} accessibilityLabel="메뉴 닫기" />
       <Animated.View
         accessibilityRole="menu"
@@ -131,6 +154,7 @@ export function PopoverMenuHost() {
 }
 
 const styles = StyleSheet.create({
+  scrim: { backgroundColor: c2.bg.popoverScrim },
   menu: {
     position: 'absolute',
     paddingVertical: space[4],
