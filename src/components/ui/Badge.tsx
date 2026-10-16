@@ -2,6 +2,7 @@ import { StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize, fontWeight } from '@/theme/spacing';
 import { fontFamily } from '@/theme/typography';
+import { StatusMark } from './StatusMark';
 
 export type BadgeTone =
   | 'primary'
@@ -12,7 +13,9 @@ export type BadgeTone =
   | 'neutral';
 
 // 색 + 형상 + 라벨 3중 인코딩. shape 는 옵션이지만 status badge 에서는 가급적 사용.
-export type BadgeShape = 'circle' | 'triangle' | 'square' | 'diamond';
+// check = 2차 '조치 완료'(원 안 ✓). Badge 는 StatusMark SVG 로 그린다. 글리프 맵의 ✓(U+2713)는 글자로만
+// 쓰는 곳(현장 상세 칩 등)용 — U+2714 ✔ 는 Android 에서 컬러 이모지로 나와 쓰지 않는다.
+export type BadgeShape = 'circle' | 'triangle' | 'square' | 'diamond' | 'check';
 
 interface Props {
   label: string;
@@ -39,6 +42,7 @@ export const BADGE_SHAPE_GLYPH: Record<BadgeShape, string> = {
   triangle: '▲',
   square: '■',
   diamond: '◆',
+  check: '✓',
 };
 
 export function Badge({
@@ -63,7 +67,9 @@ export function Badge({
         style,
       ]}
     >
-      {shape ? (
+      {shape === 'check' ? (
+        <StatusMark status="done" size={fs} />
+      ) : shape ? (
         <Text style={[styles.shape, { color: t.fg, fontSize: fs }]}>
           {BADGE_SHAPE_GLYPH[shape]}
         </Text>

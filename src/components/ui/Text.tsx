@@ -1,4 +1,5 @@
 import {
+  Platform,
   Text as RNText,
   type TextProps as RNTextProps,
   type TextStyle,
@@ -6,6 +7,7 @@ import {
 import { typography, fontFamily } from '@/theme/typography';
 import { fontWeight } from '@/theme/spacing';
 import { colors } from '@/theme/colors';
+import { c2, type2, type C2TextTone, type Type2 } from '@/theme/v2';
 
 type Variant = keyof typeof typography;
 type Weight = keyof typeof fontFamily;
@@ -33,9 +35,21 @@ interface Props extends RNTextProps {
   // 변하는 숫자(카운트·진행률·시각·거리)에 tabular-nums. 자릿수가 바뀌어도 폭이 안 흔들린다.
   // metric/metricSm variant 는 이미 포함하므로 그 외 variant 에 숫자가 섞일 때만 쓴다.
   numeric?: boolean;
+  /**
+   * 2차 텍스트 스타일(`2차/…` 27종). 주면 variant 대신 이 스타일을 쓴다. 예: `v2="bodyM.bold"`.
+   * weight 는 함께 쓰지 않는다 — 굵기는 이름에 들어 있다.
+   */
+  v2?: Type2;
+  /** 2차 글자색(`2차 · Color` text/*). 주면 color 보다 우선한다. */
+  tone?: C2TextTone;
 }
 
 const TABULAR: TextStyle = { fontVariant: ['tabular-nums'] };
+
+// 한국어는 글자 단위로 줄이 바뀌면 '되돌릴 수 없어요'가 '되/돌릴'처럼 끊긴다. 웹은 단어(어절) 단위로,
+// 너무 긴 한 어절(주소·URL)만 어디서든 끊는다. iOS 는 lineBreakStrategyIOS 로 같은 규칙을 준다.
+const IOS_HANGUL = Platform.OS === 'ios' ? ({ lineBreakStrategyIOS: 'hangul-word' } as const) : null;
+const WEB_KEEP_ALL = (Platform.OS === 'web' ? { wordBreak: 'keep-all', overflowWrap: 'anywhere' } : null) as TextStyle | null;
 
 // 디자인 시스템 typography composite + semantic color 일괄 적용.
 // 사용 예:
@@ -56,20 +70,24 @@ export function Text({
   color = 'text',
   align,
   numeric,
+  v2,
+  tone,
   style,
   ...rest
 }: Props) {
-  const base = typography[variant];
+  const base = v2 ? type2[v2] : typography[variant];
   const weightOverride: TextStyle | null = weight
     ? { fontFamily: fontFamily[weight], fontWeight: fontWeight[weight] }
     : null;
   return (
     <RNText
+      {...IOS_HANGUL}
       {...rest}
       style={[
+        WEB_KEEP_ALL,
         base,
         weightOverride,
-        { color: colors[color] },
+        { color: tone ? c2.text[tone] : colors[color] },
         align ? { textAlign: align } : null,
         numeric ? TABULAR : null,
         style,

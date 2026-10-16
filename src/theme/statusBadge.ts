@@ -28,7 +28,8 @@ export const FIELD_STATUS_BADGE: Record<
 > = {
   pending: { tone: 'warning', shape: 'circle' },
   in_progress: { tone: 'primary', shape: 'triangle' },
-  done: { tone: 'success', shape: 'square' },
+  // 2차: 조치 완료 모양이 ■ → 원 안 ✓ (Figma StatusMark). 지도 마커(shape 'check')와도 맞춘다.
+  done: { tone: 'success', shape: 'check' },
 };
 
 export const DESTINATION_STATUS_BADGE: Record<

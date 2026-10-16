@@ -18,6 +18,18 @@ import { colors } from '@/theme/colors';
 import { spacing, fontSize, radius } from '@/theme/spacing';
 import { withAlpha } from '@/theme/withAlpha';
 import { groupSameLocationMarkers } from '@/utils/groupSameLocationMarkers';
+import {
+  ACCURACY_CIRCLE_STYLE,
+  PIN_TIP_Y_RATIO,
+  START_POINT_HTML,
+  buildPinHtml,
+  pathStyle,
+  type MapPath,
+  type MapPinKind,
+  type PinSelectedSize,
+} from '@/assets/mapPins';
+
+export type { MapPath, MapPinKind, PinSelectedSize };
 
 export interface KakaoMapMarker {
   id: string;
@@ -33,6 +45,9 @@ export interface KakaoMapMarker {
   selected?: boolean;
   // 검색 결과 하이라이트 — true 면 brand 링+핑 펄스(selected 와 독립).
   highlighted?: boolean;
+  // 2차 핀 — 네이티브와 동일(KakaoMapWebView.tsx 주석).
+  pin?: MapPinKind;
+  selectedSize?: PinSelectedSize;
 }
 
 // KWCAG 1.4.1 — 색 + 형상 + 라벨 3중 인코딩.
@@ -183,6 +198,10 @@ interface Props {
   beacon?: { lat: number; lng: number } | null;
   // 외근 동선 — 목적지 순서대로 잇는 점선. 2점 미만이면 선을 그리지 않는다.
   route?: { lat: number; lng: number }[];
+  // 2차 경로선·오차 원·출발 위치 — 네이티브와 동일.
+  paths?: MapPath[];
+  circle?: { lat: number; lng: number; radius: number } | null;
+  startPoint?: { lat: number; lng: number } | null;
   // true 면 모든 마커가 한 화면에 들어오도록 자동 프레이밍 (center 무시). 위치도 미리보기용.
   fitToMarkers?: boolean;
   // false 면 드래그/줌 비활성 — BottomSheet 안 등 pan 충돌 회피용 정적 위치도.
@@ -264,6 +283,7 @@ type KakaoMap = {
   setZoomable: (v: boolean) => void;
   getProjection: () => MapProjection;
   setMapTypeId: (mapTypeId: unknown) => void;
+  relayout: () => void;
 };
 type MapTypeIdEnum = {
   ROADMAP: unknown;
@@ -288,6 +308,7 @@ type KakaoGlobal = {
       fillColor?: string;
       fillOpacity?: number;
     }) => Overlay;
+    Circle: new (options: Record<string, unknown>) => Overlay;
     Polyline: new (options: {
       path: unknown[];
       strokeWeight?: number;
@@ -362,6 +383,9 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
       myLocation = null,
       beacon = null,
       route,
+      paths,
+      circle = null,
+      startPoint = null,
       fitToMarkers = false,
       interactive = true,
       onMarkerPress,
@@ -375,6 +399,9 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
   const myLocOverlayRef = useRef<Overlay | null>(null);
   const beaconOverlayRef = useRef<Overlay | null>(null);
   const routeLineRef = useRef<Overlay | null>(null);
+  const pathLinesRef = useRef<Overlay[]>([]);
+  const circleRef = useRef<Overlay | null>(null);
+  const startRef = useRef<Overlay | null>(null);
   const boundaryOverlaysRef = useRef<Overlay[]>([]);
   // KDE 히트맵 — 캔버스 div + h337 인스턴스. redraw 클로저가 최신 모드/점을 읽도록 ref 미러.
   const heatRef = useRef<HTMLDivElement | null>(null);
@@ -472,8 +499,9 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
 
   // fitToMarkers — 모든 마커가 한 화면에 들어오도록 setBounds. 마커가 비동기로 도착(현장 좌표
   // 로드)하면 다시 맞춤. 1개면 setBounds 가 최대 줌으로 튀어 부적절 → 센터 + 적당한 level.
-  useEffect(() => {
-    if (!ready || !mapRef.current || !fitToMarkers || markers.length === 0) return;
+  const fitRef = useRef<() => void>(() => {});
+  fitRef.current = () => {
+    if (!mapRef.current || !fitToMarkers || markers.length === 0) return;
     const k = getKakao();
     if (!k) return;
     if (markers.length === 1) {
@@ -484,7 +512,29 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
     const bounds = new k.maps.LatLngBounds();
     markers.forEach((m) => bounds.extend(new k.maps.LatLng(m.lat, m.lng)));
     mapRef.current.setBounds(bounds, 40, 40, 56, 40);
+  };
+  useEffect(() => {
+    if (!ready) return;
+    fitRef.current();
   }, [ready, markers, fitToMarkers]);
+
+  // 컨테이너 크기가 바뀌면(첫 레이아웃이 지도 생성보다 늦은 작은 카드 등) 카카오 지도는 스스로 다시 재지
+  // 않아 중심이 어긋난다(MapPreviewCard 에서 핀이 카드 아래로 밀려 실측). relayout 후 다시 맞춘다.
+  useEffect(() => {
+    if (!ready || !mapRef.current || !containerRef.current) return;
+    const map = mapRef.current;
+    let last = '';
+    const ro = new ResizeObserver((entries) => {
+      const r = entries[0]?.contentRect;
+      const key = r ? `${Math.round(r.width)}x${Math.round(r.height)}` : '';
+      if (key === last) return;
+      last = key;
+      map.relayout();
+      fitRef.current();
+    });
+    ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, [ready]);
 
   // 정적 위치도(figure) — 드래그/줌 차단. BottomSheet pan 충돌 회피 + 보고서 그림용.
   useEffect(() => {
@@ -583,6 +633,61 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
     routeLineRef.current = line;
   }, [ready, route]);
 
+  // 2차 경로선.
+  useEffect(() => {
+    if (!ready || !mapRef.current) return;
+    const k = getKakao();
+    if (!k) return;
+    pathLinesRef.current.forEach((l) => l.setMap(null));
+    pathLinesRef.current = [];
+    (paths ?? []).forEach((p) => {
+      if (p.points.length < 2) return;
+      const line = new k.maps.Polyline({
+        path: p.points.map((q) => new k.maps.LatLng(q.lat, q.lng)),
+        ...pathStyle(p),
+      });
+      line.setMap(mapRef.current);
+      pathLinesRef.current.push(line);
+    });
+  }, [ready, paths]);
+
+  // 2차 GPS 오차 원.
+  useEffect(() => {
+    if (!ready || !mapRef.current) return;
+    const k = getKakao();
+    if (!k) return;
+    circleRef.current?.setMap(null);
+    circleRef.current = null;
+    if (!circle) return;
+    const c = new k.maps.Circle({
+      ...ACCURACY_CIRCLE_STYLE,
+      center: new k.maps.LatLng(circle.lat, circle.lng),
+      radius: circle.radius,
+    });
+    c.setMap(mapRef.current);
+    circleRef.current = c;
+  }, [ready, circle?.lat, circle?.lng, circle?.radius]);
+
+  // 2차 출발 위치.
+  useEffect(() => {
+    if (!ready || !mapRef.current) return;
+    const k = getKakao();
+    if (!k) return;
+    startRef.current?.setMap(null);
+    startRef.current = null;
+    if (!startPoint) return;
+    const content = document.createElement('div');
+    content.innerHTML = START_POINT_HTML;
+    startRef.current = new k.maps.CustomOverlay({
+      position: new k.maps.LatLng(startPoint.lat, startPoint.lng),
+      content,
+      map: mapRef.current,
+      xAnchor: 0.5,
+      yAnchor: 0.5,
+      zIndex: 2,
+    });
+  }, [ready, startPoint?.lat, startPoint?.lng]);
+
   // 단계구분도 카운트 집계 — 폴리곤 effect 와 분리해, 경계만 토글(markers 불변)할 땐 재집계 생략.
   // 렌더 단계라 throw 가 화면을 깨므로 try 로 감싸 실패 시 null(채색 생략)로 폴백.
   const regionCounts = useMemo(() => {
@@ -664,8 +769,29 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
       if (displayMode !== 'markers') return;
       const proj = map.getProjection();
       const showLabel = map.getLevel() <= LABEL_MAX_LEVEL;
+      // 2차 핀은 묶지 않는다(네이티브 renderMarkers 와 같은 규칙).
+      const legacy: KakaoMapMarker[] = [];
+      markers.forEach((m) => {
+        if (!m.pin) {
+          legacy.push(m);
+          return;
+        }
+        const content = document.createElement('div');
+        content.innerHTML = buildPinHtml(m.pin, m.order ?? null, m.selected ? m.selectedSize ?? 'sm' : null);
+        (content.firstChild as HTMLElement | null)?.addEventListener('click', () => onMarkerPress?.(m.id));
+        overlaysRef.current.push(
+          new k.maps.CustomOverlay({
+            position: new k.maps.LatLng(m.lat, m.lng),
+            content,
+            map,
+            xAnchor: 0.5,
+            yAnchor: PIN_TIP_Y_RATIO,
+            zIndex: m.selected ? 4 : 3,
+          }),
+        );
+      });
       const clusters = clusterByPixel(
-        markers,
+        legacy,
         proj,
         (lat, lng) => new k.maps.LatLng(lat, lng),
       );
@@ -837,7 +963,9 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
         style={{
           width: '100%',
           height: '100%',
-          minHeight: 300,
+          // 정적 지도(interactive=false)는 카드 높이(120·132)를 따라야 한다 — 300 하한이 있으면
+          // 지도가 카드보다 커져 중심(핀)이 카드 아래로 잘린다(MapPreviewCard 웹 실측).
+          minHeight: interactive ? 300 : undefined,
           backgroundColor: colors.background,
         }}
       />

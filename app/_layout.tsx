@@ -19,7 +19,7 @@ import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
 import { TripStatusBanner } from '@/components/TripStatusBanner';
 import { SessionGuardModal } from '@/components/SessionGuardModal';
-import { ActionSheetHost, ConfirmDialogHost, ToastHost } from '@/components/ui';
+import { ActionSheetHost, ConfirmDialogHost, PopoverMenuHost, ToastHost } from '@/components/ui';
 import { startSessionActivity, stopSessionActivity } from '@/stores/sessionActivity';
 import { initSentry } from '@/utils/sentry';
 import { applyWebAlertPatch } from '@/utils/webAlertPatch';
@@ -113,6 +113,7 @@ function RootContent() {
       {/* 명세 v2 공용 오버레이 — 화면 전환(replace) 직후에도 살아 있도록 스택 밖에 둔다. */}
       <ToastHost />
       <ActionSheetHost />
+      <PopoverMenuHost />
       <ConfirmDialogHost />
       <StatusBar style="dark" />
     </View>

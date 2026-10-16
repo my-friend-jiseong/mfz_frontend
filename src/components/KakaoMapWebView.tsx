@@ -29,6 +29,9 @@ import { colors } from '@/theme/colors';
 import { elevation } from '@/theme/elevation';
 import { spacing, radius } from '@/theme/spacing';
 import { groupSameLocationMarkers } from '@/utils/groupSameLocationMarkers';
+import { pathStyle, type MapPath, type MapPinKind, type PinSelectedSize } from '@/assets/mapPins';
+
+export type { MapPath, MapPinKind, PinSelectedSize };
 
 // KWCAG 1.4.1 — 색 단독 의미 전달 금지. status 별 색 + 형상 + 라벨 3중 인코딩.
 export type MarkerShape = 'triangle' | 'circle' | 'check';
@@ -55,6 +58,13 @@ export interface KakaoMapMarker {
   selected?: boolean;
   // 검색 결과 하이라이트 — true 면 마커에 brand 링+핑 펄스(selected 와 독립).
   highlighted?: boolean;
+  /**
+   * 2차 핀(Figma Pin·Pin/Number). 주면 shape·badge 대신 32×44 핀으로 그리고(끝이 좌표), 묶지 않는다.
+   * order 가 있으면 순번 핀, selected 면 1.19배 + 바닥 타원. color 는 무시된다(종류가 색을 정한다).
+   */
+  pin?: MapPinKind;
+  /** 선택된 핀 크기. sm 1.19배(기본·체크인 카드), lg 1.44배(현장 상세 카드). */
+  selectedSize?: PinSelectedSize;
 }
 
 interface Props {
@@ -72,6 +82,12 @@ interface Props {
   beacon?: { lat: number; lng: number } | null;
   // 외근 동선 — 목적지 순서대로 잇는 점선. 2점 미만이면 선을 그리지 않는다.
   route?: { lat: number; lng: number }[];
+  // 2차 경로선 여러 개(3-8 지나온 길 실선, 7-9 남은 길·건너뛴 곳 점선). route 와 따로 그린다.
+  paths?: MapPath[];
+  // 2차 GPS 오차 원(8-12). radius 는 미터.
+  circle?: { lat: number; lng: number; radius: number } | null;
+  // 2차 출발 위치 표시(3-8 흰 원·검은 테두리).
+  startPoint?: { lat: number; lng: number } | null;
   // 지도 뷰(center+level)가 정착할 때마다 보고 — 상위가 기억해 재마운트 시 복원에 사용.
   onViewChange?: (view: { lat: number; lng: number; level: number }) => void;
   // true 면 모든 마커가 한 화면에 들어오도록 자동 프레이밍 (center 무시). 위치도 미리보기용.
@@ -110,6 +126,9 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
       myLocation = null,
       beacon = null,
       route,
+      paths,
+      circle = null,
+      startPoint = null,
       fitToMarkers = false,
       interactive = true,
       onMarkerPress,
@@ -326,6 +345,27 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
       `window.__mfzSetRoute&&window.__mfzSetRoute(${JSON.stringify(route ?? [])})`,
     );
   }, [ready, route, inject]);
+
+  // 2차 경로선 — 스타일은 mapPins.pathStyle 에서 계산해 넘긴다(HTML 쪽은 그리기만).
+  useEffect(() => {
+    if (!ready) return;
+    const payload = (paths ?? []).map((p) => ({ points: p.points, style: pathStyle(p) }));
+    inject(`window.__mfzSetPaths&&window.__mfzSetPaths(${JSON.stringify(payload)})`);
+  }, [ready, paths, inject]);
+
+  // 2차 GPS 오차 원.
+  useEffect(() => {
+    if (!ready) return;
+    const payload = circle ? JSON.stringify(circle) : 'null';
+    inject(`window.__mfzSetCircle&&window.__mfzSetCircle(${payload})`);
+  }, [ready, circle?.lat, circle?.lng, circle?.radius, inject]);
+
+  // 2차 출발 위치.
+  useEffect(() => {
+    if (!ready) return;
+    const payload = startPoint ? `{lat:${startPoint.lat},lng:${startPoint.lng}}` : 'null';
+    inject(`window.__mfzSetStart&&window.__mfzSetStart(${payload})`);
+  }, [ready, startPoint?.lat, startPoint?.lng, inject]);
 
   // center 변경 → in-place setCenter (pan/zoom 보존). fitToMarkers 모드는 fitBounds 가 잡으므로 생략.
   useEffect(() => {

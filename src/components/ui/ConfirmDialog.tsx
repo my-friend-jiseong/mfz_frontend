@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { Text } from './Text';
-import { colors } from '@/theme/colors';
-import { spacing, radius } from '@/theme/spacing';
-import { duration, opacity } from '@/theme/motion';
+import { Button2 } from './Button2';
+import { Icon } from '@/components/icons';
+import { c2, elevation2, radius2, space } from '@/theme/v2';
+import { duration } from '@/theme/motion';
 
 export interface ConfirmOptions {
   title: string;
@@ -14,6 +15,11 @@ export interface ConfirmOptions {
   destructive?: boolean;
   /** 확인 버튼 없이 안내만 (차단 안내 등). */
   alertOnly?: boolean;
+  /**
+   * 제목 아래 빨간 경고 상자(3-6 '이 외근으로 만든 보고서 …도 함께 지워져요.').
+   * 함께 사라지는 것이 있을 때만 쓴다. message 는 그 아래 회색 글로 남는다.
+   */
+  warning?: string;
 }
 
 interface Pending extends ConfirmOptions {
@@ -83,8 +89,9 @@ export function ConfirmDialogHost() {
   // 파괴적 확인은 스크림 탭으로 닫지 않는다 — 실수로 바깥을 눌러 '취소' 된 줄 모르는 일은
   // 없지만, 반대로 확인 창이 사라져 무슨 일이 있었는지 헷갈리는 일을 막는다.
   const scrimCloses = !pending.destructive;
-  const confirmBg = pending.destructive ? colors.danger : colors.primary;
 
+  // 2차 확인 창(3-5·3-6·5-11·8-13): 모서리 24, 제목 Title/M, 본문 Body M 회색, 버튼 52 두 개(취소=Secondary,
+  // 확인=파괴적이면 Danger 아니면 Primary).
   return (
     <Modal transparent visible statusBarTranslucent animationType="none" onRequestClose={() => finish(false)}>
       <Animated.View style={[styles.root, { opacity: anim }]}>
@@ -96,45 +103,44 @@ export function ConfirmDialogHost() {
         />
         <Animated.View
           accessibilityViewIsModal
+          accessibilityRole="alert"
           style={[
             styles.card,
             { transform: [{ scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) }] },
           ]}
         >
-          <Text variant="h3">{pending.title}</Text>
+          <Text v2="title.m">{pending.title}</Text>
+          {pending.warning ? (
+            <View style={[styles.warning, { marginTop: space[12] }]}>
+              <Icon name="warning" size={18} color={c2.text.danger} style={styles.warningIcon} />
+              <Text v2="bodyM.semibold" tone="dangerStrong" style={styles.warningText}>
+                {pending.warning}
+              </Text>
+            </View>
+          ) : null}
           {pending.message ? (
-            <Text variant="bodySm" color="textMuted">
+            <Text v2="bodyM.regular" tone="secondary" style={{ marginTop: pending.warning ? space[12] : space[8] }}>
               {pending.message}
             </Text>
           ) : null}
           <View style={styles.buttons}>
-            <Pressable
+            <Button2
+              size="M"
+              variant={pending.alertOnly ? 'primary' : 'secondary'}
               onPress={() => finish(false)}
-              accessibilityRole="button"
-              style={({ pressed }) => [
-                styles.btn,
-                pending.alertOnly ? { backgroundColor: colors.primary } : styles.cancel,
-                pressed && { opacity: opacity.pressed },
-              ]}
+              style={styles.btn}
             >
-              <Text variant="body" weight="semibold" color={pending.alertOnly ? 'onPrimary' : 'textMuted'}>
-                {pending.cancelLabel ?? '취소'}
-              </Text>
-            </Pressable>
+              {pending.cancelLabel ?? '취소'}
+            </Button2>
             {pending.alertOnly ? null : (
-              <Pressable
+              <Button2
+                size="M"
+                variant={pending.destructive ? 'danger' : 'primary'}
                 onPress={() => finish(true)}
-                accessibilityRole="button"
-                style={({ pressed }) => [
-                  styles.btn,
-                  { backgroundColor: confirmBg },
-                  pressed && { opacity: opacity.pressed },
-                ]}
+                style={styles.btn}
               >
-                <Text variant="body" weight="bold" color="onPrimary">
-                  {pending.confirmLabel ?? '확인'}
-                </Text>
-              </Pressable>
+                {pending.confirmLabel ?? '확인'}
+              </Button2>
             )}
           </View>
         </Animated.View>
@@ -146,28 +152,34 @@ export function ConfirmDialogHost() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.overlay,
+    backgroundColor: c2.bg.overlay,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: spacing.xl,
+    paddingHorizontal: 28,
   },
   card: {
     width: '100%',
-    maxWidth: 340,
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    paddingTop: spacing.xl,
-    paddingHorizontal: spacing.lg + spacing.xs,
-    paddingBottom: spacing.lg,
-    gap: spacing.sm,
+    maxWidth: 400,
+    backgroundColor: c2.bg.canvas,
+    borderRadius: radius2['3xl'],
+    paddingTop: space[24],
+    paddingHorizontal: space[20],
+    paddingBottom: space[20],
+    ...elevation2.dialog,
   },
-  buttons: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
-  btn: {
-    flex: 1,
-    height: 48,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
+  warning: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: space[8],
+    paddingVertical: space[12],
+    paddingHorizontal: space[14],
+    borderRadius: radius2.lg,
+    backgroundColor: c2.bg.dangerSubtle,
   },
-  cancel: { backgroundColor: colors.surfaceMuted },
+  warningIcon: { marginTop: 2 },
+  warningText: { flex: 1 },
+  // 제목→본문 8, 제목→경고 12, 경고→본문 12, 본문→버튼 22(Figma 3-6·5-11·8-13).
+  buttons: { flexDirection: 'row', gap: space[8], marginTop: 22 },
+  // Figma 확인 창 버튼은 M 인스턴스를 52 로 늘려 쓴다.
+  btn: { flex: 1, height: 52 },
 });

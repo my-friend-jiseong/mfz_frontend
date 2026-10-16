@@ -22,6 +22,12 @@ const HEAT_RADIUS_BY_LEVEL_JSON = JSON.stringify(
   ),
 );
 import { HEATMAP_JS_SOURCE } from '@/assets/heatmapLib';
+import {
+  PIN_TEMPLATES,
+  PIN_TIP_Y_RATIO,
+  START_POINT_HTML,
+  ACCURACY_CIRCLE_STYLE,
+} from '@/assets/mapPins';
 
 export type MapDisplayMode = 'markers' | 'heatmap' | 'choropleth';
 
@@ -46,6 +52,9 @@ interface MapHtmlOptions {
     groupIds?: string[];
     selected?: boolean;
     highlighted?: boolean;
+    // 2차 핀(mapPins.ts). 있으면 아래 형상 마커 대신 Figma 핀으로 그리고 묶지 않는다.
+    pin?: string;
+    selectedSize?: string;
   }[];
   center: { lat: number; lng: number };
   // 초기 줌 레벨(카카오 1~14, 작을수록 확대). 미지정 시 기본 8. 마지막 뷰 복원에 사용.
@@ -165,6 +174,14 @@ MARKERS.forEach(function(m){
     var SHOW_BOUNDARY = false;
     var REGION_FILL = null;
     var BASE_MAP_TYPE = 'roadmap';
+    // 2차 핀 템플릿(mapPins.ts PIN_TEMPLATES). 키 'kind|순번있음|선택' → HTML, 순번 자리 __N__.
+    var PIN_TPL = ${JSON.stringify(PIN_TEMPLATES)};
+    var PIN_TIP = ${PIN_TIP_Y_RATIO};
+    function pinHtml(m){
+      var hasN = typeof m.order === 'number';
+      var t = PIN_TPL[m.pin + '|' + (hasN ? 1 : 0) + '|' + (m.selected ? (m.selectedSize || 'sm') : '0')] || PIN_TPL['pending|0|0'];
+      return hasN ? t.replace('__N__', String(m.order)) : t;
+    }
 
     // === KDE 히트맵 (heatmap.js / h337) ===
     // 카카오엔 히트맵 레이어가 없어 투명 캔버스에 직접 그린다. 점은 위경도로 보관하고
@@ -311,12 +328,12 @@ MARKERS.forEach(function(m){
     // 화면 픽셀 거리 기반 클러스터링. 두 좌표의 화면상 거리는 pan 에 불변(평행이동)이고
     // 줌에만 의존하므로 줌 변화 시에만 재계산하면 된다. 그리드 버킷으로 인접 3×3 셀만 검사해
     // O(n) 에 가깝게 묶는다. 각 클러스터는 head(첫 마커) 좌표에 그려 좌표 무손실.
-    function clusterMarkers(){
+    function clusterMarkers(list){
       var proj = map.getProjection();
       var buckets = {}; // "gx:gy" -> [cluster]
       var clusters = [];
-      for (var i = 0; i < MARKERS.length; i++) {
-        var m = MARKERS[i];
+      for (var i = 0; i < list.length; i++) {
+        var m = list[i];
         var pt = proj.containerPointFromCoords(new kakao.maps.LatLng(m.lat, m.lng));
         var gx = Math.floor(pt.x / CLUSTER_PX), gy = Math.floor(pt.y / CLUSTER_PX);
         var placed = null;
@@ -382,7 +399,26 @@ MARKERS.forEach(function(m){
 
     function renderMarkers(){
       var showLabel = map.getLevel() <= LABEL_MAX_LEVEL;
-      clusterMarkers().forEach(function(cl){
+      // 2차 핀은 묶지 않는다 — 외근 목적지·체크인 위치처럼 몇 개 안 되고 하나하나가 의미다.
+      var legacy = [];
+      for (var pi = 0; pi < MARKERS.length; pi++) {
+        var pm = MARKERS[pi];
+        if (!pm.pin) { legacy.push(pm); continue; }
+        (function(m){
+          var content = document.createElement('div');
+          content.innerHTML = pinHtml(m);
+          content.firstChild.addEventListener('click', function(){ postMsg({ type: 'markerPress', fieldId: m.id }); });
+          markerOverlays.push(new kakao.maps.CustomOverlay({
+            position: new kakao.maps.LatLng(m.lat, m.lng),
+            content: content,
+            map: map,
+            xAnchor: 0.5,
+            yAnchor: PIN_TIP,
+            zIndex: m.selected ? 4 : 3,
+          }));
+        })(pm);
+      }
+      clusterMarkers(legacy).forEach(function(cl){
         var head = cl.head;
         var content = document.createElement('div');
         // 라벨은 단일 마커이면서 충분히 줌인했을 때만 — 클러스터는 카운트 뱃지로 다중임을 표현.
@@ -523,6 +559,39 @@ MARKERS.forEach(function(m){
       applyBoundaryStyle();
     };
     window.__mfzSetMyLocation = applyMyLocation;
+
+    // === 2차: GPS 오차 원(8-12) · 경로선 여러 개(3-8·7-9) · 출발 위치(3-8) ===
+    var circleOv = null;
+    window.__mfzSetCircle = function(c){
+      if (circleOv) { circleOv.setMap(null); circleOv = null; }
+      if (!c) return;
+      var opt = ${JSON.stringify(ACCURACY_CIRCLE_STYLE)};
+      opt.center = new kakao.maps.LatLng(c.lat, c.lng);
+      opt.radius = c.radius;
+      circleOv = new kakao.maps.Circle(opt);
+      circleOv.setMap(map);
+    };
+    var pathLines = [];
+    window.__mfzSetPaths = function(paths){
+      for (var i = 0; i < pathLines.length; i++) pathLines[i].setMap(null);
+      pathLines = [];
+      (paths || []).forEach(function(p){
+        if (!p.points || p.points.length < 2) return;
+        var opt = p.style;
+        opt.path = p.points.map(function(q){ return new kakao.maps.LatLng(q.lat, q.lng); });
+        var line = new kakao.maps.Polyline(opt);
+        line.setMap(map);
+        pathLines.push(line);
+      });
+    };
+    var startOv = null;
+    window.__mfzSetStart = function(pt){
+      if (startOv) { startOv.setMap(null); startOv = null; }
+      if (!pt) return;
+      var content = document.createElement('div');
+      content.innerHTML = ${JSON.stringify(START_POINT_HTML)};
+      startOv = new kakao.maps.CustomOverlay({ position: new kakao.maps.LatLng(pt.lat, pt.lng), content: content, map: map, xAnchor: 0.5, yAnchor: 0.5, zIndex: 2 });
+    };
 
     // === 검색한 '새 위치' 비컨 ===
     // 주소·장소 검색 결과를 고르면 그 좌표에 핀을 떨어뜨려 어디인지 보여준다(등록은 사용자 선택).
