@@ -96,11 +96,14 @@ export function PopoverMenuHost() {
     (then?: () => void) => {
       if (closing.current) return;
       closing.current = true;
-      pendingRef.current?.onClose?.();
+      const closingPending = pendingRef.current;
+      closingPending?.onClose?.();
       pendingRef.current = null;
-      Animated.timing(anim, { toValue: 0, duration: duration.fast, useNativeDriver: true }).start(() => {
+      Animated.timing(anim, { toValue: 0, duration: duration.fast, useNativeDriver: true }).start(({ finished }) => {
+        // 닫히는 사이 새 메뉴가 열렸으면(애니메이션이 끊김) 새 메뉴를 지우지 않는다.
+        if (!finished) return;
         closing.current = false;
-        setPending(null);
+        setPending((cur) => (cur === closingPending ? null : cur));
         if (then) setTimeout(then, AFTER_CLOSE_MS);
       });
     },

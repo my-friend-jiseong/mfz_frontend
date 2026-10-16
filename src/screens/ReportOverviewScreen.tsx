@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
+import { Platform, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KakaoMapWebView } from '@/components/KakaoMapWebView';
@@ -52,6 +52,19 @@ export default function ReportOverviewScreen() {
     fitPending.current = mountView === null;
     touched.current = false;
   }, [mapKey, mountView]);
+  // 웹은 휠·키보드로도 확대한다 — 손댄 것으로 본다(터치·포인터는 아래 View 가 받는다).
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    const mark = () => {
+      touched.current = true;
+    };
+    document.addEventListener('wheel', mark, { capture: true, passive: true });
+    document.addEventListener('keydown', mark, { capture: true });
+    return () => {
+      document.removeEventListener('wheel', mark, { capture: true });
+      document.removeEventListener('keydown', mark, { capture: true });
+    };
+  }, []);
   const onViewChange = (v: OverviewMapView) => {
     if (fitPending.current && !touched.current) {
       fitPending.current = false;

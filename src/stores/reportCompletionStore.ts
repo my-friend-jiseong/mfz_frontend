@@ -9,9 +9,13 @@ import { useAuthStore } from './authStore';
 // 사용자마다 따로 둔다 — 로그인하면 그 사용자 것을 읽고, 로그아웃하면 메모리에서 비운다.
 
 const keyOf = (userId: string) => `report-accepted-empty:v1:${userId}`;
+// 사용자로 나누기 전 키(PR8 첫판). 처음 로그인한 사용자에게 한 번 합치고 지운다.
+const LEGACY_KEY = 'report-accepted-empty:v1';
 
 interface State {
   userId: string | null;
+  /** 이 사용자의 저장값을 다 읽었는가. 읽기 전에 상태를 정하면 작성 완료가 작성 중으로 보인다. */
+  loaded: boolean;
   /** reportId → 저장할 때 비어 있어도 된다고 받아들인 현장 보고 id */
   accepted: Record<string, string[]>;
   accept: (reportId: string, fieldReportIds: string[]) => void;
@@ -27,6 +31,7 @@ const persist = (userId: string | null, accepted: Record<string, string[]>) => {
 
 export const useReportCompletionStore = create<State>((set, get) => ({
   userId: null,
+  loaded: false,
   accepted: {},
   accept: (reportId, fieldReportIds) => {
     const accepted = { ...get().accepted, [reportId]: fieldReportIds };
@@ -42,24 +47,41 @@ export const useReportCompletionStore = create<State>((set, get) => ({
   },
 }));
 
-async function switchUser(userId: string | null) {
-  if (useReportCompletionStore.getState().userId === userId) return;
-  useReportCompletionStore.setState({ userId, accepted: {} });
-  if (!userId) return;
+let loading: Promise<void> = Promise.resolve();
+
+async function load(userId: string) {
   try {
     const raw = await AsyncStorage.getItem(keyOf(userId));
-    const parsed = raw ? (JSON.parse(raw) as Record<string, string[]>) : {};
+    let parsed = raw ? (JSON.parse(raw) as Record<string, string[]>) : {};
+    const legacy = await AsyncStorage.getItem(LEGACY_KEY);
+    if (legacy) {
+      parsed = { ...(JSON.parse(legacy) as Record<string, string[]>), ...parsed };
+      await AsyncStorage.setItem(keyOf(userId), JSON.stringify(parsed));
+      await AsyncStorage.removeItem(LEGACY_KEY);
+    }
     // 읽는 사이 사용자가 바뀌었으면 버린다. 읽는 사이 accept 된 것이 있으면 그것이 이긴다.
     if (useReportCompletionStore.getState().userId !== userId) return;
-    useReportCompletionStore.setState((s) => ({ accepted: { ...parsed, ...s.accepted } }));
+    useReportCompletionStore.setState((s) => ({ accepted: { ...parsed, ...s.accepted }, loaded: true }));
   } catch {
     // 못 읽으면 빈 채로 — 작성 중으로 보일 뿐이다.
+    if (useReportCompletionStore.getState().userId === userId) useReportCompletionStore.setState({ loaded: true });
   }
+}
+
+function switchUser(userId: string | null) {
+  if (useReportCompletionStore.getState().userId === userId) return;
+  useReportCompletionStore.setState({ userId, accepted: {}, loaded: !userId });
+  if (userId) loading = load(userId);
+}
+
+/** 지금 사용자의 저장값을 다 읽을 때까지 기다린다(보고서 작성 진입 판단 전). */
+export function reportCompletionReady(): Promise<void> {
+  return loading;
 }
 
 const currentUserId = () => {
   const a = useAuthStore.getState();
   return a.isAuthenticated ? (a.user?.id ?? null) : null;
 };
-void switchUser(currentUserId());
-useAuthStore.subscribe(() => void switchUser(currentUserId()));
+switchUser(currentUserId());
+useAuthStore.subscribe(() => switchUser(currentUserId()));

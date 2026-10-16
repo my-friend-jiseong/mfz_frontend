@@ -4,7 +4,7 @@ import { useReportStore } from '@/stores/reportStore';
 import { useTripStore } from '@/stores/tripStore';
 import { useVisitStore } from '@/stores/visitStore';
 import { confirm, notice } from '@/components/ui/ConfirmDialog';
-import { useReportCompletionStore } from '@/stores/reportCompletionStore';
+import { reportCompletionReady, useReportCompletionStore } from '@/stores/reportCompletionStore';
 import { reportStateNow } from '@/utils/reportStatus';
 import { tripTitle } from '@/utils/tripFormat';
 
@@ -58,7 +58,8 @@ export async function openReportForTrip(router: Router, tripId: string): Promise
       return false;
     }
     if (found) {
-      const detail = await useReportStore.getState().loadDetail(found);
+      // 기기에 남긴 '작성 완료' 표시를 다 읽은 뒤에 판단한다 — 아니면 완료된 보고서가 작성 중(9-2)으로 열린다.
+      const [detail] = await Promise.all([useReportStore.getState().loadDetail(found), reportCompletionReady()]);
       const draft = detail ? reportStateNow(found).stage === 'draft' : false;
       router.push((draft ? reportEditHref(found, 'create') : reportDetailHref(found)) as never);
       // 목록에 없던 보고서였을 수 있다 — 이동과 같은 틱에 store 를 바꾸지 않고 다음 프레임에 받는다.
@@ -67,8 +68,7 @@ export async function openReportForTrip(router: Router, tripId: string): Promise
     }
 
     // 방문 캐시는 다른 화면(현장 상세 등)이 일부만 채워 두었을 수 있다 — 늘 외근 상세를 받은 뒤 만든다.
-    await useTripStore.getState().loadDetail(tripId);
-    if (useTripStore.getState().detailStatus[tripId] !== 'success') {
+    if (!(await useTripStore.getState().loadDetail(tripId))) {
       await notice('보고서를 만들지 못했어요', '외근 기록을 불러오지 못했어요. 잠시 뒤 다시 해 주세요.');
       return false;
     }

@@ -68,7 +68,19 @@ export default function ReportDetail() {
   const insets = useSafeAreaInsets();
   const userId = useAuthStore((s) => s.user?.id);
 
-  const report = useReportStore((s) => s.detailCache[reportId] ?? s.reports.find((r) => r.id === reportId));
+  const liveReport = useReportStore((s) => s.detailCache[reportId] ?? s.reports.find((r) => r.id === reportId));
+  // 삭제한 뒤 이 화면을 떠나는 동안엔 마지막 모습을 그대로 둔다(빈 '찾을 수 없어요'가 번쩍이지 않게).
+  const [deleting, setDeleting] = useState(false);
+  const lastReport = useRef(liveReport);
+  if (liveReport) lastReport.current = liveReport;
+  const report = liveReport ?? (deleting ? lastReport.current : undefined);
+  const mountedRef = useRef(true);
+  useEffect(
+    () => () => {
+      mountedRef.current = false;
+    },
+    [],
+  );
   const detailStatus = useReportStore((s) => s.detailStatus[reportId]);
   useEffect(() => {
     if (reportId) void useReportStore.getState().loadDetail(reportId);
@@ -85,12 +97,12 @@ export default function ReportDetail() {
 
   // 위치도 캡처(백로그 §20) — 문서를 만들기 직전에 이 카드를 찍어 올린다. 타일이 그려지기 전엔 찍지 않는다. 웹은 못 찍는다.
   const mapRef = useRef<View>(null);
-  // 구도가 바뀌면 지도를 다시 띄우니 타일도 다시 기다린다.
-  const tilesReady = useRef(false);
+  // 타일이 그려진 구도. 구도가 바뀌면 지도를 다시 띄우니(key) 그 구도의 타일을 다시 기다린다.
   const viewKey = view ? `${view.lat},${view.lng},${view.level}` : String(view);
-  useEffect(() => {
-    tilesReady.current = false;
-  }, [viewKey, markers.length]);
+  const viewKeyRef = useRef(viewKey);
+  viewKeyRef.current = viewKey;
+  const tilesReadyKey = useRef<string | null>(null);
+  const tilesReady = () => tilesReadyKey.current === viewKeyRef.current;
   const moreRef = useRef<View>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   // 시트가 내려가는 동안에도 제목이 바뀌지 않게 종류는 따로 둔다.
@@ -101,7 +113,6 @@ export default function ReportDetail() {
     setSheetOpen(true);
   };
   const [busy, setBusy] = useState<ReportFileFormat | null>(null);
-  const [deleting, setDeleting] = useState(false);
 
   const isOwner = !!report && (!report.creatorId || report.creatorId === userId);
   const editedTitle = report?.title ?? '';
@@ -135,50 +146,57 @@ export default function ReportDetail() {
   // 위치도를 찍어 올린다. 실패하면 문서는 지난번 위치도(또는 없이)로 만들어지니 알려 준다. 웹은 찍을 수 없어 건너뛴다.
   const syncOverviewMap = async (): Promise<boolean> => {
     if (Platform.OS === 'web' || markers.length === 0) return true;
-    for (let i = 0; i < TILE_WAIT_STEPS && !tilesReady.current; i += 1) {
+    for (let i = 0; i < TILE_WAIT_STEPS && !tilesReady() && mountedRef.current; i += 1) {
       await new Promise((r) => setTimeout(r, TILE_WAIT_MS));
     }
-    if (!tilesReady.current) return false;
+    if (!mountedRef.current || !tilesReady()) return false;
     const file = await captureOverviewMap(mapRef);
     if (!file) return false;
     const r = await useReportStore.getState().uploadOverviewPhoto(report.id, file);
     return r.ok;
   };
 
+  const fail = async (msg: string) => {
+    if (!mountedRef.current) return;
+    setBusy(null);
+    await notice('파일을 만들지 못했어요', msg);
+  };
+
   const runFile = async (format: ReportFileFormat, action: FileAction) => {
     if (busy) return;
     setBusy(format);
     const mapOk = await syncOverviewMap();
+    // 화면을 떠났으면 문서를 만들지 않는다.
+    if (!mountedRef.current) return;
     let url: string | undefined;
     if (format === 'docx') {
       const r = await useReportStore.getState().exportWord(report.id, true);
       if (!r.ok) {
-        setBusy(null);
-        await notice('파일을 만들지 못했어요', r.error);
+        await fail(r.error);
         return;
       }
       url = useReportStore.getState().detailCache[report.id]?.outputFileUrl?.trim() || undefined;
     } else {
       const r = await useReportStore.getState().exportPdf(report.id);
       if (!r.ok) {
-        setBusy(null);
-        await notice('파일을 만들지 못했어요', r.error);
+        await fail(r.error);
         return;
       }
       url = r.url;
     }
     const abs = url ? toAbsoluteFileUrl(url) : null;
     if (!abs) {
-      setBusy(null);
-      await notice('파일을 만들지 못했어요', '파일 주소를 받지 못했어요. 잠시 뒤 다시 해 주세요.');
+      await fail('파일 주소를 받지 못했어요. 잠시 뒤 다시 해 주세요.');
       return;
     }
+    if (!mountedRef.current) return;
     const name = reportFileName(report.title, format);
     const res = action === 'share' ? await shareReportFile(abs, name, format) : await saveReportFile(abs, name, format);
+    if (!mountedRef.current) return;
     setBusy(null);
     if (res.ok) {
       setSheetOpen(false);
-      if (!mapOk) void notice('위치도를 새로 넣지 못했어요', '문서에는 전에 넣은 위치도가 들어갔어요. 다시 해 주세요.');
+      if (!mapOk) void notice('위치도를 새로 넣지 못했어요', '이번 문서에는 새 위치도가 들어가지 않았어요.');
       else if (action === 'save' && Platform.OS === 'android') toast('휴대폰에 저장했어요');
       return;
     }
@@ -211,8 +229,8 @@ export default function ReportDetail() {
       setDeleting(false);
       return;
     }
-    // 스택을 첫 화면(9)으로 되돌린다.
-    goToTabRoot('reports');
+    // 스택을 첫 화면(9)으로 되돌린다. 목록에서 빠지는 것과 같은 틱에 옮기지 않는다(떠나는 동안은 마지막 모습).
+    requestAnimationFrame(() => goToTabRoot('reports'));
   };
 
   return (
@@ -244,7 +262,7 @@ export default function ReportDetail() {
           <>
             <View ref={mapRef} collapsable={false} style={styles.map}>
               <ReportOverviewMap markers={markers} view={view} onTilesLoaded={() => {
-                  tilesReady.current = true;
+                  tilesReadyKey.current = viewKeyRef.current;
                 }} />
             </View>
             <Text v2="caption.regular" tone="tertiary" style={styles.mapCaption}>

@@ -71,7 +71,10 @@ function requestDetails(ids: string[], retryMissing: boolean) {
  */
 export function useTripReportStates(tripIdsInOrder: string[]): Map<string, TripReportState> {
   const reports = useReportStore((s) => s.reports);
-  const listLoaded = useReportStore((s) => s.listLoaded);
+  // 기기에 남긴 작성 완료 표시를 읽기 전엔 checking — 완료가 잠깐 작성 중으로 보이지 않게.
+  const listArrived = useReportStore((s) => s.listLoaded);
+  const completionLoaded = useReportCompletionStore((s) => s.loaded);
+  const listLoaded = listArrived && completionLoaded;
   const detailCache = useReportStore((s) => s.detailCache);
   const detailStatus = useReportStore((s) => s.detailStatus);
   const accepted = useReportCompletionStore((s) => s.accepted);
@@ -112,7 +115,10 @@ export function useTripReportStates(tripIdsInOrder: string[]): Map<string, TripR
 /** 외근 하나의 보고서 상태(3 외근 상세). */
 export function useTripReportState(tripId: string): TripReportState {
   const report = useReportStore((s) => reportsByTrip(s.reports).get(tripId));
-  const listLoaded = useReportStore((s) => s.listLoaded);
+  // 기기에 남긴 작성 완료 표시를 읽기 전엔 checking — 완료가 잠깐 작성 중으로 보이지 않게.
+  const listArrived = useReportStore((s) => s.listLoaded);
+  const completionLoaded = useReportCompletionStore((s) => s.loaded);
+  const listLoaded = listArrived && completionLoaded;
   const detail = useReportStore((s) => (report ? s.detailCache[report.id] : undefined));
   const status = useReportStore((s) => (report ? s.detailStatus[report.id] : undefined));
   const acceptedEmpty = useReportCompletionStore((s) => (report ? s.accepted[report.id] : undefined));
@@ -141,7 +147,10 @@ export function useTripReportState(tripId: string): TripReportState {
  */
 export function useReportStates(reportIdsInOrder: string[]): Map<string, TripReportState> {
   const reports = useReportStore((s) => s.reports);
-  const listLoaded = useReportStore((s) => s.listLoaded);
+  // 기기에 남긴 작성 완료 표시를 읽기 전엔 checking — 완료가 잠깐 작성 중으로 보이지 않게.
+  const listArrived = useReportStore((s) => s.listLoaded);
+  const completionLoaded = useReportCompletionStore((s) => s.loaded);
+  const listLoaded = listArrived && completionLoaded;
   const detailCache = useReportStore((s) => s.detailCache);
   const detailStatus = useReportStore((s) => s.detailStatus);
   const accepted = useReportCompletionStore((s) => s.accepted);

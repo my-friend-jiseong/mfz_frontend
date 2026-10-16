@@ -142,6 +142,8 @@ export function ConfirmDialogHost() {
                 size="M"
                 variant={pending.destructive ? 'danger' : 'primary'}
                 onPress={() => {
+                  // 닫히는 중에 또 눌리면 두 번 열지 않는다.
+                  if (finishing.current) return;
                   pending.onConfirmPress?.();
                   finish(true);
                 }}

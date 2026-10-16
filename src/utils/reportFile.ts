@@ -132,8 +132,9 @@ export async function shareReportFile(url: string, name: string, format: ReportF
 const SAVE_DIR_KEY = 'report-save-dir:v1';
 
 /**
- * Android — 저장할 폴더를 고르게 하고(저장소 접근 프레임워크) 그 폴더에 복사한다. 지난번 고른 폴더에서 고르기를 연다.
- * 새 파일 API(File.copy)로 옮겨 base64 로 통째로 읽고 쓰지 않는다. 복사가 안 되는 기기면 바이트로 쓴다.
+ * Android — 저장할 폴더를 고르게 하고(저장소 접근 프레임워크) 그 폴더에 새 파일을 만들어 쓴다. 지난번 고른 폴더에서 고르기를 연다.
+ * 고른 폴더는 content:// 라 File.copy 로는 쓸 수 없다 — 새 파일 API 로 바이트를 쓴다(base64 문자열로 바꾸지 않는다).
+ * 쓰다가 실패하면 만들어 둔 빈 파일을 지운다.
  */
 async function saveAndroid(local: string, name: string, format: ReportFileFormat): Promise<FileResult> {
   const { Directory, File } = await import('expo-file-system');
@@ -141,21 +142,27 @@ async function saveAndroid(local: string, name: string, format: ReportFileFormat
   let dir: Awaited<ReturnType<typeof Directory.pickDirectoryAsync>>;
   try {
     dir = await Directory.pickDirectoryAsync(initial);
-  } catch {
-    // 고르기를 닫았다.
-    return { ok: false, cancelled: true, error: '' };
+  } catch (e) {
+    // 고르기를 닫은 것만 취소로 본다. 그 밖(권한·지난 폴더 주소 오류 등)은 실패로 알린다.
+    const msg = String((e as { message?: string; code?: string })?.code ?? (e as Error)?.message ?? '');
+    if (/cancel/i.test(msg)) return { ok: false, cancelled: true, error: '' };
+    if (__DEV__) console.warn('[report] 폴더 고르기 실패', e);
+    return { ok: false, error: '휴대폰에 저장하지 못했어요.' };
   }
   void AsyncStorage.setItem(SAVE_DIR_KEY, dir.uri).catch(() => {});
+  let dest: { delete: () => void } | null = null;
   try {
-    const dest = dir.createFile(name.replace(/\.[^.]+$/, ''), MIME[format]);
-    const src = new File(local);
-    try {
-      src.copy(dest);
-    } catch {
-      dest.write(await src.bytes());
-    }
+    const created = dir.createFile(name.replace(/\.[^.]+$/, ''), MIME[format]);
+    dest = created;
+    created.write(await new File(local).bytes());
     return { ok: true };
-  } catch {
+  } catch (e) {
+    if (__DEV__) console.warn('[report] 파일 저장 실패', e);
+    try {
+      dest?.delete();
+    } catch {
+      // 지우지 못한 빈 파일은 사용자가 지운다.
+    }
     return { ok: false, error: '휴대폰에 저장하지 못했어요.' };
   }
 }

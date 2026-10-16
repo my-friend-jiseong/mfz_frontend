@@ -49,7 +49,8 @@ interface TripState {
   refreshActive: () => Promise<void>;
   refreshList: () => Promise<void>;
   // trips.detail 페치 + visitStore 로 timeline sync. trips/[id] / review 진입 시 호출.
-  loadDetail: (id: string) => Promise<void>;
+  /** 받았으면 true. 실패해도 throw 하지 않는다. */
+  loadDetail: (id: string) => Promise<boolean>;
   start: (title?: string, plannedFieldIds?: string[]) => Promise<StartResult>;
   end: (force?: boolean) => Promise<EndResult>;
   update: (id: string, body: TripUpdateBody) => Promise<GenericResult>;
@@ -163,9 +164,11 @@ export const useTripStore = create<TripState>((set, get) => ({
         ),
         detailStatus: { ...s.detailStatus, [id]: 'success' },
       }));
+      return true;
     } catch {
       // 비로그인·404 등 — 무시. 화면은 list 응답 기준으로 fallback 렌더.
       set((s) => ({ detailStatus: { ...s.detailStatus, [id]: 'missing' } }));
+      return false;
     }
   },
 

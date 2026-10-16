@@ -1,4 +1,4 @@
-import type { FieldDirectAttachment, VisitPhoto, VisitPhotoPhase } from '@/api';
+import type { FieldDirectAttachment, VisitPhoto } from '@/api';
 import type { FieldStatus } from '@/types/entities';
 import type { UploadFile } from '@/utils/media';
 import { useFieldStore } from '@/stores/fieldStore';
@@ -12,27 +12,6 @@ import { useVisitStore } from '@/stores/visitStore';
 const MEMO_WINDOW_MS = 24 * 60 * 60 * 1000;
 // 체크인 저장은 방문 생성 직후 메모를 쓰지만, 서버·기기 시계 차이를 흡수할 여유.
 const CLOCK_SKEW_MS = 60 * 1000;
-
-// === 보고서 현장 칸(전·중·후) — 예전 방문 사진의 단계를 보고서가 그대로 쓴다(reportStore). ===
-export type Phase = VisitPhotoPhase;
-
-export interface PhotoSlot {
-  uri: string;
-}
-export type PhaseSlots = Record<Phase, PhotoSlot | null>;
-
-/** 단계별로 가장 최근 방문 사진. phase 없는 사진(2차 체크인 사진)은 슬롯에 넣지 않는다. */
-export function photosToSlots(photos: readonly VisitPhoto[] | undefined): PhaseSlots {
-  const slots: PhaseSlots = { before: null, during: null, after: null };
-  const at: Partial<Record<Phase, string>> = {};
-  for (const p of photos ?? []) {
-    if (!p.phase) continue;
-    if (at[p.phase] && at[p.phase]! > p.createdAt) continue;
-    at[p.phase] = p.createdAt;
-    slots[p.phase] = { uri: p.fileUrl };
-  }
-  return slots;
-}
 
 // === 체크인 사진(Figma 8 '사진 N' — 단계 없이 찍은 순서대로) ===
 export interface CheckinPhoto {
