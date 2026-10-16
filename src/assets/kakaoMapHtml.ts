@@ -27,6 +27,9 @@ import {
   PIN_TIP_Y_RATIO,
   START_POINT_HTML,
   ACCURACY_CIRCLE_STYLE,
+  ACCURACY_CIRCLE_STYLE_BRAND,
+  PIN_TAG_TEMPLATE,
+  PIN_TAG_TOP,
 } from '@/assets/mapPins';
 
 export type MapDisplayMode = 'markers' | 'heatmap' | 'choropleth';
@@ -225,10 +228,22 @@ MARKERS.forEach(function(m){
     // 2차 핀 템플릿(mapPins.ts PIN_TEMPLATES). 키 'kind|순번있음|선택' → HTML, 순번 자리 __N__.
     var PIN_TPL = ${JSON.stringify(PIN_TEMPLATES)};
     var PIN_TIP = ${PIN_TIP_Y_RATIO};
+    // 핀 아래 이름표(6·7 다음 목적지) — 템플릿 끝 '</div>' 앞에 붙인다.
+    var PIN_TAG = ${JSON.stringify(PIN_TAG_TEMPLATE)};
+    var PIN_TAG_TOP = ${JSON.stringify(PIN_TAG_TOP)};
+    function escHtml(t){
+      return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
     function pinHtml(m){
       var hasN = typeof m.order === 'number';
-      var t = PIN_TPL[m.pin + '|' + (hasN ? 1 : 0) + '|' + (m.selected ? (m.selectedSize || 'sm') : '0')] || PIN_TPL['pending|0|0'];
-      return hasN ? t.replace('__N__', String(m.order)) : t;
+      var sel = m.selected ? (m.selectedSize || 'sm') : '0';
+      var t = PIN_TPL[m.pin + '|' + (hasN ? 1 : 0) + '|' + sel] || PIN_TPL['pending|0|0'];
+      if (hasN) t = t.replace('__N__', String(m.order));
+      if (m.nameTag) {
+        var tag = PIN_TAG.replace('__TOP__', String(PIN_TAG_TOP[sel] || PIN_TAG_TOP['0'])).replace('__TAG__', escHtml(m.nameTag));
+        t = t.slice(0, -6) + tag + '</div>';
+      }
+      return t;
     }
 
     // === KDE 히트맵 (heatmap.js / h337) ===
@@ -618,7 +633,7 @@ MARKERS.forEach(function(m){
     window.__mfzSetCircle = function(c){
       if (circleOv) { circleOv.setMap(null); circleOv = null; }
       if (!c) return;
-      var opt = ${JSON.stringify(ACCURACY_CIRCLE_STYLE)};
+      var opt = c.tone === 'brand' ? ${JSON.stringify(ACCURACY_CIRCLE_STYLE_BRAND)} : ${JSON.stringify(ACCURACY_CIRCLE_STYLE)};
       opt.center = new kakao.maps.LatLng(c.lat, c.lng);
       opt.radius = c.radius;
       circleOv = new kakao.maps.Circle(opt);

@@ -5,6 +5,8 @@ import NetInfo from '@react-native-community/netinfo';
 import { useVisitStore } from './visitStore';
 import { useDestinationStore } from './destinationStore';
 import { notice } from '@/components/ui/ConfirmDialog';
+import type { FieldStatus } from '@/types/entities';
+import { saveVisitRecord, type CheckinPhoto } from '@/utils/visitRecord';
 
 // 체크인 저장 대기열(7-2 오프라인 저장 · 7-3 저장 실패).
 // 서버에 닿지 못한 체크인을 기기에 남겨 두고, 연결이 돌아오거나 앱이 앞으로 오면 다시 보낸다.
@@ -13,7 +15,8 @@ import { notice } from '@/components/ui/ConfirmDialog';
 // 지금 서버 계약(check-in body 에 tripId 없음)에서는 서버가 '지금 진행 중인 외근'에 방문을 붙인다. 그래서
 // 대기열 항목은 그 외근이 아직 진행 중일 때만 보낸다 — 외근이 끝났거나 다른 외근이 진행 중이면 엉뚱한 외근에
 // 붙으므로 보내지 않고 알린 뒤 버린다. 끝난 외근에 붙여 저장하는 것은 backlog '2차 H'(visitedAt·tripId).
-// TODO(PR7): 체크인 화면이 사진·메모·조치 상태도 함께 대기열에 싣는다. 지금은 체크인(방문 생성)만.
+// 체크인 화면에서 함께 고른 조치 상태·사진·메모도 항목에 싣고, 체크인이 저장되면 이어서 보낸다(record).
+// 사진은 기기 안 파일 경로만 남긴다 — 앱을 지우거나 OS 가 캐시를 비우면(웹은 새로고침하면) 못 올릴 수 있어 그때는 알린다.
 
 const STORAGE_KEY = 'mfz.checkinQueue.v1';
 // 대기 중인 것이 있으면 이 간격으로도 다시 보낸다(NetInfo 이벤트를 못 받는 환경 대비).
@@ -31,6 +34,16 @@ export interface QueuedCheckIn {
   visitedAt: string;
   state: 'pending' | 'failed';
   error?: string;
+  /** 체크인과 함께 저장할 방문 기록. 체크인이 저장된 뒤 보낸다. */
+  record?: QueuedRecord;
+}
+
+export interface QueuedRecord {
+  status: FieldStatus | null;
+  /** 체크인 화면을 열 때의 조치 상태 — 같으면 보내지 않는다. */
+  initialStatus: FieldStatus | null;
+  memo: string;
+  photos: CheckinPhoto[];
 }
 
 interface CheckinQueueState {
@@ -39,7 +52,7 @@ interface CheckinQueueState {
   /** 지금 보내는 중 */
   flushing: boolean;
   hydrate: () => Promise<void>;
-  enqueue: (input: Pick<QueuedCheckIn, 'tripId' | 'fieldId' | 'label'>) => QueuedCheckIn | null;
+  enqueue: (input: Pick<QueuedCheckIn, 'tripId' | 'fieldId' | 'label' | 'record'>) => QueuedCheckIn | null;
   /** 대기 중인 것을 보낸다. retryFailed 면 실패한 것도 다시. */
   flush: (opts?: { retryFailed?: boolean }) => Promise<void>;
   /** 로그인한 사용자가 바뀌면 — 다른 사용자의 항목은 지운다. */
@@ -72,6 +85,8 @@ export const useCheckinQueueStore = create<CheckinQueueState>((set, get) => {
     if (todo.length === 0) return;
     set({ flushing: true });
     const dropped: QueuedCheckIn[] = [];
+    // 체크인은 저장했지만 함께 실은 사진·메모·조치 상태 일부를 못 보낸 현장.
+    const partial: string[] = [];
     try {
       for (const item of todo) {
         // 이 외근이 지금 진행 중이 아니면 서버가 다른 외근(또는 409)에 처리한다 — 보내지 않는다.
@@ -87,6 +102,19 @@ export const useCheckinQueueStore = create<CheckinQueueState>((set, get) => {
           replace(get().items.filter((x) => x.id !== item.id));
           // 보내는 사이 외근이 바뀌었으면 서버가 다른 외근에 붙였다 — 알린다.
           if (r.visit.tripId && r.visit.tripId !== item.tripId) dropped.push(item);
+          else if (item.record) {
+            const rec = item.record;
+            const res = await saveVisitRecord({
+              visitId: r.visit.id,
+              fieldId: item.fieldId,
+              status: rec.status,
+              initialStatus: rec.initialStatus,
+              photos: rec.photos,
+              memo: rec.memo,
+              initialMemo: null,
+            });
+            if (res.errors.length > 0) partial.push(item.label);
+          }
         } else {
           replace(get().items.map((x) => (x.id === item.id ? { ...x, state: 'failed' as const, error: r.error } : x)));
         }
@@ -97,6 +125,9 @@ export const useCheckinQueueStore = create<CheckinQueueState>((set, get) => {
     if (dropped.length > 0) {
       const names = dropped.map((d) => d.label).join(', ');
       void notice('체크인을 저장하지 못했어요', `${names} 기록은 그 외근이 끝난 뒤라 저장하지 못했어요. 방문 기록을 다시 남겨 주세요.`);
+    }
+    if (partial.length > 0) {
+      void notice('일부 기록을 저장하지 못했어요', `${partial.join(', ')} 체크인은 저장했지만 사진·메모 일부를 올리지 못했어요. 외근 상세의 기록 수정에서 다시 넣어 주세요.`);
     }
   };
 
@@ -125,7 +156,7 @@ export const useCheckinQueueStore = create<CheckinQueueState>((set, get) => {
       }
     },
 
-    enqueue: ({ tripId, fieldId, label }) => {
+    enqueue: ({ tripId, fieldId, label, record }) => {
       const userId = getUserId();
       if (!userId) return null;
       const item: QueuedCheckIn = {
@@ -136,6 +167,7 @@ export const useCheckinQueueStore = create<CheckinQueueState>((set, get) => {
         label,
         visitedAt: new Date().toISOString(),
         state: 'pending',
+        ...(record ? { record } : {}),
       };
       // 같은 외근·현장은 하나만(서버도 (외근, 현장) 기준 멱등이다).
       replace([...get().items.filter((x) => !(x.tripId === tripId && x.fieldId === fieldId)), item]);

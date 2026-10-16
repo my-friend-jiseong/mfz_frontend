@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Visit, VisitStatus } from '@/types/entities';
+import type { Visit } from '@/types/entities';
 import { normalizeVisitStatus } from '@/types/entities';
 import { visits as visitsApi, localizeError, ApiError, NetworkError } from '@/api';
 import type { UploadFile } from '@/utils/media';
@@ -9,8 +9,7 @@ import type { VisitPhoto, VisitPhotoPhase } from '@/api';
 // (memos/field_photos 는 현장 전용 — fieldStore.directAttachments 참조).
 //   - check-in: fieldId 만 (siteName·location 제거).
 //   - check-in 직후 초기 status: 'completed' (백엔드 자동 설정).
-//   - setResult: status + 'other' 일 때 reason 10자 이상 필수
-//     (검증 2026-05-28: 백엔드가 visit_status_reason_required 로 강제).
+//   - 2차: 방문 결과 6종(setResult)은 쓰지 않는다(v79). 조치 상태는 현장 상태로 저장(utils/visitRecord, 백로그 2차 D).
 
 type CheckInResult =
   | { ok: true; visit: Visit }
@@ -39,7 +38,6 @@ interface VisitState {
   remove: (visitId: string) => Promise<RemoveResult>;
 
   checkIn: (tripId: string, fieldId: string) => Promise<CheckInResult>;
-  setResult: (visitId: string, status: VisitStatus, reason?: string) => Promise<GenericResult>;
 
   // 백엔드 list endpoint 가 없어 trip/field detail 응답의 timeline·recentVisits 로 hydrate.
   // 같은 visit id 면 status 만 갱신 (기존 행 보존), 새 id 면 추가.
@@ -161,22 +159,6 @@ export const useVisitStore = create<VisitState>((set, get) => ({
         network: e instanceof NetworkError,
         status: e instanceof ApiError ? e.status : undefined,
       };
-    }
-  },
-
-  setResult: async (visitId, status, reason) => {
-    try {
-      await visitsApi.setStatus(visitId, status, reason);
-      set((s) => ({
-        visits: s.visits.map((v) =>
-          v.id === visitId
-            ? { ...v, status, reason: status === 'other' ? reason : undefined }
-            : v,
-        ),
-      }));
-      return { ok: true };
-    } catch (e) {
-      return { ok: false, error: describeError(e) };
     }
   },
 

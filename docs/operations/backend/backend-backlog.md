@@ -963,6 +963,18 @@ PATCH /api/reports/{id} { "status": "completed" }
 - 현장 목록·상세(`GET /api/fields/mine`, `/api/fields/{id}`)에 `latestActionStatus`(가장 최근 방문의 actionStatus, 방문 없으면 null)
 - 외근 상세 타임라인 항목에 그 방문의 `actionStatus`(3 외근 상세 행·3-8 핀 색)
 
+프론트 대체 동작(PR7, 2026-10-17): 체크인(8 계열)·방문 기록 수정(3-7)의 조치 상태는 **방문이 아니라 현장에** 저장한다 —
+`PATCH /api/fields/{id}/status`(`src/utils/visitRecord.ts` `saveVisitRecord`). 방문의 `status`(결과 6종)는 건드리지 않는다
+(체크인 직후 서버 기본값 `completed` 그대로). 그래서
+- 지난 방문을 3-7 에서 고치면 그 방문이 아니라 현장의 '최근 조치 상태'가 바뀐다(가장 최근 방문이 아니어도)
+- 체크인 화면의 기본값은 현장 `status`(= 마지막으로 저장한 조치 상태)
+- 새 현장(8-3)은 고른 조치 상태로 `POST /api/fields` 의 `status` 에 넣어 만든다
+서버가 `visits.actionStatus` 를 받으면 `saveVisitRecord` 의 상태 저장 한 곳만 바꾸면 된다.
+
+방문 메모(§35)도 아직 방문 단위가 없어 현장 메모(`POST /api/fields/{id}/memos`)로 저장하고, 방문 시각 뒤 24시간 안의
+가장 최근 현장 메모를 그 방문의 메모로 본다(`memoForVisit`). 3-7 에서 메모를 고치면 새로 쓰고 옛 메모를 지운다(수정 API 없음).
+체크인 사진은 2차에서 전·중·후 칸 없이 쌓는다(Figma 8 '사진 N') — `POST /api/visits/{id}/photos` 를 `phase` 없이 보낸다.
+
 ### E. 🔴 저장된 사진 파일이 404 — 스토리지 복구 + Content-Type
 
 외근 상세에서 방문 사진을 펼치면 썸네일이 비어 있다. 운영의 `/storage/...` 파일 URL 이 기존 사진 전부 404(서버 쪽 파일 유실로 보임, 2026-10-17 확인). 프론트는 못 불러온 사진을 사진 아이콘 칸으로 보인다(`TripStopRow` onError).
@@ -1011,3 +1023,7 @@ PATCH /api/reports/{id} { "status": "completed" }
 - (선택) `clientId` — 앱이 만든 대기열 id. 응답이 유실돼 다시 보내도 방문이 두 번 생기지 않게
 
 앱은 대기열 항목에 `visitedAt`·`tripId` 를 이미 들고 있다(지금은 보내지 않음). 서버가 받으면 body 에 붙인다.
+
+PR7(2026-10-17): 대기열 항목에 체크인 화면에서 고른 조치 상태·메모·사진(기기 안 파일 경로)도 싣고, 체크인이 저장되면 이어서 보낸다.
+사진 파일은 OS 가 캐시를 비우거나(웹은 새로고침) 하면 사라질 수 있어 그때는 '일부 기록을 저장하지 못했어요'로 알린다.
+새 현장(8-3)은 현장부터 만들어야 해서 오프라인이면 저장하지 않고 알린다(현장 생성도 대기열에 넣으려면 `clientId` 멱등이 필요).

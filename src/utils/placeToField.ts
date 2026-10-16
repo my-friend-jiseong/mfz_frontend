@@ -1,5 +1,5 @@
 import { useFieldStore } from '@/stores/fieldStore';
-import type { Field } from '@/types/entities';
+import type { Field, FieldStatus } from '@/types/entities';
 import type { ReverseAddress } from '@/components/fields/useKakaoPlaceSearch';
 import { regionOf } from './addressFormat';
 
@@ -15,6 +15,11 @@ export interface PlaceTarget {
   sigungu?: string;
   lat: number;
   lng: number;
+  /** 8-3 새 현장 체크인: 고른 조치 상태·프로젝트·분류·상세 주소. 없으면 조치 전·소속 없음. */
+  status?: FieldStatus;
+  projectId?: string | null;
+  categories?: string[];
+  detailAddress?: string;
 }
 
 /**
@@ -46,10 +51,12 @@ export async function createFieldFromPlace(
   }
   const body = {
     name: p.name?.trim() || address,
-    status: 'pending' as const,
+    status: p.status ?? ('pending' as const),
     roadAddress: address,
     ...(p.jibunAddress ? { jibunAddress: p.jibunAddress } : {}),
-    detailAddress: '',
+    detailAddress: p.detailAddress?.trim() ?? '',
+    ...(p.projectId ? { projectId: p.projectId } : {}),
+    ...(p.categories && p.categories.length > 0 ? { categories: p.categories } : {}),
     lat: p.lat,
     lng: p.lng,
     ...(p.sido ? { sido: p.sido } : {}),

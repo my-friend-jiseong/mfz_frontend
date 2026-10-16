@@ -26,6 +26,7 @@ import { useTripPrepStore } from '@/stores/tripPrepStore';
 import { fieldActionStatus } from '@/utils/fieldStatus';
 import { fieldTitle } from '@/utils/fieldFacets';
 import { memoForVisit } from '@/utils/visitRecord';
+import { visitEditHref } from '@/utils/checkinNav';
 import { tripTitle } from '@/utils/tripFormat';
 import { districtOf, stripRegion } from '@/utils/addressFormat';
 import { formatDistanceM } from '@/utils/nearestField';
@@ -284,8 +285,7 @@ export default function FieldDetail() {
               memo={memoForVisit(directAttachments, v.visitedAt)?.text}
               expanded={expandedId === v.id}
               onToggle={() => setExpandedId((cur) => (cur === v.id ? null : v.id))}
-              // TODO(PR7): 3-7 방문 기록 수정(체크인 수정 모드)으로 바꾼다.
-              onEdit={() => router.push(`/(tabs)/trips/${v.tripId}/visits/${v.id}` as never)}
+              onEdit={() => router.push(visitEditHref(v.id, v.tripId) as never)}
               onOpenTrip={() => router.push(`/(tabs)/trips/${v.tripId}` as never)}
               divider={i > 0}
             />

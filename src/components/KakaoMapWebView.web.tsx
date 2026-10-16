@@ -20,10 +20,12 @@ import { withAlpha } from '@/theme/withAlpha';
 import { groupSameLocationMarkers } from '@/utils/groupSameLocationMarkers';
 import {
   ACCURACY_CIRCLE_STYLE,
+  ACCURACY_CIRCLE_STYLE_BRAND,
   PIN_TIP_Y_RATIO,
   START_POINT_HTML,
   buildPinHtml,
   pathStyle,
+  type AccuracyTone,
   type MapPath,
   type MapPinKind,
   type PinSelectedSize,
@@ -201,7 +203,7 @@ interface Props {
   route?: { lat: number; lng: number }[];
   // 2차 경로선·오차 원·출발 위치 — 네이티브와 동일.
   paths?: MapPath[];
-  circle?: { lat: number; lng: number; radius: number } | null;
+  circle?: { lat: number; lng: number; radius: number; tone?: AccuracyTone } | null;
   startPoint?: { lat: number; lng: number } | null;
   // true 면 모든 마커가 한 화면에 들어오도록 자동 프레이밍 (center 무시). 위치도 미리보기용.
   fitToMarkers?: boolean;
@@ -769,13 +771,13 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
     circleRef.current = null;
     if (!circle) return;
     const c = new k.maps.Circle({
-      ...ACCURACY_CIRCLE_STYLE,
+      ...(circle.tone === 'brand' ? ACCURACY_CIRCLE_STYLE_BRAND : ACCURACY_CIRCLE_STYLE),
       center: new k.maps.LatLng(circle.lat, circle.lng),
       radius: circle.radius,
     });
     c.setMap(mapRef.current);
     circleRef.current = c;
-  }, [ready, circle?.lat, circle?.lng, circle?.radius]);
+  }, [ready, circle?.lat, circle?.lng, circle?.radius, circle?.tone]);
 
   // 2차 출발 위치.
   useEffect(() => {

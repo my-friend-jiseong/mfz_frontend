@@ -207,7 +207,8 @@ export const useFieldStore = create<FieldState>((set, get) => ({
       const res = await fieldsApi.patchStatus(id, status);
       set((s) => ({
         fields: s.fields.map((f) =>
-          f.id === id ? { ...f, status: res.status } : f,
+          // 최근 조치 상태(파생 값)를 서버가 주기 시작했으면 그것도 맞춘다 — 핀 색·체크인 기본값이 바로 바뀐다.
+          f.id === id ? { ...f, status: res.status, latestActionStatus: f.latestActionStatus != null ? res.status : f.latestActionStatus } : f,
         ),
       }));
       return { ok: true };

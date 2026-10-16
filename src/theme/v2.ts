@@ -29,6 +29,8 @@ export const c2 = {
     // 7-2·7-3 화면 안 경고 줄 글자·아이콘. Figma 에 변수 없이 hex 로 박혀 있어 이름만 붙였다.
     warningStrong: palette.amber[900],
     dangerDeep: palette.red[900],
+    // 8-4 '○○에 연결했어요' 안내 줄 글자. Figma 에 변수 없이 hex 로 박혀 있어 이름만 붙였다.
+    info: palette.blue[900],
   },
   bg: {
     canvas: palette.white,

@@ -4,7 +4,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { KakaoMapWebView, type KakaoMapHandle, type KakaoMapMarker, type MapPath } from '@/components/KakaoMapWebView';
 import { Icon } from '@/components/icons';
 import { STATUS_PIN_COLOR } from '@/components/shell/pinColors';
-import { checkinHref } from '@/components/shell/TripMiniBar';
+import { checkinHereHref, checkinHref, visitEditHref } from '@/utils/checkinNav';
 import { useRealSafeAreaInsets } from '@/components/shell/realInsets';
 import { useSharedMapSettings } from '@/components/map/useSharedMapSettings';
 import { RecordMenu } from '@/components/trips/RecordMenu';
@@ -287,8 +287,8 @@ export default function ActiveTrip() {
     router.push(checkinHref(next.fieldId) as never);
   };
 
-  // 지금 위치 기록(8-6·7-7) — TODO(PR7): 체크인 화면이 '지금 위치' 모드(가까운 현장 자동 연결 8-4 · 새 현장 8-3)를 구현한다.
-  const recordHere = () => router.push({ pathname: '/(tabs)/trips/fields/[id]/checkin', params: { id: 'here', mode: 'here' } } as never);
+  // 지금 위치 기록(8-6·7-7) — 100m 안 현장이 있으면 8-4 근처 현장, 없으면 8-3 새 현장.
+  const recordHere = () => router.push(checkinHereHref as never);
   // 사진으로 여러 곳 등록(8-7) — TODO(PR9): 화면 구현.
   const photoBatch = () => router.push('/photo-batch' as never);
   const addDestination = () => router.push('/(tabs)/trips/fields' as never);
@@ -601,7 +601,7 @@ export default function ActiveTrip() {
                   onPress={() => {
                     const v = visitByField.get(d.fieldId);
                     // 방문한 목적지는 3-7 방문 기록 수정, 아니면 5 현장 상세.
-                    if (v) router.push(`/(tabs)/trips/${v.tripId}/visits/${v.id}` as never);
+                    if (v) router.push(visitEditHref(v.id, v.tripId) as never);
                     else router.push({ pathname: '/(tabs)/trips/fields/[id]', params: { id: d.fieldId } } as never);
                   }}
                 />

@@ -7,6 +7,20 @@ export interface LatLng {
   lng: number;
 }
 
+/**
+ * 위치 + 수평 오차(m). 오차는 iOS `horizontalAccuracy`, Android `getAccuracy()`, 웹 `coords.accuracy` 를
+ * expo-location 이 `coords.accuracy` 하나로 준다(인수인계 8-5). 모르면 null.
+ */
+export interface UserLocation extends LatLng {
+  accuracy: number | null;
+}
+
+const toUserLocation = (c: { latitude: number; longitude: number; accuracy?: number | null }): UserLocation => ({
+  lat: c.latitude,
+  lng: c.longitude,
+  accuracy: typeof c.accuracy === 'number' && Number.isFinite(c.accuracy) && c.accuracy > 0 ? c.accuracy : null,
+});
+
 // docs/operations/release/REQUIREMENTS_BEFORE_LAUNCHING.md §5 — OS 권한 팝업이 뜨기 **전에** 위치를 어디에 쓰는지,
 // 백그라운드로는 수집하지 않는다는 점을 먼저 알린다. 개인정보처리방침과 실제 동작을 맞추고,
 // 맥락 없이 뜨는 팝업에 반사적으로 '거부' 를 누르는 것을 줄이려는 목적이다.
@@ -80,7 +94,7 @@ let disabledWarned = false;
 // high: Quick Photo 처럼 수십 m 단위 판정이 필요한 곳만 (Balanced 는 ~100m 오차).
 export async function requestUserLocation(opts?: {
   high?: boolean;
-}): Promise<LatLng | null> {
+}): Promise<UserLocation | null> {
   if (GEOLOCATION_DISABLED) {
     if (__DEV__ && !disabledWarned) {
       disabledWarned = true;
@@ -113,7 +127,7 @@ export async function requestUserLocation(opts?: {
     const pos = await Location.getCurrentPositionAsync({
       accuracy: opts?.high ? Location.Accuracy.High : Location.Accuracy.Balanced,
     });
-    return { lat: pos.coords.latitude, lng: pos.coords.longitude };
+    return toUserLocation(pos.coords);
   } catch {
     return null;
   }
@@ -123,7 +137,7 @@ export async function requestUserLocation(opts?: {
 // 부가 정보인 곳에서 권한 안내·팝업을 띄우지 않으려고 쓴다. 마지막으로 알려진 위치가 있으면
 // 1분 안의 것이면 먼저 쓴다(빠름). 그보다 오래됐으면 지금 위치를 새로 읽는다.
 const LAST_KNOWN_MAX_AGE_MS = 60_000;
-export async function peekUserLocation(): Promise<LatLng | null> {
+export async function peekUserLocation(): Promise<UserLocation | null> {
   if (GEOLOCATION_DISABLED) return null;
   try {
     const current = await Location.getForegroundPermissionsAsync();
@@ -131,7 +145,7 @@ export async function peekUserLocation(): Promise<LatLng | null> {
     const last = await Location.getLastKnownPositionAsync({ maxAge: LAST_KNOWN_MAX_AGE_MS }).catch(() => null);
     const pos =
       last ?? (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }));
-    return { lat: pos.coords.latitude, lng: pos.coords.longitude };
+    return toUserLocation(pos.coords);
   } catch {
     return null;
   }

@@ -26,6 +26,7 @@ import { STATUS_LABEL } from '@/components/ui/StatusMark';
 import { confirm, notice } from '@/components/ui/ConfirmDialog';
 import { safeBack } from '@/utils/backNavigation';
 import { memoForVisit } from '@/utils/visitRecord';
+import { visitEditHref } from '@/utils/checkinNav';
 import { fieldActionStatus } from '@/utils/fieldStatus';
 import { useTripReportState, type TripReportState } from '@/utils/reportStatus';
 import { fmtTripDateLine, tripTitle } from '@/utils/tripFormat';
@@ -417,8 +418,7 @@ export default function TripDetail() {
               onToggle={() => setExpandedId((cur) => (cur === vid ? null : vid))}
               photos={photosByVisit[vid]}
               memo={memoForVisit(directAttachments[s.fieldId], s.visit.visitedAt)?.text}
-              // TODO(PR7): 3-7 방문 기록 수정(체크인 수정 모드)으로 바꾼다.
-              onEdit={() => router.push(`/(tabs)/trips/${id}/visits/${vid}` as never)}
+              onEdit={() => router.push(visitEditHref(vid, id) as never)}
               onOpenField={() => router.push(`/(tabs)/trips/fields/${s.fieldId}` as never)}
               divider={i > 0}
             />

@@ -29,7 +29,7 @@ import { colors } from '@/theme/colors';
 import { elevation } from '@/theme/elevation';
 import { spacing, radius } from '@/theme/spacing';
 import { groupSameLocationMarkers } from '@/utils/groupSameLocationMarkers';
-import { pathStyle, type MapPath, type MapPinKind, type PinSelectedSize } from '@/assets/mapPins';
+import { pathStyle, type AccuracyTone, type MapPath, type MapPinKind, type PinSelectedSize } from '@/assets/mapPins';
 
 export type { MapPath, MapPinKind, PinSelectedSize };
 
@@ -65,7 +65,7 @@ export interface KakaoMapMarker {
   pin?: MapPinKind;
   /** 선택된 핀 크기. sm 1.19배(기본·체크인 카드), lg 1.44배(현장 상세 카드), next 1.19배 타원 없음(6·7 다음 목적지). */
   selectedSize?: PinSelectedSize;
-  /** 핀 아래 이름표(6 외근 준비의 다음 목적지). 지금은 웹만 그린다 — 네이티브 템플릿에 이름 자리가 없다. */
+  /** 핀 아래 이름표(6·7 다음 목적지). */
   nameTag?: string;
 }
 
@@ -86,8 +86,8 @@ interface Props {
   route?: { lat: number; lng: number }[];
   // 2차 경로선 여러 개(3-8 지나온 길 실선, 7-9 남은 길·건너뛴 곳 점선). route 와 따로 그린다.
   paths?: MapPath[];
-  // 2차 GPS 오차 원(8-12). radius 는 미터.
-  circle?: { lat: number; lng: number; radius: number } | null;
+  // 2차 위치 오차 원(8-3·8-5·8-11·8-12). radius 는 미터. tone 기본 warning(GPS 약함), brand = 보통 오차.
+  circle?: { lat: number; lng: number; radius: number; tone?: AccuracyTone } | null;
   // 2차 출발 위치 표시(3-8 흰 원·검은 테두리).
   startPoint?: { lat: number; lng: number } | null;
   // 지도 뷰(center+level)가 정착할 때마다 보고 — 상위가 기억해 재마운트 시 복원에 사용.
@@ -376,7 +376,7 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
     if (!ready) return;
     const payload = circle ? JSON.stringify(circle) : 'null';
     inject(`window.__mfzSetCircle&&window.__mfzSetCircle(${payload})`);
-  }, [ready, circle?.lat, circle?.lng, circle?.radius, inject]);
+  }, [ready, circle?.lat, circle?.lng, circle?.radius, circle?.tone, inject]);
 
   // 2차 출발 위치.
   useEffect(() => {

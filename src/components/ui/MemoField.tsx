@@ -37,6 +37,8 @@ export const MemoField = forwardRef<TextInput, Props>(function MemoField(
         ref={ref}
         {...rest}
         multiline={multiline}
+        // 웹 textarea 는 rows 기본 2 — 한 줄 칸으로 시작하게 1 을 준다. 네이티브(Android)는 줄 수를 고정해 버려 넘기지 않는다.
+        numberOfLines={multiline && Platform.OS === 'web' ? (rest.numberOfLines ?? 1) : rest.numberOfLines}
         placeholder={placeholder}
         placeholderTextColor={c2.text.tertiary}
         onFocus={(e) => {
@@ -77,9 +79,10 @@ const styles = StyleSheet.create({
     backgroundColor: c2.bg.canvas,
   },
   focused: { borderColor: c2.border.brand },
-  multi: { alignItems: 'flex-start', paddingVertical: space[4] },
+  // 여러 줄도 한 줄일 때는 한 줄 칸과 같은 높이(Figma 8 메모 54)로 시작해 내용만큼 자란다.
+  multi: { alignItems: 'flex-start' },
   input: { flex: 1, ...inputText, color: c2.text.primary, minHeight: 44, paddingVertical: 0, paddingRight: space[10] },
-  inputMulti: { lineHeight: type2['bodyM.regular'].lineHeight, paddingVertical: space[10], textAlignVertical: 'top' },
+  inputMulti: { lineHeight: type2['bodyM.regular'].lineHeight, minHeight: 0, paddingVertical: space[14], textAlignVertical: 'top' },
   mic: {
     width: 44,
     height: 44,

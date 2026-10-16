@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { KakaoMapWebView, type KakaoMapMarker, type MapPath } from '@/components/KakaoMapWebView';
+import type { AccuracyTone } from '@/assets/mapPins';
 import { Icon } from '@/components/icons';
 import { Text } from '@/components/ui/Text';
 import { Touchable } from '@/components/ui/Touchable';
@@ -8,7 +9,7 @@ import { c2, elevation2, radius2, space } from '@/theme/v2';
 
 interface Props {
   markers: KakaoMapMarker[];
-  circle?: { lat: number; lng: number; radius: number } | null;
+  circle?: { lat: number; lng: number; radius: number; tone?: AccuracyTone } | null;
   paths?: MapPath[];
   startPoint?: { lat: number; lng: number } | null;
   myLocation?: { lat: number; lng: number } | null;

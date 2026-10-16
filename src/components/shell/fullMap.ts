@@ -1,5 +1,6 @@
 import { router } from 'expo-router';
 import type { MapPath, MapPinKind } from '@/components/KakaoMapWebView';
+import type { AccuracyTone } from '@/assets/mapPins';
 import type { LatLng } from '@/utils/geolocation';
 
 // 공통 전체 지도(3-8 경로 지도 · 3-9 / 5-10 / 8-9~8-12 위치 지도) 인자.
@@ -35,8 +36,8 @@ export interface FullMapSpec {
   /** 머리 알약 문구. 예: '하신중앙로 점검 · 10월 6일', '당리동 312-7 부근 · 오차 ±48m' */
   title: string;
   pins: FullMapPin[];
-  /** GPS 오차 원(8-12). radius 는 미터. */
-  accuracyCircle?: { lat: number; lng: number; radius: number } | null;
+  /** 위치 오차 원(8-11 보통 brand · 8-12 GPS 약함 warning). radius 는 미터. */
+  accuracyCircle?: { lat: number; lng: number; radius: number; tone?: AccuracyTone } | null;
   /** 경로선(3-8). */
   paths?: MapPath[];
   /** 출발 위치(3-8). */

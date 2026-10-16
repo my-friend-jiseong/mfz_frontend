@@ -73,9 +73,10 @@ export default function FullMapScreen() {
   // 오차 원이 있으면 핀 맞춤 대신 원이 Figma 크기로 보이게 원 중심·축척으로 연다 — 핀 맞춤(핀 1개 = level 5)이면
   // 반경 48m 원이 핀 밑에 묻힌다.
   const circle = spec?.accuracyCircle ?? null;
+  // 보통 오차 원(8-11)은 작아서 핀 맞춤으로 연다 — 원 크기로 열면 너무 가까이 들어간다.
   const circleView = useMemo(
     () =>
-      circle
+      circle && circle.tone !== 'brand'
         ? {
             center: { lat: circle.lat, lng: circle.lng },
             level: levelForMetersPerPx((circle.radius * 2) / ACCURACY_DIAMETER_PT),

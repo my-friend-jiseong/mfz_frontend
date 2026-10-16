@@ -74,7 +74,7 @@ export function buildPinHtml(
   kind: MapPinKind,
   order?: number | string | null,
   selected?: PinSelectedSize | null,
-  /** 핀 아래 이름표(Figma 6 '낙동대로 351'). 웹만 — 네이티브 템플릿은 아직 이름 자리가 없다. */
+  /** 핀 아래 이름표(Figma 6 '낙동대로 351'). 네이티브는 PIN_TAG_TEMPLATE 로 같은 모양을 붙인다. */
   nameTag?: string | null,
 ): string {
   const sel = selected ? SELECTED[selected] : null;
@@ -91,9 +91,7 @@ export function buildPinHtml(
   const ground = sel && 'gh' in sel
     ? `<div style="position:absolute;left:${(w - sel.gw) / 2}px;top:${tipY - sel.lift - sel.gh / 2}px;width:${sel.gw}px;height:${sel.gh}px;border-radius:${sel.gh / 2}px;box-sizing:border-box;background:${hexA(FILL[kind === 'skipped' ? 'visited' : kind], groundAlpha[0])};border:2px solid ${hexA(FILL[kind === 'skipped' ? 'visited' : kind], groundAlpha[1])};"></div>`
     : '';
-  const tag = nameTag
-    ? `<div style="position:absolute;left:50%;top:${Math.round(tipY) + 3}px;transform:translateX(-50%);white-space:nowrap;padding:2px 8px;border-radius:10px;background:${c2.bg.canvas};color:${c2.text.primary};font-family:Pretendard,-apple-system,system-ui,sans-serif;font-size:12px;font-weight:700;line-height:16px;letter-spacing:-0.2px;box-shadow:0 1px 1.5px rgba(15,23,42,0.3),0 2px 6px rgba(15,23,42,0.12);pointer-events:none;">${escapeHtml(nameTag)}</div>`
-    : '';
+  const tag = nameTag ? nameTagHtml(Math.round(tipY) + 3, escapeHtml(nameTag)) : '';
   return (
     `<div style="position:relative;width:${w}px;height:${h}px;cursor:pointer;">` +
     ground +
@@ -112,6 +110,21 @@ function hexA(hex: string, a: number): string {
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 }
 
+// 핀 아래 이름표 — 핀 끝 3px 아래 가운데. top·글자는 호출부가 넣는다(글자는 이미 이스케이프된 것).
+function nameTagHtml(top: number | string, text: string): string {
+  return `<div style="position:absolute;left:50%;top:${top}px;transform:translateX(-50%);white-space:nowrap;padding:2px 8px;border-radius:10px;background:${c2.bg.canvas};color:${c2.text.primary};font-family:Pretendard,-apple-system,system-ui,sans-serif;font-size:12px;font-weight:700;line-height:16px;letter-spacing:-0.2px;box-shadow:0 1px 1.5px rgba(15,23,42,0.3),0 2px 6px rgba(15,23,42,0.12);pointer-events:none;">${text}</div>`;
+}
+
+/** 네이티브용 이름표 조각. __TOP__·__TAG__ 를 페이지 안에서 바꿔 핀 템플릿 끝 `</div>` 앞에 붙인다. */
+export const PIN_TAG_TEMPLATE = nameTagHtml('__TOP__', '__TAG__');
+/** 핀 크기별 이름표 top(px) — 키는 PIN_TEMPLATES 의 마지막 칸('0'|'sm'|'lg'|'next'). */
+export const PIN_TAG_TOP: Record<string, number> = Object.fromEntries(
+  (['0', ...SELECTED_SIZES] as const).map((sel) => {
+    const scale = sel === '0' ? 1 : SELECTED[sel].scale;
+    return [sel, Math.round(Math.round(H * scale) * PIN_TIP_Y_RATIO) + 3];
+  }),
+);
+
 /** 네이티브 HTML 용 템플릿. 키: `${kind}|${numbered?1:0}|${'0'|'sm'|'lg'|'next'}` */
 export const PIN_TEMPLATES: Record<string, string> = Object.fromEntries(
   PIN_KINDS.flatMap((k) =>
@@ -127,6 +140,9 @@ export const PIN_TEMPLATES: Record<string, string> = Object.fromEntries(
 /** 출발 위치(3-8): 흰 원 + 4px 검은 테두리 18. */
 export const START_POINT_HTML = `<div style="width:18px;height:18px;border-radius:9px;box-sizing:border-box;background:${c2.bg.canvas};border:4px solid ${c2.bg.ink};pointer-events:none;"></div>`;
 
+/** 위치 오차 원 색. warning = GPS 약함(8-5·8-12), brand = 보통 오차(8-3·8-11). */
+export type AccuracyTone = 'warning' | 'brand';
+
 /** GPS 오차 원(8-12) — kakao.maps.Circle 옵션. */
 export const ACCURACY_CIRCLE_STYLE = {
   strokeWeight: 1,
@@ -134,6 +150,16 @@ export const ACCURACY_CIRCLE_STYLE = {
   strokeOpacity: 0.55,
   strokeStyle: 'dash',
   fillColor: c2.status.pending,
+  fillOpacity: 0.1,
+} as const;
+
+/** 보통 오차 원(8-3 Figma 694:4460) — 파랑 0.1 바탕, 0.35 실선. */
+export const ACCURACY_CIRCLE_STYLE_BRAND = {
+  strokeWeight: 1,
+  strokeColor: c2.bg.brand,
+  strokeOpacity: 0.35,
+  strokeStyle: 'solid',
+  fillColor: c2.bg.brand,
   fillOpacity: 0.1,
 } as const;
 

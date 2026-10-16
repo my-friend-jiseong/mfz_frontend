@@ -17,7 +17,9 @@ import { Touchable } from '@/components/ui/Touchable';
 import { notice } from '@/components/ui/ConfirmDialog';
 import { Icon } from '@/components/icons';
 import { useFieldStore } from '@/stores/fieldStore';
+import { useFieldDraftStore } from '@/stores/fieldDraftStore';
 import type { UpdateFieldBody } from '@/api';
+import type { MapPinKind } from '@/components/KakaoMapWebView';
 import { fieldActionStatus } from '@/utils/fieldStatus';
 import { regionOf, shortJibun, stripRegion } from '@/utils/addressFormat';
 import { isInKorea } from '@/utils/addressSearch';
@@ -41,34 +43,80 @@ interface Addr {
 
 const sameKey = (list: string[]) => [...list].sort().join('\u0001');
 
+// 고칠 대상 — 저장된 현장, 또는 아직 서버에 없는 새 현장 입력값(8-3 [위치 보정], fieldDraftStore).
+interface Source {
+  key: string;
+  name: string;
+  address: string;
+  jibun: string;
+  addressDetail: string;
+  categories: string[];
+  latitude: number;
+  longitude: number;
+  pinKind: MapPinKind;
+}
+
 /**
  * 5-5 현장 정보 수정(Figma 556:2603). X 로 닫는 모달(탭 바를 가림). 위치 보정 지도(가운데 고정 핀) · 현장명 · 주소 · 상세 주소 · 분류.
  * 현장명은 비워도 저장한다 — 비우면 주소가 이름이 된다(인수인계 2026-10-15). 프로젝트는 5-3 이 맡는다.
- * TODO(PR7): 새 현장 체크인의 위치 보정(8-3)에서도 연다.
+ * 8-3 새 현장 체크인의 [위치 보정]도 이 모달을 연다(?draft=키). 그때는 서버에 쓰지 않고 입력값만 고쳐 돌려준다 —
+ * 현장은 체크인 [새 현장으로 저장]에서 만든다.
  */
 export default function FieldEditModal() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, draft: draftKey } = useLocalSearchParams<{ id?: string; draft?: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const field = useFieldStore((s) => s.fields.find((f) => f.id === id));
+  const savedField = useFieldStore((s) => (id ? s.fields.find((f) => f.id === id) : undefined));
+  const draft = useFieldDraftStore((s) => (draftKey ? s.drafts[draftKey] : undefined));
+  const field = useMemo<Source | undefined>(() => {
+    if (savedField) {
+      return {
+        key: savedField.id,
+        // 이름이 주소와 같으면(예전 앱이 주소를 이름으로 저장) 빈 칸으로 보인다 — 비어 있으면 주소가 이름.
+        name: savedField.name?.trim() && savedField.name.trim() !== savedField.address ? savedField.name.trim() : '',
+        address: savedField.address,
+        jibun: '',
+        addressDetail: savedField.addressDetail ?? '',
+        categories: savedField.categories ?? [],
+        latitude: savedField.latitude,
+        longitude: savedField.longitude,
+        pinKind: fieldActionStatus(savedField),
+      };
+    }
+    if (draft && draftKey) {
+      return {
+        key: `draft:${draftKey}`,
+        name: draft.name,
+        address: draft.road || draft.jibun,
+        jibun: draft.jibun,
+        addressDetail: draft.detail,
+        categories: draft.categories,
+        latitude: draft.lat,
+        longitude: draft.lng,
+        pinKind: 'new',
+      };
+    }
+    return undefined;
+  }, [savedField, draft, draftKey]);
 
   useEffect(() => {
     if (id && !useFieldStore.getState().fields.some((f) => f.id === id)) void useFieldStore.getState().loadDetail(id);
   }, [id]);
+  // 새 현장 입력값은 저장 시점의 원래 값과 비교하지 않는다 — 처음 값을 한 번 잡아 둔다.
+  const draftAtOpen = useRef(draft);
 
   // 처음 값 — 현장이 늦게 도착해도(웹 새로고침) 한 번만 맞춘다.
   const initial = useMemo(
     () =>
       field
         ? {
-            // 이름이 주소와 같으면(예전 앱이 주소를 이름으로 저장) 빈 칸으로 보인다 — 비어 있으면 주소가 이름.
-            name: field.name?.trim() && field.name.trim() !== field.address ? field.name.trim() : '',
-            detail: field.addressDetail ?? '',
-            categories: field.categories ?? [],
+            name: field.name,
+            detail: field.addressDetail,
+            categories: field.categories,
           }
         : null,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [field?.id],
+    [field?.key],
   );
   const [name, setName] = useState('');
   const [detail, setDetail] = useState('');
@@ -77,12 +125,17 @@ export default function FieldEditModal() {
   const [moved, setMoved] = useState(false);
   const hydrated = useRef<string | null>(null);
   useEffect(() => {
-    if (!field || !initial || hydrated.current === field.id) return;
-    hydrated.current = field.id;
+    if (!field || !initial || hydrated.current === field.key) return;
+    hydrated.current = field.key;
     setName(initial.name);
     setDetail(initial.detail);
     setCategories(initial.categories);
-    setAddr({ road: field.address, jibun: '', lat: field.latitude, lng: field.longitude });
+    const d = draftAtOpen.current;
+    setAddr(
+      d && !savedField
+        ? { road: d.road, jibun: d.jibun, sido: d.sido, sigungu: d.sigungu, lat: d.lat, lng: d.lng }
+        : { road: field.address, jibun: field.jibun, lat: field.latitude, lng: field.longitude },
+    );
   }, [field, initial]);
 
   const mapRef = useRef<FieldPinMapHandle>(null);
@@ -177,8 +230,26 @@ export default function FieldEditModal() {
     // 분류 시트에서 시작한 이름 변경·삭제가 끝난 뒤 저장한다 — 안 그러면 옛 이름으로 덮어쓴다.
     await waitForCategoryCascade();
     const cats = reconcileCategories(categories, categoriesAt.current);
+    // 새 현장(8-3) — 입력값만 돌려준다. 시·도·시·군·구는 [새 현장으로 저장]이 채운다(createFieldFromPlace).
+    if (!savedField && draftKey) {
+      useFieldDraftStore.getState().patch(draftKey, {
+        name: nameTrim,
+        detail: detailTrim,
+        categories: cats,
+        categoriesAt: categoriesAt.current,
+        ...(moved
+          ? { road: addr.road, jibun: addr.jibun, sido: addr.sido, sigungu: addr.sigungu, lat: addr.lat, lng: addr.lng, moved: true }
+          : {}),
+      });
+      leave();
+      return;
+    }
+    if (!savedField) {
+      fail('현장을 찾을 수 없어요.');
+      return;
+    }
     // 비교는 지금 저장된 값과 — 반영 작업이 이 현장의 분류를 이미 바꿨을 수 있다.
-    const savedCats = useFieldStore.getState().fields.find((f) => f.id === field.id)?.categories ?? initial.categories;
+    const savedCats = useFieldStore.getState().fields.find((f) => f.id === savedField.id)?.categories ?? initial.categories;
     const body: UpdateFieldBody = {};
     if (nameTrim !== initial.name) body.name = nameTrim;
     if (detailTrim !== initial.detail.trim()) body.detailAddress = detailTrim;
@@ -215,7 +286,7 @@ export default function FieldEditModal() {
       leave();
       return;
     }
-    const r = await useFieldStore.getState().update(field.id, body);
+    const r = await useFieldStore.getState().update(savedField.id, body);
     if (!r.ok) {
       fail(r.error);
       return;
@@ -241,7 +312,7 @@ export default function FieldEditModal() {
               resolveInitialAddress
               height={MAP_H}
               mode="center"
-              pinKind={fieldActionStatus(field)}
+              pinKind={field.pinKind}
               framed={false}
               onInteractionChange={setMapBusy}
             />

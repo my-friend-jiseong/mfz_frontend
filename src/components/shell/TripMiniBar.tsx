@@ -15,6 +15,7 @@ import { peekUserLocation, type LatLng } from '@/utils/geolocation';
 import { haversineKm } from '@/utils/routeOptimize';
 import { formatDistanceM } from '@/utils/nearestField';
 import { fmtDate } from '@/utils/datetime';
+import { checkinHref } from '@/utils/checkinNav';
 
 // Figma 7-4(598:2807) '진행 중인 외근' 카드 64 + 탭 바와의 간격 8. 위로 24 더 올라가는 흰 그라데이션(미니 바 바탕)은
 // 카드 뒤 목록 글자를 가린다 — 높이 계산(콘텐츠 여백·스낵바)에는 카드+간격만 쓴다.
@@ -24,7 +25,6 @@ export const MINI_BAR_HEIGHT = CARD_H + space[8];
 // 거리는 부가 정보 — 30초마다 다시 읽는다(권한이 있을 때만, 묻지 않음).
 const LOCATION_REFRESH_MS = 30_000;
 
-export const checkinHref = (fieldId: string) => `/(tabs)/trips/fields/${fieldId}/checkin`;
 
 function useSilentLocation(enabled: boolean): LatLng | null {
   const [pos, setPos] = useState<LatLng | null>(null);
@@ -116,7 +116,7 @@ export function TripMiniBar({ bottom }: { bottom: number }) {
         </Touchable>
         {next ? (
           <Touchable
-            onPress={() => router.navigate(checkinHref(next.fieldId) as never)}
+            onPress={() => router.push(checkinHref(next.fieldId) as never)}
             accessibilityRole="button"
             accessibilityLabel="체크인"
             style={styles.checkin}

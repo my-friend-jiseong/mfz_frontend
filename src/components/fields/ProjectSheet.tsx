@@ -17,7 +17,13 @@ import { fontFamily } from '@/theme/typography';
 interface Props {
   open: boolean;
   onClose: () => void;
-  field: Field;
+  /** 저장된 현장 — 고르면 바로 서버에 저장한다. */
+  field?: Field;
+  /**
+   * 아직 서버에 없는 새 현장(8-3) — 저장하지 않고 고른 값만 돌려준다. field 대신 넘긴다.
+   * value 는 지금 고른 프로젝트 id(없으면 null).
+   */
+  select?: { value: string | null; onSelect: (projectId: string | null, projectName: string | null) => void };
   /** 부제 앞부분(현장 이름). */
   placeName: string;
 }
@@ -26,7 +32,7 @@ interface Props {
  * 5-3 프로젝트 변경 시트(하나만). 고르면 바로 저장하고 닫는다. '프로젝트 없음'은 소속을 뺀다.
  * '새 프로젝트 만들기'는 그리지 않은 흐름이라 5-12 새 분류와 같은 입력 줄로 만든다.
  */
-export function ProjectSheet({ open, onClose, field, placeName }: Props) {
+export function ProjectSheet({ open, onClose, field, select, placeName }: Props) {
   const projects = useProjectStore((s) => s.projects);
   const fields = useFieldStore((s) => s.fields);
   const [creating, setCreating] = useState(false);
@@ -48,11 +54,18 @@ export function ProjectSheet({ open, onClose, field, placeName }: Props) {
   // 화면에 있는 내 현장으로 센다 — 방금 바꾼 소속이 바로 보인다. 현장 목록을 못 받았으면 서버 집계.
   const countOf = (id: string, server?: number) => (fields.length > 0 ? (countById.get(id) ?? 0) : (server ?? 0));
 
-  const current = field.projectId ?? null;
+  const current = select ? select.value : (field?.projectId ?? null);
 
   const choose = async (projectId: string | null) => {
     if (busy) return;
     if (projectId === current) {
+      onClose();
+      return;
+    }
+    if (select || !field) {
+      // 새 현장 — 목록에 방금 만든 프로젝트가 아직 없을 수 있어 스토어에서 다시 읽는다.
+      const name = projectId ? (useProjectStore.getState().projects.find((p) => p.id === projectId)?.name ?? null) : null;
+      select?.onSelect(projectId, name);
       onClose();
       return;
     }
@@ -85,7 +98,7 @@ export function ProjectSheet({ open, onClose, field, placeName }: Props) {
   };
 
   return (
-    <AppSheet open={open} onClose={onClose} title="프로젝트 변경" subtitle={`${placeName} · 현장은 프로젝트 하나에만 속해요`} scrollable>
+    <AppSheet open={open} onClose={onClose} title={select ? '프로젝트 선택' : '프로젝트 변경'} subtitle={`${placeName} · 현장은 프로젝트 하나에만 속해요`} scrollable>
       <View style={styles.list}>
         {projects.map((p, i) => (
           <SelectRow
