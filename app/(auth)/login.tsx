@@ -1,23 +1,17 @@
-import { useRef, useState } from 'react';
-import {
-  Alert,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  TextInput,
-  View,
-} from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { ScrollView, StyleSheet, View, type TextInput } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { KeyboardAvoid } from '@/components/ui/KeyboardAvoid';
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import { useAuthStore } from '@/stores/authStore';
-import { colors } from '@/theme/colors';
-import { spacing } from '@/theme/spacing';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
+import { Button2 } from '@/components/ui/Button2';
+import { FormField, TextField2 } from '@/components/ui/FormField2';
 import { Text } from '@/components/ui/Text';
+import { Touchable } from '@/components/ui/Touchable';
+import { snackbar } from '@/components/ui/Snackbar';
+import { Icon } from '@/components/icons';
 import { SafeScreen } from '@/components/SafeScreen';
-import { SUPPORT_EMAIL } from '@/utils/contact';
+import { FEATURE_PASSWORD_RESET } from '@/api/config';
+import { c2, radius2, space } from '@/theme/v2';
 
 interface FieldErrors {
   email?: string;
@@ -26,27 +20,56 @@ interface FieldErrors {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// 다른 화면에서 로그인으로 돌아오며 띄우는 한 줄(11-9 재설정 완료, 10-4 탈퇴 완료).
+// 떠나는 화면이 아니라 여기서 띄워야 화면 교체와 스낵바가 한 배치에 섞이지 않는다.
+const NOTICES = {
+  reset: '비밀번호를 바꿨어요. 새 비밀번호로 로그인해 주세요.',
+  deleted: '회원 탈퇴가 끝났어요.',
+} as const;
+
 export default function Login() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ email?: string; notice?: string }>();
   const login = useAuthStore((s) => s.login);
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(typeof params.email === 'string' ? params.email : '');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
-  const [globalError, setGlobalError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const passwordRef = useRef<TextInput>(null);
 
+  // 11-9: 재설정한 이메일을 미리 채우고 스낵바. 한 번 띄운 뒤 notice 를 지워 새로고침에 다시 뜨지 않게.
+  useEffect(() => {
+    if (typeof params.email === 'string' && params.email) setEmail(params.email);
+    const raw = params.notice;
+    const notice =
+      typeof raw === 'string' && Object.prototype.hasOwnProperty.call(NOTICES, raw)
+        ? (raw as keyof typeof NOTICES)
+        : undefined;
+    if (notice) {
+      // 이전 시도의 오류·비밀번호는 지운다(재설정·탈퇴 뒤 새로 들어온 것과 같게).
+      setFormError(null);
+      setFieldErrors({});
+      setPassword('');
+      // 앱을 이 URL 로 바로 열면 스낵바 호스트가 이 화면보다 늦게 붙는다 — 한 프레임 미룬다.
+      // (notice 를 지우면 effect 가 다시 돌므로 정리 함수로 취소하지 않는다.)
+      requestAnimationFrame(() =>
+        snackbar.show({ message: NOTICES[notice], duration: 4000, bottomOffset: space[8] }),
+      );
+      router.setParams({ notice: undefined });
+    }
+  }, [params.email, params.notice, router]);
+
   const validate = (): FieldErrors => {
     const errs: FieldErrors = {};
-    if (!email.trim()) errs.email = '이메일을 입력해주세요';
-    else if (!EMAIL_RE.test(email.trim())) errs.email = '이메일 형식이 올바르지 않습니다';
-    if (!password) errs.password = '비밀번호를 입력해주세요';
+    if (!email.trim()) errs.email = '이메일을 입력해 주세요';
+    else if (!EMAIL_RE.test(email.trim())) errs.email = '이메일 형식이 맞지 않아요';
+    if (!password) errs.password = '비밀번호를 입력해 주세요';
     return errs;
   };
 
   const handleLogin = async () => {
-    setGlobalError(null);
+    setFormError(null);
     const errs = validate();
     setFieldErrors(errs);
     if (Object.keys(errs).length > 0) return;
@@ -68,141 +91,146 @@ export default function Login() {
     }
     setSubmitting(false);
 
-    // Phase 7 코드 분기 — invalid_credentials 면 비밀번호 비우고 포커스, 인라인 표시.
+    // 11-1: 이메일·비밀번호 불일치는 칸이 아니라 버튼 위 빨간 상자 한 줄. 입력값은 그대로 둔다.
     if (result.code === 'invalid_credentials') {
-      setPassword('');
-      setFieldErrors({ password: '이메일 또는 비밀번호가 올바르지 않습니다' });
-      passwordRef.current?.focus();
+      setFormError('이메일 또는 비밀번호가 맞지 않아요.');
       return;
     }
     if (result.code === 'invalid_email' || result.code === 'email_invalid') {
-      setFieldErrors({ email: result.error });
+      setFieldErrors({ email: '이메일 형식이 맞지 않아요' });
       return;
     }
-    setGlobalError(result.error);
+    setFormError(result.error);
+  };
+
+  const openReset = () => {
+    const e = email.trim();
+    router.push((e ? `/password-reset?email=${encodeURIComponent(e)}` : '/password-reset') as never);
   };
 
   return (
-    <SafeScreen>
-    <KeyboardAvoid
-      style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <View style={styles.header}>
-          <Text variant="h1" color="primary" align="center">
+    <SafeScreen edges={['top', 'bottom']} background={c2.bg.canvas}>
+      <KeyboardAvoid style={styles.flex}>
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+          <Text v2="logo" tone="link" accessibilityRole="header">
             일가요
           </Text>
-          <Text
-            variant="bodySm"
-            color="textMuted"
-            align="center"
-            style={styles.tagline}
-          >
+          <Text v2="bodyL.regular" tone="secondary" style={styles.tagline}>
             현장 방문 업무를 함께합니다
           </Text>
-        </View>
 
-        <View style={styles.form}>
-          <Input
-            label="이메일"
-            value={email}
-            onChangeText={(v) => {
-              setEmail(v);
-              if (fieldErrors.email) setFieldErrors((p) => ({ ...p, email: undefined }));
-            }}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            returnKeyType="next"
-            onSubmitEditing={() => passwordRef.current?.focus()}
-            editable={!submitting}
-            placeholder="example@domain.com"
-            error={fieldErrors.email}
-          />
+          <View style={styles.form}>
+            <FormField label="이메일" error={fieldErrors.email}>
+              <TextField2
+                value={email}
+                onChangeText={(v) => {
+                  setEmail(v);
+                  if (fieldErrors.email) setFieldErrors((p) => ({ ...p, email: undefined }));
+                }}
+                invalid={!!fieldErrors.email}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="email-address"
+                textContentType="username"
+                autoComplete="email"
+                returnKeyType="next"
+                onSubmitEditing={() => passwordRef.current?.focus()}
+                editable={!submitting}
+                placeholder="example@domain.com"
+                accessibilityLabel="이메일"
+              />
+            </FormField>
+            <FormField label="비밀번호" error={fieldErrors.password}>
+              <TextField2
+                ref={passwordRef}
+                value={password}
+                onChangeText={(v) => {
+                  setPassword(v);
+                  if (fieldErrors.password) setFieldErrors((p) => ({ ...p, password: undefined }));
+                }}
+                invalid={!!fieldErrors.password}
+                secureTextEntry
+                textContentType="password"
+                autoComplete="current-password"
+                returnKeyType="go"
+                onSubmitEditing={() => void handleLogin()}
+                editable={!submitting}
+                placeholder="비밀번호"
+                accessibilityLabel="비밀번호"
+              />
+            </FormField>
 
-          <Input
-            ref={passwordRef}
-            label="비밀번호"
-            value={password}
-            onChangeText={(v) => {
-              setPassword(v);
-              if (fieldErrors.password) setFieldErrors((p) => ({ ...p, password: undefined }));
-            }}
-            secureTextEntry={!showPassword}
-            returnKeyType="go"
-            onSubmitEditing={() => void handleLogin()}
-            editable={!submitting}
-            placeholder="비밀번호"
-            error={fieldErrors.password}
-            rightSlot={
-              <Pressable
-                onPress={() => setShowPassword((v) => !v)}
-                accessibilityLabel={showPassword ? '비밀번호 숨기기' : '비밀번호 보기'}
-                hitSlop={8}
-              >
-                <Ionicons
-                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                  size={20}
-                  color={colors.textMuted}
-                />
-              </Pressable>
-            }
-          />
+            {formError ? (
+              <View style={styles.alert} accessibilityRole="alert" accessibilityLiveRegion="polite">
+                <Icon name="alert" size={16} color={c2.text.danger} />
+                <Text v2="bodyS.semibold" tone="danger" style={styles.alertText}>
+                  {formError}
+                </Text>
+              </View>
+            ) : null}
 
-          {globalError ? (
-            <Text variant="bodySm" color="danger">
-              {globalError}
-            </Text>
-          ) : null}
+            <Button2 onPress={() => void handleLogin()} loading={submitting} fullWidth style={styles.submit}>
+              로그인
+            </Button2>
+          </View>
 
-          <Button
-            onPress={handleLogin}
-            size="lg"
-            loading={submitting}
-            fullWidth
-            style={styles.submit}
-          >
-            로그인
-          </Button>
-
-          <Button
-            onPress={() => router.push('/(auth)/signup')}
-            variant="ghost"
-            fullWidth
-          >
-            회원가입
-          </Button>
-
-          <Pressable
-            onPress={() =>
-              // 서버의 POST /auth/password/reset-request 는 스텁이다 — OpenAPI 설명 원문:
-              // "SMTP·토큰 저장은 미구현, 항상 { ok: true }만 반환". 호출해봐야 메일이 안 가므로
-              // 배선하지 않고 수동 안내를 유지한다. 자동화 요청은 backend-backlog §30.
-              Alert.alert(
-                '비밀번호 재설정',
-                `운영자 이메일 ${SUPPORT_EMAIL} 로 가입 이메일을 알려주시면 임시 비밀번호를 발급해드립니다. (자동 재설정 기능은 준비 중입니다)`,
-              )
-            }
-            style={styles.subtleLink}
-          >
-            <Text variant="caption" color="textMuted">
-              비밀번호를 잊으셨나요?
-            </Text>
-          </Pressable>
-        </View>
-      </ScrollView>
-    </KeyboardAvoid>
+          <View style={styles.links}>
+            <Touchable
+              onPress={() => router.push('/(auth)/signup')}
+              accessibilityRole="button"
+              style={styles.link}
+            >
+              <Text v2="bodyM.bold" tone="link">
+                회원가입
+              </Text>
+            </Touchable>
+            {/* 비밀번호 찾기는 서버 API 가 생기면 연다(FEATURE_PASSWORD_RESET). */}
+            {FEATURE_PASSWORD_RESET ? (
+              <>
+                <View style={styles.divider} />
+                <Touchable onPress={openReset} accessibilityRole="button" style={styles.link}>
+                  <Text v2="bodyM.semibold" tone="secondary">
+                    비밀번호를 잊었어요
+                  </Text>
+                </Touchable>
+              </>
+            ) : null}
+          </View>
+        </ScrollView>
+      </KeyboardAvoid>
     </SafeScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  scroll: { padding: spacing.xl, paddingTop: spacing.xxl * 2 },
-  header: { marginBottom: spacing.xxl },
-  tagline: { marginTop: spacing.sm },
-  form: { gap: spacing.md },
-  submit: { marginTop: spacing.md },
-  subtleLink: {
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
+  flex: { flex: 1, backgroundColor: c2.bg.canvas },
+  // Figma 11: 상태 표시줄 아래 88 에 로고, 좌우 24.
+  scroll: {
+    paddingHorizontal: space[24],
+    paddingTop: space[32] * 2 + space[24],
+    paddingBottom: space[24],
   },
+  tagline: { marginTop: space[6] },
+  form: { marginTop: space[32] + space[8], gap: space[16] },
+  alert: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space[8],
+    paddingHorizontal: space[14],
+    paddingVertical: space[10],
+    borderRadius: radius2.lg,
+    backgroundColor: c2.bg.dangerSubtle,
+  },
+  alertText: { flex: 1 },
+  submit: { marginTop: space[8] },
+  links: {
+    marginTop: space[20],
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: space[4],
+  },
+  link: { height: 44, justifyContent: 'center', paddingHorizontal: space[12] },
+  divider: { width: 1, height: 14, backgroundColor: c2.bg.placeholder },
 });

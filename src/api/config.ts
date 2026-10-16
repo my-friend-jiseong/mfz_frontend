@@ -16,3 +16,8 @@ export function toAbsoluteFileUrl(url: string | null | undefined): string | null
 }
 
 export const DEFAULT_TIMEOUT_MS = 15000;
+
+// 비밀번호 찾기(11-4~11-9) 진입 링크. 서버의 `/auth/password/reset-request` 는 메일을 보내지 않는 스텁이고
+// 인증번호 확인·재설정 API 가 없다(backend-backlog '2차 개편 요청' A). 서버가 배포되면 true 로 바꾼다.
+// 화면은 이미 있어 URL(/password-reset)로 직접 열 수 있다 — 검토용.
+export const FEATURE_PASSWORD_RESET = false;

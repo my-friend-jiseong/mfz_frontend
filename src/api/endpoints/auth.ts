@@ -79,6 +79,39 @@ export interface DeleteMeResponse {
   message?: string;
 }
 
+// 비밀번호 찾기(2차 11-4~11-9) — **제안 계약**, 서버 미구현(backend-backlog '2차 개편 요청' A, §30-C 후속).
+// 지금 운영에는 `reset-request` 스텁(항상 { ok: true }, 메일 안 보냄)만 있다. 화면은 이 계약대로 만들고
+// FEATURE_PASSWORD_RESET 플래그로 진입 링크를 숨긴다.
+// 제한값(결정 v113): 6자리 1회용, 유효 5분, 다시 보내기 60초 뒤, 한 번호로 5번 틀리면 그 번호만 무효,
+// 발송 1시간 5통(새 번호를 보내면 이전 번호 무효), 가입 여부와 관계없이 같은 응답, 재설정 후 다른 기기 세션 무효.
+export interface PasswordResetRequestBody {
+  email: string;
+}
+export interface PasswordResetRequestResponse {
+  ok: boolean;
+  /** 인증번호 유효 시간(초). 기본 300. */
+  expiresInSec?: number;
+  /** [다시 보내기]까지 남은 시간(초). 기본 60. */
+  resendAfterSec?: number;
+}
+// 오류: 429 `password_reset_rate_limited` details { retryAfterMinutes }
+export interface PasswordResetVerifyBody {
+  email: string;
+  code: string;
+}
+export interface PasswordResetVerifyResponse {
+  /** 새 비밀번호 저장에 쓰는 1회용 토큰(유효 10분 제안). */
+  resetToken: string;
+}
+// 오류: 400 `password_reset_code_invalid` details { remainingAttempts } /
+//       400 `password_reset_code_expired` / 400 `password_reset_attempts_exceeded`
+export interface PasswordResetConfirmBody {
+  resetToken: string;
+  newPassword: string;
+  newPasswordConfirm: string;
+}
+// 오류: 400 `password_policy_violation` / `password_confirm_mismatch` / 401 `password_reset_token_invalid`
+
 export const auth = {
   signup: (body: SignupBody) =>
     request<AuthSession>('/auth/signup', { method: 'POST', body, skipAuth: true }),
@@ -101,6 +134,26 @@ export const auth = {
     }),
 
   me: () => request<ApiUser>('/api/me'),
+
+  // 2차 11-4~11-8 비밀번호 찾기 — 제안 계약(위 주석). 모두 비로그인 호출.
+  passwordResetRequest: (body: PasswordResetRequestBody) =>
+    request<PasswordResetRequestResponse>('/auth/password/reset-request', {
+      method: 'POST',
+      body,
+      skipAuth: true,
+    }),
+  passwordResetVerify: (body: PasswordResetVerifyBody) =>
+    request<PasswordResetVerifyResponse>('/auth/password/reset-verify', {
+      method: 'POST',
+      body,
+      skipAuth: true,
+    }),
+  passwordResetConfirm: (body: PasswordResetConfirmBody) =>
+    request<{ ok: boolean }>('/auth/password/reset-confirm', {
+      method: 'POST',
+      body,
+      skipAuth: true,
+    }),
 
   // backend-backlog §15 — 이름 변경. 응답은 { user } 래핑(me() 의 flat ApiUser 와 다름).
   updateMe: (body: UpdateMeBody) =>

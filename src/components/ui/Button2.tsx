@@ -17,6 +17,10 @@ interface Props {
   icon?: IconName;
   loading?: boolean;
   disabled?: boolean;
+  /**
+   * 비활성 모양. dim(기본)=투명도만 낮춤, muted=회색 바탕·회색 글자·그림자 없음(11-11 발송 제한의 [인증번호 받기]).
+   */
+  disabledLook?: 'dim' | 'muted';
   fullWidth?: boolean;
   accessibilityLabel?: string;
   children: string;
@@ -38,6 +42,8 @@ const VARIANT: Record<Button2Variant, { box: ViewStyle; fg: string }> = {
   ghost: { box: { backgroundColor: 'transparent' }, fg: c2.text.secondary },
 };
 
+const MUTED = { box: { backgroundColor: c2.bg.placeholder }, fg: c2.text.disabled };
+
 const SIZE: Record<Button2Size, { height: number; padX: number; text: Type2 }> = {
   L: { height: 56, padX: 20, text: 'button' },
   M: { height: 48, padX: 16, text: 'bodyM.bold' },
@@ -54,12 +60,14 @@ export function Button2({
   icon,
   loading,
   disabled,
+  disabledLook = 'dim',
   fullWidth,
   accessibilityLabel,
   children,
   style,
 }: Props) {
-  const v = VARIANT[variant];
+  const muted = !!disabled && !loading && disabledLook === 'muted';
+  const v = muted ? MUTED : VARIANT[variant];
   const s = SIZE[size];
   const inactive = !!disabled || !!loading;
   return (
@@ -74,9 +82,9 @@ export function Button2({
         { height: s.height, paddingHorizontal: s.padX },
         v.box,
         // 파란 그림자는 화면 하단 주 행동(Primary L)에만 — M(시트 안·확인 창)은 Figma 에서 그림자 없음.
-        variant === 'primary' && size === 'L' && elevation2.brandCta,
+        variant === 'primary' && size === 'L' && !muted && elevation2.brandCta,
         fullWidth && styles.full,
-        disabled && !loading && { opacity: opacity.disabled },
+        disabled && !loading && !muted && { opacity: opacity.disabled },
         style,
       ]}
     >

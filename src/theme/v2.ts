@@ -117,6 +117,10 @@ const t = (size: number, lineHeight: number, w: W, letterSpacing = -0.2): TextSt
 });
 
 export const type2 = {
+  // 11 로그인의 '일가요' 글자 로고. 텍스트 스타일 없이 36 ExtraBold 로 박혀 있다.
+  logo: t(36, 44, 'heavy', -1),
+  // 10 내 정보 아바타(60) 안 이니셜. 텍스트 스타일 없이 26 ExtraBold 로 박혀 있다.
+  avatar: t(26, 32, 'heavy', -0.5),
   display: t(28, 36, 'heavy', -0.8),
   'title.l': t(22, 30, 'heavy', -0.5),
   'title.m': t(20, 28, 'heavy', -0.4),
@@ -137,6 +141,8 @@ export const type2 = {
   'bodyS.regular': t(14, 20, 'regular'),
   // 3-8 경로 순서 카드의 순번 원 숫자. Figma 에 텍스트 스타일 없이 13 ExtraBold 로 박혀 있다.
   'caption.extrabold': t(13, 18, 'heavy'),
+  // 11-5 인증번호 칸 숫자. 텍스트 스타일 없이 24 Bold 로 박혀 있다.
+  'code.digit': t(24, 32, 'bold'),
   'caption.bold': t(13, 18, 'bold'),
   'caption.semibold': t(13, 18, 'semibold'),
   'caption.regular': t(13, 18, 'regular'),

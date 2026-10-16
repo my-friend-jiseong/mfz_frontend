@@ -1,28 +1,20 @@
 import { useRef, useState } from 'react';
-import {
-  Alert,
-  Linking,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  TextInput,
-  View,
-} from 'react-native';
-import { KeyboardAvoid } from '@/components/ui/KeyboardAvoid';
-import { Ionicons } from '@expo/vector-icons';
+import { Alert, Linking, Platform, ScrollView, StyleSheet, View, type TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
+import { KeyboardAvoid } from '@/components/ui/KeyboardAvoid';
 import { useAuthStore } from '@/stores/authStore';
 import { safeBack } from '@/utils/backNavigation';
 import { LEGAL_DOCS, LOCATION_TERMS_AVAILABLE, TERMS_URL } from '@/utils/contact';
-import { checkPasswordPolicy, PASSWORD_HINT } from '@/utils/password';
-import { colors } from '@/theme/colors';
-import { radius, spacing, touchTarget } from '@/theme/spacing';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
+import { checkPasswordPolicy, PASSWORD_HINT, PASSWORD_MESSAGES } from '@/utils/password';
+import { BottomActionBar } from '@/components/ui/BottomActionBar';
+import { Button2 } from '@/components/ui/Button2';
+import { Checkbox2 } from '@/components/ui/Checkbox2';
+import { FieldMessage, FormField, TextField2 } from '@/components/ui/FormField2';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Text } from '@/components/ui/Text';
+import { Touchable } from '@/components/ui/Touchable';
 import { SafeScreen } from '@/components/SafeScreen';
-import { NavHeader } from '@/components/ui/NavHeader';
+import { c2, radius2, space } from '@/theme/v2';
 
 interface FieldErrors {
   email?: string;
@@ -30,13 +22,12 @@ interface FieldErrors {
   password?: string;
   passwordConfirm?: string;
   terms?: string;
+  form?: string;
 }
 
 // 필수 약관 — 모두 동의해야 가입 가능. 각 라벨은 사용자 화면 표시, url 은 외부 페이지.
 // URL 은 profile/index.tsx 와 같은 단일 출처(utils/contact.ts LEGAL_DOCS)에서 가져온다 —
-// 예전엔 여기 따로 하드코딩돼 있어 backend-backlog §30-B(위치정보 약관 페이지) 배포 시
-// signup.tsx 도 손으로 같이 고쳐야 했다. 이제 LEGAL_DOCS.location.effectiveDate 만 올리면
-// 여기 URL 도 자동으로 /location-terms 로 바뀐다.
+// LEGAL_DOCS.location.effectiveDate 만 올리면 여기 URL 도 자동으로 /location-terms 로 바뀐다.
 const REQUIRED_TERMS = [
   { key: 'service', label: '이용약관', url: LEGAL_DOCS.service.url },
   { key: 'privacy', label: '개인정보 처리방침', url: LEGAL_DOCS.privacy.url },
@@ -45,7 +36,7 @@ const REQUIRED_TERMS = [
 type TermKey = (typeof REQUIRED_TERMS)[number]['key'];
 
 function openExternal(url: string, fallbackTitle: string) {
-  // 외부 URL — web 에선 새 탭, 모바일은 외부 브라우저. profile.tsx 의 openExternal 과 같은 패턴.
+  // 외부 URL — web 에선 새 탭, 모바일은 외부 브라우저. profile/index.tsx 의 openExternal 과 같은 패턴.
   if (Platform.OS === 'web') {
     window.open(url, '_blank', 'noopener,noreferrer');
     return;
@@ -56,23 +47,22 @@ function openExternal(url: string, fallbackTitle: string) {
       throw new Error('not_supported');
     })
     .catch(() => {
-      Alert.alert(fallbackTitle, `${url}\n\n웹브라우저에서 위 주소로 접속해주세요.`);
+      Alert.alert(fallbackTitle, `${url}\n\n웹 브라우저에서 위 주소로 열어 주세요.`);
     });
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// 비밀번호 정책은 프로필 비밀번호 변경(§15)과 공유 — src/utils/password.ts 단일 출처.
-
-// 백엔드 error.code → 어느 필드 인라인 에러로 매핑할지.
-const CODE_TO_FIELD: Record<string, keyof FieldErrors> = {
-  email_already_exists: 'email',
-  email_invalid: 'email',
-  invalid_email: 'email',
-  name_required: 'name',
-  password_too_short: 'password',
-  password_confirm_mismatch: 'passwordConfirm',
-  terms_required: 'terms',
+// 백엔드 error.code → 어느 칸 아래에 붙일지. 문구는 2차 11-3 '-해요'체로 바꿔 단다.
+const CODE_TO_FIELD: Record<string, [keyof FieldErrors, string | null]> = {
+  email_already_exists: ['email', '이미 가입된 이메일이에요'],
+  email_invalid: ['email', '이메일 형식이 맞지 않아요'],
+  invalid_email: ['email', '이메일 형식이 맞지 않아요'],
+  name_required: ['name', '이름을 입력해 주세요'],
+  password_too_short: ['password', PASSWORD_MESSAGES.tooShort],
+  password_policy_violation: ['password', null],
+  password_confirm_mismatch: ['passwordConfirm', PASSWORD_MESSAGES.mismatch],
+  terms_required: ['terms', '필수 약관 3개에 모두 동의해 주세요'],
 };
 
 export default function Signup() {
@@ -83,8 +73,7 @@ export default function Signup() {
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [name, setName] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  // 약관별 동의 — 모두 true 여야 통과.
+  // 약관 동의 칸은 처음에 모두 비어 있다(인수인계 용어·문구 규칙).
   const [agreedTerms, setAgreedTerms] = useState<Record<TermKey, boolean>>({
     service: false,
     privacy: false,
@@ -92,41 +81,40 @@ export default function Signup() {
   });
   const allAgreed = REQUIRED_TERMS.every((t) => agreedTerms[t.key]);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
-  const [globalError, setGlobalError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const nameRef = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
   const passwordConfirmRef = useRef<TextInput>(null);
 
+  const clearFieldErr = (key: keyof FieldErrors) =>
+    setFieldErrors((p) => (p[key] ? { ...p, [key]: undefined } : p));
+
   const validate = (): FieldErrors => {
     const errs: FieldErrors = {};
-    if (!email.trim()) errs.email = '이메일을 입력해주세요';
-    else if (!EMAIL_RE.test(email.trim())) errs.email = '이메일 형식이 올바르지 않습니다';
-    if (!name.trim()) errs.name = '이름을 입력해주세요';
+    if (!email.trim()) errs.email = '이메일을 입력해 주세요';
+    else if (!EMAIL_RE.test(email.trim())) errs.email = '이메일 형식이 맞지 않아요';
+    if (!name.trim()) errs.name = '이름을 입력해 주세요';
     const pwErr = checkPasswordPolicy(password);
     if (pwErr) errs.password = pwErr;
-    if (passwordConfirm !== password) errs.passwordConfirm = '비밀번호 확인이 일치하지 않습니다';
-    if (!allAgreed) errs.terms = '필수 약관 3종에 모두 동의해주세요';
+    if (passwordConfirm !== password) errs.passwordConfirm = PASSWORD_MESSAGES.mismatch;
+    if (!allAgreed) errs.terms = '필수 약관 3개에 모두 동의해 주세요';
     return errs;
   };
 
   const toggleAll = () => {
     const next = !allAgreed;
     setAgreedTerms({ service: next, privacy: next, location: next });
-    if (fieldErrors.terms) clearFieldErr('terms');
+    clearFieldErr('terms');
   };
 
   const toggleOne = (key: TermKey) => {
     setAgreedTerms((p) => ({ ...p, [key]: !p[key] }));
-    if (fieldErrors.terms) clearFieldErr('terms');
+    clearFieldErr('terms');
   };
 
-  const clearFieldErr = (key: keyof FieldErrors) =>
-    setFieldErrors((p) => ({ ...p, [key]: undefined }));
-
+  // 버튼은 오류 중에도 눌린다 — 누를 때마다 다시 검사한다(인수인계 11-3·11-12).
   const handleSignup = async () => {
-    setGlobalError(null);
     const errs = validate();
     setFieldErrors(errs);
     if (Object.keys(errs).length > 0) return;
@@ -142,242 +130,197 @@ export default function Signup() {
     }
     setSubmitting(false);
 
-    if (result.code === 'email_already_exists') {
-      Alert.alert(
-        '이미 가입된 이메일',
-        '이 이메일로 이미 계정이 있습니다. 로그인 화면으로 이동할까요?',
-        [
-          { text: '취소', style: 'cancel' },
-          { text: '로그인', onPress: () => router.replace('/(auth)/login') },
-        ],
-      );
+    const mapped = result.code ? CODE_TO_FIELD[result.code] : undefined;
+    if (mapped) {
+      setFieldErrors({ [mapped[0]]: mapped[1] ?? result.error });
       return;
     }
-
-    if (result.code && CODE_TO_FIELD[result.code]) {
-      setFieldErrors({ [CODE_TO_FIELD[result.code]]: result.error });
-      return;
-    }
-
-    setGlobalError(result.error);
+    setFieldErrors({ form: result.error });
   };
 
-  const passwordMatched =
-    passwordConfirm.length > 0 && passwordConfirm === password && !fieldErrors.passwordConfirm;
+  const termsInvalid = !!fieldErrors.terms;
 
   return (
-    <SafeScreen>
-    {/* 명세 v2 FE-AUTH-03 — 로그인 복귀는 헤더 ← 하나. 본문 '이미 계정이 있어요' 는 없앴다. */}
-    <NavHeader title="회원가입" onBack={() => safeBack(router, '/(auth)/login')} />
-    <KeyboardAvoid
-      style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <View style={styles.form}>
-          <Input
-            label="이메일"
-            value={email}
-            onChangeText={(v) => {
-              setEmail(v);
-              if (fieldErrors.email) clearFieldErr('email');
-            }}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            returnKeyType="next"
-            onSubmitEditing={() => nameRef.current?.focus()}
-            editable={!submitting}
-            placeholder="example@domain.com"
-            error={fieldErrors.email}
-          />
+    <SafeScreen background={c2.bg.canvas}>
+      <PageHeader
+        title="회원가입"
+        onBack={() => safeBack(router, '/(auth)/login')}
+        right={{ label: '로그인', onPress: () => safeBack(router, '/(auth)/login') }}
+      />
+      <KeyboardAvoid style={styles.flex}>
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+          <FormField label="이메일" error={fieldErrors.email}>
+            <TextField2
+              value={email}
+              onChangeText={(v) => {
+                setEmail(v);
+                clearFieldErr('email');
+              }}
+              invalid={!!fieldErrors.email}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="email-address"
+              textContentType="username"
+              autoComplete="email"
+              returnKeyType="next"
+              onSubmitEditing={() => nameRef.current?.focus()}
+              editable={!submitting}
+              placeholder="example@domain.com"
+              accessibilityLabel="이메일"
+            />
+          </FormField>
 
-          <Input
-            ref={nameRef}
-            label="이름"
-            value={name}
-            onChangeText={(v) => {
-              setName(v);
-              if (fieldErrors.name) clearFieldErr('name');
-            }}
-            returnKeyType="next"
-            onSubmitEditing={() => passwordRef.current?.focus()}
-            editable={!submitting}
-            placeholder="홍길동"
-            error={fieldErrors.name}
-          />
+          <FormField label="이름" error={fieldErrors.name}>
+            <TextField2
+              ref={nameRef}
+              value={name}
+              onChangeText={(v) => {
+                setName(v);
+                clearFieldErr('name');
+              }}
+              invalid={!!fieldErrors.name}
+              textContentType="name"
+              returnKeyType="next"
+              onSubmitEditing={() => passwordRef.current?.focus()}
+              editable={!submitting}
+              placeholder="홍길동"
+              accessibilityLabel="이름"
+            />
+          </FormField>
 
-          <Input
-            ref={passwordRef}
-            label="비밀번호"
-            value={password}
-            onChangeText={(v) => {
-              setPassword(v);
-              if (fieldErrors.password) clearFieldErr('password');
-              if (fieldErrors.passwordConfirm) clearFieldErr('passwordConfirm');
-            }}
-            secureTextEntry={!showPassword}
-            returnKeyType="next"
-            onSubmitEditing={() => passwordConfirmRef.current?.focus()}
-            editable={!submitting}
-            placeholder="비밀번호"
-            error={fieldErrors.password}
-            helperText={fieldErrors.password ? undefined : PASSWORD_HINT}
-            rightSlot={
-              <Pressable
-                onPress={() => setShowPassword((v) => !v)}
-                accessibilityLabel={showPassword ? '비밀번호 숨기기' : '비밀번호 보기'}
-                hitSlop={8}
+          <FormField label="비밀번호" error={fieldErrors.password} helper={PASSWORD_HINT}>
+            <TextField2
+              ref={passwordRef}
+              value={password}
+              onChangeText={(v) => {
+                setPassword(v);
+                clearFieldErr('password');
+              }}
+              invalid={!!fieldErrors.password}
+              secureTextEntry
+              textContentType="newPassword"
+              autoComplete="new-password"
+              returnKeyType="next"
+              onSubmitEditing={() => passwordConfirmRef.current?.focus()}
+              editable={!submitting}
+              placeholder="비밀번호"
+              accessibilityLabel="비밀번호"
+            />
+          </FormField>
+
+          <FormField label="비밀번호 확인" error={fieldErrors.passwordConfirm}>
+            <TextField2
+              ref={passwordConfirmRef}
+              value={passwordConfirm}
+              onChangeText={(v) => {
+                setPasswordConfirm(v);
+                clearFieldErr('passwordConfirm');
+              }}
+              invalid={!!fieldErrors.passwordConfirm}
+              secureTextEntry
+              textContentType="newPassword"
+              autoComplete="new-password"
+              returnKeyType="done"
+              onSubmitEditing={() => void handleSignup()}
+              editable={!submitting}
+              placeholder="한 번 더 입력"
+              accessibilityLabel="비밀번호 확인"
+            />
+          </FormField>
+
+          <View>
+            <View style={[styles.termsBox, termsInvalid && styles.termsBoxInvalid]}>
+              <Touchable
+                onPress={toggleAll}
+                noAutoHitSlop
+                style={styles.agreeAllRow}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: allAgreed }}
               >
-                <Ionicons
-                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                  size={20}
-                  color={colors.textMuted}
-                />
-              </Pressable>
-            }
-          />
-
-          <Input
-            ref={passwordConfirmRef}
-            label="비밀번호 확인"
-            value={passwordConfirm}
-            onChangeText={(v) => {
-              setPasswordConfirm(v);
-              if (fieldErrors.passwordConfirm) clearFieldErr('passwordConfirm');
-            }}
-            secureTextEntry={!showPassword}
-            returnKeyType="done"
-            onSubmitEditing={() => void handleSignup()}
-            editable={!submitting}
-            placeholder="비밀번호 확인"
-            error={fieldErrors.passwordConfirm}
-            rightSlot={
-              passwordMatched ? (
-                <Ionicons name="checkmark-circle" size={20} color={colors.success} />
-              ) : undefined
-            }
-          />
-
-          <View style={styles.termsBox}>
-            <Pressable
-              onPress={toggleAll}
-              style={styles.agreeAllRow}
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: allAgreed }}
-            >
-              <Ionicons
-                name={allAgreed ? 'checkbox' : 'square-outline'}
-                size={22}
-                color={allAgreed ? colors.primary : colors.textMuted}
-              />
-              <Text variant="bodySm" weight="bold" style={styles.agreeText}>
-                필수 약관에 모두 동의
-              </Text>
-            </Pressable>
-            <View style={styles.termsDivider} />
-            {REQUIRED_TERMS.map((t) => {
-              const checked = agreedTerms[t.key];
-              return (
-                <View key={t.key} style={styles.termRow}>
-                  <Pressable
-                    onPress={() => toggleOne(t.key)}
-                    style={styles.termCheck}
-                    accessibilityRole="checkbox"
-                    accessibilityState={{ checked }}
-                  >
-                    <Ionicons
-                      name={checked ? 'checkbox' : 'square-outline'}
-                      size={20}
-                      color={checked ? colors.primary : colors.textMuted}
-                    />
-                    <Text variant="bodySm" style={styles.termLabel}>
-                      (필수) {t.label}
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => openExternal(t.url, t.label)}
-                    hitSlop={8}
-                    accessibilityLabel={`${t.label} 보기`}
-                  >
-                    <Text variant="caption" color="primary">
-                      보기
-                    </Text>
-                  </Pressable>
-                </View>
-              );
-            })}
+                <Checkbox2 checked={allAgreed} invalid={termsInvalid} />
+                <Text v2="bodyL.bold" tone="primary">
+                  약관에 모두 동의
+                </Text>
+              </Touchable>
+              <View style={styles.termList}>
+                {REQUIRED_TERMS.map((t) => {
+                  const checked = agreedTerms[t.key];
+                  return (
+                    <View key={t.key} style={styles.termRow}>
+                      <Touchable
+                        onPress={() => toggleOne(t.key)}
+                        noAutoHitSlop
+                        style={styles.termCheck}
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked }}
+                        accessibilityLabel={`(필수) ${t.label}`}
+                      >
+                        <Checkbox2 checked={checked} invalid={termsInvalid} />
+                        <Text v2="bodyM.regular" tone="tertiary" style={styles.termLabel}>
+                          (필수)
+                          <Text v2="bodyM.regular" tone="primary">{` ${t.label}`}</Text>
+                        </Text>
+                      </Touchable>
+                      <Touchable
+                        onPress={() => openExternal(t.url, t.label)}
+                        style={styles.termView}
+                        accessibilityRole="link"
+                        accessibilityLabel={`${t.label} 보기`}
+                      >
+                        <Text v2="bodyS.semibold" tone="secondary">
+                          보기
+                        </Text>
+                      </Touchable>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+            {fieldErrors.terms ? <FieldMessage message={fieldErrors.terms} style={styles.below} /> : null}
           </View>
-          {fieldErrors.terms ? (
-            <Text variant="caption" color="danger" style={styles.termsError}>
-              {fieldErrors.terms}
-            </Text>
-          ) : null}
 
-          {globalError ? (
-            <Text variant="bodySm" color="danger">
-              {globalError}
-            </Text>
-          ) : null}
-
-          <Button
-            onPress={handleSignup}
-            size="lg"
-            loading={submitting}
-            fullWidth
-            style={styles.submit}
-          >
+          {fieldErrors.form ? <FieldMessage message={fieldErrors.form} /> : null}
+        </ScrollView>
+        <BottomActionBar>
+          <Button2 onPress={() => void handleSignup()} loading={submitting} fullWidth>
             가입하고 시작하기
-          </Button>
-        </View>
-      </ScrollView>
-    </KeyboardAvoid>
+          </Button2>
+        </BottomActionBar>
+      </KeyboardAvoid>
     </SafeScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  // 제목이 NavHeader 로 올라가 본문 위 큰 여백(xxl×2)은 필요 없다.
-  // Figma 4205 — 헤더 ↔ 폼 24.
-  scroll: { padding: spacing.xl },
-  form: { gap: spacing.md },
+  flex: { flex: 1, backgroundColor: c2.bg.canvas },
+  scroll: {
+    paddingHorizontal: space[20],
+    paddingTop: space[12],
+    paddingBottom: space[24],
+    gap: space[16],
+  },
   termsBox: {
-    marginTop: spacing.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    gap: spacing.xs,
+    borderColor: c2.border.default,
+    borderRadius: radius2.xl,
+    paddingHorizontal: space[14],
+    paddingTop: space[4],
+    paddingBottom: space[6],
   },
-  // 약관 행 터치 영역 44 (명세 FE-AUTH-02, Figma termRow h44).
+  // 11-3: 동의하지 않고 누르면 상자 테두리가 빨강 2.
+  termsBoxInvalid: { borderWidth: 2, borderColor: c2.danger, paddingHorizontal: space[14] - 1 },
   agreeAllRow: {
+    height: 49,
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: touchTarget.control,
-    gap: spacing.sm,
+    gap: space[10],
+    borderBottomWidth: 1,
+    borderBottomColor: c2.border.subtle,
   },
-  agreeText: { flex: 1 },
-  termsDivider: {
-    height: 1,
-    backgroundColor: colors.borderMuted,
-    marginVertical: spacing.xs,
-  },
-  termRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: touchTarget.control,
-    gap: spacing.sm,
-  },
-  // 체크 영역이 행 높이(44)를 다 차지해야 터치 영역이 44 가 된다.
-  termCheck: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'stretch',
-    gap: spacing.sm,
-    flex: 1,
-  },
+  termList: { paddingTop: space[2] },
+  termRow: { height: 44, flexDirection: 'row', alignItems: 'center' },
+  termCheck: { flex: 1, alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: space[10] },
   termLabel: { flex: 1 },
-  termsError: { marginTop: spacing.xs },
-  submit: { marginTop: spacing.md },
+  termView: { height: 44, justifyContent: 'center', paddingHorizontal: space[4] },
+  below: { marginTop: space[6] },
 });

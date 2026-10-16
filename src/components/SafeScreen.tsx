@@ -19,14 +19,17 @@ import { colors } from '@/theme/colors';
 export function SafeScreen({
   children,
   edges = ['top'],
+  background,
 }: {
   children: ReactNode;
   edges?: readonly Edge[];
+  /** 바탕색. 2차 화면은 흰 바탕(c2.bg.canvas)이라 상태 표시줄·홈 표시줄 자리도 같은 색으로 칠한다. */
+  background?: string;
 }) {
   const providerTop = useSafeAreaInsets().top;
   const effective = providerTop === 0 ? edges.filter((e) => e !== 'top') : edges;
   return (
-    <SafeAreaView style={styles.root} edges={effective}>
+    <SafeAreaView style={[styles.root, background ? { backgroundColor: background } : null]} edges={effective}>
       {children}
     </SafeAreaView>
   );

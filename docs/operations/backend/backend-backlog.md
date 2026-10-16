@@ -876,3 +876,42 @@ UI(스와이프·`방문 삭제` 버튼·확인 대화상자)는 만들고, 호�
 - **2026-06-06**: §22 추가 — 인앱 경로 표시(🟡, 2학기 후보). 사용자 불편이 항목화되지 않은 채 증발했던 건 재등재. 1단계 직선 폴리라인(프론트 단독) → 2단계 카카오모빌리티 길찾기 프록시(백엔드 필수, 자동차 한정).
 - **2026-06-06**: §21 추가 — MVP 동결 ERD 검토 중 발견. `visits.reason`('기타' 사유)이 "컬럼 제거(ERD v2) vs 입력 필수 검증(`visit_status_reason_required`)" 모순 상태(🟡). 영속/폐기 여부 회신 요청.
 - **2026-06-04**: 보고서 생성 마법사 도입에 따른 정리. **§13 클로즈(🔴→✅)**: AI 초안 분기가 프론트에서 완전 제거(2026-05-31 결정 §1)되어 generate 500 이 사용자에게 도달할 경로 없음 — 백엔드엔 미사용 endpoint 정리 권고만 잔존. **§7 클로즈(🟠→✅)**: 새 양식에서 보고서 본문·보고서 레벨 사진 개념이 제거되어 전제 소멸 — 요구사항 #2 는 마법사(현장별 전·중·후)가 해소, (B)/(C) 사진 contract 는 field-reports 가 그 역할.
+
+---
+
+## 2차 개편 요청
+
+2차 UI(`docs/handoff/2차-구현-서버-인수인계.md` §3 서버 요청)를 구현하며 서버에 필요한 것을 모은다. 프론트는 아래 계약을 먼저 쓰고, 서버가 없는 동안은 대체 동작이나 기능 플래그로 막아 둔다.
+
+### A. 🟠 비밀번호 찾기 — 인증번호 발급·확인·재설정 (§30 요청 C 후속, 결정 v87·v113)
+
+화면 11-4~11-12 는 완성돼 있고 `FEATURE_PASSWORD_RESET=false`(`src/api/config.ts`)로 로그인 화면의 '비밀번호를 잊었어요' 링크만 숨겨 두었다. 지금 운영의 `POST /auth/password/reset-request` 는 메일을 보내지 않는 스텁이고, 확인·재설정 API 는 없다. 배포되면 플래그 한 줄로 연다. 프론트 계약은 `src/api/endpoints/auth.ts`(`passwordReset*`), 응답 해석은 `src/utils/passwordReset.ts`.
+
+제한값(v113, B안): 이메일 6자리 안전한 난수·1회용, 유효 5분, 다시 보내기 60초 뒤, 한 번호로 5번 틀리면 그 번호만 무효(계정 잠금 없음), 발송 1시간 5통, 새 번호를 보내면 이전 번호 무효, **가입 여부와 관계없이 같은 응답**, 재설정 후 다른 기기 세션 무효화.
+
+제안 계약(모두 비로그인, 오류는 Phase 7 `{ code, message, details }`):
+
+```jsonc
+// 1) 인증번호 보내기 — 가입 안 된 이메일이어도 200 (메일만 안 보냄)
+POST /auth/password/reset-request   { "email": "hong@company.com" }
+200 { "ok": true, "expiresInSec": 300, "resendAfterSec": 60 }
+429 { "code": "password_reset_rate_limited", "details": { "retryAfterMinutes": 42 } }   // 1시간 5통 초과 → 11-11
+
+// 2) 인증번호 확인 → 1회용 재설정 토큰
+POST /auth/password/reset-verify    { "email": "...", "code": "382917" }
+200 { "resetToken": "..." }                                                          // 유효 10분 제안
+400 { "code": "password_reset_code_invalid", "details": { "remainingAttempts": 4 } } // 11-6
+400 { "code": "password_reset_code_expired" }                                         // 5분 지남 → 11-10
+400 { "code": "password_reset_attempts_exceeded" }                                    // 5번 틀림 → 11-7
+
+// 3) 새 비밀번호 저장 — 성공하면 그 계정의 모든 세션 무효화
+POST /auth/password/reset-confirm   { "resetToken": "...", "newPassword": "...", "newPasswordConfirm": "..." }
+200 { "ok": true }
+400 { "code": "password_policy_violation" } | { "code": "password_confirm_mismatch" }
+401 { "code": "password_reset_token_invalid" }
+```
+
+- 가입 안 된 이메일·발송 실패도 1)은 200 으로 같게(계정 존재 노출 금지). 2)에서도 없는 이메일은 `password_reset_code_invalid` 로.
+- `remainingAttempts` 가 0 이 되는 시도는 `password_reset_attempts_exceeded` 로 답해 주면 프론트가 바로 11-7 로 간다(0 으로 와도 11-7 로 처리한다).
+- 경로·필드 이름은 제안이다. 바꾸면 알려 주면 `auth.ts` 세 줄만 고친다.
+- 검토용: 개발 빌드에서 `/password-reset?mock=ok|wrong|locked|expired|limited` 로 가짜 응답을 골라 각 상태를 띄울 수 있다(운영 빌드는 무시).

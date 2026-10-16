@@ -1,45 +1,25 @@
 import { useState } from 'react';
-import {
-  Alert,
-  Linking,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  View,
-} from 'react-native';
-import { KeyboardAvoid } from '@/components/ui/KeyboardAvoid';
-import { Ionicons } from '@expo/vector-icons';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { KeyboardAvoid } from '@/components/ui/KeyboardAvoid';
 import { useAuthStore } from '@/stores/authStore';
-import { Card } from '@/components/ui/Card';
-import { Input } from '@/components/ui/Input';
-import { Button } from '@/components/ui/Button';
-import { confirm } from '@/components/ui/ConfirmDialog';
+import { BottomActionBar } from '@/components/ui/BottomActionBar';
+import { Button2 } from '@/components/ui/Button2';
+import { Checkbox2 } from '@/components/ui/Checkbox2';
+import { FieldMessage, FormField, TextField2 } from '@/components/ui/FormField2';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Text } from '@/components/ui/Text';
-import { GroupLabel } from '@/components/ui/GroupLabel';
+import { Touchable } from '@/components/ui/Touchable';
 import { SafeScreen } from '@/components/SafeScreen';
-import { SUPPORT_EMAIL, supportMailto } from '@/utils/contact';
-import { colors } from '@/theme/colors';
-import { spacing, touchTarget } from '@/theme/spacing';
-import { opacity } from '@/theme/motion';
+import { safeBack } from '@/utils/backNavigation';
+import { c2, radius2, space } from '@/theme/v2';
 
-// docs/operations/release/REQUIREMENTS_BEFORE_LAUNCHING.md §1·§6 — Google Play 는 계정을 만드는 앱에 **계정·데이터
-// 삭제 경로**를 요구한다(출시 대상은 Play 뿐, App Store 는 계획에 없다).
-// 백엔드 DELETE /api/me 는 아직 없어(§30) 이 화면은 선반영이다.
-//
-// 문서의 4단계(안내 → 비밀번호 → 최종 확인 → 완료)를 화면 4개로 쪼개지 않고 한 화면에 둔다.
-// 단계 분리는 이 프로젝트에서 이미 걷어낸 패턴이고, 되돌릴 수 없는 동작의 안전장치는
-// 화면 수가 아니라 '비밀번호 + 명시적 동의 + 최종 확인' 세 겹이 담당한다.
+// 10-2 회원 탈퇴 (Figma 570:2522). Google Play 는 계정을 만드는 앱에 계정·데이터 삭제 경로를 요구한다.
+// 서버 `DELETE /api/me`(backend-backlog §30-A, 배포됨): password 재인증, 불일치 400 current_password_invalid.
+// 되돌릴 수 없는 동작의 안전장치는 '비밀번호 + 명시적 동의' 두 겹. 2차에는 최종 확인 창 프레임이 없어 두지 않는다.
+// 끝나면 로그인 첫 화면 + 스낵바 '회원 탈퇴가 끝났어요.'(10-4) — 스낵바는 로그인 화면이 notice 로 띄운다.
 
-const DELETED_ITEMS = [
-  '회원 기본정보 (이름·이메일)',
-  '외근 기록',
-  '방문 기록',
-  '업무 보고서',
-  '등록한 사진',
-  '작성한 메모',
-  '로그인 세션 및 토큰',
-] as const;
+const DELETED_ITEMS = ['이름과 이메일', '외근 기록과 방문 기록', '보고서', '올린 사진과 메모', '로그인 정보'] as const;
 
 export default function DeleteAccount() {
   const router = useRouter();
@@ -49,176 +29,141 @@ export default function DeleteAccount() {
   const [password, setPassword] = useState('');
   const [pwError, setPwError] = useState<string | null>(null);
   const [agreed, setAgreed] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const canSubmit = password.length > 0 && agreed && !submitting;
+  const canSubmit = password.length > 0 && agreed;
 
-  const performDelete = async () => {
+  const handleSubmit = async () => {
+    if (!canSubmit) return;
+    setPwError(null);
+    setFormError(null);
     setSubmitting(true);
     const r = await deleteAccount(password);
 
     if (r.ok) {
       // 성공 경로에서는 폼 상태를 되돌리지 않는다 — 떠나는 화면에서 setState 와 navigate 가
       // 같은 배치로 합쳐지면 무음 크래시가 났던 이력이 있다. 화면은 어차피 버려진다.
-      Alert.alert('탈퇴 완료', '계정과 관련 정보가 삭제됐습니다. 그동안 이용해 주셔서 감사합니다.');
-      router.replace('/(auth)/login' as never);
+      router.replace({ pathname: '/(auth)/login', params: { notice: 'deleted' } } as never);
       return;
     }
 
     setSubmitting(false);
-
-    // 비밀번호가 틀린 건 입력 옆에 붙여야 사용자가 어디를 고칠지 안다.
+    // 비밀번호가 틀린 건 입력 아래에 붙여야 어디를 고칠지 안다.
     if (r.code === 'current_password_invalid' || r.code === 'invalid_credentials') {
-      setPwError(r.error);
+      setPwError('비밀번호가 맞지 않아요');
       return;
     }
-
-    // 백엔드 미구현(§30) — 메일 문의로 넘길 수 있게 실행 가능한 선택지를 준다.
-    if (r.code === 'delete_account_unimplemented') {
-      Alert.alert('탈퇴 요청', r.error, [
-        { text: '닫기', style: 'cancel' },
-        {
-          text: '메일로 요청',
-          onPress: () => {
-            const url = supportMailto(`[일가요] 회원 탈퇴 요청 (${user?.email ?? ''})`);
-            void Linking.openURL(url).catch(() => {
-              Alert.alert('메일 앱을 열 수 없습니다', `${SUPPORT_EMAIL} 로 직접 보내주세요.`);
-            });
-          },
-        },
-      ]);
-      return;
-    }
-
-    Alert.alert('탈퇴 실패', r.error);
-  };
-
-  // 최종 확인은 ConfirmDialog(명세 FE-UX-03) — destructive 라 스크림 탭으로 닫히지 않는다.
-  const handleSubmit = async () => {
-    setPwError(null);
-    const ok = await confirm({
-      title: '정말 탈퇴하시겠습니까?',
-      message: '삭제된 정보는 복구할 수 없습니다.',
-      confirmLabel: '탈퇴하기',
-      destructive: true,
-    });
-    if (ok) void performDelete();
+    setFormError(r.error);
   };
 
   return (
-    // 네이티브 스택 헤더(_layout headerShown)가 status bar 를 이미 덮는다 — top 을 또 두르면 이중 여백(Android 실측).
-    <SafeScreen edges={[]}>
-      <KeyboardAvoid
-        style={styles.flex}>
+    <SafeScreen background={c2.bg.canvas}>
+      <PageHeader title="회원 탈퇴" onBack={() => safeBack(router, '/(tabs)/profile')} />
+      <KeyboardAvoid style={styles.flex}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-          {/* 경고 박스는 손으로 짠 표면이 아니라 Card 에 tone 만 얹는다 — fields new/edit 의
-              warnBox 와 같은 패턴(muted 배경 + 같은 계열 테두리). 테두리 없이 배경만 깔면
-              문서 흐름의 depth 전략(테두리)에서 이 박스만 빠진다. */}
-          <Card padding="md" style={styles.warnBox}>
-            <View style={styles.warnRow}>
-              <Ionicons name="alert-circle" size={22} color={colors.danger} />
-              <Text variant="bodySm" weight="semibold" color="danger" style={styles.warnText}>
-                탈퇴하면 아래 정보가 삭제되며 복구할 수 없습니다.
-              </Text>
-            </View>
-          </Card>
+          <Text v2="title.l" tone="primary" accessibilityRole="header">
+            탈퇴하면 기록이 모두 지워져요
+          </Text>
+          <Text v2="bodyM.regular" tone="secondary" style={styles.sub}>
+            지워진 정보는 되돌릴 수 없어요.
+          </Text>
 
-          <GroupLabel>삭제되는 정보</GroupLabel>
-          <Card style={styles.itemsCard}>
-            {DELETED_ITEMS.map((item) => (
-              <View key={item} style={styles.itemRow}>
-                <Ionicons name="close-circle-outline" size={16} color={colors.danger} />
-                <Text variant="bodySm" style={styles.itemText}>
-                  {item}
-                </Text>
-              </View>
-            ))}
-            <Text variant="caption" color="textMuted" style={styles.legalNote}>
-              법령상 보관 대상 정보는 관련 법령에 따라 별도 보관될 수 있습니다.
+          <View style={styles.box}>
+            <Text v2="caption.bold" tone="secondary">
+              지워지는 정보
             </Text>
-          </Card>
+            <View style={styles.items}>
+              {DELETED_ITEMS.map((item) => (
+                <View key={item} style={styles.item}>
+                  <View style={styles.dot} />
+                  <Text v2="bodyM.regular" tone="body">
+                    {item}
+                  </Text>
+                </View>
+              ))}
+            </View>
+            <Text v2="caption.regular" tone="tertiary" style={styles.legal}>
+              법령에 따라 보관해야 하는 정보는 정해진 기간 동안 따로 보관돼요.
+            </Text>
+          </View>
 
-          <GroupLabel>본인 확인</GroupLabel>
-          <Card style={styles.card}>
-            <Input
-              label="비밀번호"
-              value={password}
-              onChangeText={(v) => {
-                setPassword(v);
-                if (pwError) setPwError(null);
-              }}
-              secureTextEntry
-              autoCapitalize="none"
-              editable={!submitting}
-              error={pwError ?? undefined}
-              helperText={`${user?.email ?? '현재 계정'} 의 비밀번호를 입력해주세요`}
-              returnKeyType="done"
-            />
-          </Card>
+          <View style={styles.pw}>
+            <FormField
+              label="비밀번호 확인"
+              error={pwError}
+              helper={`${user?.email ?? '이'} 계정의 비밀번호를 입력해 주세요.`}
+            >
+              <TextField2
+                value={password}
+                onChangeText={(v) => {
+                  setPassword(v);
+                  if (pwError) setPwError(null);
+                }}
+                invalid={!!pwError}
+                secureTextEntry
+                autoCapitalize="none"
+                textContentType="password"
+                autoComplete="current-password"
+                editable={!submitting}
+                placeholder="비밀번호"
+                returnKeyType="done"
+                accessibilityLabel="비밀번호 확인"
+              />
+            </FormField>
+          </View>
 
-          <Pressable
+          <Touchable
             onPress={() => setAgreed((v) => !v)}
             disabled={submitting}
+            noAutoHitSlop
             accessibilityRole="checkbox"
             accessibilityState={{ checked: agreed }}
-            accessibilityLabel="삭제 내용을 확인했으며 복구할 수 없음에 동의"
-            style={({ pressed }) => [styles.agreeRow, pressed && { opacity: opacity.pressed }]}
+            style={styles.agree}
           >
-            <Ionicons
-              name={agreed ? 'checkbox' : 'square-outline'}
-              size={22}
-              color={agreed ? colors.danger : colors.textSubtle}
-            />
-            <Text variant="bodySm" style={styles.agreeText}>
-              위 내용을 확인했으며, 삭제된 정보는 복구할 수 없음에 동의합니다.
+            <Checkbox2 checked={agreed} />
+            <Text v2="bodyM.regular" tone="primary" style={styles.agreeText}>
+              위 내용을 확인했고, 되돌릴 수 없다는 데 동의해요.
             </Text>
-          </Pressable>
+          </Touchable>
 
-          <Button
-            onPress={() => void handleSubmit()}
-            disabled={!canSubmit}
-            loading={submitting}
-            variant="destructive"
-            fullWidth
-            leftIcon="trash-outline"
-            style={styles.submit}
-          >
-            회원 탈퇴
-          </Button>
-
-          <Button onPress={() => router.back()} disabled={submitting} variant="ghost" fullWidth>
-            취소
-          </Button>
+          {formError ? <FieldMessage message={formError} style={styles.formError} /> : null}
         </ScrollView>
+        <BottomActionBar>
+          {/* [취소][탈퇴하기] 같은 폭으로 나란히(Figma 175 + 8 + 175). */}
+          <View style={styles.pair}>
+            <Button2 variant="secondary" disabled={submitting} onPress={() => safeBack(router, '/(tabs)/profile')} style={styles.half}>
+              취소
+            </Button2>
+            <Button2 variant="danger" loading={submitting} disabled={!canSubmit} onPress={() => void handleSubmit()} style={styles.half}>
+              탈퇴하기
+            </Button2>
+          </View>
+        </BottomActionBar>
       </KeyboardAvoid>
     </SafeScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.background },
-  scroll: { padding: spacing.xl, paddingBottom: spacing.xxl },
-  warnBox: {
-    backgroundColor: colors.dangerMuted,
-    borderColor: colors.danger,
+  flex: { flex: 1, backgroundColor: c2.bg.canvas },
+  scroll: { paddingHorizontal: space[20], paddingTop: space[16], paddingBottom: space[24] },
+  sub: { marginTop: space[6] },
+  box: {
+    marginTop: space[20],
+    padding: space[16],
+    paddingTop: space[16],
+    borderRadius: radius2.xl,
+    backgroundColor: c2.bg.subtle,
   },
-  warnRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
-  warnText: { flex: 1 },
-  // 같은 성질의 항목 7 줄은 '한 덩어리 안의 줄'(sm)이다. md 로 벌리면 7 개가 각각
-  // 독립 블록처럼 보여 목록으로 읽히지 않는다. 대신 성질이 다른 법령 주석은 md 로 뗀다.
-  itemsCard: { gap: spacing.sm },
-  card: { gap: spacing.md },
-  itemRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  itemText: { flex: 1 },
-  legalNote: { marginTop: spacing.md },
-  agreeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.lg,
-    paddingHorizontal: spacing.xs,
-    minHeight: touchTarget.row,
-  },
+  items: { marginTop: space[10], gap: space[6] },
+  item: { flexDirection: 'row', alignItems: 'center', gap: space[10] },
+  dot: { width: 5, height: 5, borderRadius: radius2.full, backgroundColor: c2.status.visited },
+  legal: { marginTop: space[12] },
+  pw: { marginTop: space[20] },
+  agree: { marginTop: space[12], minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: space[10] },
   agreeText: { flex: 1 },
-  submit: { marginTop: spacing.lg },
+  formError: { marginTop: space[8] },
+  pair: { flexDirection: 'row', gap: space[8] },
+  half: { flex: 1 },
 });

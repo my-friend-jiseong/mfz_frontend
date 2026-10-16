@@ -1,216 +1,216 @@
 import { useRef, useState } from 'react';
-import {
-  Alert,
-  ScrollView,
-  StyleSheet,
-  TextInput,
-} from 'react-native';
+import { ScrollView, StyleSheet, View, type TextInput } from 'react-native';
+import { useRouter } from 'expo-router';
 import { KeyboardAvoid } from '@/components/ui/KeyboardAvoid';
 import { useAuthStore } from '@/stores/authStore';
-import { Card } from '@/components/ui/Card';
-import { Input } from '@/components/ui/Input';
-import { Button } from '@/components/ui/Button';
+import { BottomActionBar } from '@/components/ui/BottomActionBar';
+import { Button2 } from '@/components/ui/Button2';
+import { FieldMessage, FormField, ReadonlyField, TextField2 } from '@/components/ui/FormField2';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Text } from '@/components/ui/Text';
-import { GroupLabel } from '@/components/ui/GroupLabel';
+import { snackbar } from '@/components/ui/Snackbar';
 import { SafeScreen } from '@/components/SafeScreen';
-import { checkPasswordPolicy, PASSWORD_HINT } from '@/utils/password';
-import { colors } from '@/theme/colors';
-import { spacing } from '@/theme/spacing';
+import { safeBack } from '@/utils/backNavigation';
+import { checkNewPassword, PASSWORD_HINT } from '@/utils/password';
+import { c2, space } from '@/theme/v2';
 
-// backend-backlog §15 (release 2026-07-26) — PATCH /api/me · PATCH /api/me/password.
-// 카드 2개를 독립 저장으로 둔다: 이름만 바꾸러 온 사용자가 비밀번호까지 입력할 이유가 없고,
-// 한쪽 실패가 다른 쪽을 되돌리지 않는다.
-// 이메일은 인증 식별자라 백엔드가 변경을 받지 않는다 — 읽기 전용으로 이유와 함께 보여준다.
+// 10-1 내 정보 수정 · 10-3 현재 비밀번호 오류 (Figma 584:2640, 727:1906).
+// 이름과 비밀번호는 따로 저장한다: 이름만 바꾸러 온 사용자가 비밀번호까지 넣을 이유가 없고,
+// 한쪽 실패가 다른 쪽을 되돌리지 않는다. 이메일은 인증 식별자라 서버가 바꾸지 않는다(읽기 전용).
+
+type PwErrs = { current?: string; next?: string; confirm?: string; form?: string };
 
 export default function ProfileEdit() {
+  const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const updateName = useAuthStore((s) => s.updateName);
   const changePassword = useAuthStore((s) => s.changePassword);
+  const goBack = () => safeBack(router, '/(tabs)/profile');
 
   // ----- 이름 -----
   const [name, setName] = useState(user?.name ?? '');
   const [nameErr, setNameErr] = useState<string | null>(null);
   const [nameSaving, setNameSaving] = useState(false);
-  const nameDirty = name.trim() !== (user?.name ?? '').trim();
 
+  // [저장] → 10 내 정보로 돌아간다(결정 v85).
   const handleSaveName = async () => {
     const trimmed = name.trim();
-    if (!trimmed) {
-      setNameErr('이름을 입력해주세요');
-      return;
-    }
+    if (!trimmed) return setNameErr('이름을 입력해 주세요');
     // 백엔드 maxLength 100 — 서버 왕복 전에 잡아준다.
-    if (trimmed.length > 100) {
-      setNameErr('이름은 100자 이하여야 합니다');
-      return;
-    }
+    if (trimmed.length > 100) return setNameErr('이름은 100자까지 쓸 수 있어요');
+    if (trimmed === (user?.name ?? '').trim()) return goBack();
     setNameErr(null);
     setNameSaving(true);
     const r = await updateName(trimmed);
-    setNameSaving(false);
-    if (!r.ok) {
-      setNameErr(r.error);
+    if (r.ok) {
+      // 떠나는 화면의 폼은 되돌리지 않는다(같은 틱 setState + 이동 금지).
+      goBack();
       return;
     }
-    // web 은 webAlertPatch 가 window.alert 로 라우팅 — 분기 불필요.
-    Alert.alert('저장 완료', '이름이 변경됐습니다.');
+    setNameSaving(false);
+    setNameErr(r.error);
   };
 
   // ----- 비밀번호 -----
   const [currentPw, setCurrentPw] = useState('');
   const [newPw, setNewPw] = useState('');
   const [newPwConfirm, setNewPwConfirm] = useState('');
-  const [pwErrs, setPwErrs] = useState<{
-    current?: string;
-    next?: string;
-    confirm?: string;
-  }>({});
+  const [pwErrs, setPwErrs] = useState<PwErrs>({});
   const [pwSaving, setPwSaving] = useState(false);
-
   const newPwRef = useRef<TextInput>(null);
   const confirmRef = useRef<TextInput>(null);
 
-  // 백엔드 error.code → 어느 입력의 인라인 에러로 붙일지 (signup 과 같은 방식).
-  const codeToField: Record<string, keyof typeof pwErrs> = {
-    current_password_invalid: 'current',
-    password_policy_violation: 'next',
-    password_confirm_mismatch: 'confirm',
-  };
+  const clearPwErr = (k: keyof PwErrs) => setPwErrs((p) => (p[k] || p.form ? { ...p, [k]: undefined, form: undefined } : p));
 
   const handleChangePassword = async () => {
-    const next: typeof pwErrs = {};
-    if (!currentPw) next.current = '현재 비밀번호를 입력해주세요';
-    const policy = checkPasswordPolicy(newPw);
-    if (policy) next.next = policy;
-    if (newPw !== newPwConfirm) next.confirm = '새 비밀번호가 일치하지 않습니다';
-    // 현재와 같은 비밀번호로 바꾸는 건 의미가 없다 — 서버 왕복 전에 알려준다.
-    if (!next.next && currentPw && newPw === currentPw) {
-      next.next = '현재 비밀번호와 다른 비밀번호를 입력해주세요';
-    }
+    const check = checkNewPassword(newPw, newPwConfirm);
+    const next: PwErrs = { next: check.password, confirm: check.confirm };
+    if (!currentPw) next.current = '현재 비밀번호를 입력해 주세요';
+    // 지금과 같은 비밀번호로 바꾸는 건 의미가 없다 — 서버 왕복 전에 알려준다.
+    if (!next.next && currentPw && newPw === currentPw) next.next = '현재 비밀번호와 다르게 정해 주세요';
     setPwErrs(next);
-    if (Object.keys(next).length > 0) return;
+    if (next.current || next.next || next.confirm) return;
 
     setPwSaving(true);
     const r = await changePassword(currentPw, newPw, newPwConfirm);
-    setPwSaving(false);
-    if (!r.ok) {
-      const field = r.code ? codeToField[r.code] : undefined;
-      // 매핑되는 필드가 없으면 Alert 로 — 인라인 자리가 없는 에러가 조용히 사라지지 않게.
-      if (field) setPwErrs({ [field]: r.error });
-      else Alert.alert('비밀번호 변경 실패', r.error);
+    if (r.ok) {
+      // 10 으로 돌아가며 스낵바(인수인계: 그리지 않음). 이동과 같은 틱에 띄우지 않는다.
+      goBack();
+      requestAnimationFrame(() => snackbar.show({ message: '비밀번호를 바꿨어요' }));
       return;
     }
-    setCurrentPw('');
-    setNewPw('');
-    setNewPwConfirm('');
-    setPwErrs({});
-    Alert.alert('변경 완료', '비밀번호가 변경됐습니다.');
+    setPwSaving(false);
+    if (r.code === 'current_password_invalid') setPwErrs({ current: '현재 비밀번호가 맞지 않아요' });
+    else if (r.code === 'password_policy_violation') setPwErrs({ next: r.error });
+    else if (r.code === 'password_confirm_mismatch') setPwErrs({ confirm: '비밀번호가 서로 달라요' });
+    else setPwErrs({ form: r.error });
   };
 
   return (
-    // 네이티브 스택 헤더(_layout headerShown)가 status bar 를 이미 덮는다 — top 을 또 두르면 이중 여백(Android 실측).
-    <SafeScreen edges={[]}>
-      <KeyboardAvoid
-        style={styles.flex}>
+    <SafeScreen background={c2.bg.canvas}>
+      <PageHeader title="내 정보 수정" onBack={goBack} />
+      <KeyboardAvoid style={styles.flex}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-          {/* 화면 첫 줄 — scroll 의 padding xl 위에 marginTop 을 더하지 않는다. */}
-          <GroupLabel style={styles.firstGroup}>이름</GroupLabel>
-          <Card style={styles.card}>
-            {/* 섹션 제목이 이미 '이름' 이라 Input 라벨은 중복 — 스크린리더용 라벨만 남긴다. */}
-            <Input
-              accessibilityLabel="이름"
-              value={name}
-              onChangeText={(v) => {
-                setName(v);
-                if (nameErr) setNameErr(null);
-              }}
-              editable={!nameSaving}
-              placeholder="홍길동"
-              error={nameErr ?? undefined}
-              returnKeyType="done"
-              onSubmitEditing={() => void handleSaveName()}
-            />
-            <Button
-              onPress={() => void handleSaveName()}
-              loading={nameSaving}
-              disabled={!nameDirty}
-              variant="primary"
-              fullWidth
-            >
-              이름 저장
-            </Button>
-          </Card>
+          <FormField label="이메일" helper="로그인에 쓰는 주소라 바꿀 수 없어요.">
+            <ReadonlyField value={user?.email ?? '-'} />
+          </FormField>
 
-          <GroupLabel>비밀번호</GroupLabel>
-          <Card style={styles.card}>
-            <Input
-              label="현재 비밀번호"
-              value={currentPw}
-              onChangeText={(v) => {
-                setCurrentPw(v);
-                if (pwErrs.current) setPwErrs((p) => ({ ...p, current: undefined }));
-              }}
-              secureTextEntry
-              autoCapitalize="none"
-              editable={!pwSaving}
-              error={pwErrs.current}
-              returnKeyType="next"
-              onSubmitEditing={() => newPwRef.current?.focus()}
-            />
-            <Input
-              ref={newPwRef}
-              label="새 비밀번호"
-              value={newPw}
-              onChangeText={(v) => {
-                setNewPw(v);
-                if (pwErrs.next) setPwErrs((p) => ({ ...p, next: undefined }));
-              }}
-              secureTextEntry
-              autoCapitalize="none"
-              editable={!pwSaving}
-              error={pwErrs.next}
-              helperText={PASSWORD_HINT}
-              returnKeyType="next"
-              onSubmitEditing={() => confirmRef.current?.focus()}
-            />
-            <Input
-              ref={confirmRef}
-              label="새 비밀번호 확인"
-              value={newPwConfirm}
-              onChangeText={(v) => {
-                setNewPwConfirm(v);
-                if (pwErrs.confirm) setPwErrs((p) => ({ ...p, confirm: undefined }));
-              }}
-              secureTextEntry
-              autoCapitalize="none"
-              editable={!pwSaving}
-              error={pwErrs.confirm}
-              returnKeyType="done"
-              onSubmitEditing={() => void handleChangePassword()}
-            />
-            <Button
-              onPress={() => void handleChangePassword()}
-              loading={pwSaving}
-              variant="primary"
-              fullWidth
-            >
+          <View style={styles.gapL}>
+            <FormField label="이름" error={nameErr}>
+              <View style={styles.nameRow}>
+                <TextField2
+                  value={name}
+                  onChangeText={(v) => {
+                    setName(v);
+                    if (nameErr) setNameErr(null);
+                  }}
+                  invalid={!!nameErr}
+                  editable={!nameSaving}
+                  placeholder="홍길동"
+                  textContentType="name"
+                  returnKeyType="done"
+                  onSubmitEditing={() => void handleSaveName()}
+                  accessibilityLabel="이름"
+                  style={styles.nameInput}
+                />
+                <Button2 variant="secondary" size="M" loading={nameSaving} onPress={() => void handleSaveName()} style={styles.nameSave}>
+                  저장
+                </Button2>
+              </View>
+            </FormField>
+          </View>
+
+          <View style={styles.pwSection}>
+            <Text v2="bodyM.bold" tone="primary" accessibilityRole="header">
               비밀번호 변경
-            </Button>
-          </Card>
-
-          <Text variant="caption" color="textMuted" style={styles.note}>
-            이메일({user?.email ?? '-'})은 로그인 식별자라 변경할 수 없습니다.
-          </Text>
+            </Text>
+            <View style={styles.pwFields}>
+              <FormField label="현재 비밀번호" error={pwErrs.current}>
+                <TextField2
+                  value={currentPw}
+                  onChangeText={(v) => {
+                    setCurrentPw(v);
+                    clearPwErr('current');
+                  }}
+                  invalid={!!pwErrs.current}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  textContentType="password"
+                  autoComplete="current-password"
+                  editable={!pwSaving}
+                  placeholder="현재 비밀번호"
+                  returnKeyType="next"
+                  onSubmitEditing={() => newPwRef.current?.focus()}
+                  accessibilityLabel="현재 비밀번호"
+                />
+              </FormField>
+              <FormField label="새 비밀번호" error={pwErrs.next} helper={PASSWORD_HINT}>
+                <TextField2
+                  ref={newPwRef}
+                  value={newPw}
+                  onChangeText={(v) => {
+                    setNewPw(v);
+                    clearPwErr('next');
+                  }}
+                  invalid={!!pwErrs.next}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  textContentType="newPassword"
+                  autoComplete="new-password"
+                  editable={!pwSaving}
+                  placeholder="새 비밀번호"
+                  returnKeyType="next"
+                  onSubmitEditing={() => confirmRef.current?.focus()}
+                  accessibilityLabel="새 비밀번호"
+                />
+              </FormField>
+              <FormField label="새 비밀번호 확인" error={pwErrs.confirm}>
+                <TextField2
+                  ref={confirmRef}
+                  value={newPwConfirm}
+                  onChangeText={(v) => {
+                    setNewPwConfirm(v);
+                    clearPwErr('confirm');
+                  }}
+                  invalid={!!pwErrs.confirm}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  textContentType="newPassword"
+                  autoComplete="new-password"
+                  editable={!pwSaving}
+                  placeholder="한 번 더 입력"
+                  returnKeyType="done"
+                  onSubmitEditing={() => void handleChangePassword()}
+                  accessibilityLabel="새 비밀번호 확인"
+                />
+              </FormField>
+              {pwErrs.form ? <FieldMessage message={pwErrs.form} /> : null}
+            </View>
+          </View>
         </ScrollView>
+        <BottomActionBar>
+          <Button2 onPress={() => void handleChangePassword()} loading={pwSaving} fullWidth>
+            비밀번호 변경
+          </Button2>
+        </BottomActionBar>
       </KeyboardAvoid>
     </SafeScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.background },
-  scroll: { padding: spacing.xl, paddingBottom: spacing.xxl },
-  firstGroup: { marginTop: 0 },
-  card: { gap: spacing.md },
-  note: { marginTop: spacing.xl, paddingHorizontal: spacing.xs },
+  flex: { flex: 1, backgroundColor: c2.bg.canvas },
+  scroll: { paddingHorizontal: space[20], paddingTop: space[16], paddingBottom: space[24] },
+  gapL: { marginTop: space[20] + space[2] },
+  nameRow: { flexDirection: 'row', gap: space[8] },
+  nameInput: { flex: 1 },
+  nameSave: { height: 52 },
+  // Figma 10-1: 이름 칸 아래 22 에 옅은 구분선, 그 아래 18 에 '비밀번호 변경'.
+  pwSection: {
+    marginTop: space[20] + space[2],
+    paddingTop: space[16] + space[2],
+    borderTopWidth: 1,
+    borderTopColor: c2.border.subtle,
+  },
+  pwFields: { marginTop: space[12], gap: space[12] },
 });
