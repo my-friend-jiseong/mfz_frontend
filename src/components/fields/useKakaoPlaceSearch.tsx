@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import type { AddressSearchItem } from '@/api';
@@ -29,6 +29,13 @@ export function useKakaoPlaceSearch() {
   // 로드 전 들어온 요청은 차례대로 쌓아 두고 onLoadEnd 에서 모두 보낸다(검색과 좌표→주소가 섞여도 잃지 않게).
   const readyRef = useRef(false);
   const queuedJsRef = useRef<string[]>([]);
+  // 브리지가 사라지면 다음에 붙을 때까지 준비 전으로 돌린다.
+  useEffect(
+    () => () => {
+      readyRef.current = false;
+    },
+    [],
+  );
 
   const search = useCallback(
     (query: string, near?: { lat: number; lng: number } | null): Promise<AddressSearchItem[]> => {
@@ -88,6 +95,10 @@ export function useKakaoPlaceSearch() {
         source={{ html: buildSearchHtml(kakaoJsKey), baseUrl: KAKAO_WEBVIEW_BASE_URL }}
         javaScriptEnabled
         domStorageEnabled
+        // 다시 불러오는 동안(웹뷰 재시작 등)에는 주입하지 않고 쌓아 둔다.
+        onLoadStart={() => {
+          readyRef.current = false;
+        }}
         onLoadEnd={() => {
           readyRef.current = true;
           const queued = queuedJsRef.current;

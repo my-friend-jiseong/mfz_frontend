@@ -35,8 +35,9 @@ export async function openRouteTo(to: RouteTarget, from?: { lat: number; lng: nu
       // 웹은 새 탭 — 같은 탭으로 가면 앱 상태(담은 목적지 등)를 잃는다.
       // 'noopener' 를 주면 window.open 이 늘 null 을 돌려줘 차단 여부를 못 안다 — 열고 나서 opener 를 끊는다.
       const w = window.open(webUrl, '_blank');
-      if (!w) throw new Error('popup blocked');
-      w.opener = null;
+      // 팝업이 막혔으면 이 탭에서 연다(길 안내가 우선 — 돌아오면 앱을 다시 열면 된다).
+      if (w) w.opener = null;
+      else window.location.assign(webUrl);
       return;
     }
     await Linking.openURL(webUrl);

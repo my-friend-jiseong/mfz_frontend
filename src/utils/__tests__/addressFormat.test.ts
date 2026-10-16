@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { districtOf, pickedPlaceName, placeCategoryLabel, shortJibun, sigunguOf, stripRegion } from '../addressFormat';
+import { regionOf, districtOf, pickedPlaceName, placeCategoryLabel, shortJibun, sigunguOf, stripRegion } from '../addressFormat';
 
 test('stripRegion: 시·도와 시·군·구를 뗀다', () => {
   assert.equal(stripRegion('부산 사하구 낙동대로 550'), '낙동대로 550');
@@ -32,4 +32,9 @@ test('pickedPlaceName', () => {
 test('placeCategoryLabel', () => {
   assert.equal(placeCategoryLabel('교육,학문 > 학교 > 초등학교'), '초등학교');
   assert.equal(placeCategoryLabel(undefined), '');
+});
+
+test('regionOf: 시·도와 시·군·구', () => {
+  assert.deepEqual(regionOf('부산 사하구 낙동대로 351'), { sido: '부산', sigungu: '사하구' });
+  assert.deepEqual(regionOf('낙동대로 351'), { sido: '', sigungu: '' });
 });

@@ -30,7 +30,10 @@ export async function waitForCategoryCascade(): Promise<void> {
 type LogEntry = { at: number; from: string; to: string | null };
 const log: LogEntry[] = [];
 
-/** since(ms) 이후의 이름 변경·삭제를 names 에 적용한다. */
+/**
+ * since(ms) 이후의 이름 변경·삭제를 names 에 적용한다. since 는 그 선택을 마지막으로 고친 때 —
+ * 그 전에 끝난 변경은 선택에 이미 들어 있고, 그 뒤에 같은 이름을 새로 만든 경우를 지우지 않게 한다.
+ */
 export function reconcileCategories(names: string[], since: number): string[] {
   let out = [...names];
   for (const e of log) {
@@ -39,6 +42,11 @@ export function reconcileCategories(names: string[], since: number): string[] {
     out = out.flatMap((c) => (norm(c) === n ? (e.to ? [e.to] : []) : [c]));
   }
   return out.filter((c, i) => out.findIndex((x) => norm(x) === norm(c)) === i);
+}
+
+/** 이 세션에서 이름을 바꾸거나 지운 분류(옛 이름, 정규화). 분류 시트의 '마스터에 없는 옛 분류' 줄에서 뺀다. */
+export function touchedCategoryNames(): Set<string> {
+  return new Set(log.map((e) => norm(e.from)));
 }
 
 export function fieldsUsingCategory(name: string): number {

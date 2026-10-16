@@ -5,7 +5,6 @@ import { SheetTextInput } from '@/components/ui/SheetTextInput';
 import { Text } from '@/components/ui/Text';
 import { Touchable } from '@/components/ui/Touchable';
 import { Icon } from '@/components/icons';
-import { useKakaoPlaceSearch } from './useKakaoPlaceSearch';
 import { fields as fieldsApi, type AddressSearchItem } from '@/api';
 import { MIN_KEYWORD_LEN, SEARCH_DEBOUNCE_MS, mergeSearchItems } from '@/utils/addressSearch';
 import { shortJibun, stripRegion } from '@/utils/addressFormat';
@@ -16,6 +15,11 @@ interface Props {
   open: boolean;
   onClose: () => void;
   onSelect: (item: AddressSearchItem) => void;
+  /**
+   * 장소 검색 — 화면이 가진 useKakaoPlaceSearch 의 search. 네이티브 브리지(WebView)는 시트 밖 화면에 둔다
+   * (시트 안에 두면 열고 닫을 때마다 WebView 가 다시 뜨고 준비 표시가 어긋난다).
+   */
+  searchPlaces: (q: string, near?: { lat: number; lng: number } | null) => Promise<AddressSearchItem[]>;
   /** 장소 검색 기준점(지금 현장 위치) — 같은 이름의 먼 곳이 앞에 오지 않게. */
   near?: { lat: number; lng: number } | null;
 }
@@ -24,10 +28,9 @@ interface Props {
  * 5-5 주소 칸을 누르면 뜨는 주소 검색 시트. Figma 에 그리지 않은 보조 화면이라 4-1 결과 행 모양을 줄여 쓴다.
  * 주소(서버, 도로명·지번)와 장소(카카오 키워드)를 함께 찾는다.
  */
-export function AddressSearchSheet({ open, onClose, onSelect, near }: Props) {
+export function AddressSearchSheet({ open, onClose, onSelect, near, searchPlaces }: Props) {
   const nearRef = useRef(near);
   nearRef.current = near;
-  const { search: searchPlaces, element: bridge } = useKakaoPlaceSearch();
   const [query, setQuery] = useState('');
   const [items, setItems] = useState<AddressSearchItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -69,7 +72,6 @@ export function AddressSearchSheet({ open, onClose, onSelect, near }: Props) {
 
   return (
     <AppSheet open={open} onClose={onClose} title="주소 검색" snapPoints={['85%']} scrollable>
-      {bridge}
       <View style={styles.body}>
         <View style={styles.inputBox}>
           <Icon name="search" size={18} color={c2.text.primary} />

@@ -27,6 +27,13 @@ export function sigunguOf(address: string): string {
   return out.join(' ');
 }
 
+/** 주소 글의 시·도와 시·군·구. '부산 사하구 낙동대로 351' → { sido: '부산', sigungu: '사하구' }. 모르면 ''. */
+export function regionOf(address: string): { sido: string; sigungu: string } {
+  const t = tokens(address);
+  const sigungu = sigunguOf(address);
+  return { sido: sigungu && t.length > 1 ? t[0] : '', sigungu };
+}
+
 /** 지번 주소의 동 이하. '부산 사하구 당리동 343-1' → '당리동 343-1'. */
 export function shortJibun(jibun: string): string {
   const t = tokens(jibun);

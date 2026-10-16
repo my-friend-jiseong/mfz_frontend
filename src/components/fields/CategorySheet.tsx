@@ -12,7 +12,12 @@ import { confirm, notice } from '@/components/ui/ConfirmDialog';
 import { Icon } from '@/components/icons';
 import { useCategoryStore, norm } from '@/stores/categoryStore';
 import { useFieldStore } from '@/stores/fieldStore';
-import { deleteCategoryEverywhere, renameCategoryEverywhere } from '@/utils/categoryCascade';
+import {
+  deleteCategoryEverywhere,
+  reconcileCategories,
+  renameCategoryEverywhere,
+  touchedCategoryNames,
+} from '@/utils/categoryCascade';
 import { c2, radius2, space, type2 } from '@/theme/v2';
 import { fontFamily } from '@/theme/typography';
 
@@ -22,6 +27,8 @@ interface Props {
   placeName: string;
   /** 시트를 열 때의 선택. */
   initial: string[];
+  /** initial 을 마지막으로 고친 때(ms) — 그 뒤에 끝난 이름 변경·삭제를 initial 에 맞춘다(categoryCascade). */
+  since: number;
   /** X·끌어내리기·바깥 누르기 — 어떻게 닫든 고른 것이 그대로 반영된다(완료 버튼 없음, v135). */
   onClose: (selected: string[]) => void;
 }
@@ -32,7 +39,7 @@ type Editing = { kind: 'rename'; id: string; name: string } | { kind: 'new' } | 
  * 5-6 분류 선택 시트(여러 개). 행 ⋯ → 5-7 [이름 변경][삭제], 5-8 행 안 이름 바꾸기, 5-9 삭제 확인,
  * 5-12 맨 아래 새 분류 입력 줄. 이름 변경·삭제는 그 분류가 붙은 현장에도 반영한다(categoryCascade).
  */
-export function CategorySheet({ open, placeName, initial, onClose }: Props) {
+export function CategorySheet({ open, placeName, initial, since, onClose }: Props) {
   const categories = useCategoryStore((s) => s.categories);
   const fields = useFieldStore((s) => s.fields);
   const [selected, setSelected] = useState<string[]>(initial);
@@ -44,7 +51,7 @@ export function CategorySheet({ open, placeName, initial, onClose }: Props) {
   // 열 때마다 처음 선택으로 맞추고 목록을 서버와 맞춘다.
   useEffect(() => {
     if (!open) return;
-    setSelected(initial);
+    setSelected(reconcileCategories(initial, since));
     setEditing(null);
     setError(null);
     void useCategoryStore.getState().refresh();
@@ -64,11 +71,14 @@ export function CategorySheet({ open, placeName, initial, onClose }: Props) {
   // 마스터에 없는 이 현장의 옛 분류도 목록에 보인다(지우지 않게).
   const rows = useMemo(() => {
     const list = categories.map((c) => ({ id: c.id, name: c.name, master: true }));
-    for (const name of initial) {
+    // 이 세션에서 바꾸거나 지운 이름은 옛 분류 줄로 되살리지 않는다.
+    const touched = touchedCategoryNames();
+    for (const name of reconcileCategories(initial, since)) {
+      if (touched.has(norm(name))) continue;
       if (!list.some((r) => norm(r.name) === norm(name))) list.push({ id: `legacy:${name}`, name, master: false });
     }
     return list;
-  }, [categories, initial]);
+  }, [categories, initial, since]);
 
   const isOn = (name: string) => selected.some((s) => norm(s) === norm(name));
   const toggle = (name: string) =>

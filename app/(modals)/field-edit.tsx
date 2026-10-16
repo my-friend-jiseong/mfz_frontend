@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FieldPinMap, type FieldPinMapHandle } from '@/components/fields/FieldPinMap';
 import { CategoryChips } from '@/components/fields/CategoryChips';
@@ -19,7 +19,7 @@ import { Icon } from '@/components/icons';
 import { useFieldStore } from '@/stores/fieldStore';
 import type { UpdateFieldBody } from '@/api';
 import { fieldActionStatus } from '@/utils/fieldStatus';
-import { shortJibun, stripRegion } from '@/utils/addressFormat';
+import { regionOf, shortJibun, stripRegion } from '@/utils/addressFormat';
 import { isInKorea } from '@/utils/addressSearch';
 import { requestUserLocation } from '@/utils/geolocation';
 import { safeBack } from '@/utils/backNavigation';
@@ -86,10 +86,28 @@ export default function FieldEditModal() {
   }, [field, initial]);
 
   const mapRef = useRef<FieldPinMapHandle>(null);
-  const openedAt = useRef(Date.now());
+  // 분류 선택을 마지막으로 고친 때 — 저장할 때 그 뒤에 끝난 이름 변경·삭제만 맞춘다(categoryCascade.reconcileCategories).
+  const categoriesAt = useRef(Date.now());
+  // 저장 중에는 닫지 못한다(X·안드로이드 뒤로) — 반만 저장된 채 떠나지 않게. 떠난 뒤엔 이동하지 않는다.
+  const savingRef = useRef(false);
+  const mountedRef = useRef(true);
+  useEffect(
+    () => () => {
+      mountedRef.current = false;
+    },
+    [],
+  );
+  const navigation = useNavigation();
+  useEffect(
+    () =>
+      navigation.addListener('beforeRemove', (e) => {
+        if (savingRef.current) e.preventDefault();
+      }),
+    [navigation],
+  );
   // 지도를 만지는 동안 바깥 스크롤을 잠근다 — 안드로이드는 ScrollView 가 지도 끌기를 가로챈다(FieldPinMap 주석).
   const [mapBusy, setMapBusy] = useState(false);
-  const { reverse, element: placeBridge } = useKakaoPlaceSearch();
+  const { search: searchPlaces, reverse, element: placeBridge } = useKakaoPlaceSearch();
   const [searchOpen, setSearchOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -101,6 +119,22 @@ export default function FieldEditModal() {
       </View>
     );
   }
+
+  const close = () => {
+    if (savingRef.current) return;
+    safeBack(router);
+  };
+  // 저장이 끝나 떠날 때 — 막는 표시를 먼저 풀고, 이미 떠난 화면이면 아무것도 하지 않는다.
+  const leave = () => {
+    savingRef.current = false;
+    if (mountedRef.current) safeBack(router);
+  };
+  const fail = (msg: string) => {
+    savingRef.current = false;
+    if (!mountedRef.current) return;
+    setSaving(false);
+    setError(msg);
+  };
 
   // 지도를 끌어 놓은 자리(가운데 핀). 주소는 역지오코딩이 끝나면 따라온다.
   const onPinMove = (lat: number, lng: number, a?: { roadAddress: string; jibunAddress: string; sido?: string; sigungu?: string }) => {
@@ -136,49 +170,58 @@ export default function FieldEditModal() {
   const nameTrim = name.trim();
   const detailTrim = detail.trim();
   const save = async () => {
-    if (saving) return;
+    if (savingRef.current) return;
+    savingRef.current = true;
     setSaving(true);
+    setError(null);
     // 분류 시트에서 시작한 이름 변경·삭제가 끝난 뒤 저장한다 — 안 그러면 옛 이름으로 덮어쓴다.
     await waitForCategoryCascade();
-    const cats = reconcileCategories(categories, openedAt.current);
-    const baseCats = reconcileCategories(initial.categories, openedAt.current);
+    const cats = reconcileCategories(categories, categoriesAt.current);
+    // 비교는 지금 저장된 값과 — 반영 작업이 이 현장의 분류를 이미 바꿨을 수 있다.
+    const savedCats = useFieldStore.getState().fields.find((f) => f.id === field.id)?.categories ?? initial.categories;
     const body: UpdateFieldBody = {};
     if (nameTrim !== initial.name) body.name = nameTrim;
     if (detailTrim !== initial.detail.trim()) body.detailAddress = detailTrim;
-    if (sameKey(cats) !== sameKey(baseCats)) body.categories = cats;
+    if (sameKey(cats) !== sameKey(savedCats)) body.categories = cats;
     if (moved) {
       let a = addr;
-      // 장소 검색으로 고른 곳은 시·도·시·군·구가 비어 온다 — 좌표로 채운다.
+      // 장소 검색으로 고른 곳은 시·도·시·군·구가 비어 온다 — 좌표로 채우고, 안 되면 주소 글에서 읽는다.
       if (!a.sido || !a.sigungu || !(a.road || a.jibun)) {
         const r = await reverse(a.lat, a.lng);
         if (r) a = { ...a, road: a.road || r.roadAddress, jibun: a.jibun || r.jibunAddress, sido: a.sido || r.sido, sigungu: a.sigungu || r.sigungu };
       }
       const road = a.road || a.jibun;
       if (!road) {
-        setSaving(false);
-        setError('주소를 아직 확인하지 못했어요. 지도를 조금 움직이거나 주소로 검색해 주세요.');
+        fail('주소를 아직 확인하지 못했어요. 지도를 조금 움직이거나 주소로 검색해 주세요.');
+        return;
+      }
+      if (!a.sido || !a.sigungu) {
+        const parsed = regionOf(road);
+        a = { ...a, sido: a.sido || parsed.sido, sigungu: a.sigungu || parsed.sigungu };
+      }
+      // 옛 시·군·구가 새 주소와 함께 남지 않게, 모르면 저장하지 않는다.
+      if (!a.sido || !a.sigungu) {
+        fail('주소의 시·군·구를 확인하지 못했어요. 주소로 다시 검색해 주세요.');
         return;
       }
       body.roadAddress = road;
       if (a.jibun) body.jibunAddress = a.jibun;
       body.lat = a.lat;
       body.lng = a.lng;
-      if (a.sido) body.sido = a.sido;
-      if (a.sigungu) body.sigungu = a.sigungu;
+      body.sido = a.sido;
+      body.sigungu = a.sigungu;
     }
     if (Object.keys(body).length === 0) {
-      setSaving(false);
-      safeBack(router);
+      leave();
       return;
     }
     const r = await useFieldStore.getState().update(field.id, body);
     if (!r.ok) {
-      setSaving(false);
-      setError(r.error);
+      fail(r.error);
       return;
     }
     // 이름을 비우면 서버가 주소를 이름으로 저장한다(2026-10-17 실측) — 화면은 '이름 = 주소'를 빈 이름으로 본다.
-    safeBack(router);
+    leave();
   };
 
   // 분류 시트 부제 — 현장명이 먼저, 비어 있으면 주소.
@@ -186,7 +229,7 @@ export default function FieldEditModal() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      <Header onClose={() => safeBack(router)} />
+      <Header onClose={close} />
       <KeyboardAvoid style={styles.flex}>
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll} scrollEnabled={!mapBusy}>
           <View style={styles.mapBox}>
@@ -280,7 +323,14 @@ export default function FieldEditModal() {
             />
 
             <View style={styles.gap}>
-              <CategoryChips value={categories} onChange={setCategories} placeName={placeName} />
+              <CategoryChips
+                value={categories}
+                onChange={(next) => {
+                  categoriesAt.current = Date.now();
+                  setCategories(next);
+                }}
+                placeName={placeName}
+              />
             </View>
             {error ? <FieldMessage message={error} style={styles.gapSm} /> : null}
           </View>
@@ -294,6 +344,7 @@ export default function FieldEditModal() {
       {placeBridge}
       <AddressSearchSheet
         near={{ lat: addr.lat, lng: addr.lng }}
+        searchPlaces={searchPlaces}
         open={searchOpen}
         onClose={() => setSearchOpen(false)}
         onSelect={(it) => {

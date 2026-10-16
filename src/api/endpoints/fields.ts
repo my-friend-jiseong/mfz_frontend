@@ -112,6 +112,8 @@ export interface CreateFieldBody {
   status: FieldStatus;
   // ERD v2 필수: 도로명·상세주소·좌표.
   roadAddress: string;
+  // OpenAPI 는 필수로 적지만 지금 앱은 빼고 보내도 201 이다 — 있으면 함께 보낸다.
+  jibunAddress?: string;
   detailAddress: string;
   lat: number;
   lng: number;

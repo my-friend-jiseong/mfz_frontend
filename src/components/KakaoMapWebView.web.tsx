@@ -561,17 +561,21 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
     let timer: ReturnType<typeof setTimeout> | null = null;
     let sx = 0;
     let sy = 0;
+    // 길게 누른 뒤 손을 떼며 생기는 첫 click 은 핀·지도 누르기로 치지 않는다(네이티브 HTML 과 같은 규칙).
+    let swallow = false;
     const cancel = () => {
       if (timer) clearTimeout(timer);
       timer = null;
     };
     const start = (x: number, y: number) => {
       cancel();
+      swallow = false;
       if (!onLongPressRef.current) return;
       sx = x;
       sy = y;
       timer = setTimeout(() => {
         timer = null;
+        swallow = true;
         const k = getKakao();
         const map = mapRef.current;
         if (!k || !map) return;
@@ -594,8 +598,19 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
     const onTouchMove = (e: TouchEvent) => {
       if (e.touches[0]) move(e.touches[0].clientX, e.touches[0].clientY);
     };
+    const onClick = (e: MouseEvent) => {
+      if (!swallow) return;
+      swallow = false;
+      e.stopPropagation();
+      e.preventDefault();
+    };
+    // 길게 누르면 뜨는 브라우저 메뉴를 막는다.
+    const onContextMenu = (e: Event) => e.preventDefault();
     // 캡처 단계 — 카카오 지도가 드래그 처리로 이벤트를 멈춰도 받는다.
     const opts = { capture: true, passive: true } as const;
+    const activeOpts = { capture: true } as const;
+    root.addEventListener('click', onClick, activeOpts);
+    root.addEventListener('contextmenu', onContextMenu, activeOpts);
     root.addEventListener('mousedown', onMouseDown, opts);
     root.addEventListener('mousemove', onMouseMove, opts);
     root.addEventListener('mouseup', cancel, opts);
@@ -606,6 +621,8 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
     root.addEventListener('touchcancel', cancel, opts);
     return () => {
       cancel();
+      root.removeEventListener('click', onClick, activeOpts);
+      root.removeEventListener('contextmenu', onContextMenu, activeOpts);
       root.removeEventListener('mousedown', onMouseDown, opts);
       root.removeEventListener('mousemove', onMouseMove, opts);
       root.removeEventListener('mouseup', cancel, opts);

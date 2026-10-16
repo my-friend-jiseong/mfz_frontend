@@ -21,7 +21,7 @@ const SEARCH_HREF = '/(tabs)/trips/fields';
 export function FieldDetailHeader({ query }: { query: string }) {
   const router = useRouter();
   const cart = useDestinationCart();
-  const toSearch = (q: string) => router.dismissTo({ pathname: SEARCH_HREF, params: { q } } as never);
+  const toSearch = (q: string) => router.dismissTo({ pathname: SEARCH_HREF, params: { q, n: String(Date.now()) } } as never);
   return (
     <View style={styles.header}>
       <Touchable onPress={() => safeBack(router)} accessibilityRole="button" accessibilityLabel="검색 결과로" style={styles.back}>
@@ -47,16 +47,18 @@ interface FooterProps {
   added: boolean;
   adding?: boolean;
   onAdd: () => void;
+  /** 현장을 지우는 중 등 — 두 버튼을 모두 막는다. */
+  disabled?: boolean;
 }
 
 /** 5·5-2 아래 줄: [길찾기] + [외근 목적지에 추가 / ✓ 외근 목적지에 추가됨]. */
-export function FieldDetailFooter({ name, lat, lng, added, adding, onAdd }: FooterProps) {
+export function FieldDetailFooter({ name, lat, lng, added, adding, onAdd, disabled }: FooterProps) {
   return (
     <BottomActionBar
       safeArea={false}
       style={styles.footer}
       secondary={
-        <Button2 variant="secondary" icon="navigation" onPress={() => void openRouteTo({ name, lat, lng })}>
+        <Button2 variant="secondary" icon="navigation" disabled={disabled} onPress={() => void openRouteTo({ name, lat, lng })}>
           길찾기
         </Button2>
       }
@@ -65,6 +67,7 @@ export function FieldDetailFooter({ name, lat, lng, added, adding, onAdd }: Foot
         variant={added ? 'tonal' : 'primary'}
         icon={added ? 'check' : undefined}
         loading={adding}
+        disabled={disabled}
         onPress={onAdd}
         fullWidth
       >

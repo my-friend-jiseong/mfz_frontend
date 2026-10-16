@@ -172,9 +172,9 @@ MARKERS.forEach(function(m){
     // 정적 위치도(figure) — 드래그/줌 차단. BottomSheet 등에서 pan 충돌 회피 + 보고서 그림용.
     if (!INTERACTIVE) { map.setDraggable(false); map.setZoomable(false); }
     // 길게 누르기(4-3 지도에서 위치 고르기) — 손가락이 600ms 동안 10px 안에 머물면 그 지점 좌표를 보낸다.
-    // 길게 누른 직후 손을 떼며 생기는 click 은 핀 누르기로 치지 않는다.
-    var lpAt = 0;
-    var lpRecent = function(){ return Date.now() - lpAt < 600; };
+    // 길게 누른 뒤 손을 떼며 생기는 첫 click 은(얼마나 오래 눌렀든) 핀 누르기로 치지 않는다. 다음 손가락이 닿으면 푼다.
+    var lpSwallow = false;
+    var lpRecent = function(){ if (lpSwallow) { lpSwallow = false; return true; } return false; };
     // 길게 누르면 뜨는 브라우저 메뉴(이미지 저장·텍스트 선택)를 막는다.
     container.addEventListener('contextmenu', function(e){ e.preventDefault(); });
     if (INTERACTIVE) {
@@ -182,11 +182,12 @@ MARKERS.forEach(function(m){
       var lpCancel = function(){ if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } };
       container.addEventListener('touchstart', function(e){
         lpCancel();
+        lpSwallow = false;
         if (!e.touches || e.touches.length !== 1) return;
         lpX = e.touches[0].clientX; lpY = e.touches[0].clientY;
         lpTimer = setTimeout(function(){
           lpTimer = null;
-          lpAt = Date.now();
+          lpSwallow = true;
           var rect = container.getBoundingClientRect();
           var ll = map.getProjection().coordsFromContainerPoint(new kakao.maps.Point(lpX - rect.left, lpY - rect.top));
           postMsg({ type: 'longPress', lat: ll.getLat(), lng: ll.getLng() });

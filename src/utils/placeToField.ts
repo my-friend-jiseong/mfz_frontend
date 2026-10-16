@@ -1,5 +1,7 @@
 import { useFieldStore } from '@/stores/fieldStore';
 import type { Field } from '@/types/entities';
+import type { ReverseAddress } from '@/components/fields/useKakaoPlaceSearch';
+import { regionOf } from './addressFormat';
 
 // 등록 안 된 위치(4-1 주소·장소 결과, 4-3 지도에서 고른 위치, 5-2)를 외근 목적지에 담을 때 현장으로 저장한다
 // (5-2 '외근 목적지에 추가하면 현장으로 저장돼요.').
@@ -15,13 +17,38 @@ export interface PlaceTarget {
   lng: number;
 }
 
-export async function createFieldFromPlace(p: PlaceTarget): Promise<{ ok: true; field: Field } | { ok: false; error: string }> {
+/**
+ * reverse: 좌표 → 주소(useKakaoPlaceSearch). 장소 검색·지도에서 고른 위치는 시·도·시·군·구가 비어 오므로 채운다.
+ * 그래도 모르면 주소 글에서 읽는다 — 다른 지역 값이 섞여 저장되지 않게 모르는 값은 보내지 않는다.
+ */
+export async function createFieldFromPlace(
+  input: PlaceTarget,
+  reverse?: (lat: number, lng: number) => Promise<ReverseAddress | null>,
+): Promise<{ ok: true; field: Field } | { ok: false; error: string }> {
+  let p = input;
+  if ((!p.sido || !p.sigungu || !p.jibunAddress || !p.roadAddress) && reverse) {
+    const r = await reverse(p.lat, p.lng);
+    if (r) {
+      p = {
+        ...p,
+        roadAddress: p.roadAddress || r.roadAddress,
+        jibunAddress: p.jibunAddress || r.jibunAddress,
+        sido: p.sido || r.sido,
+        sigungu: p.sigungu || r.sigungu,
+      };
+    }
+  }
   const address = p.roadAddress || p.jibunAddress;
   if (!address) return { ok: false, error: '주소를 확인하지 못했어요. 다른 곳을 골라 주세요.' };
+  if (!p.sido || !p.sigungu) {
+    const parsed = regionOf(address);
+    p = { ...p, sido: p.sido || parsed.sido, sigungu: p.sigungu || parsed.sigungu };
+  }
   const body = {
     name: p.name?.trim() || address,
     status: 'pending' as const,
     roadAddress: address,
+    ...(p.jibunAddress ? { jibunAddress: p.jibunAddress } : {}),
     detailAddress: '',
     lat: p.lat,
     lng: p.lng,

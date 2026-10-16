@@ -63,7 +63,7 @@ interface PlaceResult {
 export default function FieldSearchScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ q?: string }>();
+  const params = useLocalSearchParams<{ q?: string; n?: string }>();
   const userId = useAuthStore((s) => s.user?.id);
   const allFields = useFieldStore((s) => s.fields);
   const projects = useProjectStore((s) => s.projects);
@@ -71,10 +71,12 @@ export default function FieldSearchScreen() {
   const { search: searchPlaces, reverse, element: placeBridge } = useKakaoPlaceSearch();
 
   const [query, setQuery] = useState(params.q ?? '');
-  // 5 에서 머리의 검색창·지우기로 돌아오면 그 검색어로 맞춘다.
+  // 5 에서 머리의 검색창·지우기·삭제로 돌아오면 그 검색어로 맞춘다. 같은 검색어로 다시 와도 맞추도록
+  // 보낼 때마다 바뀌는 n(시각)을 함께 받는다 — 그냥 뒤로 오면(n 그대로) 입력하던 검색어를 그대로 둔다.
   useEffect(() => {
     if (params.q !== undefined) setQuery(params.q);
-  }, [params.q]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.q, params.n]);
 
   const [myLoc, setMyLoc] = useState<LatLng | null>(null);
   useEffect(() => {
@@ -270,7 +272,7 @@ export default function FieldSearchScreen() {
   const addPlace = async (key: string, target: PlaceTarget): Promise<Field | null> => {
     if (addingKey) return null;
     setAddingKey(key);
-    const r = await createFieldFromPlace(target);
+    const r = await createFieldFromPlace(target, reverse);
     setAddingKey(null);
     if (!r.ok) {
       toast(r.error);

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { FilterChip2 } from '@/components/ui/FilterChip2';
 import { Text } from '@/components/ui/Text';
@@ -22,6 +22,12 @@ interface Props {
 export function CategoryChips({ value, onChange, placeName }: Props) {
   const categories = useCategoryStore((s) => s.categories);
   const [sheetOpen, setSheetOpen] = useState(false);
+  // value 를 마지막으로 고친 때 — 시트가 그 뒤에 끝난 이름 변경·삭제만 value 에 맞춘다.
+  const changedAt = useRef(Date.now());
+  const change = (next: string[]) => {
+    changedAt.current = Date.now();
+    onChange(next);
+  };
 
   useEffect(() => {
     void useCategoryStore.getState().refresh();
@@ -35,7 +41,7 @@ export function CategoryChips({ value, onChange, placeName }: Props) {
 
   const isOn = (name: string) => value.some((v) => norm(v) === norm(name));
   const toggle = (name: string) =>
-    onChange(isOn(name) ? value.filter((v) => norm(v) !== norm(name)) : [...value, name]);
+    change(isOn(name) ? value.filter((v) => norm(v) !== norm(name)) : [...value, name]);
 
   return (
     <View>
@@ -57,9 +63,10 @@ export function CategoryChips({ value, onChange, placeName }: Props) {
         open={sheetOpen}
         placeName={placeName}
         initial={value}
+        since={changedAt.current}
         onClose={(next) => {
           setSheetOpen(false);
-          onChange(next);
+          change(next);
         }}
       />
     </View>

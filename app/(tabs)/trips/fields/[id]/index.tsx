@@ -52,6 +52,8 @@ export default function FieldDetail() {
   // 삭제하는 동안은 마지막 값으로 그린다 — 스토어에서 빠진 같은 틱에 '찾을 수 없어요'로 바뀌며 떠나는 화면이 뒤집히지 않게.
   const lastFieldRef = useRef(liveField);
   const deletingRef = useRef(false);
+  // 지우는 동안 아래 줄·더보기·프로젝트를 막는다(지운 현장을 담거나 고치지 않게).
+  const [deleting, setDeleting] = useState(false);
   if (liveField) lastFieldRef.current = liveField;
   const field = liveField ?? (deletingRef.current ? lastFieldRef.current : undefined);
   const directAttachments = useFieldStore((s) => s.directAttachments[fieldId]);
@@ -165,9 +167,11 @@ export default function FieldDetail() {
     });
     if (!ok || deletingRef.current) return;
     deletingRef.current = true;
+    setDeleting(true);
     const r = await useFieldStore.getState().remove(field.id, true);
     if (!r.ok) {
       deletingRef.current = false;
+      setDeleting(false);
       await notice('현장을 삭제하지 못했어요', 'error' in r ? r.error : r.message);
       return;
     }
@@ -185,7 +189,7 @@ export default function FieldDetail() {
     useTripPrepStore.getState().remove(field.id);
     toast('현장을 삭제했어요');
     // 삭제 후 4 현장 검색으로(인수인계 현장 삭제). 스토어 변경과 화면 이동을 한 틱에 섞지 않는다.
-    setTimeout(() => router.dismissTo({ pathname: '/(tabs)/trips/fields', params: { q: q ?? '' } } as never), 0);
+    setTimeout(() => router.dismissTo({ pathname: '/(tabs)/trips/fields', params: { q: q ?? '', n: String(Date.now()) } } as never), 0);
   };
 
   const openMore = () =>
@@ -205,6 +209,7 @@ export default function FieldDetail() {
         <View style={styles.metaRow}>
           <Touchable
             onPress={() => setProjectOpen(true)}
+            disabled={deleting}
             accessibilityRole="button"
             accessibilityLabel={`프로젝트: ${field.projectName ?? '없음'}, 바꾸기`}
             style={styles.project}
@@ -220,7 +225,7 @@ export default function FieldDetail() {
               <Tag key={c} label={c} />
             ))}
           </View>
-          <Touchable ref={moreRef} onPress={openMore} accessibilityRole="button" accessibilityLabel="현장 더보기 (정보 수정, 삭제)" style={styles.more}>
+          <Touchable ref={moreRef} onPress={openMore} disabled={deleting} accessibilityRole="button" accessibilityLabel="현장 더보기 (정보 수정, 삭제)" style={styles.more}>
             <Icon name="more" size={22} color={c2.text.secondary} />
           </Touchable>
         </View>
@@ -293,6 +298,7 @@ export default function FieldDetail() {
         lng={field.longitude}
         added={added}
         onAdd={() => cart.toggle(field.id)}
+        disabled={deleting}
       />
       <ProjectSheet open={projectOpen} onClose={() => setProjectOpen(false)} field={field} placeName={title} />
     </View>

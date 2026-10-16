@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MapPreviewCard } from '@/components/MapPreviewCard';
 import { FieldDetailFooter, FieldDetailHeader } from '@/components/fields/FieldDetailChrome';
@@ -11,6 +11,7 @@ import { Icon } from '@/components/icons';
 import { STATUS_PIN_COLOR } from '@/components/shell/pinColors';
 import { openFullMap } from '@/components/shell/fullMap';
 import { createFieldFromPlace } from '@/utils/placeToField';
+import { useKakaoPlaceSearch } from '@/components/fields/useKakaoPlaceSearch';
 import { useDestinationCart } from '@/utils/destinationCart';
 import { districtOf, shortJibun, stripRegion } from '@/utils/addressFormat';
 import { formatDistanceM } from '@/utils/nearestField';
@@ -39,35 +40,65 @@ export default function UnregisteredPlace() {
     void peekUserLocation().then(setMyLoc);
   }, []);
   const [adding, setAdding] = useState(false);
+  const { reverse, element: placeBridge } = useKakaoPlaceSearch();
+  // 현장을 만드는 동안은 뒤로 가지 못하게 하고(만들어진 현장이 담기지 않은 채 남지 않게), 떠난 뒤엔 화면을 바꾸지 않는다.
+  const addingRef = useRef(false);
+  const mountedRef = useRef(true);
+  useEffect(
+    () => () => {
+      mountedRef.current = false;
+    },
+    [],
+  );
+  const navigation = useNavigation();
+  useEffect(
+    () =>
+      navigation.addListener('beforeRemove', (e) => {
+        if (addingRef.current) e.preventDefault();
+      }),
+    [navigation],
+  );
 
   const valid = Number.isFinite(lat) && Number.isFinite(lng);
   const distance = myLoc && valid ? formatDistanceM(haversineKm(myLoc, { lat, lng }) * 1000) : null;
   const subtitle = [p.cat || districtOf(jibun || road), distance ? `현 위치에서 ${distance}` : null].filter(Boolean).join(' · ');
 
   const add = async () => {
-    if (adding || !valid) return;
+    if (addingRef.current || !valid) return;
+    addingRef.current = true;
     setAdding(true);
-    const r = await createFieldFromPlace({
-      name: p.name || null,
-      roadAddress: road,
-      jibunAddress: jibun,
-      sido: p.sido,
-      sigungu: p.sigungu,
-      lat,
-      lng,
-    });
+    const r = await createFieldFromPlace(
+      {
+        name: p.name || null,
+        roadAddress: road,
+        jibunAddress: jibun,
+        sido: p.sido,
+        sigungu: p.sigungu,
+        lat,
+        lng,
+      },
+      reverse,
+    );
+    addingRef.current = false;
     if (!r.ok) {
+      if (!mountedRef.current) return;
       setAdding(false);
       await notice('외근 목적지에 추가하지 못했어요', r.error);
       return;
     }
     cart.add([r.field.id]);
-    // 현장이 되었으니 5 현장 상세로 바꾼다. 상태 변경(setAdding)과 화면 교체를 한 배치에 두지 않는다.
-    setTimeout(() => router.replace({ pathname: '/(tabs)/trips/fields/[id]', params: { id: r.field.id, q: p.q ?? '' } } as never), 0);
+    if (!mountedRef.current) return;
+    // 현장이 되었으니 5 현장 상세로 바꾼다. 상태 변경과 화면 교체를 한 배치에 두지 않는다.
+    setTimeout(() => {
+      if (mountedRef.current) {
+        router.replace({ pathname: '/(tabs)/trips/fields/[id]', params: { id: r.field.id, q: p.q ?? '' } } as never);
+      }
+    }, 0);
   };
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
+      {placeBridge}
       <FieldDetailHeader query={p.q ?? ''} />
       <ScrollView contentContainerStyle={styles.content}>
         <Tag label="등록 안 된 위치" style={styles.tag} />
