@@ -2,6 +2,8 @@ import { useCallback, useRef, useState } from 'react';
 import { Alert, Linking, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useAuthStore } from '@/stores/authStore';
+import { useCheckinQueueStore } from '@/stores/checkinQueueStore';
+import { confirm } from '@/components/ui/ConfirmDialog';
 import { useMiniBarInset } from '@/stores/bottomChromeStore';
 import { Button2 } from '@/components/ui/Button2';
 import { Text } from '@/components/ui/Text';
@@ -116,7 +118,20 @@ export default function Profile() {
   );
 
   // 10 [로그아웃] → 11 로그인 바로(결정 v86 연결). 되돌릴 수 있는 동작이라 확인 창을 두지 않는다.
+  // 다만 보내지 못한 체크인이 있으면 로그아웃이 그 기록을 지우므로 먼저 묻는다.
   const handleLogout = async () => {
+    if (loggingOut) return;
+    const uid = useAuthStore.getState().user?.id;
+    const unsent = uid ? useCheckinQueueStore.getState().items.filter((x) => x.userId === uid).length : 0;
+    if (unsent > 0) {
+      const ok = await confirm({
+        title: '로그아웃할까요?',
+        message: `보내지 못한 체크인이 ${unsent}건 있어요. 로그아웃하면 사라져요.`,
+        confirmLabel: '로그아웃',
+        destructive: true,
+      });
+      if (!ok) return;
+    }
     setLoggingOut(true);
     try {
       await logout();

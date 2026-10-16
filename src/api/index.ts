@@ -1,22 +1,16 @@
 export { API_BASE_URL, toAbsoluteFileUrl } from './config';
 export { ApiError, NetworkError, localizeError, errorCode, applyFieldErrors } from './errors';
 export { request, configureAuth } from './client';
-export { support } from './endpoints/support';
-export type { SupportCategory, SupportInquiry, SupportInquiryPage, CreateSupportInquiry } from './endpoints/support';
 
 export { auth } from './endpoints/auth';
 export type { ApiUser, AuthSession, SignupBody, LoginBody } from './endpoints/auth';
 
 export {
   trips,
-  ROUTE_MAX_WAYPOINTS,
   TRIP_MAX_PLANNED_FIELDS,
   TRIP_BACKEND_MAX_PLANNED_FIELDS,
 } from './endpoints/trips';
 export type {
-  LatLng,
-  RouteBody,
-  RouteResponse,
   TripStartBody,
   TripUpdateBody,
   PlannedFieldInput,
@@ -30,11 +24,6 @@ export type {
   TripTimelineEntry,
   NavigationDeepLinksBody,
   NavigationDeepLinksResponse,
-  OptimizePreviewBody,
-  OptimizePreviewResponse,
-  OptimizeNavigationBody,
-  OptimizeNavigationResponse,
-  OptimizedOrderItem,
 } from './endpoints/trips';
 
 export { visits } from './endpoints/visits';

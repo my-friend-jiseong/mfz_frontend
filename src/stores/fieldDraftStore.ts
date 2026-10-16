@@ -19,6 +19,8 @@ export interface FieldDraft {
   sigungu?: string;
   lat: number;
   lng: number;
+  /** 이 좌표의 주소를 찾지 못했다(역지오코딩 빈 결과·시간 초과) — '확인하고 있어요'에 머물지 않는다. */
+  addrMissing?: boolean;
   /** 위치 보정으로 옮겼으면 true — GPS 오차 원·경고를 더 보이지 않는다. */
   moved: boolean;
 }

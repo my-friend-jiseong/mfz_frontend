@@ -32,6 +32,8 @@ interface Props {
 
 // 아래 카드: 위 16 + 사진 64 + 14 + 버튼 56 + 아래 여백(Figma 600:2947).
 const CARD_BODY_H = space[16] + 64 + space[14] + 56;
+// 이 시간 안에 주소가 오지 않으면 못 찾은 것으로 본다.
+const ADDRESS_TIMEOUT_MS = 8000;
 // 카드 모서리(20) 아래까지 지도를 깐다.
 const CARD_RADIUS = radius2['2xl'];
 
@@ -43,6 +45,15 @@ export function PhotoLocationPicker({ photo, index, total, start, onClose, onPic
   const insets = useSafeAreaInsets();
   const { height: winH } = useWindowDimensions();
   const [pos, setPos] = useState<PickedLocation>({ ...start, address: null });
+  // 주소를 못 찾은 좌표(빈 결과·시간 초과) — '확인하고 있어요'에 머물지 않는다.
+  const [missingAt, setMissingAt] = useState<{ lat: number; lng: number } | null>(null);
+  useEffect(() => {
+    if (pos.address) return;
+    const at = { lat: pos.lat, lng: pos.lng };
+    const t = setTimeout(() => setMissingAt(at), ADDRESS_TIMEOUT_MS);
+    return () => clearTimeout(t);
+  }, [pos]);
+  const missing = !pos.address && missingAt?.lat === pos.lat && missingAt?.lng === pos.lng;
 
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -54,7 +65,11 @@ export function PhotoLocationPicker({ photo, index, total, start, onClose, onPic
 
   const cardH = CARD_BODY_H + Math.max(insets.bottom, space[20]);
   const mapH = Math.max(240, winH - cardH + CARD_RADIUS);
-  const title = pos.address ? pickedPlaceName(pos.address.jibunAddress, pos.address.roadAddress) : '주소를 확인하고 있어요';
+  const title = pos.address
+    ? pickedPlaceName(pos.address.jibunAddress, pos.address.roadAddress)
+    : missing
+      ? '주소를 찾지 못했어요 · 지도를 조금 옮겨 주세요'
+      : '주소를 확인하고 있어요';
 
   return (
     <View style={styles.root}>
@@ -69,6 +84,7 @@ export function PhotoLocationPicker({ photo, index, total, start, onClose, onPic
           showOrigin={false}
           level={4}
           resolveInitialAddress
+          onAddressMissing={(lat, lng) => setMissingAt({ lat, lng })}
           onDragEnd={(lat, lng, a) =>
             setPos({
               lat,
@@ -103,7 +119,7 @@ export function PhotoLocationPicker({ photo, index, total, start, onClose, onPic
             <Text v2="caption.regular" tone="tertiary" numeric numberOfLines={1}>
               {photo.takenAt ? `${fmtMonthDayAmPm(photo.takenAt)} 촬영 · ${total}장 중 ${index}` : `${total}장 중 ${index}`}
             </Text>
-            <Text v2="title.xs" numberOfLines={1}>
+            <Text v2="title.xs" numberOfLines={1} tone={pos.address ? undefined : 'tertiary'}>
               {title}
             </Text>
           </View>

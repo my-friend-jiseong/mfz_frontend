@@ -14,7 +14,8 @@ import { c2, elevation2, radius2, space } from '@/theme/v2';
 import { peekUserLocation, type LatLng } from '@/utils/geolocation';
 import { haversineKm } from '@/utils/routeOptimize';
 import { formatDistanceM } from '@/utils/nearestField';
-import { fmtDate } from '@/utils/datetime';
+import { tripTitle } from '@/utils/tripFormat';
+import { fieldTitle } from '@/utils/fieldFacets';
 import { checkinHref } from '@/utils/checkinNav';
 
 // Figma 7-4(598:2807) '진행 중인 외근' 카드 64 + 탭 바와의 간격 8. 위로 24 더 올라가는 흰 그라데이션(미니 바 바탕)은
@@ -77,7 +78,7 @@ export function TripMiniBar({ bottom }: { bottom: number }) {
 
   const { next, field } = info;
   const label = next ? `외근 중 · 다음 ${info.position}/${info.total}` : '외근 중';
-  const placeName = field ? field.name?.trim() || field.address : null;
+  const placeName = field ? fieldTitle(field) : null;
   const distance =
     field && myPos && !(field.latitude === 0 && field.longitude === 0)
       ? formatDistanceM(haversineKm(myPos, { lat: field.latitude, lng: field.longitude }) * 1000)
@@ -86,7 +87,9 @@ export function TripMiniBar({ bottom }: { bottom: number }) {
     ? distance
       ? `${placeName} · ${distance}`
       : placeName
-    : trip?.title?.trim() || fmtDate(trip?.startedAt);
+    : trip
+      ? tripTitle(trip)
+      : '외근 중';
 
   return (
     <View pointerEvents="box-none" style={[styles.wrap, { bottom }]}>

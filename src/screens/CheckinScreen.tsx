@@ -250,8 +250,13 @@ export default function CheckinScreen() {
     setMode('new');
     void reverse(p.lat, p.lng).then((a) => {
       const cur = useFieldDraftStore.getState().drafts[draftKey];
-      if (!a || !cur || cur.moved) return;
-      useFieldDraftStore.getState().patch(draftKey, { road: a.roadAddress, jibun: a.jibunAddress, sido: a.sido, sigungu: a.sigungu });
+      if (!cur || cur.moved) return;
+      // 못 찾으면(빈 결과·시간 초과 — reverse 가 null) '주소를 찾지 못했어요'로 바꾸고 위치 보정을 권한다.
+      if (!a || !(a.roadAddress || a.jibunAddress)) {
+        useFieldDraftStore.getState().patch(draftKey, { addrMissing: true });
+        return;
+      }
+      useFieldDraftStore.getState().patch(draftKey, { road: a.roadAddress, jibun: a.jibunAddress, sido: a.sido, sigungu: a.sigungu, addrMissing: false });
     });
   };
 
@@ -836,7 +841,12 @@ function NewFieldBlock({
   onCategory: () => void;
   onCorrect: () => void;
 }) {
-  const address = draft.jibun || draft.road ? `${draft.jibun || draft.road} 부근` : '주소를 확인하고 있어요';
+  const hasAddr = !!(draft.jibun || draft.road);
+  const address = hasAddr
+    ? `${draft.jibun || draft.road} 부근`
+    : draft.addrMissing
+      ? '주소를 찾지 못했어요'
+      : '주소를 확인하고 있어요';
   return (
     <>
       <View style={styles.metaRow}>
@@ -899,9 +909,14 @@ function NewFieldBlock({
         </Touchable>
       </View>
       <View style={styles.address}>
-        <Text v2="bodyM.semibold" numberOfLines={2}>
+        <Text v2="bodyM.semibold" numberOfLines={2} tone={hasAddr ? undefined : 'tertiary'}>
           {address}
         </Text>
+        {!hasAddr && draft.addrMissing ? (
+          <Text v2="caption.regular" tone="tertiary">
+            [위치 보정]으로 주소가 있는 곳에 맞춰 주세요.
+          </Text>
+        ) : null}
         {weakAccuracy != null ? (
           <View style={styles.weak}>
             <Icon name="warning" size={15} color={c2.text.warning} />

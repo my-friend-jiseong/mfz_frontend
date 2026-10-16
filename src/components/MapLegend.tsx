@@ -6,7 +6,7 @@ import { elevation } from '@/theme/elevation';
 import { withAlpha } from '@/theme/withAlpha';
 import { choroplethLegend, CHOROPLETH_COLOR } from '@/theme/choroplethScale';
 import { heatLegendCells, HEAT_MAX } from '@/theme/heatScale';
-import type { DisplayMode } from '@/components/MapFilterBar';
+import type { DisplayMode } from '@/stores/mapSettingsStore';
 
 // 지도 좌하단 범례 — 히트맵·단계구분도의 색을 정량(건수/밀도)으로 읽게 한다.
 // 마커 모드는 마커 자체에 형상·라벨이 있어 범례 불필요(null).

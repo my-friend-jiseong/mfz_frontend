@@ -9,7 +9,7 @@ import { palette } from './palette';
 //   border.*     — 테두리·구분선
 //   primary.*    — 브랜드 (기본 액션)
 //   intent.*     — success/danger/warning/info 상태 의미
-//   fieldStatus.*, visitStatus.*  — 도메인 status (색+형상+라벨 3중 인코딩 일부)
+//   fieldStatus.*  — 도메인 status (색+형상+라벨 3중 인코딩 일부)
 //
 // backward-compat:
 //   기존 callsite (colors.text, colors.textMuted, colors.primary, colors.danger 등) 가
@@ -84,25 +84,10 @@ export const colors = {
   // WCAG 3중 인코딩 (색+형상+라벨) — 색만 정보 전달 금지.
   // pending 은 amber[500] 이었는데 Badge 의 warning tone(amber[600])과 한 단계 어긋나
   // 같은 상태가 카드에선 밝고 지도 마커에선 어두웠다. 600 으로 맞춰 하나로 만든다
-  // (야외 조도에서 대비도 함께 올라간다). 형상·라벨 매핑은 statusBadge.ts.
+  // (야외 조도에서 대비도 함께 올라간다). 형상·라벨 매핑은 ui/StatusMark.
   fieldStatus: {
     pending: palette.amber[600],
     in_progress: palette.blue[600],
     done: palette.green[600],
   },
-
-  // === Domain — visit.status ===
-  visitStatus: {
-    completed: palette.green[600],
-    absent: palette.slate[500],
-    refused: palette.red[600],
-    unknown_address: palette.violet[500],
-    revisit_needed: palette.amber[600],
-    other: palette.slate[600],
-  },
-
-  // === Other ===
-  // 진행 중 외근 상단 배너 — '활성 세션' 의미는 brand(파랑). 빨강은 파괴적 액션(외근 종료)에만
-  // 두어 색의 의미를 1:1 로 유지 (UI/UX P1-2). 이전엔 red[600] 이라 종료 버튼과 빨강이 중복됐음.
-  tripBanner: palette.blue[600],
 } as const;

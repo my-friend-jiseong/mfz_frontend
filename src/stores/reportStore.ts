@@ -345,7 +345,7 @@ export const useReportStore = create<ReportState>((set, get) => ({
       const url = (res?.downloadUrl ?? res?.url ?? '').trim();
       if (!url) {
         // 200 인데 URL 이 없으면 열 대상이 없다 — 조용히 성공 처리하면 아무 일도 안 일어난 것처럼 보인다.
-        return { ok: false, error: 'PDF 주소를 받지 못했습니다. 잠시 후 다시 시도해주세요.' };
+        return { ok: false, error: 'PDF 주소를 받지 못했어요. 잠시 뒤에 다시 해 주세요.' };
       }
       return { ok: true, url };
     } catch (e) {

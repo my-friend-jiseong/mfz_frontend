@@ -1,63 +1,52 @@
 import { StyleSheet, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { Button } from '@/components/ui/Button';
+import { Icon } from '@/components/icons';
+import { Button2 } from '@/components/ui/Button2';
 import { Text } from '@/components/ui/Text';
-import { colors } from '@/theme/colors';
-import { spacing } from '@/theme/spacing';
+import { c2, radius2, space } from '@/theme/v2';
 
-// EmptyState 의 형제. 둘을 절대 같은 화면으로 처리하지 않기 위해 별도 컴포넌트로 둔다 —
-// 조회 실패를 empty 로 렌더하면 사용자가 '서버 오류' 를 '데이터 없음' 으로 오독한다
-// (야외 LTE 환경에서 가장 자주 나는 실패이고, 오독 시 배정이 없다고 판단해 돌아간다).
-//
-// 색: danger(빨강)를 쓰지 않는다. '빨강 = 파괴적 액션 전용' 규칙(colors.ts 105, Button.tsx 71)
-// 은 액션에 대한 것이고, amber 는 이미 '조치 전' 상태가 점유했다. 조회 실패는 상태이므로
-// 색을 새로 끌어오는 대신 형상(아이콘) + 라벨 + 재시도 액션으로 구분한다 (강령 2 의 3중 인코딩).
+// 조회 실패. 빈 목록과 같은 모양으로 그리지 않는다 — 조회 실패를 '데이터 없음'으로 오독하면
+// (야외 LTE 에서 가장 흔한 실패) 배정이 없다고 판단해 돌아간다. 빨강은 파괴적 동작 전용이라 쓰지 않고
+// 아이콘 + 글 + [다시 시도]로 구분한다.
 interface Props {
   // localizeError(e) 결과. NetworkError / ApiError 가 이미 한국어로 구분되어 들어온다.
   message?: string | null;
   onRetry?: () => void;
 }
 
-// 재시도 중 스피너 prop 은 두지 않는다 — 재시도하면 listStatus 가 'loading' 으로 바뀌어
-// 이 컴포넌트 자체가 LoadingState 로 교체되므로, 버튼이 busy 를 보여줄 틈이 없다.
+// 재시도 중 스피너는 두지 않는다 — 재시도하면 listStatus 가 'loading' 으로 바뀌어 이 컴포넌트가 바로 사라진다.
 export function ErrorState({ message, onRetry }: Props) {
   return (
     <View style={styles.container}>
       <View style={styles.iconWrap}>
-        <Ionicons name="cloud-offline-outline" size={32} color={colors.textSubtle} />
+        <Icon name="cloud-off" size={28} color={c2.text.tertiary} />
       </View>
-      <Text variant="body" weight="semibold" align="center" style={styles.title}>
-        불러오지 못했습니다
+      <Text v2="bodyM.bold" style={styles.center}>
+        불러오지 못했어요
       </Text>
-      <Text variant="bodySm" color="textMuted" align="center">
-        {message || '잠시 후 다시 시도해주세요'}
+      <Text v2="bodyS.regular" tone="tertiary" style={[styles.center, styles.message]}>
+        {message || '잠시 뒤에 다시 해 주세요.'}
       </Text>
       {onRetry ? (
-        <View style={styles.action}>
-          <Button onPress={onRetry} variant="secondary" leftIcon="refresh">
-            다시 시도
-          </Button>
-        </View>
+        <Button2 variant="secondary" size="M" onPress={onRetry} style={styles.action}>
+          다시 시도
+        </Button2>
       ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    padding: spacing.xxl,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  container: { padding: space[24], alignItems: 'center', justifyContent: 'center' },
   iconWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: colors.surfaceMuted,
+    width: 56,
+    height: 56,
+    borderRadius: radius2.full,
+    backgroundColor: c2.bg.muted,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.md,
+    marginBottom: space[12],
   },
-  title: { marginBottom: spacing.xs },
-  action: { marginTop: spacing.lg },
+  center: { textAlign: 'center' },
+  message: { marginTop: space[4] },
+  action: { marginTop: space[16] },
 });

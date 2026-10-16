@@ -46,14 +46,6 @@ export const visits = {
   checkIn: (body: CheckInBody) =>
     request<CheckInResponse>('/api/visits/check-in', { method: 'POST', body }),
 
-  // v2 검증(2026-05-28): body 는 { status, reason? }. status='other' 면 reason 10자 이상 필수
-  // (visit_status_reason_required). 응답: { visitId, status, resultStatus(normal|abnormal) auto }.
-  setStatus: (visitId: string, status: string, reason?: string) =>
-    request<unknown>(`/api/visits/${visitId}/status`, {
-      method: 'PATCH',
-      body: { status, ...(reason ? { reason } : {}) },
-    }),
-
   detail: (tripId: string, visitId: string) =>
     request<VisitDetailResponse>(`/api/trips/${tripId}/visits/${visitId}`),
 

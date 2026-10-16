@@ -26,3 +26,9 @@ export async function loadTripStartPoint(tripId: string): Promise<LatLng | null>
   }
   return null;
 }
+
+/** 로그아웃 — 다음 사용자에게 이전 사람의 출발 지점이 남지 않게. */
+export function clearTripStartPoint(): void {
+  cache = null;
+  AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
+}

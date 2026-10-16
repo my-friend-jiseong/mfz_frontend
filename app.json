@@ -17,9 +17,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.mfz.app",
       "infoPlist": {
-        "NSCameraUsageDescription": "방문 기록에 사진을 첨부하기 위해 카메라를 사용합니다.",
-        "NSPhotoLibraryUsageDescription": "방문 기록에 사진을 첨부하기 위해 사진 라이브러리에 접근합니다.",
-        "NSLocationWhenInUseUsageDescription": "현장 위치 등록, 가까운 현장 자동 매칭(빠른 촬영), 지도의 내 위치 표시를 위해 위치 정보를 사용합니다.",
+        "NSCameraUsageDescription": "방문 기록에 현장 사진을 찍어 붙이기 위해 카메라를 사용해요.",
+        "NSPhotoLibraryUsageDescription": "방문 기록에 사진을 붙이고, '사진으로 여러 곳 등록'에서 사진의 촬영 위치와 시각을 읽어 현장을 만들기 위해 사진 보관함에 접근해요.",
+        "NSLocationWhenInUseUsageDescription": "현장 위치 등록, 체크인할 때 가까운 현장 찾기, 지도의 내 위치 표시를 위해 위치 정보를 사용해요. 백그라운드 위치는 수집하지 않아요.",
         "LSApplicationQueriesSchemes": ["kakaomap"]
       }
     },
@@ -59,14 +59,14 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "방문 기록에 사진을 첨부하기 위해 사진 라이브러리에 접근합니다.",
-          "cameraPermission": "방문 기록에 사진을 첨부하기 위해 카메라를 사용합니다."
+          "photosPermission": "방문 기록에 사진을 붙이고, '사진으로 여러 곳 등록'에서 사진의 촬영 위치와 시각을 읽어 현장을 만들기 위해 사진 보관함에 접근해요.",
+          "cameraPermission": "방문 기록에 현장 사진을 찍어 붙이기 위해 카메라를 사용해요."
         }
       ],
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "현장 위치 등록, 가까운 현장 자동 매칭(빠른 촬영), 지도의 내 위치 표시를 위해 위치 정보를 사용합니다."
+          "locationWhenInUsePermission": "현장 위치 등록, 체크인할 때 가까운 현장 찾기, 지도의 내 위치 표시를 위해 위치 정보를 사용해요. 백그라운드 위치는 수집하지 않아요."
         }
       ],
       "@sentry/react-native",

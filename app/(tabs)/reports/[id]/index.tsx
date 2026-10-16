@@ -1,3 +1,4 @@
+import { fieldTitle } from '@/utils/fieldFacets';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -10,7 +11,6 @@ import {
   SLOTS,
   SLOT_CAPTION,
   SLOT_URL,
-  fieldName,
   useReportRows,
   type ReportRow,
 } from '@/components/reports/ReportParts';
@@ -350,7 +350,7 @@ function FieldSection({ row }: { row: ReportRow }) {
       <View style={styles.sectionHead}>
         <OrderBadge n={row.order} kind={row.kind} />
         <Text v2="bodyL.bold" numberOfLines={1} style={styles.shrink}>
-          {fieldName(row.field)}
+          {fieldTitle(row.field)}
         </Text>
       </View>
       {empty ? (
@@ -364,12 +364,25 @@ function FieldSection({ row }: { row: ReportRow }) {
             if (!s) return <View key={`gap-${i}`} style={styles.tile} />;
             const url = toAbsoluteFileUrl(row.fr[SLOT_URL[s.key]]);
             const caption = row.fr[SLOT_CAPTION[s.key]]?.trim();
+            // 설명만 있고 사진이 없는 칸은 빈 회색 틀을 그리지 않는다 — 전·중·후 표시와 설명만.
+            if (!url) {
+              return (
+                <View key={s.key} style={styles.tile}>
+                  <View style={[styles.photoTag, styles.photoTagInline]}>
+                    <Text v2="micro.bold" tone="inverse">
+                      {s.short}
+                    </Text>
+                  </View>
+                  <Text v2="small.regular" tone="secondary" style={styles.photoCaption}>
+                    {caption}
+                  </Text>
+                </View>
+              );
+            }
             return (
               <View key={s.key} style={styles.tile}>
                 <View style={styles.photo}>
-                  {url ? (
-                    <Image source={{ uri: url }} style={StyleSheet.absoluteFill} resizeMode="cover" accessibilityLabel={`${s.label} 사진`} />
-                  ) : null}
+                  <Image source={{ uri: url }} style={StyleSheet.absoluteFill} resizeMode="cover" accessibilityLabel={`${s.label} 사진`} />
                   <View style={styles.photoTag}>
                     <Text v2="micro.bold" tone="inverse">
                       {s.short}
@@ -472,6 +485,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: c2.bg.hint,
   },
+  photoTagInline: { position: 'relative', top: 0, left: 0, alignSelf: 'flex-start' },
   photoCaption: { marginTop: space[6] },
   footer: { paddingTop: space[12], borderTopColor: c2.border.default },
   footerRow: { flexDirection: 'row', gap: space[8] },

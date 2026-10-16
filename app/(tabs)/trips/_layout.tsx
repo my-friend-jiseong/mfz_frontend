@@ -22,7 +22,6 @@ export default function TripsLayout() {
       <Stack.Screen name="active" />
       <Stack.Screen name="prep" />
       <Stack.Screen name="fields/index" />
-      <Stack.Screen name="fields/new" options={{ presentation: 'modal' }} />
       <Stack.Screen name="fields/place" />
       <Stack.Screen name="fields/[id]/index" />
     </Stack>

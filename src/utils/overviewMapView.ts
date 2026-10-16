@@ -12,7 +12,18 @@ export interface OverviewMapView {
   level: number;
 }
 
-const keyOf = (reportId: string) => `report-overview-view:${reportId}`;
+const PREFIX = 'report-overview-view:';
+const keyOf = (reportId: string) => `${PREFIX}${reportId}`;
+
+/** 로그아웃 — 기기에 남긴 모든 보고서의 구도를 지운다(다음 사용자에게 남기지 않는다). */
+export async function clearOverviewMapViews(): Promise<void> {
+  try {
+    const keys = (await AsyncStorage.getAllKeys()).filter((k) => k.startsWith(PREFIX));
+    if (keys.length > 0) await AsyncStorage.multiRemove(keys);
+  } catch {
+    // 못 지워도 보고서 id 로만 찾는 값이라 다른 사용자 화면에 섞이지 않는다.
+  }
+}
 
 export async function loadOverviewMapView(reportId: string): Promise<OverviewMapView | null> {
   try {
@@ -65,7 +76,7 @@ export function useOverviewMapView(reportId: string): OverviewMapView | null | u
   return view;
 }
 
-// 로그아웃(reportStore.clearAll → generation 증가)하면 메모리의 구도를 비운다. 기기 저장은 보고서 id 로만 찾으니 남겨 둔다.
+// 로그아웃(reportStore.clearAll → generation 증가)하면 메모리의 구도를 비운다. 기기 저장은 clearOverviewMapViews 가 지운다.
 useReportStore.subscribe((s, prev) => {
   if (s.generation !== prev.generation) useOverviewMapViewStore.setState({ views: {} });
 });

@@ -14,7 +14,8 @@ interface Props {
 
 /**
  * 2차 푸시 화면 머리(Figma 'Header · …' 10-1·10-2·11-2·11-4 등): ← 44 + 제목 18 ExtraBold.
- * 상태 표시줄 아래 48(버튼 44 + 여유 4). 상태 표시줄 여백은 화면의 SafeScreen 이 준다.
+ * 상태 표시줄 아래 52(위 4 + 버튼 44 + 아래 4 — Figma 10-1 584:2641·11-4 591:2585 모두 높이 96 = 44 + 52).
+ * 상태 표시줄 여백은 화면의 SafeScreen 이 준다.
  */
 export function PageHeader({ title, onBack, right }: Props) {
   return (
@@ -48,7 +49,7 @@ export function PageHeader({ title, onBack, right }: Props) {
 
 const styles = StyleSheet.create({
   row: {
-    height: 48,
+    height: 52,
     flexDirection: 'row',
     alignItems: 'center',
     paddingLeft: space[4],

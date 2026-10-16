@@ -65,7 +65,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       const p = toProject(res);
       if (!p) {
         set({ busy: false });
-        return { ok: false, error: '프로젝트 생성 응답이 올바르지 않습니다' };
+        return { ok: false, error: '프로젝트를 만들었는지 확인하지 못했어요. 목록을 새로 고쳐 확인해 주세요.' };
       }
       set((s) => ({
         projects: [p, ...s.projects.filter((x) => x.id !== p.id)],

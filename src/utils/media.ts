@@ -104,8 +104,8 @@ export async function pickPhoto(source: 'camera' | 'library'): Promise<UploadFil
 
   if (!perm.granted) {
     Alert.alert(
-      source === 'camera' ? '카메라 권한 필요' : '사진 라이브러리 권한 필요',
-      '설정에서 권한을 허용해주세요.',
+      source === 'camera' ? '카메라 권한이 필요해요' : '사진 접근 권한이 필요해요',
+      '설정에서 권한을 허용해 주세요.',
       [
         { text: '취소', style: 'cancel' },
         { text: '설정 열기', onPress: openSettings },
@@ -148,7 +148,7 @@ export function assetToUploadFile(a: ImagePicker.ImagePickerAsset): UploadFile {
 export async function pickPhotos(limit: number): Promise<ImagePicker.ImagePickerAsset[] | null> {
   const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (!perm.granted) {
-    Alert.alert('사진 라이브러리 권한 필요', '설정에서 권한을 허용해주세요.', [
+    Alert.alert('사진 접근 권한이 필요해요', '설정에서 권한을 허용해 주세요.', [
       { text: '취소', style: 'cancel' },
       { text: '설정 열기', onPress: openSettings },
     ]);

@@ -14,6 +14,8 @@ interface Props {
   // 마운트 직후 초기 좌표를 역지오코딩해 pinAddress 를 1회 emit — 현 위치 시작 플로우용.
   // 마운트 시점 값만 사용 (후속 prop 변경 무시).
   resolveInitialAddress?: boolean;
+  /** 역지오코딩이 주소를 못 찾았을 때(바다·산 등 빈 결과·오류). 그 좌표를 넘긴다. */
+  onAddressMissing?: (lat: number, lng: number) => void;
   height?: number;
   // 네이티브 전용 — shape 만 맞춘다(호출하지 않음). 안드로이드는 부모 ScrollView 가 지도
   // 드래그를 가로채 이 신호로 스크롤을 잠그지만, 웹은 카카오 SDK 가 컨테이너에
@@ -141,7 +143,7 @@ function loadKakaoSdk(appkey: string): Promise<void> {
 }
 
 export const FieldPinMap = forwardRef<FieldPinMapHandle, Props>(function FieldPinMap(
-  { lat, lng, onDragEnd, resolveInitialAddress = false, height = 220, mode = 'drag', pinKind = 'pending', framed = true, showOrigin = true, level = 3 },
+  { lat, lng, onDragEnd, onAddressMissing, resolveInitialAddress = false, height = 220, mode = 'drag', pinKind = 'pending', framed = true, showOrigin = true, level = 3 },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -157,6 +159,8 @@ export const FieldPinMap = forwardRef<FieldPinMapHandle, Props>(function FieldPi
   const initialLatRef = useRef(safeLat);
   const initialLngRef = useRef(safeLng);
   const resolveInitialRef = useRef(resolveInitialAddress);
+  const missingRef = useRef(onAddressMissing);
+  missingRef.current = onAddressMissing;
   // SDK 로드 후 effect 안에서 만들어지는 emitAddress 를 명령형 핸들에서 쓰기 위한 통로.
   const emitAddressRef = useRef<((la: number, ln: number) => void) | null>(null);
   // SDK 로드 전에 들어온 resolveAddress 요청 — 로드 완료 직후 flush (silent drop 방지).
@@ -219,6 +223,8 @@ export const FieldPinMap = forwardRef<FieldPinMapHandle, Props>(function FieldPi
           if (status === k.maps.services.Status.OK && result[0]) {
             lastEmittedRef.current = { lat: la, lng: ln };
             onDragEnd(la, ln, toPinAddress(result[0]));
+          } else {
+            missingRef.current?.(la, ln);
           }
         });
       };

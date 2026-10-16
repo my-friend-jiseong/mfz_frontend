@@ -154,11 +154,11 @@ PLANS_DIR="$MAIN_ROOT/.claude/worktrees/plans"
 
 | 레이어 | 실체 | 소비 화면 (files 에 포함) |
 |---|---|---|
-| `map` | `MapSheetLayout` → `MapDashboard` → `KakaoMapWebView`/`MapFilterBar`/`MapLegend`/`MapSearchBar`, `src/stores/mapSettingsStore.ts`, `src/api/endpoints/map.ts` | `trips/fields/index`, `trips/fields/[id]/index`, `trips/index`(`src/screens/TripsListScreen`·`ActiveTripScreen`), `trips/[id]`, `trips/visit`, `trips/new/select`, `trips/new/order`, `reports/index`, `reports/[id]/index` — 지도 직접 사용: `trips/navigate`, `reports/new` — 핀 편집: `trips/fields/new`, `trips/fields/[id]/edit`(`FieldPinMap`) |
-| `visits` | `src/stores/visitStore.ts`, `src/api/endpoints/visits.ts`, `AttachmentPreview.tsx`, `src/components/trips/ReviewVisitCard.tsx` | `trips/fields/[id]/checkin`·`index`·`edit`, `trips/visit`·`index`(`ActiveTripScreen`)·`[id]`, `reports/index`·`new`·`[id]/index`·`[id]/field-report` |
+| `map` | `MapDashboard` → `KakaoMapWebView`/`MapLegend`/`map/MapSettingsSheet`, `MapPreviewCard`, `shell/fullMap`, `src/stores/mapSettingsStore.ts`, `src/api/endpoints/map.ts` | `trips/index`(`src/screens/TripsListScreen`·`ActiveTripScreen`), `trips/[id]`, `trips/prep`, `trips/fields/index`·`[id]/index`·`place`, `(modals)/map`, `CheckinScreen`, `PhotoBatchScreen`, `ReportOverviewScreen` — 핀 편집: `(modals)/field-edit`, `photoBatch/PhotoLocationPicker`(`FieldPinMap`) |
+| `visits` | `src/stores/visitStore.ts`, `src/api/endpoints/visits.ts`, `src/stores/checkinQueueStore.ts`, `src/utils/visitRecord.ts` | `CheckinScreen`, `ActiveTripScreen`, `PhotoBatchScreen`, `trips/[id]`, `trips/fields/[id]/index`, `TripsListScreen`, `FieldReportScreen`, `ReportEditScreen` |
 | `ui/theme` | `src/components/ui/**`, `src/theme/**` | 사실상 전 화면 — 토큰·공용 컴포넌트 변경은 단독 사이클로 돌린다 |
 
-슬라이스 간 다리 역할 파일도 같이 본다: `src/utils/postTripFlow.ts`(외근 종료 → 보고서), `src/components/fields/quickPhotoHandoff.ts`·`useQuickPhoto.ts`(`trips/fields/new` ↔ `ActiveTripScreen`).
+슬라이스 간 다리 역할 파일도 같이 본다: `src/utils/postTripFlow.ts`(외근 종료 → 보고서), `src/utils/reportEntry.ts`(외근 상세 → 보고서 작성), `src/utils/destinationCart.ts`(현장 화면 → 외근 목적지).
 
 범위가 불확실하면 `Grep`/`Glob`로 후보를 좁히고, 넓게 퍼질 가능성이 있으면 `Explore` 에이전트로 추정한다. 추정 범위는 보수적으로(넓게) 잡아 충돌을 놓치지 않는다.
 

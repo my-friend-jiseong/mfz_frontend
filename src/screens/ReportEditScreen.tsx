@@ -1,3 +1,4 @@
+import { fieldTitle } from '@/utils/fieldFacets';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { InteractionManager, ScrollView, StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
@@ -7,7 +8,6 @@ import {
   OrderBadge,
   ReportOverviewMap,
   SlotMiniBoxes,
-  fieldName,
   fieldReportCounts,
   useReportRows,
   type ReportRow,
@@ -198,7 +198,7 @@ export default function ReportEditScreen() {
     }
     const empties = rows.filter((r) => isFieldReportEmpty(r.fr));
     if (empties.length > 0) {
-      const first = fieldName(empties[0].field);
+      const first = fieldTitle(empties[0].field);
       const ok = await confirm({
         title: `${empties.length}곳이 아직 비어 있어요`,
         message:
@@ -289,7 +289,7 @@ export default function ReportEditScreen() {
             {rows.map((r, i) => {
               const empty = isFieldReportEmpty(r.fr);
               const { photos, captions } = fieldReportCounts(r.fr);
-              const name = fieldName(r.field);
+              const name = fieldTitle(r.field);
               return (
                 <Touchable
                   key={r.fr.id}
@@ -331,7 +331,7 @@ export default function ReportEditScreen() {
         <View style={styles.sheetList}>
           {candidates.list.map((c, i) => {
             const f = fieldById.get(c.fieldId);
-            const name = fieldName(f);
+            const name = fieldTitle(f);
             const sub = [f ? districtOf(f.address) : '', c.visitedAt ? `${fmtMonthDay(c.visitedAt)} 방문` : '']
               .filter(Boolean)
               .join(' · ');

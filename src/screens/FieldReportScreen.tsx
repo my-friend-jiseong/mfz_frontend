@@ -1,3 +1,4 @@
+import { fieldTitle } from '@/utils/fieldFacets';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Image, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -5,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { toAbsoluteFileUrl } from '@/api';
 import type { VisitPhoto } from '@/api';
 import { Icon } from '@/components/icons';
-import { DashedBox, OrderBadge, SLOTS, SLOT_CAPTION, SLOT_URL, fieldName, useReportRows, type Slot } from '@/components/reports/ReportParts';
+import { DashedBox, OrderBadge, SLOTS, SLOT_CAPTION, SLOT_URL, useReportRows, type Slot } from '@/components/reports/ReportParts';
 import { ReportModalHeader } from '@/components/reports/ReportModalHeader';
 import { STATUS_TONE } from '@/components/trips/TripStopRow';
 import { showActionSheet } from '@/components/ui/ActionSheet';
@@ -160,7 +161,7 @@ export default function FieldReportScreen() {
 
   const onSlotPress = (k: Slot) => {
     if (filled(slots[k])) {
-      showActionSheet([{ label: '사진 빼기', icon: 'trash-outline', tone: 'danger', onPress: () => setSlot(k, { url: null, file: undefined }) }]);
+      showActionSheet([{ label: '사진 빼기', icon: 'trash', tone: 'danger', onPress: () => setSlot(k, { url: null, file: undefined }) }]);
       return;
     }
     promptPhotoSource((src) => {
@@ -239,7 +240,7 @@ export default function FieldReportScreen() {
   const removeFromReport = async () => {
     if (busy.current || !frId) return;
     const ok = await confirm({
-      title: `${withObjectJosa(fieldName(field))} 보고서에서 뺄까요?`,
+      title: `${withObjectJosa(fieldTitle(field))} 보고서에서 뺄까요?`,
       message: '이 현장의 전·중·후 사진과 설명이 보고서에서 빠져요. 외근의 방문 기록은 그대로 남아요.',
       confirmLabel: '빼기',
       destructive: true,
@@ -279,7 +280,7 @@ export default function FieldReportScreen() {
               <OrderBadge n={order} kind={kind} />
               <View style={styles.flex}>
                 <Text v2="button" numberOfLines={1}>
-                  {fieldName(field)}
+                  {fieldTitle(field)}
                 </Text>
                 <Text v2="caption.regular" tone="tertiary" numberOfLines={1}>
                   {headLine}

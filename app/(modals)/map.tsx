@@ -1,3 +1,4 @@
+import { fieldTitle } from '@/utils/fieldFacets';
 import React, { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -60,7 +61,7 @@ export default function FullMapScreen() {
           id: f.id,
           lat: f.latitude,
           lng: f.longitude,
-          label: f.name?.trim() || f.address,
+          label: fieldTitle(f),
           color: STATUS_PIN_COLOR[fieldActionStatus(f)],
           pin: fieldActionStatus(f),
         });

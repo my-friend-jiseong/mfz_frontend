@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, Modal, Platform, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Animated, Platform, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { Icon, type IconName } from '@/components/icons';
 import { c2, elevation2, radius2, space } from '@/theme/v2';
 import { duration } from '@/theme/motion';
 import { Text } from './Text';
+import { OverlayModal } from './OverlayModal';
 import { Touchable } from './Touchable';
 
 export interface PopoverItem {
@@ -118,7 +119,7 @@ export function PopoverMenuHost() {
   const top = below + menuH > winH - EDGE ? Math.max(EDGE, anchor.y - GAP - menuH) : below;
 
   return (
-    <Modal transparent visible statusBarTranslucent animationType="none" onRequestClose={() => close()}>
+    <OverlayModal visible onRequestClose={() => close()}>
       {pending.dim ? <Animated.View style={[StyleSheet.absoluteFill, styles.scrim, { opacity: anim }]} pointerEvents="none" /> : null}
       <Pressable style={StyleSheet.absoluteFill} onPress={() => close()} accessibilityLabel="메뉴 닫기" />
       <Animated.View
@@ -152,7 +153,7 @@ export function PopoverMenuHost() {
           );
         })}
       </Animated.View>
-    </Modal>
+    </OverlayModal>
   );
 }
 

@@ -31,6 +31,8 @@ const NAME_MAX = 100;
 const DETAIL_MAX = 100;
 // 위치 보정 지도 높이(Figma 556:2612).
 const MAP_H = 236;
+// 이 시간 안에 주소가 오지 않으면 못 찾은 것으로 본다(useKakaoPlaceSearch 제한 시간과 같은 결).
+const ADDRESS_TIMEOUT_MS = 8000;
 
 interface Addr {
   road: string;
@@ -164,6 +166,16 @@ export default function FieldEditModal() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 주소를 못 찾은 좌표 — 역지오코딩이 빈 결과를 주거나(바다·산) 응답이 없으면 '확인하고 있어요'에 머물지 않는다.
+  const [missingAt, setMissingAt] = useState<{ lat: number; lng: number } | null>(null);
+  const noAddr = !!addr && !addr.road && !addr.jibun;
+  useEffect(() => {
+    if (!noAddr || !addr) return;
+    const at = { lat: addr.lat, lng: addr.lng };
+    const t = setTimeout(() => setMissingAt(at), ADDRESS_TIMEOUT_MS);
+    return () => clearTimeout(t);
+  }, [noAddr, addr?.lat, addr?.lng]); // eslint-disable-line react-hooks/exhaustive-deps
+  const addrMissing = noAddr && !!missingAt && missingAt.lat === addr?.lat && missingAt.lng === addr?.lng;
 
   if (!field || !addr || !initial) {
     return (
@@ -238,7 +250,7 @@ export default function FieldEditModal() {
         categories: cats,
         categoriesAt: categoriesAt.current,
         ...(moved
-          ? { road: addr.road, jibun: addr.jibun, sido: addr.sido, sigungu: addr.sigungu, lat: addr.lat, lng: addr.lng, moved: true }
+          ? { road: addr.road, jibun: addr.jibun, sido: addr.sido, sigungu: addr.sigungu, lat: addr.lat, lng: addr.lng, moved: true, addrMissing: !addr.road && !addr.jibun }
           : {}),
       });
       leave();
@@ -251,7 +263,8 @@ export default function FieldEditModal() {
     // 비교는 지금 저장된 값과 — 반영 작업이 이 현장의 분류를 이미 바꿨을 수 있다.
     const savedCats = useFieldStore.getState().fields.find((f) => f.id === savedField.id)?.categories ?? initial.categories;
     const body: UpdateFieldBody = {};
-    if (nameTrim !== initial.name) body.name = nameTrim;
+    const nameChanged = nameTrim !== initial.name;
+    if (nameChanged && nameTrim) body.name = nameTrim;
     if (detailTrim !== initial.detail.trim()) body.detailAddress = detailTrim;
     if (sameKey(cats) !== sameKey(savedCats)) body.categories = cats;
     if (moved) {
@@ -282,6 +295,9 @@ export default function FieldEditModal() {
       body.sido = a.sido;
       body.sigungu = a.sigungu;
     }
+    // 이름을 비우면 주소를 이름으로 보낸다(인수인계 '비우면 주소') — 서버는 빈 이름을 무시하고 옛 이름을 남긴다(2026-10-17 실측).
+    // 이름 없이 주소만 옮겨도 이름이 옛 주소로 남지 않게 새 주소를 이름으로 보낸다.
+    if (!nameTrim && (nameChanged || body.roadAddress)) body.name = body.roadAddress ?? savedField.address;
     if (Object.keys(body).length === 0) {
       leave();
       return;
@@ -291,7 +307,7 @@ export default function FieldEditModal() {
       fail(r.error);
       return;
     }
-    // 이름을 비우면 서버가 주소를 이름으로 저장한다(2026-10-17 실측) — 화면은 '이름 = 주소'를 빈 이름으로 본다.
+    // 화면은 '이름 = 주소'를 빈 이름으로 본다.
     leave();
   };
 
@@ -309,6 +325,7 @@ export default function FieldEditModal() {
               lat={addr.lat}
               lng={addr.lng}
               onDragEnd={onPinMove}
+              onAddressMissing={(la, ln) => setMissingAt({ lat: la, lng: ln })}
               resolveInitialAddress
               height={MAP_H}
               mode="center"
@@ -368,12 +385,16 @@ export default function FieldEditModal() {
             >
               <Icon name="search" size={18} color={c2.text.secondary} />
               <View style={styles.flex}>
-                <Text v2="bodyM.semibold" numberOfLines={1}>
-                  {addr.road || addr.jibun || '주소를 확인하고 있어요'}
+                <Text v2="bodyM.semibold" numberOfLines={1} tone={noAddr ? 'tertiary' : undefined}>
+                  {addr.road || addr.jibun || (addrMissing ? '주소를 찾지 못했어요' : '주소를 확인하고 있어요')}
                 </Text>
                 {addr.jibun && addr.road ? (
                   <Text v2="small.regular" tone="tertiary" numberOfLines={1}>
                     {`지번 ${shortJibun(addr.jibun)}`}
+                  </Text>
+                ) : addrMissing ? (
+                  <Text v2="small.regular" tone="tertiary" numberOfLines={2}>
+                    지도를 조금 옮기거나, 눌러서 주소로 검색해 주세요
                   </Text>
                 ) : null}
               </View>

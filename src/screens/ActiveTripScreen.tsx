@@ -345,11 +345,9 @@ export default function ActiveTrip() {
   };
 
   const finalizeEnd = (endedTripId: string) => {
-    // 먼저 이동하고, 이 화면을 바꾸는 정리(목적지 비우기·종료 표식 해제 → 첫 화면이 1 로)는 전환이 끝난 뒤에.
-    runAfterNextPush(() => {
-      useDestinationStore.getState().removeByTrip(endedTripId);
-      useTripStore.getState().clearEnding();
-    });
+    // 먼저 이동하고, 이 화면을 바꾸는 정리(종료 표식 해제 → 첫 화면이 1 로)는 전환이 끝난 뒤에.
+    // 끝낸 외근의 목적지는 지우지 않는다 — 막 연 3 외근 상세가 건너뜀 행·'N/M 방문'을 그 목적지로 그린다.
+    runAfterNextPush(() => useTripStore.getState().clearEnding());
     navigateToTripDetail(router, endedTripId);
   };
 

@@ -1,10 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { Text } from '@/components/ui/Text';
-import type { AddressSearchItem } from '@/api';
 import { useFieldStore } from '@/stores/fieldStore';
 import { useAuthStore } from '@/stores/authStore';
 import {
@@ -13,21 +10,16 @@ import {
   type KakaoMapHandle,
 } from '@/components/KakaoMapWebView';
 import { MapLegend } from '@/components/MapLegend';
-import { elevation } from '@/theme/elevation';
-import { spacing, radius } from '@/theme/spacing';
-import { peekUserLocation, requestUserLocation, type LatLng } from '@/utils/geolocation';
-import { MapFilterBar } from '@/components/MapFilterBar';
-import { MapSearchBar } from '@/components/MapSearchBar';
+import { peekUserLocation, type LatLng } from '@/utils/geolocation';
 import { MapSettingsSheet } from '@/components/map/MapSettingsSheet';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { MapButton } from '@/components/ui/MapButton';
 import { RANGE_DAYS, useMapSettingsStore } from '@/stores/mapSettingsStore';
 import { useLocationPermission, useLocationPermissionStore } from '@/stores/locationPermissionStore';
 import { fieldActionStatus } from '@/utils/fieldStatus';
-import { space } from '@/theme/v2';
+import { c2, space } from '@/theme/v2';
 import { useCategoryStore } from '@/stores/categoryStore';
 import { mergeCategoryNames } from '@/utils/fieldFacets';
-import { colors } from '@/theme/colors';
 
 // 비로그인 시 myFields — 렌더마다 새 [] 를 만들면 하위 useMemo(scopedFields 등)가
 // 매번 무효화되므로 identity 고정 모듈 상수로.
@@ -67,7 +59,7 @@ interface MapDashboardProps {
    * 2차 지도 크롬(1 지도): 검색창은 4 현장 검색으로 가는 입구, 옆에 지도 설정(1-3), 2차 핀(최근 조치 상태 색).
    * 위치는 앱을 열 때 묻지 않고(1-1), 권한이 없으면 내 위치 버튼이 꺼진 모양 — 누르면 onLocationOff(1-2).
    */
-  v2?: {
+  v2: {
     onSearchPress: () => void;
     onLocationOff: () => void;
     /** 내 위치 버튼의 화면 아래 기준 위치(시트 위 16). */
@@ -84,7 +76,7 @@ export function MapDashboard({
   routeVertexes,
   keepGlobalChrome = false,
   v2,
-}: MapDashboardProps = {}) {
+}: MapDashboardProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const userId = useAuthStore((s) => s.user?.id);
@@ -147,26 +139,12 @@ export function MapDashboard({
   // 사용자 현재 위치 — mount 1회 fetch. 권한 거부/오류 시 null 유지 (지도는 부산 중심 fallback).
   // ref guard 로 같은 세션 내 dashboard 재 mount 마다 또 권한 prompt 가 뜨는 회로 차단.
   const [myLocation, setMyLocation] = useState<LatLng | null>(null);
-  // 검색에서 고른 현장 — 그 마커에 하이라이트(브랜드 링+핑). 다음 검색 선택까지 유지.
-  const [highlightedFieldId, setHighlightedFieldId] = useState<string | null>(null);
-  // 검색에서 고른 '새 위치'(카카오 장소) — 지도에 비컨을 찍고 등록 여부를 묻는 카드를 띄운다.
-  const [pendingPlace, setPendingPlace] = useState<AddressSearchItem | null>(null);
-  const locationFetchedRef = useRef(false);
-  const isV2 = !!v2;
-  useEffect(() => {
-    // 2차는 묻지 않는다 — 아래 권한 상태 effect 가 허용됐을 때만 읽는다.
-    if (isV2 || locationFetchedRef.current) return;
-    locationFetchedRef.current = true;
-    void requestUserLocation().then((loc) => {
-      if (loc) setMyLocation(loc);
-    });
-  }, [isV2]);
 
   // 2차(1-1·1-2): 권한 상태를 보고 허용됐을 때만 위치를 읽는다. 1-2 에서 허용하고 돌아오면 내 위치로 옮긴다.
   const permission = useLocationPermission();
   const recenterAfterGrantRef = useRef(false);
   useEffect(() => {
-    if (!isV2 || permission !== 'granted') return;
+    if (permission !== 'granted') return;
     let alive = true;
     void peekUserLocation().then((loc) => {
       if (!alive || !loc) return;
@@ -179,7 +157,7 @@ export function MapDashboard({
     return () => {
       alive = false;
     };
-  }, [isV2, permission]);
+  }, [permission]);
   // 1-2 를 허용 없이 닫으면(나중에·스크림) 다음 허용 때 엉뚱하게 내 위치로 끌려가지 않게 잊는다.
   const permissionSheetOpen = useLocationPermissionStore((s) => s.sheetOpen);
   useEffect(() => {
@@ -187,7 +165,7 @@ export function MapDashboard({
   }, [permissionSheetOpen, permission]);
   const locationOff = permission === 'off' || permission === 'blocked';
   const onLocatePress = () => {
-    if (!v2 || !locationOff) {
+    if (!locationOff) {
       mapHandleRef.current?.recenter();
       return;
     }
@@ -323,10 +301,9 @@ export function MapDashboard({
   const markers = useMemo(() => {
     const base = fieldsToMarkers(visibleFields);
     // 2차 핀: 최근 조치 상태 색(fieldActionStatus). 핀 종류가 색을 정한다.
-    const pinOf = isV2 ? new Map(visibleFields.map((f) => [f.id, fieldActionStatus(f)])) : null;
+    const pinOf = new Map(visibleFields.map((f) => [f.id, fieldActionStatus(f)]));
     return base.map((m) => {
       const selected = selectedSet.has(m.id);
-      const highlighted = m.id === highlightedFieldId;
       const presence = attachmentPresenceByField.get(m.id);
       let label = m.label;
       if (presence) {
@@ -335,15 +312,13 @@ export function MapDashboard({
         if (visibleAttachments.photo && presence.photo) tags.push('사진');
         if (tags.length > 0) label = `${m.label} · ${tags.join('·')}`;
       }
-      return { ...m, label, selected, highlighted, order: orderByFieldId.get(m.id), pin: pinOf?.get(m.id) };
+      return { ...m, label, selected, order: orderByFieldId.get(m.id), pin: pinOf.get(m.id) };
     });
   }, [
-    isV2,
     visibleFields,
     attachmentPresenceByField,
     visibleAttachments,
     selectedSet,
-    highlightedFieldId,
     orderByFieldId,
   ]);
 
@@ -367,7 +342,7 @@ export function MapDashboard({
     return pts.length >= 2 ? pts : undefined;
   }, [routeVertexes, routeFieldIds, scopedFields]);
 
-  // 1-3 지도 설정 — 1 지도(2차)와 아직 옮기지 않은 지도 화면이 같은 시트를 쓴다.
+  // 1-3 지도 설정 시트.
   const settingsProps = {
     displayMode,
     onChangeDisplayMode: setDisplayMode,
@@ -401,7 +376,6 @@ export function MapDashboard({
         showBoundary={showBoundary}
         baseMapType={baseMapType}
         myLocation={myLocation}
-        beacon={pendingPlace ? { lat: pendingPlace.lat, lng: pendingPlace.lng } : null}
         route={route}
         center={mapCenter}
         initialLevel={lastViewAtMount?.level}
@@ -414,126 +388,28 @@ export function MapDashboard({
         }
       />
       <MapLegend displayMode={displayMode} bottomInset={legendBottomInset} />
-      {/* 지도 상단 검색창 — 현장을 이름(주소)으로 찾아 지도를 그 위치로 이동.
-          레이어 패널과 동일하게 메인 탭(외근·현장)에만 노출. */}
-      {sharesSettings && !v2 ? (
-        <MapSearchBar
-          fields={scopedFields}
-          onSelectField={(f) => {
-            // 내 현장 선택 — 비컨/등록 카드는 닫고 그 현장으로 이동·하이라이트.
-            setPendingPlace(null);
-            setHighlightedFieldId(f.id);
-            mapHandleRef.current?.recenter({ lat: f.latitude, lng: f.longitude });
-          }}
-          onSelectPlace={(item) => {
-            // 카카오 장소 = 새 위치 → 바로 등록하지 않고 그 좌표로 지도 이동 + 비컨.
-            // 어디인지 확인한 뒤 카드의 '여기에 현장 등록' 으로 진행 여부를 사용자가 결정.
-            setHighlightedFieldId(null);
-            setPendingPlace(item);
-            mapHandleRef.current?.recenter({ lat: item.lat, lng: item.lng });
-          }}
-        />
-      ) : null}
-      {/* '새 위치' 비컨 확인 카드 — 검색창 아래에 떠서, 비컨 위치를 확인하고 등록 여부를 결정. */}
-      {sharesSettings && !v2 && pendingPlace ? (
-        <View
-          style={[styles.placeCard, { top: insets.top + spacing.sm + 44 + spacing.sm }]}
-        >
-          <View style={styles.placeCardRow}>
-            <Ionicons name="location" size={18} color={colors.primary} />
-            <View style={styles.placeCardText}>
-              <Text variant="bodySm" weight="semibold" numberOfLines={1}>
-                {pendingPlace.buildingName ||
-                  pendingPlace.roadAddress ||
-                  pendingPlace.jibunAddress}
-              </Text>
-              {pendingPlace.buildingName && pendingPlace.roadAddress ? (
-                <Text variant="caption" color="textMuted" numberOfLines={1}>
-                  {pendingPlace.roadAddress}
-                </Text>
-              ) : pendingPlace.jibunAddress &&
-                pendingPlace.jibunAddress !== pendingPlace.roadAddress ? (
-                <Text variant="caption" color="textMuted" numberOfLines={1}>
-                  {pendingPlace.jibunAddress}
-                </Text>
-              ) : null}
-            </View>
-            <Pressable
-              onPress={() => setPendingPlace(null)}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="위치 선택 닫기"
-            >
-              <Ionicons name="close-circle" size={20} color={colors.textMuted} />
-            </Pressable>
-          </View>
-          <Pressable
-            onPress={() => {
-              const p = pendingPlace;
-              setPendingPlace(null);
-              // 등록 화면이 좌표로 진입 후 역지오코딩으로 주소를 채운다(기존 fields/new 흐름 재사용).
-              router.push({
-                pathname: '/(tabs)/trips/fields/new',
-                params: { lat: String(p.lat), lng: String(p.lng) },
-              } as never);
-            }}
-            style={({ pressed }) => [
-              styles.placeRegisterBtn,
-              pressed && styles.placeRegisterBtnPressed,
-            ]}
-            accessibilityRole="button"
-            accessibilityLabel="이 위치에 현장 등록"
-          >
-            <Ionicons name="add" size={18} color={colors.onPrimary} />
-            <Text variant="bodySm" weight="bold" color="onPrimary">
-              여기에 현장 등록
-            </Text>
-          </Pressable>
-        </View>
-      ) : null}
-      {v2 ? (
-        <>
-          {/* 1 지도 위쪽: 4 현장 검색으로 가는 검색창 + 지도 설정(1-3). */}
-          <View style={[styles.v2Top, { top: insets.top + space[8] }]} pointerEvents="box-none">
-            <SearchBar value="" onPressLauncher={v2.onSearchPress} style={styles.v2Search} />
-            {sharesSettings ? (
-              <MapButton
-                icon="layers"
-                size={52}
-                dot={settingsChanged}
-                accessibilityLabel="지도 설정"
-                onPress={() => setSettingsOpen(true)}
-              />
-            ) : null}
-          </View>
+      {/* 1 지도 위쪽: 4 현장 검색으로 가는 검색창 + 지도 설정(1-3). */}
+      <View style={[styles.v2Top, { top: insets.top + space[8] }]} pointerEvents="box-none">
+        <SearchBar value="" onPressLauncher={v2.onSearchPress} style={styles.v2Search} />
+        {sharesSettings ? (
           <MapButton
-            icon={locationOff ? 'locate-off' : 'locate'}
-            accessibilityLabel={locationOff ? '위치 권한 꺼짐 — 내 위치 켜기' : '내 위치로 지도 이동'}
-            onPress={onLocatePress}
-            style={[styles.v2Locate, { bottom: v2.locateBottom }]}
+            icon="layers"
+            size={52}
+            dot={settingsChanged}
+            accessibilityLabel="지도 설정"
+            onPress={() => setSettingsOpen(true)}
           />
-        </>
-      ) : (
-        // 내 위치로 복구 — 우측 하단 조준점 버튼. 시트 peek 위로 띄움.
-        <Pressable
-          onPress={onLocatePress}
-          style={({ pressed }) => [
-            styles.locateBtn,
-            { bottom: (legendBottomInset ?? 0) + spacing.md },
-            pressed && styles.locateBtnPressed,
-          ]}
-          accessibilityRole="button"
-          accessibilityLabel="내 위치로 지도 이동"
-        >
-          <Ionicons name="locate" size={22} color={colors.text} />
-        </Pressable>
-      )}
+        ) : null}
+      </View>
+      <MapButton
+        icon={locationOff ? 'locate-off' : 'locate'}
+        accessibilityLabel={locationOff ? '위치 권한 꺼짐 — 내 위치 켜기' : '내 위치로 지도 이동'}
+        onPress={onLocatePress}
+        style={[styles.v2Locate, { bottom: v2.locateBottom }]}
+      />
       {/* 지도 설정은 공유 설정을 쓰는 메인 탭에만 — 스코프·선택 화면은 작업 집중 위해 숨긴다
           (여기서 바꾸면 전역 store 가 바뀌어 혼란하므로). */}
-      {sharesSettings && !v2 ? (
-        <MapFilterBar changed={settingsChanged} {...settingsProps} />
-      ) : null}
-      {sharesSettings && v2 ? (
+      {sharesSettings ? (
         <MapSettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} {...settingsProps} />
       ) : null}
     </View>
@@ -541,49 +417,7 @@ export function MapDashboard({
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  placeCard: {
-    position: 'absolute',
-    left: spacing.lg,
-    right: spacing.lg,
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.md,
-    gap: spacing.sm,
-    ...elevation.raised,
-  },
-  placeCardRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  placeCardText: { flex: 1 },
-  placeRegisterBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    height: 40,
-    borderRadius: radius.md,
-    backgroundColor: colors.primary,
-  },
-  placeRegisterBtnPressed: { opacity: 0.85 },
-  locateBtn: {
-    position: 'absolute',
-    right: spacing.lg,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    ...elevation.raised,
-  },
-  locateBtnPressed: { backgroundColor: colors.surfaceMuted },
+  container: { flex: 1, backgroundColor: c2.bg.canvas },
   v2Top: {
     position: 'absolute',
     left: space[16],

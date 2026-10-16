@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Animated, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { Text } from './Text';
+import { OverlayModal } from './OverlayModal';
 import { Button2 } from './Button2';
 import { Icon } from '@/components/icons';
 import { c2, elevation2, radius2, space } from '@/theme/v2';
@@ -98,7 +99,7 @@ export function ConfirmDialogHost() {
   // 2차 확인 창(3-5·3-6·5-11·8-13): 모서리 24, 제목 Title/M, 본문 Body M 회색, 버튼 52 두 개(취소=Secondary,
   // 확인=파괴적이면 Danger 아니면 Primary).
   return (
-    <Modal transparent visible statusBarTranslucent animationType="none" onRequestClose={() => finish(false)}>
+    <OverlayModal visible onRequestClose={() => finish(false)}>
       <Animated.View style={[styles.root, { opacity: anim }]}>
         <Pressable
           style={StyleSheet.absoluteFill}
@@ -155,7 +156,7 @@ export function ConfirmDialogHost() {
           </View>
         </Animated.View>
       </Animated.View>
-    </Modal>
+    </OverlayModal>
   );
 }
 

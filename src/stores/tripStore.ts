@@ -288,7 +288,7 @@ export const useTripStore = create<TripState>((set, get) => ({
   remove: async (id, force = false) => {
     // 진행 중 외근은 종료 후 삭제 — UI 가드와 별개로 store 차원에서도 거부.
     if (get().activeTripId === id) {
-      return { ok: false, error: '진행 중인 외근은 종료 후 삭제할 수 있습니다.' };
+      return { ok: false, error: '진행 중인 외근은 종료한 뒤에 삭제할 수 있어요.' };
     }
     try {
       await tripsApi.remove(id, force);

@@ -6,8 +6,8 @@ import type { Field, FieldStatus } from '@/types/entities';
 
 // 현장의 논리적 '제목' — name(건물·장소명) 우선, 없으면 address.
 // 목록 검색과 카드 제목이 이 한 셀렉터를 공유해 "보이는 제목 = 검색 대상" 을 보장.
-export function fieldTitle(f: Pick<Field, 'name' | 'address'>): string {
-  return f.name?.trim() || f.address;
+export function fieldTitle(f: Pick<Field, 'name' | 'address'> | null | undefined): string {
+  return f?.name?.trim() || f?.address || '알 수 없는 현장';
 }
 
 // 문자열 s 가 tail 로 '끝나는가' — 토큰 경계까지 본다.

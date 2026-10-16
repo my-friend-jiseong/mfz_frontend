@@ -8,7 +8,7 @@ import {
   useState,
 } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon } from '@/components/icons';
 import { WebView } from 'react-native-webview';
 import {
   buildKakaoMapHtml,
@@ -489,7 +489,7 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
                     {m.label}
                   </Text>
                   {m.selected ? (
-                    <Ionicons name="checkmark-circle" size={18} color={colors.primary} />
+                    <Icon name="check" size={18} color={colors.primary} />
                   ) : null}
                 </Pressable>
               ))}

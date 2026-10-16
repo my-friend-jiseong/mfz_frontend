@@ -1,3 +1,4 @@
+import { fieldTitle } from '@/utils/fieldFacets';
 import React, { useEffect, useMemo } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import Svg, { Rect } from 'react-native-svg';
@@ -37,8 +38,6 @@ export const OVERVIEW_MAP_HEIGHT = 152;
 export const OVERVIEW_MAP_SIDE = 20;
 export const OVERVIEW_FIT_PADDING: [number, number, number, number] = [48, 24, 12, 24];
 
-export const fieldName = (f: Pick<Field, 'name' | 'address'> | undefined) =>
-  f?.name?.trim() || f?.address || '알 수 없는 현장';
 
 const hasCoord = (f: Field | undefined): f is Field => !!f && !(f.latitude === 0 && f.longitude === 0);
 
@@ -85,7 +84,7 @@ export function useReportRows(fieldReports: readonly FieldReport[] | undefined) 
         id: r.fr.id,
         lat: r.field!.latitude,
         lng: r.field!.longitude,
-        label: fieldName(r.field),
+        label: fieldTitle(r.field),
         color: STATUS_PIN_COLOR[r.kind],
         pin: r.kind as MapPinKind,
         order: r.order,

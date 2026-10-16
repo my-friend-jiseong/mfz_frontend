@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
-import { Modal, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { OverlayModal } from '@/components/ui/OverlayModal';
 import { useRouter } from 'expo-router';
 import { useSessionGuardStore } from '@/stores/sessionGuardStore';
 import { Text } from '@/components/ui/Text';
@@ -8,8 +9,8 @@ import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 
 const TITLE: Record<'superseded' | 'revoked', string> = {
-  superseded: '다른 기기에서 로그인되었습니다',
-  revoked: '보안 경고 — 모든 세션이 종료되었습니다',
+  superseded: '다른 기기에서 로그인했어요',
+  revoked: '보안을 위해 모든 기기에서 로그아웃됐어요',
 };
 
 export function SessionGuardModal() {
@@ -30,7 +31,7 @@ export function SessionGuardModal() {
   };
 
   return (
-    <Modal transparent animationType="fade" visible={!!notice} onRequestClose={handleConfirm}>
+    <OverlayModal animationType="fade" visible={!!notice} onRequestClose={handleConfirm}>
       <View style={styles.backdrop}>
         <View style={styles.box}>
           <Text variant="h3" style={styles.title}>
@@ -44,7 +45,7 @@ export function SessionGuardModal() {
           </Button>
         </View>
       </View>
-    </Modal>
+    </OverlayModal>
   );
 }
 

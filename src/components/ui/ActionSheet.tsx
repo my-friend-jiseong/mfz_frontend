@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
-  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -9,18 +8,18 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon, type IconName } from '@/components/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from './Text';
+import { OverlayModal } from './OverlayModal';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { duration, opacity } from '@/theme/motion';
 
-type IonName = React.ComponentProps<typeof Ionicons>['name'];
 
 export interface ActionSheetOption {
   label: string;
-  icon?: IonName;
+  icon?: IconName;
   /** 파괴적 항목(삭제 등) — 빨강. */
   tone?: 'default' | 'danger';
   /** 현재 선택된 항목 표시(현장 선택 시트). */
@@ -92,7 +91,7 @@ export function ActionSheetHost() {
   if (!pending) return null;
 
   return (
-    <Modal transparent visible statusBarTranslucent animationType="none" onRequestClose={() => close()}>
+    <OverlayModal visible onRequestClose={() => close()}>
       <View style={styles.root}>
         <Animated.View style={[StyleSheet.absoluteFill, styles.scrim, { opacity: anim }]}>
           <Pressable
@@ -131,7 +130,7 @@ export function ActionSheetHost() {
                   accessibilityState={o.selected ? { selected: true } : undefined}
                   style={({ pressed }) => [styles.row, pressed && { opacity: opacity.pressed }]}
                 >
-                  {o.icon ? <Ionicons name={o.icon} size={24} color={tint} /> : null}
+                  {o.icon ? <Icon name={o.icon} size={24} color={tint} /> : null}
                   <Text
                     variant="body"
                     weight={o.selected ? 'bold' : danger ? 'semibold' : undefined}
@@ -141,14 +140,14 @@ export function ActionSheetHost() {
                   >
                     {o.label}
                   </Text>
-                  {o.selected ? <Ionicons name="checkmark" size={20} color={colors.primary} /> : null}
+                  {o.selected ? <Icon name="check" size={20} color={colors.primary} /> : null}
                 </Pressable>
               );
             })}
           </ScrollView>
         </Animated.View>
       </View>
-    </Modal>
+    </OverlayModal>
   );
 }
 

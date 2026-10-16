@@ -265,99 +265,59 @@ async function flowSignupAndAuthGuards(page, ctx) {
     }
 }
 
+// 2차: 현장 등록 화면(fields/new)이 없어졌다 — 5-2 등록 안 된 위치 화면에서 [외근 목적지에 추가]로 현장을 만든다.
+async function registerFieldViaPlace(page, place) {
+  const qs = new URLSearchParams({
+    name: place.name,
+    road: place.road,
+    jibun: place.jibun,
+    cat: '',
+    lat: place.lat,
+    lng: place.lng,
+    sido: place.sido,
+    sigungu: place.sigungu,
+    q: place.name,
+  });
+  await page.goto(`${BASE}/trips/fields/place?${qs.toString()}`);
+  await page.waitForTimeout(1500);
+  await page.getByText('외근 목적지에 추가', { exact: true }).first().click();
+  await page.waitForTimeout(3500);
+  return new URL(page.url()).pathname;
+}
+
+const isFieldDetailPath = (path) => path.startsWith('/trips/fields/') && path !== '/trips/fields/place';
+
 async function flowFirstField(page, ctx) {
-    // S4 첫 현장 추가 — 카카오 검색 + 좌표 자동 채움 + 제출.
-    // (이 시점엔 이미 로그인됨)
-
-    // network 응답 캡처
-    const captured = [];
-    const onResp = async (resp) => {
-      const u = resp.url();
-      if (u.includes('/api/fields')) {
-        try {
-          const body = await resp.text();
-          captured.push({ url: u.split('/api')[1], method: resp.request().method(), status: resp.status(), body: body.slice(0, 600) });
-        } catch {
-          captured.push({ url: u.split('/api')[1], method: resp.request().method(), status: resp.status(), body: '<read failed>' });
-        }
-      }
-    };
-    page.on('response', onResp);
-
-    // 2차에서 현장 목록(+ 새 현장)이 없어졌다(4 현장 검색으로 대체) — 현장 등록 화면으로 바로 간다.
-    await page.goto(`${BASE}/trips/fields/new`);
-    await page.waitForTimeout(1500);
-    const afterAddPath = new URL(page.url()).pathname;
-    if (!afterAddPath.includes('/trips/fields/new')) {
-      add('FAIL', 'S4 + 새 현장 클릭 후 fields/new 미진입', `path=${afterAddPath}`);
-      return;
+  // S4 첫 현장 추가 — 5-2 위치 화면 → [외근 목적지에 추가] → 5 현장 상세. (이 시점엔 이미 로그인됨)
+  const captured = [];
+  const onResp = async (resp) => {
+    const u = resp.url();
+    if (u.includes('/api/fields') && resp.request().method() === 'POST') {
+      const body = await resp.text().catch(() => '<read failed>');
+      captured.push({ url: u.split('/api')[1], status: resp.status(), body: body.slice(0, 600) });
     }
-
-    // 주소 검색 input — fields/new.tsx 의 검색 placeholder.
-    const searchBox = page.locator('input[placeholder*="해운대 우동"]').first();
-    await searchBox.waitFor({ state: 'visible', timeout: 10000 });
-    await searchBox.fill('부산광역시청');
-    await page.waitForTimeout(5000);
-
-    const kakaoEmpty = captured.some((c) => c.url?.includes('address/search') && /"items":\[\]/.test(c.body));
-    if (kakaoEmpty) {
-      const r = captured.find((c) => c.url?.includes('address/search'));
-      add('FAIL', '[B-N1] 백엔드 addressSearch — 카카오 REST 결과 0건', `body: ${r?.body?.slice(0, 200)}`);
-    }
-
-    // 검색 결과 시도 — 있으면 클릭, 없으면 manual 모드로 우회.
-    const result = page.locator('div').filter({ hasText: /부산.*시청|시청.*부산/ }).first();
-    const found = await result.isVisible().catch(() => false);
-    if (found) {
-      await result.click();
-      add('PASS', 'S4 카카오 검색 결과 항목 클릭');
-    } else {
-      // manual 모드 진입 — "좌표 직접 입력으로 진행 →"
-      const manualLink = page.getByText(/좌표 직접 입력으로 진행/).first();
-      if (await manualLink.isVisible().catch(() => false)) {
-        await manualLink.click();
-        await page.waitForTimeout(500);
-        // 도로명·지번·좌표 입력 — 부산광역시청 좌표
-        await page.locator('input[placeholder*="해운대해변로"]').first().fill(`부산광역시 연제구 중앙대로 ${TS % 1000}`);
-        await page.locator('input[placeholder*="우동 1411"]').first().fill(`부산광역시 연제구 연산동 ${TS % 1000}`);
-        await page.locator('input[placeholder="33~43"]').first().fill(FIELD1_LAT);
-        await page.locator('input[placeholder="124~132"]').first().fill(FIELD1_LNG);
-        // "이 좌표로 진행"
-        await page.getByText('이 좌표로 진행', { exact: true }).first().click();
-        await page.waitForTimeout(800);
-        add('PASS', 'S4 manual 좌표 입력으로 우회 (카카오 0건 대응)');
-      } else {
-        add('FAIL', 'S4 검색 결과 없음 + manual 진입점도 없음');
-        return;
-      }
-    }
-
-    // step 2 — 제목 + 상세주소 (백엔드 필수 — [B-N2]) + 현장 등록
-    const titleInput = page.locator('input[placeholder*="가로수"]').first();
-    await titleInput.waitFor({ state: 'visible', timeout: 10000 });
-    await titleInput.fill('QA 통합 첫 번째 현장');
-    await page.locator('input[placeholder*="101동"]').first().fill('1층 정문');
-    await page.getByText('현장 등록', { exact: true }).first().click();
-    await page.waitForTimeout(3500);
-
-    const path = new URL(page.url()).pathname;
-    if (path.startsWith('/trips/fields/') && path !== '/trips/fields/new') {
+  };
+  page.on('response', onResp);
+  try {
+    const path = await registerFieldViaPlace(page, {
+      name: `QA 통합 첫 현장 ${TS % 1000}`,
+      road: `부산광역시 연제구 중앙대로 ${TS % 1000}`,
+      jibun: `부산광역시 연제구 연산동 ${TS % 1000}`,
+      sido: '부산광역시',
+      sigungu: '연제구',
+      lat: FIELD1_LAT,
+      lng: FIELD1_LNG,
+    });
+    if (isFieldDetailPath(path)) {
       add('PASS', 'S4 첫 현장 등록 → 상세 진입', `path=${path}`);
     } else {
       add('FAIL', 'S4 첫 현장 등록 후 예상 경로 아님', `path=${path}`);
-      // POST /api/fields 응답 출력
-      captured.filter((c) => c.method === 'POST' && c.url?.endsWith('/fields')).forEach((c, i) => {
-        add('FAIL', `  POST /api/fields resp[${i}]`, `status=${c.status}; body=${c.body}`);
-      });
-      // 그 외 모든 fields 호출 요약
-      add('FAIL', '  fields traffic summary', captured.map((c) => `${c.method} ${c.url} → ${c.status}`).join(' | ').slice(0, 500));
+      captured.forEach((c, i) => add('FAIL', `  POST /api/fields resp[${i}]`, `status=${c.status}; body=${c.body}`));
     }
-
-    if (ctx.pageErrors.length > 0) {
-      add('FAIL', 'S4 페이지 에러', ctx.pageErrors.slice(0, 3).join(' | '));
-    }
-
+    if (ctx.pageErrors.length > 0) add('FAIL', 'S4 페이지 에러', ctx.pageErrors.slice(0, 3).join(' | '));
+  } finally {
     page.off('response', onResp);
+  }
 }
 
 async function flowB3StatusChipModal(page, ctx) {
@@ -365,7 +325,7 @@ async function flowB3StatusChipModal(page, ctx) {
   // (UI v2: WebChoiceModal → ActionSheet. 시트 제목 "현재 상태: X", 조치 완료는 확인 대화상자 1회 더.)
   // 이 시점 path = /fields/{newFieldId} (직전 단계 결과)
   const startPath = new URL(page.url()).pathname;
-  if (!startPath.startsWith('/trips/fields/') || startPath === '/trips/fields/new' || startPath === '/trips/fields') {
+  if (!isFieldDetailPath(startPath) || startPath === '/trips/fields') {
     add('FAIL', 'B-3 회귀 시작 path 가 /fields/{id} 아님', `path=${startPath}`);
     return;
   }
@@ -439,37 +399,16 @@ async function flowB3StatusChipModal(page, ctx) {
 
 async function flowSecondField(page, ctx) {
   // 두 번째 현장 — 외근 다중 선택을 위한 전제. 다른 좌표.
-  await page.goto(`${BASE}/trips/fields/new`);
-  await page.waitForTimeout(1500);
-
-  // 카카오 0건 알려져 있으니 곧장 manual.
-  const searchBox = page.locator('input[placeholder*="해운대 우동"]').first();
-  await searchBox.waitFor({ state: 'visible', timeout: 10000 });
-  await searchBox.fill('해운대해수욕장');
-  await page.waitForTimeout(3500);
-
-  const result = page.locator('div').filter({ hasText: /해운대/ }).first();
-  if (await result.isVisible().catch(() => false)) {
-    await result.click();
-  } else {
-    const manualLink = page.getByText(/좌표 직접 입력으로 진행/).first();
-    await manualLink.click();
-    await page.waitForTimeout(500);
-    await page.locator('input[placeholder*="해운대해변로"]').first().fill(`부산광역시 해운대구 해운대해변로 ${TS % 1000}`);
-    await page.locator('input[placeholder*="우동 1411"]').first().fill(`부산광역시 해운대구 우동 ${TS % 1000}`);
-    await page.locator('input[placeholder="33~43"]').first().fill(FIELD2_LAT);
-    await page.locator('input[placeholder="124~132"]').first().fill(FIELD2_LNG);
-    await page.getByText('이 좌표로 진행', { exact: true }).first().click();
-    await page.waitForTimeout(800);
-  }
-
-  await page.locator('input[placeholder*="가로수"]').first().fill('QA 통합 두 번째 현장');
-  await page.locator('input[placeholder*="101동"]').first().fill('백사장 입구');
-  await page.getByText('현장 등록', { exact: true }).first().click();
-  await page.waitForTimeout(3500);
-
-  const path = new URL(page.url()).pathname;
-  if (path.startsWith('/trips/fields/') && path !== '/trips/fields/new') {
+  const path = await registerFieldViaPlace(page, {
+    name: 'QA 통합 두 번째 현장',
+    road: `부산광역시 해운대구 해운대해변로 ${TS % 1000}`,
+    jibun: `부산광역시 해운대구 우동 ${TS % 1000}`,
+    sido: '부산광역시',
+    sigungu: '해운대구',
+    lat: FIELD2_LAT,
+    lng: FIELD2_LNG,
+  });
+  if (isFieldDetailPath(path)) {
     add('PASS', 'S5 두 번째 현장 등록', `path=${path}`);
   } else {
     add('FAIL', 'S5 두 번째 현장 등록 실패', `path=${path}`);

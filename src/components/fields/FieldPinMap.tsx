@@ -16,6 +16,8 @@ interface Props {
   // 마운트 직후 초기 좌표를 역지오코딩해 pinAddress 를 1회 emit — 현 위치 시작 플로우용.
   // 마운트 시점 값만 사용 (후속 prop 변경 무시).
   resolveInitialAddress?: boolean;
+  /** 역지오코딩이 주소를 못 찾았을 때(바다·산 등 빈 결과·오류). 그 좌표를 넘긴다. */
+  onAddressMissing?: (lat: number, lng: number) => void;
   height?: number;
   // 지도에 손이 닿아 있는 동안 true. 부모 ScrollView 의 scrollEnabled 를 끄는 데 쓴다.
   //
@@ -50,6 +52,7 @@ export const FieldPinMap = forwardRef<FieldPinMapHandle, Props>(function FieldPi
     lat,
     lng,
     onDragEnd,
+    onAddressMissing,
     resolveInitialAddress = false,
     height = 220,
     onInteractionChange,
@@ -165,6 +168,8 @@ export const FieldPinMap = forwardRef<FieldPinMapHandle, Props>(function FieldPi
             } else if (msg.type === 'pinAddress' && okCoord && msg.address) {
               lastEmittedRef.current = { lat: msg.lat, lng: msg.lng };
               onDragEnd(msg.lat, msg.lng, msg.address as PinAddress);
+            } else if (msg.type === 'pinAddressMissing' && okCoord) {
+              onAddressMissing?.(msg.lat, msg.lng);
             }
           } catch {
             // ignore
@@ -243,6 +248,8 @@ function buildHtml(
             roadAddress: roadAddress, jibunAddress: jibunAddress, buildingName: buildingName,
             sido: base.region_1depth_name || '', sigungu: base.region_2depth_name || '', display: display
           }});
+        } else {
+          postMsg({ type: 'pinAddressMissing', lat: la, lng: ln });
         }
       });
     }

@@ -28,6 +28,7 @@ import { safeBack } from '@/utils/backNavigation';
 import { memoForVisit } from '@/utils/visitRecord';
 import { visitEditHref } from '@/utils/checkinNav';
 import { fieldActionStatus } from '@/utils/fieldStatus';
+import { fieldTitle } from '@/utils/fieldFacets';
 import { useTripReportState, type TripReportState } from '@/utils/reportStatus';
 import { fmtTripDateLine, tripTitle } from '@/utils/tripFormat';
 import { findTripReportId, openReportForTrip, reportDetailHref, reportEditHref } from '@/utils/reportEntry';
@@ -90,7 +91,6 @@ function buildStops(
   return out;
 }
 
-const fieldName = (f: Field | undefined) => f?.name?.trim() || f?.address || '알 수 없는 현장';
 const hasCoord = (f: Field | undefined): f is Field => !!f && !(f.latitude === 0 && f.longitude === 0);
 
 // 3·3-1·3-2 머리 오른쪽 보고서 상태(인수인계: 외근 상세는 '보고서'를 붙인다).
@@ -179,7 +179,7 @@ export default function TripDetail() {
         lng: f.longitude,
         kind,
         order: s.order,
-        label: fieldName(f),
+        label: fieldTitle(f),
       });
       all.push({ lat: f.latitude, lng: f.longitude });
       if (s.kind === 'visit') visited.push({ lat: f.latitude, lng: f.longitude });
@@ -248,7 +248,7 @@ export default function TripDetail() {
           return {
             key: s.key,
             marker: { order: s.order, kind: 'visited' },
-            label: fieldName(f),
+            label: fieldTitle(f),
             trailing: '건너뜀',
             dim: true,
           };
@@ -257,7 +257,7 @@ export default function TripDetail() {
         return {
           key: s.key,
           marker: { order: s.order, kind: st },
-          label: fieldName(f),
+          label: fieldTitle(f),
           trailing: STATUS_LABEL[st],
           trailingTone: LEGEND_TONE[st],
         };
@@ -397,13 +397,15 @@ export default function TripDetail() {
           style={styles.map}
         />
 
-        <Text v2="bodyM.bold" style={styles.sectionTitle}>
-          {visitCount === 0 ? '계획한 현장' : '방문한 현장'}
-        </Text>
+        {stops.length > 0 ? (
+          <Text v2="bodyM.bold" style={styles.sectionTitle}>
+            {visitCount === 0 ? '계획한 현장' : '방문한 현장'}
+          </Text>
+        ) : null}
         {stops.map((s, i) => {
           const f = fieldById.get(s.fieldId);
           if (s.kind === 'skipped') {
-            return <TripStopRow key={s.key} kind="skipped" order={s.order} title={fieldName(f)} divider={i > 0} />;
+            return <TripStopRow key={s.key} kind="skipped" order={s.order} title={fieldTitle(f)} divider={i > 0} />;
           }
           const vid = s.visit.id;
           return (
@@ -411,7 +413,7 @@ export default function TripDetail() {
               key={s.key}
               kind="visit"
               order={s.order}
-              title={fieldName(f)}
+              title={fieldTitle(f)}
               visitedAt={s.visit.visitedAt}
               status={fieldActionStatus(f)}
               expanded={expandedId === vid}

@@ -1,6 +1,5 @@
 import React, { useRef, useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { Text } from './Text';
 import { colors } from '@/theme/colors';
 import { spacing, radius, fontSize, fontWeight, touchTarget } from '@/theme/spacing';
@@ -93,7 +92,7 @@ export function EditableTitle({
         onPress={begin}
         accessibilityRole="button"
         accessibilityLabel={`${label}: ${value || placeholder || ''}`}
-        accessibilityHint="눌러서 제목을 수정합니다"
+        accessibilityHint="눌러서 제목을 고쳐요"
         style={({ pressed }) => [styles.display2, dense && styles.dense, pressed && { opacity: opacity.pressed }]}
       >
         <View style={styles.title2}>
@@ -113,7 +112,7 @@ export function EditableTitle({
         onPress={begin}
         accessibilityRole="button"
         accessibilityLabel={`${label}: ${value}`}
-        accessibilityHint="눌러서 제목을 수정합니다"
+        accessibilityHint="눌러서 제목을 고쳐요"
         style={({ pressed }) => [styles.display, pressed && { opacity: opacity.pressed }]}
       >
         <Text variant="h2" weight="heavy" numberOfLines={2}>
@@ -147,7 +146,7 @@ export function EditableTitle({
             hitSlop={(touchTarget.control - 32) / 2}
             style={styles.clear}
           >
-            <Ionicons name="close-circle" size={20} color={colors.textSubtle} />
+            <Icon name="clear" size={20} color={c2.text.disabled} />
           </Pressable>
         ) : null}
       </View>

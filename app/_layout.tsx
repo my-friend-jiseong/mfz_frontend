@@ -11,6 +11,7 @@ import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
 import { SessionGuardModal } from '@/components/SessionGuardModal';
 import { ActionSheetHost, ConfirmDialogHost, PopoverMenuHost, ToastHost } from '@/components/ui';
+import { TopOverlay } from '@/components/ui/OverlayModal';
 import { startSessionActivity, stopSessionActivity } from '@/stores/sessionActivity';
 import { initSentry } from '@/utils/sentry';
 import { applyWebAlertPatch } from '@/utils/webAlertPatch';
@@ -124,12 +125,15 @@ function RootContent() {
           options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
         />
       </Stack>
-      <SessionGuardModal />
-      {/* 명세 v2 공용 오버레이 — 화면 전환(replace) 직후에도 살아 있도록 스택 밖에 둔다. */}
-      <ToastHost />
-      <ActionSheetHost />
-      <PopoverMenuHost />
-      <ConfirmDialogHost />
+      {/* 명세 v2 공용 오버레이 — 화면 전환(replace) 직후에도 살아 있도록 스택 밖에 둔다.
+          iOS 는 (modals) 네이티브 모달 위에 보이도록 FullWindowOverlay 로 감싼다(TopOverlay, 실기기 확인). */}
+      <TopOverlay>
+        <SessionGuardModal />
+        <ToastHost />
+        <ActionSheetHost />
+        <PopoverMenuHost />
+        <ConfirmDialogHost />
+      </TopOverlay>
       <StatusBar style="dark" />
     </View>
   );

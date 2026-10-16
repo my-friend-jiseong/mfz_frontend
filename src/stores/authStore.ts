@@ -15,6 +15,9 @@ import { useTripStore } from './tripStore';
 import { useReportStore } from './reportStore';
 import { useProjectStore } from './projectStore';
 import { useCategoryStore } from './categoryStore';
+import { useCheckinQueueStore } from './checkinQueueStore';
+import { clearTripStartPoint } from '@/utils/tripStartPoint';
+import { clearOverviewMapViews } from '@/utils/overviewMapView';
 import { SUPPORT_EMAIL, agreedTermsPayload } from '@/utils/contact';
 
 type Result<T = void> =
@@ -154,23 +157,23 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             }
           }
           useSessionGuardStore.getState().show('superseded', (e as ApiError).message);
-          await clearRefreshToken();
-          set({ user: null, accessToken: null, refreshToken: null, isAuthenticated: false, isHydrating: false });
+          await clearLocalSession({ keepQueue: true });
+          set({ isHydrating: false });
           return;
         }
 
         if (isApi && code === 'all_sessions_revoked') {
           useSessionGuardStore.getState().show('revoked', (e as ApiError).message);
-          await clearRefreshToken();
-          set({ user: null, accessToken: null, refreshToken: null, isAuthenticated: false, isHydrating: false });
+          await clearLocalSession({ keepQueue: true });
+          set({ isHydrating: false });
           return;
         }
 
         // 그 외 401: 토큰 진짜 무효 → 폐기
         if (isApi && status === 401) {
           if (__DEV__) console.warn('[auth.hydrate] refresh 401, 토큰 폐기', code);
-          await clearRefreshToken();
-          set({ user: null, accessToken: null, refreshToken: null, isAuthenticated: false, isHydrating: false });
+          await clearLocalSession({ keepQueue: true });
+          set({ isHydrating: false });
           return;
         }
 
@@ -189,7 +192,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const session = await auth.login({ email, password });
       if (!isValidSession(session)) {
         if (__DEV__) console.warn('[authStore] login 응답 shape 비정상:', session);
-        return { ok: false, error: '서버 응답이 올바르지 않습니다' };
+        return { ok: false, error: '서버 응답이 올바르지 않아요. 잠시 뒤에 다시 해 주세요.' };
       }
       await saveRefreshToken(session.refreshToken);
       set({
@@ -218,7 +221,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       });
       if (!isValidSession(session)) {
         if (__DEV__) console.warn('[authStore] signup 응답 shape 비정상:', session);
-        return { ok: false, error: '서버 응답이 올바르지 않습니다' };
+        return { ok: false, error: '서버 응답이 올바르지 않아요. 잠시 뒤에 다시 해 주세요.' };
       }
       await saveRefreshToken(session.refreshToken);
       set({
@@ -294,7 +297,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         return {
           ok: false,
           code: 'delete_account_unimplemented',
-          error: `아직 앱에서 탈퇴를 처리할 수 없습니다. ${SUPPORT_EMAIL} 로 요청해 주시면 처리해 드립니다.`,
+          error: `아직 앱에서 탈퇴할 수 없어요. ${SUPPORT_EMAIL} 로 요청해 주시면 처리해 드릴게요.`,
         };
       }
 
@@ -314,8 +317,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 // 두 경로가 각자 목록을 들고 있으면 한쪽에만 store 가 빠져, 같은 기기에서 다음 사용자가
 // 로그인할 때 hydrate 완료 전까지 이전 사용자 데이터가 노출되는 회로가 생긴다.
 // 정리 대상 목록은 반드시 여기 한 곳에서만 관리한다.
-async function clearLocalSession(): Promise<void> {
+// 강제 로그아웃(다른 기기 로그인·세션 만료)은 keepQueue — 보내지 못한 체크인은 사용자 id 가 붙어 있어 같은 사람이
+// 다시 로그인하면 이어서 보내고, 다른 사람이 로그인하면 onUserChange 가 지운다. 직접 로그아웃·탈퇴는 확인을 받고 지운다.
+async function clearLocalSession({ keepQueue = false }: { keepQueue?: boolean } = {}): Promise<void> {
   await clearRefreshToken();
+  if (!keepQueue) await useCheckinQueueStore.getState().clearAll();
+  clearTripStartPoint();
+  await clearOverviewMapViews();
   await useDestinationStore.getState().clearAll();
   useFieldStore.getState().clearAll();
   useVisitStore.getState().clearAll();
@@ -385,35 +393,17 @@ async function refreshAccessSingleFlight(): Promise<string | null> {
           }
         }
         useSessionGuardStore.getState().show('superseded', e.message);
-        await clearRefreshToken();
-        useAuthStore.setState({
-          user: null,
-          accessToken: null,
-          refreshToken: null,
-          isAuthenticated: false,
-        });
+        await clearLocalSession({ keepQueue: true });
         return null;
       }
       // Phase 7 — all_sessions_revoked: 보안상 전체 세션 종료. 강제 로그아웃 + 보안 경고 모달.
       if (e instanceof ApiError && e.code === 'all_sessions_revoked') {
         useSessionGuardStore.getState().show('revoked', e.message);
-        await clearRefreshToken();
-        useAuthStore.setState({
-          user: null,
-          accessToken: null,
-          refreshToken: null,
-          isAuthenticated: false,
-        });
+        await clearLocalSession({ keepQueue: true });
         return null;
       }
       if (__DEV__) console.error('[auth] _refreshAccess FAILED — store cleared', e);
-      await clearRefreshToken();
-      useAuthStore.setState({
-        user: null,
-        accessToken: null,
-        refreshToken: null,
-        isAuthenticated: false,
-      });
+      await clearLocalSession({ keepQueue: true });
       return null;
     } finally {
       // 다음 사이클에서 새 호출은 새 refresh 를 시도할 수 있도록 클리어
