@@ -1042,3 +1042,21 @@ PR7(2026-10-17): 대기열 항목에 체크인 화면에서 고른 조치 상태
 - HWPX: 생성 API 가 없다(운영 OpenAPI `POST /api/reports/{id}/export` 의 format 은 `word|pdf`). 프론트는 HWPX 줄을 **숨겼다**(`app/(tabs)/reports/[id]/index.tsx` FORMATS). 요청: `POST /api/reports/{id}/export/hwpx`(또는 `/export` `{format:"hwpx"}`) → `{ url }`. 오면 줄 하나만 되살린다(배지 색 `c2.file.hwpx` 는 이미 있음).
 - DOCX: 앱은 누를 때마다 `POST /export/word {regenerate:true}` 로 다시 만든 뒤 상세의 `outputFileUrl` 을 받는다(응답 본문 비의존). 서버가 현장 보고·위치도가 바뀔 때 `outputFileUrl` 을 비우거나 응답에 `url` 을 확실히 주면 상세 재요청 한 번을 줄일 수 있다(선택).
 - 파일 주소는 인증 없이 받는다(앱이 캐시로 내려받아 공유 창에 넘김). 파일 이름을 서버가 `Content-Disposition` 으로 주면 웹 내려받기 이름이 맞는다(지금은 앱이 '{보고서 제목}.docx' 로 붙임).
+
+### J. 🟡 사진 일괄 등록 — 묶음마다 현장·방문·사진을 한 번에 (8-7 사진으로 여러 곳 등록, 결정 v133)
+
+정책: 사진을 위치별로 묶어(100m) 묶음마다 방문 1건. 100m 안 기존 현장이면 그 현장, 아니면 새 현장.
+
+지금 앱(PR9, 2026-10-17)은 일괄 API 가 없어 묶음마다 차례로 보낸다: (새 현장이면 `POST /api/fields` →) `POST /api/visits/check-in` → `POST /api/visits/{id}/photos`(장마다, `capturedAt` = Exif 촬영 시각).
+한 묶음이 실패해도 나머지는 보내고, [남은 N곳 저장]으로 실패한 묶음만 다시 보낸다. 다시 보낼 때 중복을 막으려고 앱이 서버를 먼저 본다:
+- 현장 만들기가 실패했으면 현장 목록을 다시 받아 그 자리(10m)에 새로 생긴 현장을 쓴다
+- 체크인이 실패했으면 외근 상세 timeline 에서 그 현장의 그 뒤 방문을 쓴다
+- 사진은 `skipAlreadySaved`(capturedAt 대조) — 그런데 **방문 상세 사진에 `capturedAt` 이 오지 않는다**(2026-10-17 실측, 응답 칸 없음). 그래서 사진 응답이 유실되면 같은 사진이 두 번 올라갈 수 있다
+
+실측(2026-10-17): **같은 외근·같은 현장에 체크인을 두 번 보내면 방문이 2건 생긴다**(visitId 다름, visitCount 증가). H 의 '지금처럼 멱등' 전제와 다르다 — `visitStore.checkIn` 주석도 옛 동작 기준.
+
+요청(택1):
+1. `POST /api/trips/{tripId}/photo-batch` multipart — 묶음 배열 `[{fieldId? | {lat,lng,roadAddress,jibunAddress,sido,sigungu}, photos:[{file, capturedAt}]}]` → 묶음별 `{fieldId, visitId, created, photoIds}`. 묶음 단위로 성공·실패를 돌려주면 앱은 실패한 묶음만 다시 보낸다
+2. 최소안: check-in·현장 생성·사진 올리기에 `clientId`(앱이 만든 id) 멱등 키 — 응답이 유실돼 다시 보내도 하나만 생기게. 방문 사진 응답에 `capturedAt` 포함
+
+Android 10+ 는 앱에 `ACCESS_MEDIA_LOCATION` 이 없으면 사진 위치가 지워져 온다(서버 일 아님, 실기기 확인 항목).

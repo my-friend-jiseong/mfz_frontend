@@ -14,6 +14,7 @@ const FILL: Record<MapPinKind, string> = {
   search: c2.status.new,
   visited: c2.status.visited,
   skipped: c2.bg.canvas,
+  group: c2.bg.brand,
 };
 
 const WHITE = c2.text.inverse;

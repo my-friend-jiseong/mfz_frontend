@@ -128,14 +128,42 @@ export async function pickPhoto(source: 'camera' | 'library'): Promise<UploadFil
         });
 
   if (result.canceled || !result.assets[0]) return null;
+  return assetToUploadFile(result.assets[0]);
+}
 
-  const a = result.assets[0];
+/** picker 결과 한 장 → 업로드 파일. */
+export function assetToUploadFile(a: ImagePicker.ImagePickerAsset): UploadFile {
   // type 은 허용 형식으로 정규화, name 은 그 type 과 맞는 확장자를 보장 →
   // 서버가 content-type 으로 검증하든 확장자로 검증하든 통과.
   const type = normalizeImageMime(a.mimeType, a.fileName, a.uri);
   const rawName = a.fileName ?? basenameFromUri(a.uri, `photo-${Date.now()}.jpg`);
   const name = withMatchingExt(rawName, type);
   return { uri: a.uri, name, type };
+}
+
+/**
+ * 갤러리에서 사진 여러 장(8-7 사진으로 여러 곳 등록). 촬영 위치를 읽으려고 exif 를 함께 받는다.
+ * 권한이 없으면 안내 후 null, 취소해도 null.
+ */
+export async function pickPhotos(limit: number): Promise<ImagePicker.ImagePickerAsset[] | null> {
+  const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (!perm.granted) {
+    Alert.alert('사진 라이브러리 권한 필요', '설정에서 권한을 허용해주세요.', [
+      { text: '취소', style: 'cancel' },
+      { text: '설정 열기', onPress: openSettings },
+    ]);
+    return null;
+  }
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ImagePicker.MediaTypeOptions.Images,
+    allowsMultipleSelection: true,
+    selectionLimit: limit,
+    orderedSelection: true,
+    quality: 0.8,
+    exif: true,
+  });
+  if (result.canceled || result.assets.length === 0) return null;
+  return result.assets;
 }
 
 /**

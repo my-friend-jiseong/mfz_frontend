@@ -30,6 +30,8 @@ interface Props {
   pinKind?: MapPinKind;
   /** false 면 테두리·모서리 없이 꽉 채운다. */
   framed?: boolean;
+  /** center 모드에서 원래 위치 점선 원을 그릴지(기본 true). 8-8 사진 위치 지정은 원래 위치가 없어 끈다. */
+  showOrigin?: boolean;
 }
 
 // 마운트 후 임의 시점에 핀 이동 + 역지오코딩을 트리거하는 명령형 핸들
@@ -52,6 +54,7 @@ export const FieldPinMap = forwardRef<FieldPinMapHandle, Props>(function FieldPi
     mode = 'drag',
     pinKind = 'pending',
     framed = true,
+    showOrigin = true,
   },
   ref,
 ) {
@@ -66,6 +69,7 @@ export const FieldPinMap = forwardRef<FieldPinMapHandle, Props>(function FieldPi
   const initialLngRef = useRef(safeLng);
   const resolveInitialRef = useRef(resolveInitialAddress);
   const modeRef = useRef(mode);
+  const showOriginRef = useRef(showOrigin);
   // 사용자가 지도에서 방금 옮긴 좌표 — 이 값이 prop 으로 되돌아오면 재센터를 건너뛴다.
   // (재센터하면 핀이 항상 화면 중앙으로 튕겨 "안 움직이는" 것처럼 보이는 피드백 루프 차단)
   const lastEmittedRef = useRef<{ lat: number; lng: number } | null>(null);
@@ -77,6 +81,7 @@ export const FieldPinMap = forwardRef<FieldPinMapHandle, Props>(function FieldPi
         initialLngRef.current,
         resolveInitialRef.current,
         modeRef.current === 'center',
+        showOriginRef.current,
       ),
     [kakaoJsKey],
   );
@@ -173,6 +178,7 @@ function buildHtml(
   lng: number,
   resolveInitial: boolean,
   centerMode: boolean,
+  showOrigin = true,
 ): string {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
@@ -202,7 +208,7 @@ function buildHtml(
     if (CENTER_MODE) {
       // 가운데 고정 핀은 RN 이 그린다 — 카카오 마커는 좌표 보관용으로만 두고 숨긴다. 원래 위치엔 점선 원.
       marker.setMap(null);
-      new kakao.maps.CustomOverlay({ position: new kakao.maps.LatLng(${lat}, ${lng}), content: ${JSON.stringify(ORIGIN_DOT_HTML)}, map: map, xAnchor: 0.5, yAnchor: 0.5 });
+      ${showOrigin ? `new kakao.maps.CustomOverlay({ position: new kakao.maps.LatLng(${lat}, ${lng}), content: ${JSON.stringify(ORIGIN_DOT_HTML)}, map: map, xAnchor: 0.5, yAnchor: 0.5 });` : ''}
       // idle — 끌기·확대 축소 모두 끝난 뒤 한 번. 코드로 옮긴 곳(마커와 같은 좌표)은 건너뛴다.
       kakao.maps.event.addListener(map, 'idle', function(){
         var c = map.getCenter();

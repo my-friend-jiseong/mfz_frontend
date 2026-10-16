@@ -4,10 +4,13 @@
 // 조합별 템플릿을 미리 만들어 JSON 으로 넣고, 순번 자리 __N__ 만 페이지 안에서 바꾼다.
 import { c2, pinShadowFilterCss } from '@/theme/v2';
 
-/** 조치 전·중·완료, 새 현장(검은 핀), 검색 위치(돋보기), 방문함(회색), 건너뜀(흰 바탕 회색 점선) */
-export type MapPinKind = 'pending' | 'in_progress' | 'done' | 'new' | 'search' | 'visited' | 'skipped';
+/**
+ * 조치 전·중·완료, 새 현장(검은 핀), 검색 위치(돋보기), 방문함(회색), 건너뜀(흰 바탕 회색 점선),
+ * 사진 묶음(8-7 파란 순번 원 — 물방울이 아니라 원이고 가운데가 좌표).
+ */
+export type MapPinKind = 'pending' | 'in_progress' | 'done' | 'new' | 'search' | 'visited' | 'skipped' | 'group';
 
-export const PIN_KINDS: MapPinKind[] = ['pending', 'in_progress', 'done', 'new', 'search', 'visited', 'skipped'];
+export const PIN_KINDS: MapPinKind[] = ['pending', 'in_progress', 'done', 'new', 'search', 'visited', 'skipped', 'group'];
 
 const W = 32;
 const H = 44;
@@ -41,7 +44,27 @@ const FILL: Record<MapPinKind, string> = {
   search: c2.status.new,
   visited: c2.status.visited,
   skipped: c2.bg.canvas,
+  group: c2.bg.brand,
 };
+
+// 8-7 사진 묶음 순번 원(Figma 600:2867): 34, 흰 테두리 3, 숫자 15 ExtraBold, 그림자 0 2 3 ink 0.3.
+const GROUP_D = 34;
+const GROUP_SHADOW = 'drop-shadow(0px 2px 3px rgba(15,23,42,0.3))';
+
+/**
+ * 순번 원 HTML. 지도는 모든 2차 핀을 yAnchor PIN_TIP_Y_RATIO(물방울 끝)로 놓으므로, 바깥 상자는 원 크기로 두고
+ * 원을 그만큼 아래로 내려 원 가운데가 좌표에 오게 한다.
+ */
+function groupDotHtml(n: string): string {
+  const top = GROUP_D * PIN_TIP_Y_RATIO - GROUP_D / 2;
+  return (
+    `<div style="position:relative;width:${GROUP_D}px;height:${GROUP_D}px;">` +
+    `<div style="position:relative;top:${top.toFixed(2)}px;width:${GROUP_D}px;height:${GROUP_D}px;box-sizing:border-box;border-radius:${GROUP_D / 2}px;` +
+    `background:${FILL.group};border:3px solid ${WHITE};filter:${GROUP_SHADOW};display:flex;align-items:center;justify-content:center;cursor:pointer;` +
+    `color:${WHITE};font-family:Pretendard,-apple-system,system-ui,sans-serif;font-size:15px;font-weight:800;line-height:22px;letter-spacing:-0.2px;">${n}</div>` +
+    `</div>`
+  );
+}
 
 function glyph(kind: MapPinKind): string {
   switch (kind) {
@@ -77,6 +100,7 @@ export function buildPinHtml(
   /** 핀 아래 이름표(Figma 6 '낙동대로 351'). 네이티브는 PIN_TAG_TEMPLATE 로 같은 모양을 붙인다. */
   nameTag?: string | null,
 ): string {
+  if (kind === 'group') return groupDotHtml(order != null ? String(order) : '');
   const sel = selected ? SELECTED[selected] : null;
   const s = sel ? sel.scale : 1;
   const w = Math.round(W * s);

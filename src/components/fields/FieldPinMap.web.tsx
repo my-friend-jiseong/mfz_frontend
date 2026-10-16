@@ -28,6 +28,8 @@ interface Props {
   pinKind?: MapPinKind;
   /** false 면 테두리·모서리 없이 꽉 채운다(5-5 머리 아래 지도). */
   framed?: boolean;
+  /** center 모드에서 원래 위치 점선 원을 그릴지(기본 true). 8-8 사진 위치 지정은 원래 위치가 없어 끈다. */
+  showOrigin?: boolean;
 }
 
 // 마운트 후 임의 시점에 핀 이동 + 역지오코딩을 트리거하는 명령형 핸들
@@ -137,7 +139,7 @@ function loadKakaoSdk(appkey: string): Promise<void> {
 }
 
 export const FieldPinMap = forwardRef<FieldPinMapHandle, Props>(function FieldPinMap(
-  { lat, lng, onDragEnd, resolveInitialAddress = false, height = 220, mode = 'drag', pinKind = 'pending', framed = true },
+  { lat, lng, onDragEnd, resolveInitialAddress = false, height = 220, mode = 'drag', pinKind = 'pending', framed = true, showOrigin = true },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -158,6 +160,7 @@ export const FieldPinMap = forwardRef<FieldPinMapHandle, Props>(function FieldPi
   // SDK 로드 전에 들어온 resolveAddress 요청 — 로드 완료 직후 flush (silent drop 방지).
   const pendingResolveRef = useRef<{ lat: number; lng: number } | null>(null);
   const modeRef = useRef(mode);
+  const showOriginRef = useRef(showOrigin);
   // center 모드: 코드로 지도를 옮길 때(주소 검색·내 위치) 가운데 좌표도 함께 맞춘다.
   const setCenterRef = useRef<((la: number, ln: number) => void) | null>(null);
 
@@ -188,7 +191,7 @@ export const FieldPinMap = forwardRef<FieldPinMapHandle, Props>(function FieldPi
           : new k.maps.Marker({ position: initial, map, draggable: true });
       markerRef.current = marker;
       if (modeRef.current === 'center') {
-        new k.maps.CustomOverlay({ position: initial, content: ORIGIN_DOT_HTML, map, xAnchor: 0.5, yAnchor: 0.5 });
+        if (showOriginRef.current) new k.maps.CustomOverlay({ position: initial, content: ORIGIN_DOT_HTML, map, xAnchor: 0.5, yAnchor: 0.5 });
         // idle — 끌기·확대 축소(두 손가락·휠은 가운데가 움직인다) 모두 끝난 뒤 한 번. 코드로 옮긴 곳(같은 좌표)은 건너뛴다.
         k.maps.event.addListener(map, 'idle', () => {
           const c = map.getCenter();

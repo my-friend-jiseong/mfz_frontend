@@ -45,6 +45,15 @@ export function fmtMonthDay(iso: string | undefined | null): string {
   return `${d.getMonth() + 1}월 ${d.getDate()}일`;
 }
 
+// 'M월 D일 오전 h:mm' — 8-8 사진 위치 지정의 촬영 시각.
+export function fmtMonthDayAmPm(iso: string | undefined | null): string {
+  const d = safe(iso);
+  if (!d) return '-';
+  const h = d.getHours();
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${d.getMonth() + 1}월 ${d.getDate()}일 ${h < 12 ? '오전' : '오후'} ${h12}:${pad(d.getMinutes())}`;
+}
+
 // 목록 섹션 헤더용 상대 날짜 그룹 — 오늘 / 어제 / 이번 주 / 지난주 / 'YYYY년 M월'.
 // 주 시작은 월요일(업무 앱 관행). 로컬 자정 기준으로만 비교하므로 시각 성분에 영향받지 않는다.
 // ms 산술 대신 Date 생성자 컴포넌트 연산 — 월말/연말 경계를 런타임이 알아서 정규화.

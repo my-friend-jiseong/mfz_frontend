@@ -10,4 +10,5 @@ export const STATUS_PIN_COLOR: Record<MapPinKind, string> = {
   search: c2.bg.brand,
   visited: c2.status.visited,
   skipped: c2.status.visited,
+  group: c2.bg.brand,
 };
