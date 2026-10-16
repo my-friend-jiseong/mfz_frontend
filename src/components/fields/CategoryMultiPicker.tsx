@@ -151,7 +151,7 @@ export function CategoryMultiPicker({ value, onChange, disabled }: Props) {
               <Pressable
                 onPress={() => {
                   setOpen(false);
-                  router.push('/(tabs)/fields/categories' as never);
+                  router.push('/(tabs)/trips/fields/categories' as never);
                 }}
                 accessibilityRole="button"
                 accessibilityLabel="카테고리 관리"

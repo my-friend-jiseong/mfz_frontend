@@ -3,6 +3,7 @@ import { AccessibilityInfo, Animated, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSegments } from 'expo-router';
 import { BOTTOM_ACTION_BAR_HEIGHT } from './BottomActionBar';
+import { useBottomChromeStore } from '@/stores/bottomChromeStore';
 import { Text } from './Text';
 import { Touchable } from './Touchable';
 import { c2, elevation2, radius2, space } from '@/theme/v2';
@@ -15,8 +16,8 @@ export interface SnackbarOptions {
   /** 보이는 시간(ms). 기본: 버튼이 있으면 4000, 없으면 2000. */
   duration?: number;
   /**
-   * 화면 바닥에서 띄울 거리(safe area 제외). 기본은 탭 바·하단 액션 바를 비키는 값.
-   * 미니 바(7-4)나 외근 진행 시트(7-9)처럼 더 높이 떠야 하면 화면이 넘긴다.
+   * 화면 바닥에서 띄울 거리(safe area 제외). 기본은 탭 바·미니 바(7-4)·하단 액션 바를 비키는 값.
+   * 외근 진행 시트(7-9)처럼 더 높이 떠야 하면 화면이 넘긴다.
    */
   bottomOffset?: number;
 }
@@ -25,14 +26,14 @@ interface Item extends SnackbarOptions {
   id: number;
 }
 
-// 탭 바(56) 위. 탭 루트 중 하단 바가 있는 곳은 그 위까지 비킨다(기존 Toast 규칙 유지).
-const TAB_BAR_H = 56;
-const ROOTS_WITH_BAR = new Set(['trips', 'fields']);
-function useDefaultClearance(): number {
+// 기본 위치: 탭 화면이면 탭 바·미니 바(7-4)·하단 버튼 바를 모두 비킨 위, 그 밖(모달·로그인)은 화면 하단 버튼 바 위.
+// 탭 쪽 높이는 셸이 bottomChromeStore 에 실측해 넣는다(safe area 포함). 반환값은 화면 바닥에서의 거리.
+function useDefaultBottom(): number {
+  const insets = useSafeAreaInsets();
   const segments = useSegments() as string[];
-  const tabRoot = segments[0] === '(tabs)' && segments.length <= 2;
-  if (!tabRoot) return BOTTOM_ACTION_BAR_HEIGHT + space[8];
-  return TAB_BAR_H + (ROOTS_WITH_BAR.has(segments[1] ?? 'trips') ? BOTTOM_ACTION_BAR_HEIGHT + space[8] : space[24]);
+  const { tabBar, miniBar, footer } = useBottomChromeStore();
+  if (segments[0] === '(tabs)' && tabBar > 0) return tabBar + miniBar + footer + space[8];
+  return insets.bottom + BOTTOM_ACTION_BAR_HEIGHT + space[8];
 }
 
 let showFn: ((item: Item) => void) | null = null;
@@ -55,7 +56,7 @@ export const snackbar = {
 /** 앱 루트에 1회 마운트. 화면 전환 직후 호출해도 살아남도록 스택 밖에 둔다. */
 export function SnackbarHost() {
   const insets = useSafeAreaInsets();
-  const clearance = useDefaultClearance();
+  const defaultBottom = useDefaultBottom();
   const [item, setItem] = useState<Item | null>(null);
   // 사라지는 중(페이드아웃)인 스낵바 id — 그동안은 버튼을 다시 못 누르게 터치를 끈다.
   const [hidingId, setHidingId] = useState<number | null>(null);
@@ -94,7 +95,7 @@ export function SnackbarHost() {
 
   if (!item) return null;
   const interactive = !!item.action && hidingId !== item.id;
-  const bottom = insets.bottom + (item.bottomOffset ?? clearance);
+  const bottom = item.bottomOffset != null ? insets.bottom + item.bottomOffset : defaultBottom;
 
   return (
     <View pointerEvents="box-none" style={[styles.wrap, { bottom }]}>

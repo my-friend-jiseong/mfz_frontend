@@ -1,6 +1,9 @@
-import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import React, { useContext, useEffect, useState } from 'react';
+import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { NavigationContext } from '@react-navigation/native';
+import { BottomTabBarHeightContext } from '@react-navigation/bottom-tabs';
+import { useBottomChromeStore } from '@/stores/bottomChromeStore';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 
@@ -15,8 +18,8 @@ interface Props {
    */
   absolute?: boolean;
   /**
-   * 홈 인디케이터만큼 아래 여백을 더할지. 탭 루트 화면(외근 내역·현장 목록)은 바 아래에 탭바가
-   * 있어 그쪽이 inset 을 먹으므로 false.
+   * 홈 인디케이터만큼 아래 여백을 더할지. 탭 화면 안에서는 탭 레이아웃이 bottom inset 을 0 으로 내려
+   * 주므로 따로 끌 필요 없이 Figma 대로 `padding: 12px 16px 12px`(탭 바 바로 위)가 된다.
    */
   safeArea?: boolean;
 }
@@ -36,10 +39,34 @@ export function useBottomActionBarHeight(safeArea = true): number {
  * 보조 버튼은 왼쪽(내용 너비), 주 버튼은 오른쪽(남은 너비).
  * 떠 있는 CTA(`StickyBottomBar`)와 달리 화면 바닥에 붙어 콘텐츠와 경계를 만든다.
  */
+// 탭 화면에서 보이는 동안 높이를 셸에 알린다 — 스낵바가 이 바 위로 뜨게(bottomChromeStore).
+// 탭 밖(모달·RN Modal 안)이면 아무것도 안 한다. 포커스를 잃으면(다른 탭·푸시 화면) 0 으로 돌린다.
+function useReportFooterHeight(height: number) {
+  const inTabs = useContext(BottomTabBarHeightContext) !== undefined;
+  const nav = useContext(NavigationContext);
+  useEffect(() => {
+    if (!inTabs || !nav || height === 0) return;
+    const { setFooter } = useBottomChromeStore.getState();
+    const apply = () => setFooter(height);
+    const clear = () => setFooter(0);
+    if (nav.isFocused()) apply();
+    const offFocus = nav.addListener('focus', apply);
+    const offBlur = nav.addListener('blur', clear);
+    return () => {
+      offFocus();
+      offBlur();
+      clear();
+    };
+  }, [inTabs, nav, height]);
+}
+
 export function BottomActionBar({ children, secondary, absolute, safeArea = true }: Props) {
   const insets = useSafeAreaInsets();
+  const [height, setHeight] = useState(0);
+  useReportFooterHeight(height);
   return (
     <View
+      onLayout={(e: LayoutChangeEvent) => setHeight(Math.round(e.nativeEvent.layout.height))}
       style={[
         styles.bar,
         { paddingBottom: safeArea ? Math.max(insets.bottom, spacing.md) : spacing.md },

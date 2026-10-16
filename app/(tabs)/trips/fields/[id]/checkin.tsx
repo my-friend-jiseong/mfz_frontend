@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { goToTabRoot } from '@/components/shell/tabNav';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { KeyboardAvoid } from '@/components/ui/KeyboardAvoid';
 import { Ionicons } from '@expo/vector-icons';
@@ -28,7 +29,6 @@ import { openReportForTripField } from '@/utils/reportEntry';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 
-const ACTIVE_ROUTE = '/(tabs)/trips/active';
 
 // 체크인 (명세 v2 §4.1).
 // 방문은 **`체크인 완료` 를 눌러야** 만든다 — 예전엔 화면 진입과 동시에 만들어서 뒤로가기해도
@@ -113,7 +113,8 @@ export default function FieldCheckin() {
     }, []),
   );
 
-  const back = () => router.replace(ACTIVE_ROUTE as never);
+  // 외근 탭 첫 화면 = 진행 중이면 외근 진행(7). 그 위에 쌓인 체크인을 걷어 낸다.
+  const back = () => goToTabRoot('trips');
 
   if (!field) {
     return (
@@ -189,9 +190,9 @@ export default function FieldCheckin() {
     if (!visitId) return;
     completed.current = true;
     toast('체크인을 저장했습니다');
-    // safeBack 대신 replace — 체크인은 trips/active 에서 다른 탭(fields) 스택으로 건너와 있어
-    // canGoBack 기준이 엉뚱하다. 돌아갈 곳이 정해져 있으니 직행한다.
-    router.replace(ACTIVE_ROUTE as never);
+    // safeBack 대신 — 미니 바(다른 탭)에서 들어온 경우 canGoBack 기준이 엉뚱하다.
+    // 돌아갈 곳이 정해져 있으니 외근 탭 첫 화면(외근 진행)으로 직행한다.
+    goToTabRoot('trips');
   };
 
   const handleReport = async () => {

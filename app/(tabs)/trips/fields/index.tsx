@@ -118,7 +118,7 @@ export default function FieldsList() {
     ({ item }: { item: import('@/types/entities').Field }) => (
       <FieldCard
         field={item}
-        onPress={() => router.push(`/(tabs)/fields/${item.id}` as never)}
+        onPress={() => router.push(`/(tabs)/trips/fields/${item.id}` as never)}
       />
     ),
     [router],
@@ -226,7 +226,7 @@ export default function FieldsList() {
       <BottomActionBar absolute safeArea={false}>
         <View style={styles.bottomBarRow}>
           <Button
-            onPress={() => router.push('/(tabs)/fields/new' as never)}
+            onPress={() => router.push('/(tabs)/trips/fields/new' as never)}
             leftIcon="add-circle"
             style={styles.bottomBarMain}
           >

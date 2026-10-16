@@ -198,7 +198,7 @@ async function flowSignupAndAuthGuards(page, ctx) {
       () => {
         const p = window.location.pathname;
         // (tabs) 는 URL 에 노출 안 됨 — 대신 trips/fields/reports/profile 중 하나 또는 /
-        return ['/trips', '/fields', '/reports', '/profile', '/'].some((x) => p === x);
+        return ['/trips', '/trips/fields', '/reports', '/profile', '/'].some((x) => p === x);
       },
       { timeout: 20000 },
     ).then(() => true).catch(() => false);
@@ -285,14 +285,14 @@ async function flowFirstField(page, ctx) {
     page.on('response', onResp);
 
     // 현장 탭으로 이동 — 탭바가 BottomSheet/지도에 가려져 클릭 안 잡힐 수 있어 URL 로 직접.
-    await page.goto(`${BASE}/fields`);
+    await page.goto(`${BASE}/trips/fields`);
     await page.waitForTimeout(1500);
     // 실제 UI 라벨은 "+ 새 현장" — 시나리오 문서엔 "현장 추가" 라고 적혀있어 불일치 (시나리오 문서 정정 대상).
     const addBtn = page.getByText('+ 새 현장').first();
     await addBtn.click();
     await page.waitForTimeout(1500);
     const afterAddPath = new URL(page.url()).pathname;
-    if (!afterAddPath.includes('/fields/new')) {
+    if (!afterAddPath.includes('/trips/fields/new')) {
       add('FAIL', 'S4 + 새 현장 클릭 후 fields/new 미진입', `path=${afterAddPath}`);
       return;
     }
@@ -345,7 +345,7 @@ async function flowFirstField(page, ctx) {
     await page.waitForTimeout(3500);
 
     const path = new URL(page.url()).pathname;
-    if (path.startsWith('/fields/') && path !== '/fields/new') {
+    if (path.startsWith('/trips/fields/') && path !== '/trips/fields/new') {
       add('PASS', 'S4 첫 현장 등록 → 상세 진입', `path=${path}`);
     } else {
       add('FAIL', 'S4 첫 현장 등록 후 예상 경로 아님', `path=${path}`);
@@ -369,7 +369,7 @@ async function flowB3StatusChipModal(page, ctx) {
   // (UI v2: WebChoiceModal → ActionSheet. 시트 제목 "현재 상태: X", 조치 완료는 확인 대화상자 1회 더.)
   // 이 시점 path = /fields/{newFieldId} (직전 단계 결과)
   const startPath = new URL(page.url()).pathname;
-  if (!startPath.startsWith('/fields/') || startPath === '/fields/new' || startPath === '/fields') {
+  if (!startPath.startsWith('/trips/fields/') || startPath === '/trips/fields/new' || startPath === '/trips/fields') {
     add('FAIL', 'B-3 회귀 시작 path 가 /fields/{id} 아님', `path=${startPath}`);
     return;
   }
@@ -443,7 +443,7 @@ async function flowB3StatusChipModal(page, ctx) {
 
 async function flowSecondField(page, ctx) {
   // 두 번째 현장 — 외근 다중 선택을 위한 전제. 다른 좌표.
-  await page.goto(`${BASE}/fields`);
+  await page.goto(`${BASE}/trips/fields`);
   await page.waitForTimeout(1500);
   await page.getByText('+ 새 현장').first().click();
   await page.waitForTimeout(1200);
@@ -475,7 +475,7 @@ async function flowSecondField(page, ctx) {
   await page.waitForTimeout(3500);
 
   const path = new URL(page.url()).pathname;
-  if (path.startsWith('/fields/') && path !== '/fields/new') {
+  if (path.startsWith('/trips/fields/') && path !== '/trips/fields/new') {
     add('PASS', 'S5 두 번째 현장 등록', `path=${path}`);
   } else {
     add('FAIL', 'S5 두 번째 현장 등록 실패', `path=${path}`);
@@ -484,7 +484,7 @@ async function flowSecondField(page, ctx) {
 
 async function flowTripStart(page, ctx) {
   // S7 외근 시작 — 두 현장 선택 → 순서 (optimize-preview, 백엔드 실패 시 client nearest-neighbor
-  // 폴백 — backend-backlog §5, 2026-08-18 결과보고서로 재개) → 외근 시작 → /trips/active
+  // 폴백 — backend-backlog §5, 2026-08-18 결과보고서로 재개) → 외근 시작 → /trips (외근 탭 첫 화면 = 외근 진행)
   // S5 회귀 (mapFieldIds 지도 scope) 는 visual 검증 어려워 path 만 확인.
   const captured = [];
   const onResp = async (resp) => {
@@ -543,8 +543,8 @@ async function flowTripStart(page, ctx) {
     await startBtn.click();
     await page.waitForTimeout(3500);
     const activePath = new URL(page.url()).pathname;
-    if (activePath === '/trips/active') {
-      add('PASS', 'S7 외근 시작 → /trips/active 진입');
+    if (activePath === '/trips') {
+      add('PASS', 'S7 외근 시작 → /trips(외근 진행) 진입');
     } else {
       add('FAIL', 'S7 외근 시작 후 active 미진입', `path=${activePath}`);
       const startCall = captured.find((c) => c.method === 'POST' && c.url?.includes('/trips/start'));
@@ -578,9 +578,9 @@ async function flowCheckinAndEndTrip(page, ctx) {
   page.on('response', onResp);
 
   try {
-    // /trips/active 도달 가정. "체크인" 버튼 클릭.
-    if (new URL(page.url()).pathname !== '/trips/active') {
-      await page.goto(`${BASE}/trips/active`);
+    // /trips(외근 진행) 도달 가정. "체크인" 버튼 클릭.
+    if (new URL(page.url()).pathname !== '/trips') {
+      await page.goto(`${BASE}/trips`);
       await page.waitForTimeout(2000);
     }
 
@@ -618,14 +618,14 @@ async function flowCheckinAndEndTrip(page, ctx) {
     await page.waitForTimeout(3000);
 
     const afterSavePath = new URL(page.url()).pathname;
-    if (afterSavePath === '/trips/active') {
+    if (afterSavePath === '/trips') {
       add('PASS', 'S9 결과 저장 → active 복귀', `path=${afterSavePath}`);
     } else {
       add('WARN', 'S9 결과 저장 후 path 예상과 다름', `path=${afterSavePath}`);
     }
 
     // 외근 종료
-    await page.goto(`${BASE}/trips/active`);
+    await page.goto(`${BASE}/trips`);
     await page.waitForTimeout(2000);
     const endBtn = page.getByText(/^외근 종료/).first();
     await endBtn.waitFor({ state: 'visible', timeout: 10000 });
@@ -633,7 +633,7 @@ async function flowCheckinAndEndTrip(page, ctx) {
     await page.waitForTimeout(3500);
     const afterEndPath = new URL(page.url()).pathname;
     const endCall = captured.find((c) => c.method === 'POST' && c.url?.includes('/trips/end'));
-    if (endCall && endCall.status === 200 && afterEndPath !== '/trips/active') {
+    if (endCall && endCall.status === 200 && afterEndPath.startsWith('/trips/') && afterEndPath !== '/trips/new/select') {
       add('PASS', 'S10 외근 종료 → 화면 이동', `path=${afterEndPath}; end status=${endCall.status}`);
     } else if (endCall && endCall.status === 200) {
       add('PASS', 'S10 외근 종료 응답 200 (AI 보고서 prompt cancel 후 active 잔존 가능)', `path=${afterEndPath}`);

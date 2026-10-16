@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { goToTabRoot } from '@/components/shell/tabNav';
 import { Alert, StyleSheet, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
@@ -133,12 +134,14 @@ export default function NewTripOrder() {
     setSubmitting(true);
     // 계획 목적지를 외근 시작과 함께 서버에 영속 — tripStore.start 가 응답으로 destinationStore 하이드레이트.
     const r = await startTrip(title, list.map((f) => f.id));
-    setSubmitting(false);
     if (!r.ok) {
+      setSubmitting(false);
       Alert.alert('외근 시작 실패', r.error);
       return;
     }
-    router.replace('/(tabs)/trips/active' as never);
+    // 시작이 activeTripId 를 채운 배치(첫 화면이 목록 → 외근 진행으로 바뀜)와 화면 이동을 한 배치에
+    // 섞지 않는다 — 다음 프레임에 이동. 떠나는 이 화면의 상태(submitting)는 뒤집지 않는다.
+    requestAnimationFrame(() => goToTabRoot('trips'));
   };
 
   if (list.length === 0) {

@@ -1,58 +1,47 @@
-import { useEffect, useState } from 'react';
-import { Redirect, Tabs, router, useSegments } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Text } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { colors } from '@/theme/colors';
-import { fontSize, lineHeight } from '@/theme/spacing';
-import { fontFamily } from '@/theme/typography';
+import { useEffect, useMemo, useState } from 'react';
+import { Keyboard, StyleSheet, View } from 'react-native';
+import { Redirect, Tabs, useSegments } from 'expo-router';
+import { SafeAreaInsetsContext, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { AppTabBar, tabBarHeight } from '@/components/shell/AppTabBar';
+import { RealSafeAreaInsetsContext } from '@/components/shell/realInsets';
+import { TripMiniBar, MINI_BAR_HEIGHT } from '@/components/shell/TripMiniBar';
 import { useAuthStore } from '@/stores/authStore';
 import { useTripStore } from '@/stores/tripStore';
 import { useFieldStore } from '@/stores/fieldStore';
+import { useBottomChromeStore } from '@/stores/bottomChromeStore';
+import { c2 } from '@/theme/v2';
 
-type IonName = React.ComponentProps<typeof Ionicons>['name'];
+// 미니 바(7-4)를 띄우는 탭. 외근 탭은 첫 화면이 곧 외근 진행(7)이라 띄우지 않는다.
+// 그 탭의 첫 화면(9 보고서 목록·10 내 정보)에서만 — 푸시된 입력 화면(현장 보고·보고서 작성 등)에서는
+// 하단 버튼 바와 겹치므로 띄우지 않는다.
+const MINI_BAR_TABS = new Set(['reports', 'profile']);
 
-// 라벨은 React Navigation 이 직접 그린다 — 직접 만든 아이콘+라벨 묶음을 tabBarIcon 으로
-// 넘기면 안 된다. tabBarShowLabel:false 일 때 RN 은 '아이콘 슬롯'을 아이콘 크기(실측 28px)로만
-// 잡는데, 그 안에 라벨까지 넣으면 콘텐츠 43px 이 15px 넘쳐 아이콘이 바 위로 삐져나오고
-// 위 여백이 사라진다(웹 실측: 아이콘 top 이 바 top 보다 위). 슬롯 규격에 맞춰 아이콘만 넘기고
-// 라벨·간격은 tabBarLabelStyle 로 다룬다.
-// 선택된 탭만 채운 아이콘, 나머지는 외곽선 (Figma 개선본 BottomTabBar).
-const tabIcon =
-  (name: IonName) =>
-  ({ color, size, focused }: { color: string; size: number; focused: boolean }) => (
-    <Ionicons name={focused ? name : (`${name}-outline` as IonName)} size={size} color={color} />
-  );
-
-// 라벨 굵기도 선택 여부를 따른다 — tabBarLabelStyle 은 focused 를 모른다.
-const tabLabel = ({ focused, color, children }: { focused: boolean; color: string; children: string }) => (
-  <Text
-    style={{
-      color,
-      fontFamily: focused ? fontFamily.semibold : fontFamily.regular,
-      fontSize: fontSize.xs,
-      lineHeight: lineHeight.xs,
-    }}
-  >
-    {children}
-  </Text>
-);
+function useKeyboardVisible(): boolean {
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', () => setVisible(true));
+    const hide = Keyboard.addListener('keyboardDidHide', () => setVisible(false));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+  return visible;
+}
 
 export default function TabsLayout() {
   // deep-link 새로고침 시 hydrate 가 실패한 케이스 (refresh 토큰 만료·무효 등) 에서
   // (tabs) 가 토큰 없이 hydrateTrips/Fields 를 호출해 401 을 흘리는 회로 차단.
   // index.tsx 의 redirect 는 / 진입에서만 동작하므로 여기 별도 게이트가 필요.
   const insets = useSafeAreaInsets();
-  // 명세 v2 §2.1 — 하단 탭은 탭 루트 화면에서만 보인다. segments 가 ['(tabs)', 'trips'] 면 루트,
-  // 그보다 깊으면('(tabs)','trips','active' 등) 푸시 화면이다. 푸시 화면은 자기 하단 바를 갖는다.
-  const segments = useSegments();
-  const hideTabBar = segments.length > 2;
+  const segments = useSegments() as string[];
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const hydrateTrips = useTripStore((s) => s.hydrate);
   const hydrateFields = useFieldStore((s) => s.hydrate);
+  const tripActive = useTripStore((s) => s.activeTripId !== null);
 
   // 인증 후 진입 시 외근/현장 초기 페치 — trips 탭이 첫 화면이라도 지도(MapDashboard)에
-  // 마커가 즉시 그려지도록 fields 도 함께 hydrate. fields 탭의 filter 기반 refresh 는 그대로.
+  // 마커가 즉시 그려지도록 fields 도 함께 hydrate.
   useEffect(() => {
     if (!isAuthenticated) return;
     void hydrateTrips();
@@ -73,71 +62,57 @@ export default function TabsLayout() {
     return () => clearTimeout(id);
   }, [isAuthenticated]);
 
+  // 탭 바는 모든 탭 화면(푸시 화면 포함)에서 보인다(인수인계 §2 공통, HIG). 탭 바를 가려야 하는 화면은
+  // 루트 (modals) 스택으로 올린다. 탭 바가 아래 safe area 를 먹으므로 탭 화면들에는 bottom inset 0 을 내려
+  // 하단 버튼 바·시트가 탭 바 위에 홈 인디케이터 여백을 또 얹지 않게 한다.
+  const barH = tabBarHeight(insets.bottom);
+  const screenInsets = useMemo(() => ({ ...insets, bottom: 0 }), [insets]);
+  const keyboardVisible = useKeyboardVisible();
+  // segments: 탭 첫 화면은 ['(tabs)', 'reports'], 푸시 화면은 그보다 길다.
+  const showMiniBar =
+    tripActive && !keyboardVisible && segments.length === 2 && MINI_BAR_TABS.has(segments[1] ?? '');
+
+  const setTabBar = useBottomChromeStore((s) => s.setTabBar);
+  const setMiniBar = useBottomChromeStore((s) => s.setMiniBar);
+  useEffect(() => {
+    setTabBar(barH);
+    return () => setTabBar(0);
+  }, [barH, setTabBar]);
+  useEffect(() => {
+    setMiniBar(showMiniBar ? MINI_BAR_HEIGHT : 0);
+  }, [showMiniBar, setMiniBar]);
+  useEffect(() => () => setMiniBar(0), [setMiniBar]);
+
   if (!isAuthenticated) {
     return graceExpired ? <Redirect href="/(auth)/login" /> : null;
   }
 
   return (
-    <Tabs
-      initialRouteName="trips"
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textMuted,
-        tabBarStyle: hideTabBar ? { display: 'none' } : {
-          borderTopColor: colors.border,
-          // 콘텐츠 높이 56 = Material Design bottom navigation 표준값. 거기에 OS 가 보고하는
-          // 실제 네비게이션 바 높이(insets.bottom)만 더해 바를 띄운다 — 임의 수치 없이 표준 + 실측.
-          height: 56 + insets.bottom,
-          // paddingTop 을 두지 않는다 — React Navigation 이 탭 아이템에 자체 상하 padding(5) 을
-          // 이미 넣는다. 여기서 더하면 이중으로 공간을 먹어 아이콘 위 여백이 사라진다(실측).
-          paddingBottom: insets.bottom,
-        },
-        tabBarLabelPosition: 'below-icon',
-        // 앱 서체(Pretendard)·caption 크기로 맞춤 — Text 컴포넌트를 못 쓰는 자리라 토큰 직접 사용.
-        tabBarLabel: tabLabel,
-      }}
-    >
-      <Tabs.Screen name="index" options={{ href: null }} />
-      <Tabs.Screen
-        name="trips"
-        options={{
-          title: '외근',
-          // 라벨을 함수로 그리면 React Navigation 이 접근성 라벨을 못 만든다 — 직접 준다.
-          tabBarAccessibilityLabel: '외근',
-          tabBarIcon: tabIcon('briefcase'),
-        }}
-      />
-      <Tabs.Screen
-        name="fields"
-        options={{
-          title: '현장',
-          tabBarAccessibilityLabel: '현장',
-          tabBarIcon: tabIcon('location'),
-        }}
-        listeners={() => ({
-          tabPress: () => {
-            // 탭 클릭 시 항상 현장 목록(index)로 리셋 — 이전 [id] 상세에 머물러 있던 stack 잔재를 클리어
-            router.replace('/(tabs)/fields' as never);
-          },
-        })}
-      />
-      <Tabs.Screen
-        name="reports"
-        options={{
-          title: '보고서',
-          tabBarAccessibilityLabel: '보고서',
-          tabBarIcon: tabIcon('document-text'),
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: '내 정보',
-          tabBarAccessibilityLabel: '내 정보',
-          tabBarIcon: tabIcon('person'),
-        }}
-      />
-    </Tabs>
+    <View style={styles.root}>
+      <RealSafeAreaInsetsContext.Provider value={insets}>
+        <SafeAreaInsetsContext.Provider value={screenInsets}>
+          <Tabs
+            initialRouteName="trips"
+            // 미니 바가 뜨는 동안 화면 영역을 그만큼 줄인다 — 목록 끝·하단 버튼 바가 미니 바 뒤로 숨지 않게.
+            // 미니 바의 흰 그라데이션(위 24)만 화면 끝에 겹친다(Figma 7-4 '미니 바 바탕').
+            screenOptions={{
+              headerShown: false,
+              sceneStyle: showMiniBar ? styles.sceneWithMiniBar : undefined,
+            }}
+            tabBar={(props) => <AppTabBar {...props} insetBottom={insets.bottom} />}
+          >
+            <Tabs.Screen name="trips" options={{ title: '외근' }} />
+            <Tabs.Screen name="reports" options={{ title: '보고서' }} />
+            <Tabs.Screen name="profile" options={{ title: '내 정보' }} />
+          </Tabs>
+        </SafeAreaInsetsContext.Provider>
+      </RealSafeAreaInsetsContext.Provider>
+      {showMiniBar ? <TripMiniBar bottom={barH} /> : null}
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  root: { flex: 1 },
+  sceneWithMiniBar: { paddingBottom: MINI_BAR_HEIGHT, backgroundColor: c2.bg.canvas },
+});

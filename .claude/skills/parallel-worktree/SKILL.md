@@ -138,10 +138,10 @@ PLANS_DIR="$MAIN_ROOT/.claude/worktrees/plans"
 
 | 슬라이스 | 라우트 | 스토어 | API | 컴포넌트 |
 |---|---|---|---|---|
-| `fields` | `app/(tabs)/fields/**` | `src/stores/fieldStore.ts` | `src/api/endpoints/fields.ts` | `src/components/fields/**`, `FieldCard.tsx` |
-| `trips` | `app/(tabs)/trips/**` | `src/stores/tripStore.ts`, `destinationStore.ts` | `src/api/endpoints/trips.ts` | `src/components/trips/**`, `TripStatusBanner.tsx` |
+| `fields` | `app/(tabs)/trips/fields/**` | `src/stores/fieldStore.ts` | `src/api/endpoints/fields.ts` | `src/components/fields/**`, `FieldCard.tsx` |
+| `trips` | `app/(tabs)/trips/**`(`fields/**` 제외), `src/screens/TripsListScreen.tsx`·`ActiveTripScreen.tsx` | `src/stores/tripStore.ts`, `destinationStore.ts` | `src/api/endpoints/trips.ts` | `src/components/trips/**`, `src/components/shell/TripMiniBar.tsx` |
 | `reports` | `app/(tabs)/reports/**` | `src/stores/reportStore.ts` | `src/api/endpoints/reports.ts` | — |
-| `categories` | `app/(tabs)/fields/categories.tsx` | `src/stores/categoryStore.ts` | `src/api/endpoints/categories.ts` | `CategoryMultiPicker.tsx` |
+| `categories` | `app/(tabs)/trips/fields/categories.tsx` | `src/stores/categoryStore.ts` | `src/api/endpoints/categories.ts` | `CategoryMultiPicker.tsx` |
 | `projects` | — | `src/stores/projectStore.ts` | `src/api/endpoints/projects.ts` | `ProjectPicker.tsx` |
 | `auth` | `app/(auth)/**` | `src/stores/authStore.ts`, `sessionGuardStore.ts`, `sessionActivity.ts` | `src/api/endpoints/auth.ts` | `SessionGuardModal.tsx` |
 | `profile` | `app/(tabs)/profile/**` | `authStore.ts` | `auth.updateMe` / `auth.changePassword` (`endpoints/auth.ts`) | — |
@@ -154,11 +154,11 @@ PLANS_DIR="$MAIN_ROOT/.claude/worktrees/plans"
 
 | 레이어 | 실체 | 소비 화면 (files 에 포함) |
 |---|---|---|
-| `map` | `MapSheetLayout` → `MapDashboard` → `KakaoMapWebView`/`MapFilterBar`/`MapLegend`/`MapSearchBar`, `src/stores/mapSettingsStore.ts`, `src/api/endpoints/map.ts` | `fields/index`, `fields/[id]/index`, `trips/index`, `trips/[id]`, `trips/active`, `trips/visit`, `trips/new/select`, `trips/new/order`, `reports/index`, `reports/[id]/index` — 지도 직접 사용: `trips/navigate`, `reports/new` — 핀 편집: `fields/new`, `fields/[id]/edit`(`FieldPinMap`) |
-| `visits` | `src/stores/visitStore.ts`, `src/api/endpoints/visits.ts`, `AttachmentPreview.tsx`, `src/components/trips/ReviewVisitCard.tsx` | `fields/[id]/checkin`·`index`·`edit`, `trips/visit`·`active`·`index`·`[id]`, `reports/index`·`new`·`[id]/index`·`[id]/field-report` |
+| `map` | `MapSheetLayout` → `MapDashboard` → `KakaoMapWebView`/`MapFilterBar`/`MapLegend`/`MapSearchBar`, `src/stores/mapSettingsStore.ts`, `src/api/endpoints/map.ts` | `trips/fields/index`, `trips/fields/[id]/index`, `trips/index`(`src/screens/TripsListScreen`·`ActiveTripScreen`), `trips/[id]`, `trips/visit`, `trips/new/select`, `trips/new/order`, `reports/index`, `reports/[id]/index` — 지도 직접 사용: `trips/navigate`, `reports/new` — 핀 편집: `trips/fields/new`, `trips/fields/[id]/edit`(`FieldPinMap`) |
+| `visits` | `src/stores/visitStore.ts`, `src/api/endpoints/visits.ts`, `AttachmentPreview.tsx`, `src/components/trips/ReviewVisitCard.tsx` | `trips/fields/[id]/checkin`·`index`·`edit`, `trips/visit`·`index`(`ActiveTripScreen`)·`[id]`, `reports/index`·`new`·`[id]/index`·`[id]/field-report` |
 | `ui/theme` | `src/components/ui/**`, `src/theme/**` | 사실상 전 화면 — 토큰·공용 컴포넌트 변경은 단독 사이클로 돌린다 |
 
-슬라이스 간 다리 역할 파일도 같이 본다: `src/utils/postTripFlow.ts`(외근 종료 → 보고서), `src/components/fields/quickPhotoHandoff.ts`·`useQuickPhoto.ts`(`fields/new` ↔ `trips/active`).
+슬라이스 간 다리 역할 파일도 같이 본다: `src/utils/postTripFlow.ts`(외근 종료 → 보고서), `src/components/fields/quickPhotoHandoff.ts`·`useQuickPhoto.ts`(`trips/fields/new` ↔ `ActiveTripScreen`).
 
 범위가 불확실하면 `Grep`/`Glob`로 후보를 좁히고, 넓게 퍼질 가능성이 있으면 `Explore` 에이전트로 추정한다. 추정 범위는 보수적으로(넓게) 잡아 충돌을 놓치지 않는다.
 

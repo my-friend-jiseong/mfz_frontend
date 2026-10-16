@@ -28,9 +28,10 @@ import {
   type Button2Variant,
 } from '@/components/ui';
 import { c2, elevation2, radius2, shadowCss, space, type2, type Type2 } from '@/theme/v2';
+import { openFullMap } from '@/components/shell/fullMap';
 
 // 2차 공통 컴포넌트 갤러리(개발 전용). http://localhost:8081/dev/ui2
-// 상태를 띄운 채 찍고 싶으면 쿼리: ?show=snackbar | sheet | menu | confirm | warn
+// 상태를 띄운 채 찍고 싶으면 쿼리: ?show=snackbar | sheet | menu | confirm | warn | routeMap | locationMap
 // 지명·좌표는 데모용(부산 사하구) — 화면 코드에 옮기지 말 것.
 
 const VARIANTS: Button2Variant[] = ['primary', 'secondary', 'tonal', 'outline', 'danger', 'ghost'];
@@ -53,6 +54,33 @@ const DEMO_PATHS: MapPath[] = [
   { points: [P(35.1072, 128.9772), P(35.1061, 128.98)], tone: 'muted', dotted: true },
   { points: [P(35.1061, 128.98), P(35.1031, 128.9781)], tone: 'brand', dotted: true },
 ];
+
+// 3-8 경로 지도 · 8-12 위치 지도(GPS 약함) 예시.
+const openRouteMap = () =>
+  openFullMap({
+    title: '하신중앙로 점검 · 10월 6일',
+    pins: [
+      { id: 'f', ...P(35.1068, 128.9725), kind: 'in_progress', order: 1 },
+      { id: 'g', ...P(35.1072, 128.9772), kind: 'done', order: 2 },
+      { id: 'h', ...P(35.1061, 128.98), kind: 'visited', order: 3 },
+    ],
+    paths: [{ points: [P(35.104, 128.974), P(35.1068, 128.9725), P(35.1072, 128.9772)], tone: 'brand' }],
+    startPoint: P(35.104, 128.974),
+    legend: [
+      { key: 's', marker: 'start', label: '출발', trailing: '09:40' },
+      { key: '1', marker: { order: 1, kind: 'in_progress' }, label: '하신중앙로 12', trailing: '조치 중', trailingTone: 'brand' },
+      { key: '2', marker: { order: 2, kind: 'done' }, label: '당리로 87', trailing: '조치 완료', trailingTone: 'success' },
+      { key: '3', marker: { order: 3, kind: 'visited' }, label: '괴정로 22', trailing: '건너뜀', dim: true },
+    ],
+  });
+const openLocationMap = () =>
+  openFullMap({
+    title: '당리동 312-7 부근 · 오차 ±48m',
+    pins: [{ id: 'new', ...P(35.1012, 128.9733), kind: 'new', selected: true }],
+    accuracyCircle: { lat: 35.1012, lng: 128.9733, radius: 48 },
+    myLocation: P(35.1011, 128.9740),
+    nearbyFields: true,
+  });
 
 export default function Ui2Gallery() {
   if (!__DEV__) return <Redirect href="/" />;
@@ -87,6 +115,8 @@ function Gallery() {
   useEffect(() => {
     const t = setTimeout(() => {
       if (show === 'snackbar') openSnack();
+      if (show === 'routeMap') openRouteMap();
+      if (show === 'locationMap') openLocationMap();
       if (show === 'menu') openMenu();
       if (show === 'confirm')
         void confirm({ title: '현장을 삭제할까요?', message: '방문 기록 3건도 함께 지워지고 되돌릴 수 없어요.', confirmLabel: '삭제', destructive: true });
@@ -290,6 +320,17 @@ function Gallery() {
             circle={{ lat: 35.1012, lng: 128.9733, radius: 48 }}
             onExpand={() => undefined}
           />
+        </Section>
+
+        <Section title="전체 지도 (openFullMap)">
+          <View style={styles.row}>
+            <Button2 size="M" variant="outline" onPress={openRouteMap}>
+              경로 지도 3-8
+            </Button2>
+            <Button2 size="M" variant="outline" onPress={openLocationMap}>
+              위치 지도 8-12
+            </Button2>
+          </View>
         </Section>
 
         <Section title="Map pins · paths · circle · start">

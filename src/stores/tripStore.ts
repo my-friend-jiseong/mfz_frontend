@@ -29,6 +29,13 @@ interface TripState {
   listStatus: 'idle' | 'loading' | 'ready' | 'error';
   listError: string | null;
   activeTripId: string | null;
+  // 첫 /api/trips/active 응답(성공·실패)을 받았는지. 외근 탭 첫 화면이 진행 중 여부를 모른 채
+  // 목록부터 그렸다가 외근 진행으로 바뀌는 깜빡임을 막는다.
+  activeResolved: boolean;
+  // 방금 끝낸 외근 id — 종료 직후 이동이 끝날 때까지 외근 탭 첫 화면이 외근 진행 화면을 계속 그리게 한다.
+  // activeTripId 가 비는 배치에서 첫 화면이 목록으로 바뀌면서 동시에 화면 이동이 일어나면 Fabric 이
+  // 무음 크래시한 전례가 있다(떠나는 화면 폼 플립 금지). 이동 뒤 clearEnding 으로 비운다.
+  endingTripId: string | null;
   busy: boolean;
   // tripId 별 detail fetch 진행 상태 (G10 altitude) — reportStore.detailStatus 와 동일 패턴.
   // 'loading' 동안엔 그 tripId 에 의존하는 submit/UI 가드 가능. token-ref race 회피용 단일 진실.
@@ -44,6 +51,7 @@ interface TripState {
   update: (id: string, body: TripUpdateBody) => Promise<GenericResult>;
   remove: (id: string, force?: boolean) => Promise<RemoveResult>;
 
+  clearEnding: () => void;
   getById: (id: string) => Trip | undefined;
   byWorker: (workerId: string) => Trip[];
   clearAll: () => void;
@@ -60,6 +68,8 @@ export const useTripStore = create<TripState>((set, get) => ({
   listStatus: 'idle',
   listError: null,
   activeTripId: null,
+  activeResolved: false,
+  endingTripId: null,
   busy: false,
   detailStatus: {},
 
@@ -71,9 +81,10 @@ export const useTripStore = create<TripState>((set, get) => ({
     try {
       // ERD v2: official-notice 제거 — 활성 외근 id 만.
       const res = await tripsApi.active();
-      set({ activeTripId: res.isActive ? res.tripId : null });
+      set({ activeTripId: res.isActive ? res.tripId : null, activeResolved: true });
     } catch {
-      // 비로그인 상태에서 호출되는 경우 등 — 무시
+      // 비로그인 상태에서 호출되는 경우 등 — 무시. 모르는 채로 막아 두지 않고 목록을 보여 준다.
+      set({ activeResolved: true });
     }
   },
 
@@ -195,6 +206,7 @@ export const useTripStore = create<TripState>((set, get) => ({
           return t;
         }),
         activeTripId: null,
+        endingTripId: res.tripId,
         busy: false,
       }));
       if (!endedTrip) {
@@ -270,6 +282,8 @@ export const useTripStore = create<TripState>((set, get) => ({
     }
   },
 
+  clearEnding: () => set({ endingTripId: null }),
+
   getById: (id) => get().trips.find((t) => t.id === id),
 
   byWorker: (workerId) =>
@@ -284,6 +298,8 @@ export const useTripStore = create<TripState>((set, get) => ({
       listStatus: 'idle',
       listError: null,
       activeTripId: null,
+      activeResolved: false,
+      endingTripId: null,
       busy: false,
       detailStatus: {},
     }),

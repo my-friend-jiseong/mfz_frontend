@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef } from 'react';
 import { StyleSheet, View, useWindowDimensions, type StyleProp, type ViewStyle } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRealSafeAreaInsets } from '@/components/shell/realInsets';
 import {
   BottomSheetBackdrop,
   BottomSheetModal,
@@ -62,7 +62,8 @@ export function AppSheet({
   children,
 }: Props) {
   const ref = useRef<BottomSheetModal>(null);
-  const insets = useSafeAreaInsets();
+  // 시트는 포털로 창 맨 아래까지 내려온다 — 탭 화면의 bottom 0 덮어쓰기 대신 창 기준 inset.
+  const insets = useRealSafeAreaInsets();
   const { height } = useWindowDimensions();
   // presented: 시트가 떠 있거나 뜨는 중. dismissing: open=false 로 우리가 닫기를 요청해 내려가는 중.
   // 닫히는 애니메이션 도중 다시 open=true 가 오면(닫자마자 다시 열기) present 가 무시되므로,

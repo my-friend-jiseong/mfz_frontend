@@ -20,6 +20,8 @@ interface Props {
  */
 // 가로 줄 안에서 입력칸 등 flex 형제에 밀려 아이콘이 줄어드는 것 방지(웹 실측: SearchBar 값 입력 시).
 const NO_SHRINK = { flexShrink: 0 } as const;
+// Active 아이콘의 연한 채움(Figma TabItem Active=On 의 Tint 레이어 opacity 0.14).
+const ICON_TINT_OPACITY = 0.14;
 
 export const Icon = memo(function Icon({
   name,
@@ -35,13 +37,15 @@ export const Icon = memo(function Icon({
       {parts.map((part, i) => {
         const [d, sw, flags = ''] = part as readonly [string, number, string?];
         const fillOnly = flags.includes('F');
-        const filled = fillOnly || flags.includes('f');
+        const tint = flags.includes('t');
+        const filled = fillOnly || tint || flags.includes('f');
         const stroke = fillOnly ? undefined : flags.includes('w') ? c2.text.inverse : color;
         return (
           <Path
             key={i}
             d={d}
             fill={filled ? color : 'none'}
+            fillOpacity={tint ? ICON_TINT_OPACITY : undefined}
             stroke={stroke}
             strokeWidth={fillOnly ? undefined : sw}
             strokeLinecap={flags.includes('b') ? 'butt' : 'round'}

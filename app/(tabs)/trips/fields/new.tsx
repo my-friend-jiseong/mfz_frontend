@@ -292,7 +292,7 @@ export default function NewField() {
     toast('현장이 등록되었습니다');
     // 등록 화면(모달)을 닫고 들어온 자리로 — 현장 목록에서 왔으면 목록, 외근 중 현장 추가에서
     // 왔으면 그 외근. replace 는 목록 위에 목록을 한 겹 더 쌓았다(리뷰).
-    safeBack(router, '/(tabs)/fields');
+    safeBack(router, '/(tabs)/trips/fields');
   };
 
   const handleCreate = async () => {
@@ -397,7 +397,7 @@ export default function NewField() {
     <SafeScreen>
     {/* Figma 470:4884 navHeader — 모달(headerShown:false)이라 화면이 직접 뒤로가기를 둔다.
         웹·딥링크처럼 히스토리가 없으면 현장 목록으로. */}
-    <NavHeader title="현장 등록" onBack={() => safeBack(router, '/(tabs)/fields')} />
+    <NavHeader title="현장 등록" onBack={() => safeBack(router, '/(tabs)/trips/fields')} />
     <KeyboardAvoid
       style={styles.container}>
       {placeSearchBridge}

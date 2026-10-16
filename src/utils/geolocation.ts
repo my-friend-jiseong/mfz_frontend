@@ -117,3 +117,21 @@ export async function requestUserLocation(opts?: {
     return null;
   }
 }
+
+// 묻지 않고 위치 읽기 — 이미 권한이 있을 때만. 보고서·내 정보 탭의 미니 바(7-4)처럼 위치가
+// 부가 정보인 곳에서 권한 안내·팝업을 띄우지 않으려고 쓴다. 마지막으로 알려진 위치가 있으면
+// 1분 안의 것이면 먼저 쓴다(빠름). 그보다 오래됐으면 지금 위치를 새로 읽는다.
+const LAST_KNOWN_MAX_AGE_MS = 60_000;
+export async function peekUserLocation(): Promise<LatLng | null> {
+  if (GEOLOCATION_DISABLED) return null;
+  try {
+    const current = await Location.getForegroundPermissionsAsync();
+    if (!current.granted) return null;
+    const last = await Location.getLastKnownPositionAsync({ maxAge: LAST_KNOWN_MAX_AGE_MS }).catch(() => null);
+    const pos =
+      last ?? (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }));
+    return { lat: pos.coords.latitude, lng: pos.coords.longitude };
+  } catch {
+    return null;
+  }
+}

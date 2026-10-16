@@ -1,0 +1,170 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import { StyleSheet, View } from 'react-native';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
+import { router } from 'expo-router';
+import { goToTabRoot } from './tabNav';
+import { Icon } from '@/components/icons';
+import { Text } from '@/components/ui/Text';
+import { Touchable } from '@/components/ui/Touchable';
+import { useTripStore } from '@/stores/tripStore';
+import { useDestinationStore } from '@/stores/destinationStore';
+import { useFieldStore } from '@/stores/fieldStore';
+import { useBottomChromeStore } from '@/stores/bottomChromeStore';
+import { c2, elevation2, radius2, space } from '@/theme/v2';
+import { peekUserLocation, type LatLng } from '@/utils/geolocation';
+import { haversineKm } from '@/utils/routeOptimize';
+import { formatDistanceM } from '@/utils/nearestField';
+import { fmtDate } from '@/utils/datetime';
+
+// Figma 7-4(598:2807) '진행 중인 외근' 카드 64 + 탭 바와의 간격 8. 위로 24 더 올라가는 흰 그라데이션(미니 바 바탕)은
+// 카드 뒤 목록 글자를 가린다 — 높이 계산(콘텐츠 여백·스낵바)에는 카드+간격만 쓴다.
+const CARD_H = 64;
+const FADE_H = 96;
+export const MINI_BAR_HEIGHT = CARD_H + space[8];
+// 거리는 부가 정보 — 30초마다 다시 읽는다(권한이 있을 때만, 묻지 않음).
+const LOCATION_REFRESH_MS = 30_000;
+
+export const checkinHref = (fieldId: string) => `/(tabs)/trips/fields/${fieldId}/checkin`;
+
+function useSilentLocation(enabled: boolean): LatLng | null {
+  const [pos, setPos] = useState<LatLng | null>(null);
+  useEffect(() => {
+    if (!enabled) return;
+    let alive = true;
+    const read = () => void peekUserLocation().then((p) => alive && p && setPos(p));
+    read();
+    const id = setInterval(read, LOCATION_REFRESH_MS);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+  }, [enabled]);
+  return pos;
+}
+
+/**
+ * 외근 중 미니 바(7-4). 보고서·내 정보 탭에서 탭 바 바로 위에 뜬다. 누르면 외근 진행(7), [체크인]은 다음 목적지 체크인(8).
+ * 진행 중 외근이 없으면 아무것도 그리지 않는다 — 보일지 여부는 탭 레이아웃이 정한다.
+ */
+export function TripMiniBar({ bottom }: { bottom: number }) {
+  const activeTripId = useTripStore((s) => s.activeTripId);
+  const trip = useTripStore((s) => (s.activeTripId ? s.trips.find((t) => t.id === s.activeTripId) : undefined));
+  const destinations = useDestinationStore((s) => s.destinations);
+  // getById 는 함수 참조가 고정이라 현장 목록이 늦게 도착해도 다시 그려지지 않는다 — 배열을 구독한다.
+  const fields = useFieldStore((s) => s.fields);
+  const myPos = useSilentLocation(activeTripId !== null);
+  // 하단 버튼 바가 있는 화면이면 그라데이션이 버튼 아래쪽을 덮는다 — 그땐 카드만.
+  const hasFooter = useBottomChromeStore((s) => s.footer > 0);
+
+  const info = useMemo(() => {
+    if (!activeTripId) return null;
+    const mine = destinations.filter((d) => d.tripId === activeTripId).sort((a, b) => a.order - b.order);
+    const resolved = mine.filter((d) => d.status !== 'pending').length;
+    const next = mine.find((d) => d.status === 'pending');
+    const field = next ? fields.find((f) => f.id === next.fieldId) : undefined;
+    return { total: mine.length, position: resolved + 1, next, field };
+  }, [activeTripId, destinations, fields]);
+
+  if (!activeTripId || !info) return null;
+
+  const { next, field } = info;
+  const label = next ? `외근 중 · 다음 ${info.position}/${info.total}` : '외근 중';
+  const placeName = field ? field.name?.trim() || field.address : null;
+  const distance =
+    field && myPos && !(field.latitude === 0 && field.longitude === 0)
+      ? formatDistanceM(haversineKm(myPos, { lat: field.latitude, lng: field.longitude }) * 1000)
+      : null;
+  const title = placeName
+    ? distance
+      ? `${placeName} · ${distance}`
+      : placeName
+    : trip?.title?.trim() || fmtDate(trip?.startedAt);
+
+  return (
+    <View pointerEvents="box-none" style={[styles.wrap, { bottom }]}>
+      {hasFooter ? null : (
+        <Svg pointerEvents="none" width="100%" height={FADE_H} style={styles.fade}>
+          <Defs>
+            <LinearGradient id="miniBarFade" x1="0" y1="0" x2="0" y2="1">
+              <Stop offset="0" stopColor={c2.bg.canvas} stopOpacity={0} />
+              <Stop offset="0.29167" stopColor={c2.bg.canvas} stopOpacity={1} />
+              <Stop offset="1" stopColor={c2.bg.canvas} stopOpacity={1} />
+            </LinearGradient>
+          </Defs>
+          <Rect x="0" y="0" width="100%" height={FADE_H} fill="url(#miniBarFade)" />
+        </Svg>
+      )}
+      <View style={styles.card}>
+        <Touchable
+          onPress={() => goToTabRoot('trips')}
+          accessibilityRole="button"
+          accessibilityLabel={`${label}, ${title}. 외근 진행 화면으로 이동`}
+          noAutoHitSlop
+          style={styles.main}
+        >
+          <View style={styles.iconBox}>
+            <Icon name="briefcase" size={22} color={c2.text.inverse} />
+          </View>
+          <View style={styles.texts}>
+            <Text v2="small.bold" tone="brand" numberOfLines={1}>
+              {label}
+            </Text>
+            <Text v2="bodyL.bold" numberOfLines={1}>
+              {title}
+            </Text>
+          </View>
+        </Touchable>
+        {next ? (
+          <Touchable
+            onPress={() => router.navigate(checkinHref(next.fieldId) as never)}
+            accessibilityRole="button"
+            accessibilityLabel="체크인"
+            style={styles.checkin}
+          >
+            <Text v2="bodyM.bold" tone="inverse">
+              체크인
+            </Text>
+          </Touchable>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  wrap: { position: 'absolute', left: 0, right: 0, height: FADE_H, justifyContent: 'flex-end' },
+  fade: { position: 'absolute', left: 0, right: 0, top: 0 },
+  card: {
+    height: CARD_H,
+    marginHorizontal: space[12],
+    marginBottom: space[8],
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space[8],
+    paddingLeft: space[10],
+    paddingRight: space[10],
+    borderRadius: radius2.xl,
+    borderWidth: 1,
+    borderColor: c2.border.default,
+    backgroundColor: c2.bg.canvas,
+    ...elevation2.popover,
+  },
+  main: { flex: 1, height: CARD_H, flexDirection: 'row', alignItems: 'center', gap: space[10] },
+  iconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: radius2.md,
+    backgroundColor: c2.bg.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  texts: { flex: 1 },
+  checkin: {
+    height: 44,
+    paddingHorizontal: space[16],
+    borderRadius: radius2.md,
+    backgroundColor: c2.bg.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});

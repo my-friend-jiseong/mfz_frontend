@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { TabRootRedirect } from '@/components/shell/TabRootRedirect';
 import { Alert, StyleSheet, View } from 'react-native';
 import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { Ionicons } from '@expo/vector-icons';
@@ -213,7 +214,7 @@ export default function TripDetail() {
 
   // 아직 진행 중인 트립으로 들어왔다면 active 화면으로 — 정리는 종료 후에만.
   if (activeTripId === id) {
-    return <Redirect href="/(tabs)/trips/active" />;
+    return <TabRootRedirect tab="trips" />;
   }
 
   const visitCount = visits.length;

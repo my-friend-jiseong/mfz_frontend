@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { goToTabRoot } from '@/components/shell/tabNav';
 import {
   Alert,
   Image,
@@ -317,7 +318,7 @@ function FieldReportEditor() {
       return;
     }
     toast('작성 중인 내용을 저장했어요');
-    if (activeTripId) router.replace('/(tabs)/trips/active' as never);
+    if (activeTripId) goToTabRoot('trips');
     else goDetail();
   };
 

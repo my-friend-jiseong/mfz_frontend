@@ -175,7 +175,7 @@ export default function FieldDetail() {
     const r = await removeField(field.id);
     if (r.ok) {
       toast('현장을 삭제했습니다');
-      router.replace('/(tabs)/fields' as never);
+      router.replace('/(tabs)/trips/fields' as never);
     } else if ('needsConfirm' in r) {
       // 서버는 방문 기록이 있는 현장의 삭제를 거부한다(백로그 §40 — 명세 FE-SITE-09 와 충돌).
       await notice('삭제할 수 없습니다', '방문 기록이 있는 현장은 아직 삭제할 수 없습니다.');
@@ -189,7 +189,7 @@ export default function FieldDetail() {
       {
         label: '현장 정보 수정',
         icon: 'create-outline',
-        onPress: () => router.push(`/(tabs)/fields/${field.id}/edit` as never),
+        onPress: () => router.push(`/(tabs)/trips/fields/${field.id}/edit` as never),
       },
       { label: '현장 삭제', icon: 'trash-outline', tone: 'danger', onPress: () => void handleDelete() },
     ]);

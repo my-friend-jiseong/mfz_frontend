@@ -43,7 +43,7 @@ async function fetchAllMyFields(): Promise<Field[]> {
 // params 로는 토큰·측위 좌표만 넘긴다. 등록 완료 시 새 현장에 사진이 자동 첨부 (new.tsx 가 소비).
 function buildNewFieldHref(file: UploadFile, pos: LatLng | null) {
   return {
-    pathname: '/(tabs)/fields/new',
+    pathname: '/(tabs)/trips/fields/new',
     params: {
       photoToken: stashQuickPhoto(file),
       ...(pos ? { lat: String(pos.lat), lng: String(pos.lng) } : {}),
@@ -148,7 +148,7 @@ export function useQuickPhoto() {
           { text: '닫기', style: 'cancel' },
           {
             text: '현장 보기',
-            onPress: () => router.push(`/(tabs)/fields/${field.id}` as never),
+            onPress: () => router.push(`/(tabs)/trips/fields/${field.id}` as never),
           },
         ]);
       } else {

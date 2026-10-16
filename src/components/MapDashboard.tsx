@@ -332,7 +332,7 @@ export function MapDashboard({
           // 선택 모드(onSelectField 주어짐)에선 토글, 아니면 현장 상세로 이동.
           onSelectField
             ? onSelectField(fieldId)
-            : router.push(`/(tabs)/fields/${fieldId}` as never)
+            : router.push(`/(tabs)/trips/fields/${fieldId}` as never)
         }
       />
       <MapLegend displayMode={displayMode} bottomInset={legendBottomInset} />
@@ -395,7 +395,7 @@ export function MapDashboard({
               setPendingPlace(null);
               // 등록 화면이 좌표로 진입 후 역지오코딩으로 주소를 채운다(기존 fields/new 흐름 재사용).
               router.push({
-                pathname: '/(tabs)/fields/new',
+                pathname: '/(tabs)/trips/fields/new',
                 params: { lat: String(p.lat), lng: String(p.lng) },
               } as never);
             }}

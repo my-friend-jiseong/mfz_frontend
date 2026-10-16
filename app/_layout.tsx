@@ -1,23 +1,14 @@
 import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { useFonts } from 'expo-font';
-import {
-  SafeAreaProvider,
-  SafeAreaView,
-  SafeAreaInsetsContext,
-  useSafeAreaInsets,
-} from 'react-native-safe-area-context';
-import { useTripStore } from '@/stores/tripStore';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 // 루트는 일부러 safe area 패딩 미적용 — map 화면(MapSheetLayout)이 BottomSheet 를 edge-to-edge
 // (status bar 영역까지) 노출해야 하기 때문. 비-map 화면 (forms, profile, auth) 은 각자 SafeAreaView
-// 로 paddingTop 책임. TripStatusBanner 가 보이면 그게 inset 을 consume 한 것으로 간주해
-// 하위 트리에 inset.top=0 을 provider 로 내려보내 비-map 화면이 banner 아래에 또 padding 을
-// 추가하는 더블 패딩 회로 차단.
+// 로 paddingTop 책임. 외근 중 표시는 위 배너가 아니라 탭 바 위 미니 바(7-4)라 위쪽 inset 을 건드리지 않는다.
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
-import { TripStatusBanner } from '@/components/TripStatusBanner';
 import { SessionGuardModal } from '@/components/SessionGuardModal';
 import { ActionSheetHost, ConfirmDialogHost, PopoverMenuHost, ToastHost } from '@/components/ui';
 import { startSessionActivity, stopSessionActivity } from '@/stores/sessionActivity';
@@ -86,29 +77,23 @@ export default function RootLayout() {
   );
 }
 
-// inset provider 가 SafeAreaProvider 내부에서만 useSafeAreaInsets 호출 가능.
 function RootContent() {
-  const insets = useSafeAreaInsets();
-  const bannerVisible = useTripStore((s) => s.activeTripId !== null);
-  const downstreamInsets = bannerVisible
-    ? { ...insets, top: 0 }
-    : insets;
-
   return (
     <View style={styles.root}>
-      <TripStatusBanner />
-      <SafeAreaInsetsContext.Provider value={downstreamInsets}>
-        <View style={styles.content}>
-          {/* animation:'none' — 루트 전환은 auth↔tabs 뿐. 전환 애니메이션 동안 RNSScreen 이
-              removeView 를 보류(startViewTransition)해, 같은 배치의 뷰 재부모화와 충돌 시
-              Fabric FATAL(screens#3249). 애니메이션 제거로 보류 윈도우 자체를 차단(2중 방어). */}
-          <Stack screenOptions={{ headerShown: false, animation: 'none' }}>
-            <Stack.Screen name="index" />
-            <Stack.Screen name="(auth)" />
-            <Stack.Screen name="(tabs)" />
-          </Stack>
-        </View>
-      </SafeAreaInsetsContext.Provider>
+      {/* animation:'none' — 루트 전환은 auth↔tabs 뿐. 전환 애니메이션 동안 RNSScreen 이
+          removeView 를 보류(startViewTransition)해, 같은 배치의 뷰 재부모화와 충돌 시
+          Fabric FATAL(screens#3249). 애니메이션 제거로 보류 윈도우 자체를 차단(2중 방어).
+          (modals) 만 예외 — 사용자가 누른 버튼으로만 열리고 같은 배치에 화면 교체가 없다. */}
+      <Stack screenOptions={{ headerShown: false, animation: 'none' }}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="(auth)" />
+        <Stack.Screen name="(tabs)" />
+        {/* X 로 닫는 모달 — 탭 바까지 덮는다(인수인계 §2 공통). */}
+        <Stack.Screen
+          name="(modals)"
+          options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
+        />
+      </Stack>
       <SessionGuardModal />
       {/* 명세 v2 공용 오버레이 — 화면 전환(replace) 직후에도 살아 있도록 스택 밖에 둔다. */}
       <ToastHost />
@@ -122,7 +107,6 @@ function RootContent() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
-  content: { flex: 1 },
   center: {
     flex: 1,
     alignItems: 'center',

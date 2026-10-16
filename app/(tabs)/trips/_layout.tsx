@@ -1,5 +1,10 @@
 import { Stack } from 'expo-router';
 
+// 딥 링크(/trips/fields/123 등)로 바로 들어와도 스택 맨 아래에 외근 탭 첫 화면을 깔아,
+// 뒤로·탭 다시 누르기가 첫 화면으로 돌아오게 한다.
+export const unstable_settings = { initialRouteName: 'index' };
+
+// 외근 탭 스택. 현장 화면(4 현장 검색·5 현장 상세)도 외근 탭 소속이라 여기 둔다(trips/fields/...).
 export default function TripsLayout() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
@@ -10,6 +15,12 @@ export default function TripsLayout() {
       <Stack.Screen name="new/select" />
       <Stack.Screen name="new/order" />
       <Stack.Screen name="[id]/visits/[visitId]" />
+      <Stack.Screen name="fields/index" />
+      <Stack.Screen name="fields/new" options={{ presentation: 'modal' }} />
+      <Stack.Screen name="fields/[id]/index" />
+      <Stack.Screen name="fields/categories" options={{ title: '카테고리 관리', headerShown: true }} />
+      <Stack.Screen name="fields/[id]/edit" options={{ title: '현장 수정', headerShown: true }} />
+      <Stack.Screen name="fields/[id]/checkin" />
     </Stack>
   );
 }

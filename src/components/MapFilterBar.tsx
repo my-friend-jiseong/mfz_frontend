@@ -7,7 +7,7 @@ import {
   View,
   type ImageSourcePropType,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRealSafeAreaInsets } from '@/components/shell/realInsets';
 import {
   BottomSheetModal,
   BottomSheetScrollView,
@@ -117,7 +117,8 @@ export function MapFilterBar({
   showBoundary,
   onToggleBoundary,
 }: Props) {
-  const insets = useSafeAreaInsets();
+  // 시트는 포털로 창 맨 아래까지 내려온다 — 탭 화면의 bottom 0 덮어쓰기 대신 창 기준 inset.
+  const insets = useRealSafeAreaInsets();
   const { height: screenHeight } = useWindowDimensions();
   const sheetRef = useRef<BottomSheetModal>(null);
 

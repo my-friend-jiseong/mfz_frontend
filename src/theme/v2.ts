@@ -135,6 +135,8 @@ export const type2 = {
   'bodyS.bold': t(14, 20, 'bold'),
   'bodyS.semibold': t(14, 20, 'semibold'),
   'bodyS.regular': t(14, 20, 'regular'),
+  // 3-8 경로 순서 카드의 순번 원 숫자. Figma 에 텍스트 스타일 없이 13 ExtraBold 로 박혀 있다.
+  'caption.extrabold': t(13, 18, 'heavy'),
   'caption.bold': t(13, 18, 'bold'),
   'caption.semibold': t(13, 18, 'semibold'),
   'caption.regular': t(13, 18, 'regular'),

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { goToTabRoot } from '@/components/shell/tabNav';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
@@ -147,7 +148,7 @@ export default function NewTripSelect() {
           description="현재 외근을 종료한 뒤 새 외근을 시작해주세요"
           action={
             <Button
-              onPress={() => router.replace('/(tabs)/trips/active' as never)}
+              onPress={() => goToTabRoot('trips')}
               leftIcon="navigate"
             >
               진행 중 외근 보기
@@ -288,7 +289,7 @@ export default function NewTripSelect() {
             action={
               !search && !hasFilter ? (
                 <Button
-                  onPress={() => router.push('/(tabs)/fields/new' as never)}
+                  onPress={() => router.push('/(tabs)/trips/fields/new' as never)}
                   leftIcon="add-circle"
                 >
                   새 현장 등록
