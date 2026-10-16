@@ -43,6 +43,8 @@ interface Props {
    *   snapPoints 를 넘긴다. 열린 뒤의 크기 변화는 정상 반영된다(애니메이션이 끝난 뒤라서).
    */
   snapPoints?: (string | number)[];
+  /** 위 모서리. 기본 20(5-6·1-2), 1-3 지도 설정은 24. */
+  topRadius?: number;
   children: React.ReactNode;
 }
 
@@ -60,6 +62,7 @@ export function AppSheet({
   scrollable,
   snapPoints,
   children,
+  topRadius,
 }: Props) {
   const ref = useRef<BottomSheetModal>(null);
   // 시트는 포털로 창 맨 아래까지 내려온다 — 탭 화면의 bottom 0 덮어쓰기 대신 창 기준 inset.
@@ -148,8 +151,8 @@ export function AppSheet({
       onDismiss={handleDismiss}
       backdropComponent={renderBackdrop}
       handleComponent={SheetHandleSlot}
-      backgroundStyle={styles.bg}
-      style={styles.shadow}
+      backgroundStyle={topRadius != null ? [styles.bg, { borderTopLeftRadius: topRadius, borderTopRightRadius: topRadius }] : styles.bg}
+      style={topRadius != null ? [styles.shadow, { borderTopLeftRadius: topRadius, borderTopRightRadius: topRadius }] : styles.shadow}
     >
       {scrollable ? (
         <BottomSheetScrollView contentContainerStyle={bottomPad}>

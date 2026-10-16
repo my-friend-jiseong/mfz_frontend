@@ -1,5 +1,5 @@
 import React, { useContext, useEffect, useState } from 'react';
-import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
+import { StyleSheet, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavigationContext } from '@react-navigation/native';
 import { BottomTabBarHeightContext } from '@react-navigation/bottom-tabs';
@@ -22,6 +22,10 @@ interface Props {
    * 주므로 따로 끌 필요 없이 Figma 대로 `padding: 12px 16px 12px`(탭 바 바로 위)가 된다.
    */
   safeArea?: boolean;
+  /** 버튼 줄 위에 한 줄 더(3-1 '현장 3곳 중 1곳 작성했어요'). */
+  header?: React.ReactNode;
+  /** 2차 화면별 여백·구분선 색(1 지도 10/13·subtle, 3 외근 상세 12/13). */
+  style?: StyleProp<ViewStyle>;
 }
 
 // 버튼 52 + 위 12 + 아래 최소 12. 스크롤 콘텐츠가 바 뒤로 숨지 않게 하단 여백 계산에 쓴다.
@@ -60,7 +64,7 @@ function useReportFooterHeight(height: number) {
   }, [inTabs, nav, height]);
 }
 
-export function BottomActionBar({ children, secondary, absolute, safeArea = true }: Props) {
+export function BottomActionBar({ children, secondary, absolute, safeArea = true, header, style }: Props) {
   const insets = useSafeAreaInsets();
   const [height, setHeight] = useState(0);
   useReportFooterHeight(height);
@@ -71,10 +75,22 @@ export function BottomActionBar({ children, secondary, absolute, safeArea = true
         styles.bar,
         { paddingBottom: safeArea ? Math.max(insets.bottom, spacing.md) : spacing.md },
         absolute && styles.absolute,
+        header ? styles.column : null,
+        style,
       ]}
     >
-      {secondary ? <View style={styles.secondary}>{secondary}</View> : null}
-      <View style={styles.primary}>{children}</View>
+      {header}
+      {header ? (
+        <View style={styles.row}>
+          {secondary ? <View style={styles.secondary}>{secondary}</View> : null}
+          <View style={styles.primary}>{children}</View>
+        </View>
+      ) : (
+        <>
+          {secondary ? <View style={styles.secondary}>{secondary}</View> : null}
+          <View style={styles.primary}>{children}</View>
+        </>
+      )}
     </View>
   );
 }
@@ -91,6 +107,8 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
   },
   absolute: { position: 'absolute', left: 0, right: 0, bottom: 0 },
+  column: { flexDirection: 'column', alignItems: 'stretch' },
+  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   secondary: { flexShrink: 0 },
   primary: { flex: 1 },
 });

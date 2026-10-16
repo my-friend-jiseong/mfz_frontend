@@ -92,6 +92,8 @@ interface Props {
   onViewChange?: (view: { lat: number; lng: number; level: number }) => void;
   // true 면 모든 마커가 한 화면에 들어오도록 자동 프레이밍 (center 무시). 위치도 미리보기용.
   fitToMarkers?: boolean;
+  // fitToMarkers 여백(위·오른쪽·아래·왼쪽 px). 지도 위를 덮는 카드가 있으면 그만큼(3-8 경로 순서 카드).
+  fitPadding?: [number, number, number, number];
   // false 면 드래그/줌 비활성 — BottomSheet 안 등 pan 충돌 회피용 정적 위치도.
   interactive?: boolean;
   onMarkerPress?: (fieldId: string) => void;
@@ -130,6 +132,7 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
       circle = null,
       startPoint = null,
       fitToMarkers = false,
+      fitPadding,
       interactive = true,
       onMarkerPress,
       onTilesLoaded,
@@ -352,6 +355,12 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
     const payload = (paths ?? []).map((p) => ({ points: p.points, style: pathStyle(p) }));
     inject(`window.__mfzSetPaths&&window.__mfzSetPaths(${JSON.stringify(payload)})`);
   }, [ready, paths, inject]);
+
+  const fitPaddingKey = fitPadding?.join(',') ?? '';
+  useEffect(() => {
+    if (!ready || !fitPaddingKey) return;
+    inject(`window.__mfzSetFitPadding&&window.__mfzSetFitPadding([${fitPaddingKey}])`);
+  }, [ready, fitPaddingKey, inject]);
 
   // 2차 GPS 오차 원.
   useEffect(() => {

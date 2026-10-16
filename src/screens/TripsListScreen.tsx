@@ -1,370 +1,272 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { Alert, StyleSheet, View } from 'react-native';
-import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
-import { Ionicons } from '@expo/vector-icons';
+import { StyleSheet, View } from 'react-native';
+import BottomSheet, { BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTripStore } from '@/stores/tripStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useVisitStore } from '@/stores/visitStore';
-import { useDestinationStore } from '@/stores/destinationStore';
 import { useReportStore } from '@/stores/reportStore';
-import { EmptyState } from '@/components/EmptyState';
+import { useLocationPermissionStore } from '@/stores/locationPermissionStore';
 import { ErrorState } from '@/components/ErrorState';
-import { MapSheetLayout, sheetScrollableStyle } from '@/components/MapSheetLayout';
-import { TripCard } from '@/components/trips/TripCard';
-import {
-  TripFilterBar,
-  type TripReportFilter,
-} from '@/components/trips/TripFilterBar';
-import { Button } from '@/components/ui/Button';
-import { Text } from '@/components/ui/Text';
-import { Input } from '@/components/ui/Input';
-import { BottomActionBar, useBottomActionBarHeight } from '@/components/ui/BottomActionBar';
+import { MapDashboard } from '@/components/MapDashboard';
+import { LocationPermissionSheet } from '@/components/map/LocationPermissionSheet';
+import { TripHistoryRow } from '@/components/trips/TripHistoryRow';
+import { BottomActionBar } from '@/components/ui/BottomActionBar';
+import { Button2 } from '@/components/ui/Button2';
+import { SheetHandle } from '@/components/ui/AppSheet';
 import { SkeletonCard } from '@/components/ui/SkeletonCard';
-import { colors } from '@/theme/colors';
-import { spacing } from '@/theme/spacing';
-import { fmtDate, tripDateGroup } from '@/utils/datetime';
-import type { Destination, Trip, Visit } from '@/types/entities';
+import { Text } from '@/components/ui/Text';
+import { Touchable } from '@/components/ui/Touchable';
+import { useTripReportStates } from '@/utils/reportStatus';
+import { openReportForTrip } from '@/utils/reportEntry';
+import { isGeolocationDisabled } from '@/utils/geolocation';
+import { tripHistoryGroup } from '@/utils/tripFormat';
+import { c2, elevation2, radius2, space } from '@/theme/v2';
+import type { Trip } from '@/types/entities';
 
-// 외근 제목 = title 우선, 없으면 시작일 날짜(카드에 보이는 제목과 동일).
-// 목록 검색이 이 값과 카드 제목을 함께 쓰도록 통일 — '보이는 제목 = 검색 대상'.
-const tripTitle = (t: Trip) => (t.title?.trim() ? t.title.trim() : fmtDate(t.startedAt));
+// 1 지도: 접힌 시트 높이(외근 시작 줄 포함). Figma 634:3004 는 탭 바 위 304.
+const SHEET_COLLAPSED = 304;
+// 지도 위 검색창(52) — 시트를 끝까지 올려도 이 아래(+8)에서 멈춘다(Figma 2: 검색창 아래 8).
+const SEARCH_BAR_H = 52;
+// 외근 시작 줄: 위 10 + 버튼 56 + 아래 13(Figma 1 'Frame' 79).
+const FOOTER_H = 79;
+// SheetHandle 높이: 위 8 + 4 + 아래 8.
+const SHEET_HANDLE_H = 20;
 
-// 목록 행 — 날짜 그룹 헤더와 외근 카드를 한 배열에 섞어 FlatList 하나로 그린다(아래 rows 주석 참고).
-type TripRow =
-  | { kind: 'header'; title: string }
-  | { kind: 'trip'; trip: Trip };
+// gorhom 이 넘기는 시트 상태 props 는 쓰지 않는다.
+const SheetHandleSlot = () => <SheetHandle />;
 
-// 외근의 현장 id 를 방문 순서대로. 계획 목적지(order 순)를 우선 쓰고, 거기 없는 현장은
-// 실제 방문(visitedAt 순)으로 메운다 — destinations 가 비어 있는 세션에서도 지도가 비지 않도록.
-function resolveTripFieldIds(
-  tripId: string,
-  destinations: Destination[],
-  visits: Visit[],
-): string[] {
-  const ids: string[] = [];
-  const seen = new Set<string>();
-  const push = (fieldId: string) => {
-    if (!fieldId || seen.has(fieldId)) return;
-    seen.add(fieldId);
-    ids.push(fieldId);
-  };
-  destinations
-    .filter((d) => d.tripId === tripId)
-    .sort((a, b) => a.order - b.order)
-    .forEach((d) => push(d.fieldId));
-  visits
-    .filter((v) => v.tripId === tripId)
-    .sort((a, b) => a.visitedAt.localeCompare(b.visitedAt))
-    .forEach((v) => push(v.fieldId));
-  return ids;
-}
+type Row =
+  | { kind: 'header'; key: string; title: string; first: boolean }
+  | { kind: 'trip'; key: string; trip: Trip; divider: boolean };
 
-export default function TripsList() {
+/**
+ * 1 지도(외근 탭 첫 화면, 외근 전) — 지도 + 외근 내역 시트 + [외근 시작].
+ * 2 외근 내역은 같은 시트를 끝까지 올린 모습([전체 보기] 또는 끌어올리기), 2-1 은 외근 0건.
+ * 검색·필터는 2차에서 뺐다(결정 기록). 검색창은 4 현장 검색으로 가는 입구다.
+ */
+export default function TripsListScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const userId = useAuthStore((s) => s.user?.id);
   const allTrips = useTripStore((s) => s.trips);
   const listStatus = useTripStore((s) => s.listStatus);
   const listError = useTripStore((s) => s.listError);
-  const hydrateTrips = useTripStore((s) => s.hydrate);
   const allVisits = useVisitStore((s) => s.visits);
-  const allReports = useReportStore((s) => s.reports);
+  const sheetRef = useRef<BottomSheet>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [containerH, setContainerH] = useState<number | null>(null);
 
-  const [search, setSearch] = useState('');
-  // 필터 — 기간(시작일)·보고 여부. 둘 다 클라이언트 필터(trips API 는 필터 파라미터가 없다).
-  const [fromDate, setFromDate] = useState<string | null>(null);
-  const [toDate, setToDate] = useState<string | null>(null);
-  const [reported, setReported] = useState<TripReportFilter>(null);
-  const hasFilter = fromDate !== null || toDate !== null || reported !== null;
-
-  // 보고서 마스터 로드 — 카드의 '보고서' 배지 판정에만 쓴다. 목록 1회 페치로
-  // trip 당 추가 요청 없이 tripId 매칭.
-  //
-  // mount 가 아니라 focus 마다 — 보고서는 이 세션 안에서 생긴다(외근 정리 → 보고서 작성 →
-  // 목록 복귀). mount 1회만 받으면 방금 만든 보고서가 배지에 안 뜨고 앱을 새로 켜야 보였다(실측).
+  // 보고서는 이 세션 안에서 생긴다(외근 상세 → 보고서 작성 → 돌아옴) — 포커스마다 받아 배지를 맞춘다.
   useFocusEffect(
     useCallback(() => {
       void useReportStore.getState().hydrate();
     }, []),
   );
 
-  const myTrips = useMemo(() => {
-    if (!userId) return [];
-    return allTrips
-      .filter((t) => t.workerId === userId)
-      .sort((a, b) => b.startedAt.localeCompare(a.startedAt));
-  }, [allTrips, userId]);
+  const trips = useMemo(
+    () =>
+      userId
+        ? allTrips.filter((t) => t.workerId === userId).sort((a, b) => b.startedAt.localeCompare(a.startedAt))
+        : [],
+    [allTrips, userId],
+  );
 
-  const query = search.trim().toLowerCase();
+  const tripIds = useMemo(() => trips.map((t) => t.id), [trips]);
+  const reportStates = useTripReportStates(tripIds);
 
-  // tripId → visit 카운트 Map — renderItem 의 per-row .filter (O(N×M)) 제거.
-  // allVisits 가 바뀔 때만 재계산. 단 visitStore 는 각 외근 loadDetail 시에만 채워지므로,
-  // 탭 첫 진입(refreshList 만 돈 상태)에선 비어 있다 → 카운트가 있는 trip 만 여기 등재되고,
-  // 없는 trip 은 list API 의 item.visitCount 로 폴백(visitsOf 참고).
+  // 방문 수 — 상세를 받은 외근은 visitStore, 아니면 목록 응답의 visitCount.
   const visitCountByTrip = useMemo(() => {
     const m = new Map<string, number>();
     for (const v of allVisits) m.set(v.tripId, (m.get(v.tripId) ?? 0) + 1);
     return m;
   }, [allVisits]);
-  const visitsOf = (t: Trip) => visitCountByTrip.get(t.id) ?? t.visitCount ?? 0;
 
-  // 보고서가 붙은 외근 id — Report.tripId 는 nullable(외근 없이 만든 보고서).
-  const reportedTripIds = useMemo(() => {
-    const s = new Set<string>();
-    for (const r of allReports) if (r.tripId) s.add(r.tripId);
-    return s;
-  }, [allReports]);
-
-  // 검색 + 필터 적용. 보고 여부는 카드 배지와 같은 판정(reportedTripIds)을 써서
-  // "배지는 있는데 필터에선 안 걸린다" 는 어긋남이 생기지 않게 한다.
-  // 기간은 시작일(startedAt) 기준 — 목록의 날짜 그룹핑과 같은 축이다.
-  const trips = useMemo(() => {
-    let out = myTrips;
-    if (query) out = out.filter((t) => tripTitle(t).toLowerCase().includes(query));
-    if (fromDate) out = out.filter((t) => t.startedAt.slice(0, 10) >= fromDate);
-    if (toDate) out = out.filter((t) => t.startedAt.slice(0, 10) <= toDate);
-    if (reported === 'reported') out = out.filter((t) => reportedTripIds.has(t.id));
-    else if (reported === 'unreported') out = out.filter((t) => !reportedTripIds.has(t.id));
-    return out;
-  }, [myTrips, query, fromDate, toDate, reported, reportedTripIds]);
-
-
-  // 날짜 그룹 섹션 — trips 가 startedAt 내림차순이라 같은 그룹은 연속으로 붙는다.
-  // 검색 중엔 그룹핑을 끈다: 검색은 '찾기'라 구간 훑기용 헤더가 잡음이 된다.
-  // 날짜 그룹 헤더를 목록 행으로 평탄화 — trips 가 startedAt 내림차순이라 같은 그룹은 연속으로 붙는다.
-  // 검색 중엔 그룹핑을 끈다: 검색은 '찾기'라 구간 훑기용 헤더가 잡음이 된다.
-  //
-  // ★ SectionList 를 쓰지 않는 이유 (웹 크래시, 실측):
-  //   gorhom 은 웹에서 스크롤 DOM 노드를 findNodeHandle.web 으로 찾는데 _findNodeHandle →
-  //   getNativeScrollRef() → _scrollRef 순으로 시도한다. RN SectionList 는 getScrollableNode()
-  //   만 노출해 셋 다 실패 → 컴포넌트 인스턴스를 그대로 반환 → addEventListener 호출에서
-  //   "element.addEventListener is not a function" 으로 앱이 죽는다(외근 탭이 첫 화면이라 진입 즉시).
-  //   FlatList 는 getNativeScrollRef/_scrollRef 를 직접 가져 정상. gorhom 에 BottomSheetFlatList
-  //   와 달리 SectionList 의 .web 변형이 없는 것도 같은 이유. 네이티브는 reanimated 경로라 무관.
-  const rows = useMemo<TripRow[]>(() => {
-    if (query) return trips.map((trip) => ({ kind: 'trip' as const, trip }));
-    const out: TripRow[] = [];
-    let lastGroup: string | null = null;
+  // 묶음 머리와 행을 한 배열로 — SectionList 는 웹 gorhom 에서 스크롤 노드를 못 찾아 죽는다(예전 주석, 실측).
+  const rows = useMemo<Row[]>(() => {
+    const out: Row[] = [];
+    let last: string | null = null;
     for (const t of trips) {
-      const g = tripDateGroup(t.startedAt);
-      if (g !== lastGroup) {
-        out.push({ kind: 'header', title: g });
-        lastGroup = g;
+      const g = tripHistoryGroup(t.startedAt);
+      const newGroup = g !== last;
+      if (newGroup) {
+        out.push({ kind: 'header', key: `h:${g}`, title: g, first: last === null });
+        last = g;
       }
-      out.push({ kind: 'trip', trip: t });
+      out.push({ kind: 'trip', key: `t:${t.id}`, trip: t, divider: !newGroup });
     }
     return out;
-  }, [trips, query]);
+  }, [trips]);
 
-  // 하단 바(외근 시작) 높이 — 목록 끝이 바 뒤로 숨지 않게. (훅 순서 고정).
-  // 탭 루트라 바 아래는 탭바가 safe area 를 먹는다 → safeArea=false.
-  const barHeight = useBottomActionBarHeight(false);
+  const openTrip = useCallback((id: string) => router.push(`/(tabs)/trips/${id}` as never), [router]);
+  const writeReport = useCallback((id: string) => void openReportForTrip(router, id), [router]);
 
-  // === 지도 포커스 ===
-  // 목록은 배경 지도에 내 현장 전체를 깔지만, 카드와 지도가 아무 관계도 없어 지도가 장식이었다.
-  // 카드의 지도 버튼 → 그 외근의 현장만 남기고 순번·동선까지 그린다(재탭 시 해제).
-  const [focusTripId, setFocusTripId] = useState<string | null>(null);
-  const [mapLoadingId, setMapLoadingId] = useState<string | null>(null);
-  const allDestinations = useDestinationStore((s) => s.destinations);
-
-  // 핸들러가 '현재 포커스'를 읽어야 하는데 state 를 deps 에 넣으면 콜백 identity 가 매번 바뀌어
-  // TripCard memo 가 무력화된다. ref 를 진실값으로 두고 state 는 렌더용으로만 쓴다.
-  // (setState updater 로 읽는 방법은 안 된다 — updater 는 다음 렌더에 실행돼 값이 늦게 온다)
-  const focusTripIdRef = useRef<string | null>(null);
-  const setFocus = useCallback((next: string | null) => {
-    focusTripIdRef.current = next;
-    setFocusTripId(next);
+  // 외근 시작 — 위치 권한이 꺼져 있으면 1-2 를 한 번 보인다. 위치는 외근의 필수 조건이 아니라(결정)
+  // 허용하든 [나중에]·닫기든 이어서 시작한다.
+  // TODO(PR6): 6 외근 준비로 바꾼다. 지금은 기존 현장 고르기 화면.
+  const pendingStartRef = useRef(false);
+  const goStart = useCallback(() => router.push('/(tabs)/trips/new/select' as never), [router]);
+  const startTrip = async () => {
+    if (isGeolocationDisabled()) {
+      goStart();
+      return;
+    }
+    const store = useLocationPermissionStore.getState();
+    const status = store.status ?? (await store.refresh());
+    if (status === 'granted') {
+      goStart();
+      return;
+    }
+    pendingStartRef.current = true;
+    store.openSheet();
+  };
+  const onPermissionDone = () => {
+    if (!pendingStartRef.current) return;
+    pendingStartRef.current = false;
+    // 시트를 닫는 상태 변경과 화면 이동을 한 배치에 섞지 않는다.
+    setTimeout(goStart, 0);
+  };
+  const onLocationOff = useCallback(() => {
+    pendingStartRef.current = false;
+    useLocationPermissionStore.getState().openSheet();
   }, []);
 
-  // 계획 목적지(order 순) 우선, 누락분은 방문(visitedAt 순)으로 보완 — trips/[id].tsx 와 동일 규칙.
-  // destinations 는 서버 하이드레이트 전엔 비어 있을 수 있어 visit 폴백이 필요하다.
-  const focusFieldIds = useMemo(() => {
-    if (!focusTripId) return undefined;
-    return resolveTripFieldIds(focusTripId, allDestinations, allVisits);
-  }, [focusTripId, allDestinations, allVisits]);
+  const maxSheet =
+    containerH != null && containerH > 0
+      ? Math.max(SHEET_COLLAPSED + 1, containerH - (insets.top + space[8] + SEARCH_BAR_H + space[8]))
+      : null;
+  const snapPoints = useMemo(() => (maxSheet ? [SHEET_COLLAPSED, maxSheet] : [SHEET_COLLAPSED]), [maxSheet]);
 
-  const handleFocusMap = useCallback(
-    async (tripId: string) => {
-      // 토글 — 이미 이 외근을 보고 있으면 해제.
-      if (focusTripIdRef.current === tripId) {
-        setFocus(null);
-        return;
-      }
-      setMapLoadingId(tripId);
-      // 목록 진입 시점엔 이 외근의 목적지·방문이 로컬에 없다 → 탭한 1건만 상세 페치.
-      // (카드마다 미리 부르면 목록 진입에 N개 요청이 터진다)
-      await useTripStore.getState().loadDetail(tripId);
-      setMapLoadingId(null);
-      const ids = resolveTripFieldIds(
-        tripId,
-        useDestinationStore.getState().destinations,
-        useVisitStore.getState().visits,
-      );
-      if (ids.length === 0) {
-        // 침묵하는 무반응 대신 이유를 말한다 — 강제 종료된 외근 등 실제로 있는 케이스.
-        Alert.alert(
-          '지도에 표시할 현장이 없습니다',
-          '이 외근에는 기록된 목적지나 방문이 없습니다.',
-        );
-        return;
-      }
-      setFocus(tripId);
-    },
-    [setFocus],
-  );
-
-  // TripCard 에 넘길 stable 콜백 — id 를 인자로 받아 카드마다 새 클로저를 만들지 않는다.
-  const openTrip = useCallback(
-    (tripId: string) => router.push(`/(tabs)/trips/${tripId}` as never),
-    [router],
-  );
-  const focusMap = useCallback(
-    (tripId: string) => void handleFocusMap(tripId),
-    [handleFocusMap],
+  const empty = trips.length === 0 && listStatus !== 'loading' && listStatus !== 'error';
+  const renderItem = useCallback(
+    ({ item }: { item: Row }) =>
+      item.kind === 'header' ? (
+        <Text v2="bodyS.bold" tone="secondary" style={[styles.group, !item.first && styles.groupNext]}>
+          {item.title}
+        </Text>
+      ) : (
+        <TripHistoryRow
+          trip={item.trip}
+          visitCount={visitCountByTrip.get(item.trip.id) ?? item.trip.visitCount ?? 0}
+          stage={reportStates.get(item.trip.id)?.stage ?? 'checking'}
+          divider={item.divider}
+          onPress={openTrip}
+          onWriteReport={writeReport}
+        />
+      ),
+    [visitCountByTrip, reportStates, openTrip, writeReport],
   );
 
   return (
-    // 외근 탭 배경 지도도 '현장' 탭과 동일하게 내 현장 전체를 깐다(mapFieldIds 미지정 = 전체).
-    // 표시 설정(히트맵 등)은 mapSettingsStore 로 공유되어 탭 간 같은 배경 지도를 유지.
-    // 하단 바는 시트 **밖**(absolute) — 시트 안에 두면 gorhom pan 이 터치를 가로챈다.
-    <View style={styles.screenRoot}>
-    <MapSheetLayout bottomBarHeight={barHeight}
-      title="외근 내역"
-      mapFieldIds={focusFieldIds}
-      routeFieldIds={focusFieldIds}
-      collapseOnScopeChange
-      // 목록의 지도 포커스는 메인 탭 안의 임시 상태 — 스코프가 걸려도 검색창·레이어 버튼과
-      // 히트맵 등 표시 설정은 그대로 둔다(토글 한 번에 컨트롤이 사라지지 않게).
-      keepGlobalChrome
-    >
-      <View style={styles.toolbar}>
-        <Input
-          value={search}
-          onChangeText={setSearch}
-          placeholder="제목 검색"
-          autoCapitalize="none"
-          clearButtonMode="while-editing"
-          leftSlot={<Ionicons name="search" size={18} color={colors.textMuted} />}
-        />
-        <TripFilterBar
-          fromDate={fromDate}
-          toDate={toDate}
-          onDateRange={(f, t) => {
-            setFromDate(f);
-            setToDate(t);
-          }}
-          reported={reported}
-          onReported={setReported}
-          hasFilter={hasFilter}
-          onResetAll={() => {
-            setFromDate(null);
-            setToDate(null);
-            setReported(null);
-          }}
-        />
-        {query || hasFilter ? (
-          <View style={styles.summary}>
-            <Ionicons name="search" size={14} color={colors.textMuted} />
-            <Text variant="caption" weight="semibold" color="textMuted">
-              {query ? '검색 결과' : '필터 결과'} {trips.length}건
-            </Text>
-          </View>
-        ) : null}
-      </View>
-      <BottomSheetFlatList
-        data={rows}
-        keyExtractor={(row) =>
-          row.kind === 'header' ? `h:${row.title}` : `t:${row.trip.id}`
-        }
-        renderItem={({ item }) =>
-          item.kind === 'header' ? (
-            <View style={styles.groupHeader}>
-              <Text variant="caption" weight="bold" color="textMuted">
-                {item.title}
-              </Text>
-            </View>
-          ) : (
-            <TripCard
-              trip={item.trip}
-              title={tripTitle(item.trip)}
-              visitCount={visitsOf(item.trip)}
-              plannedCount={item.trip.destinationCount ?? null}
-              hasReport={reportedTripIds.has(item.trip.id)}
-              onPress={openTrip}
-              onFocusMap={focusMap}
-              mapFocused={focusTripId === item.trip.id}
-              mapLoading={mapLoadingId === item.trip.id}
-            />
-          )
-        }
-        style={sheetScrollableStyle}
-        contentContainerStyle={[styles.list, { paddingBottom: barHeight + spacing.xl }]}
-        // 로딩 중·조회 실패·진짜 없음 셋을 갈라 렌더한다 (강령 3).
-        // loading/error 는 받아둔 데이터가 없을 때만 이긴다 (필터는 전부 클라이언트라
-        // 0건이 곧 실패는 아니다). 재시도는 refreshList 가 아니라 hydrate — 부팅이
-        // 오프라인이면 refreshActive 도 함께 실패해 activeTripId 가 null 로 남는데,
-        // 목록만 되살리면 진행 중 외근이 있는데도 '외근 시작' CTA 가 그대로 뜬다.
-        ListEmptyComponent={
-          allTrips.length === 0 && listStatus === 'loading' ? (
-            // Figma `외근 내역 · 로딩`(470:5642) — 스켈레톤 카드 3장.
-            <View style={styles.skeletons}>
-              <SkeletonCard />
-              <SkeletonCard />
-              <SkeletonCard />
-            </View>
-          ) : allTrips.length === 0 && listStatus === 'error' ? (
-            <ErrorState message={listError} onRetry={() => void hydrateTrips()} />
-          ) : (
-            <EmptyState
-              icon={query || hasFilter ? 'search-outline' : 'briefcase'}
-              title={
-                query || hasFilter ? '조건에 맞는 외근이 없습니다' : '예정된 외근이 없습니다'
-              }
-              description={
-                query || hasFilter
-                  ? '검색어나 필터를 바꿔보세요'
-                  : '새 외근을 만들면 여기에 표시됩니다'
-              }
-            />
-          )
-        }
+    <View style={styles.root} onLayout={(e) => setContainerH(e.nativeEvent.layout.height)}>
+      <MapDashboard
+        keepGlobalChrome
+        legendBottomInset={SHEET_COLLAPSED}
+        v2={{
+          // TODO(PR5): 4 현장 검색으로 바꾼다. 지금은 기존 현장 화면.
+          onSearchPress: () => router.push('/(tabs)/trips/fields' as never),
+          onLocationOff,
+          locateBottom: SHEET_COLLAPSED + space[16],
+        }}
       />
-    </MapSheetLayout>
-      <BottomActionBar absolute safeArea={false}>
-        <Button
-          onPress={() => router.push('/(tabs)/trips/new/select' as never)}
-          size="lg"
-          fullWidth
-          leftIcon="play-circle"
+      {/* 높이를 재기 전엔 시트를 그리지 않는다 — snapPoints 를 마운트 뒤 바꾸면 gorhom 이 시트를 엉뚱한 곳에 둔다
+          (MapSheetLayout 주석, 실측). */}
+      {maxSheet ? (
+        <BottomSheet
+          ref={sheetRef}
+          index={0}
+          snapPoints={snapPoints}
+          enableDynamicSizing={false}
+          enablePanDownToClose={false}
+          onChange={(i) => setExpanded(i === 1)}
+          handleComponent={SheetHandleSlot}
+          backgroundStyle={styles.sheetBg}
+          style={styles.sheetShadow}
         >
+          {/* 명시적 height — gorhom 콘텐츠 높이 미적용(Fabric+reanimated 4) 우회(MapSheetLayout 주석). */}
+          <View style={{ height: maxSheet - SHEET_HANDLE_H }}>
+            <View style={styles.head}>
+              <Text v2="heading" style={styles.flex} accessibilityRole="header">
+                외근 내역
+              </Text>
+              {!expanded && !empty && trips.length > 0 ? (
+                <Touchable onPress={() => sheetRef.current?.snapToIndex(1)} accessibilityRole="button" style={styles.all}>
+                  <Text v2="bodyS.semibold" tone="link">
+                    전체 보기
+                  </Text>
+                </Touchable>
+              ) : null}
+            </View>
+            <BottomSheetFlatList
+              data={rows}
+              keyExtractor={(r) => r.key}
+              renderItem={renderItem}
+              style={styles.flex}
+              contentContainerStyle={{ paddingBottom: FOOTER_H + space[16] }}
+              ListEmptyComponent={
+                listStatus === 'loading' && allTrips.length === 0 ? (
+                  <View style={styles.skeletons}>
+                    <SkeletonCard />
+                    <SkeletonCard />
+                  </View>
+                ) : listStatus === 'error' && allTrips.length === 0 ? (
+                  <ErrorState message={listError} onRetry={() => void useTripStore.getState().hydrate()} />
+                ) : (
+                  // 2-1 외근 0건(Figma 634:3131)
+                  <View style={styles.empty}>
+                    <Text v2="bodyL.bold" style={styles.center}>
+                      아직 외근이 없어요
+                    </Text>
+                    <Text v2="bodyS.regular" tone="tertiary" style={styles.center}>
+                      {'외근을 시작해 갈 현장을 담고 기록하면\n여기에 쌓여요.'}
+                    </Text>
+                  </View>
+                )
+              }
+            />
+          </View>
+        </BottomSheet>
+      ) : null}
+      {/* 시트 밖에 둔다 — 시트 안에 두면 gorhom pan 이 버튼 터치를 가로챈다. 모양은 시트 맨 아래 줄과 같다. */}
+      <BottomActionBar absolute safeArea={false} style={styles.footer}>
+        <Button2 icon="play" onPress={() => void startTrip()} fullWidth>
           외근 시작
-        </Button>
+        </Button2>
       </BottomActionBar>
+      <LocationPermissionSheet onDone={onPermissionDone} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  screenRoot: { flex: 1 },
-  skeletons: { gap: spacing.sm },
-  toolbar: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm,
-    gap: spacing.sm,
-    backgroundColor: colors.background,
+  root: { flex: 1, backgroundColor: c2.bg.muted },
+  flex: { flex: 1 },
+  center: { textAlign: 'center' },
+  sheetBg: {
+    backgroundColor: c2.bg.canvas,
+    borderTopLeftRadius: radius2['2xl'],
+    borderTopRightRadius: radius2['2xl'],
   },
-  summary: {
+  sheetShadow: { ...elevation2.sheet, borderTopLeftRadius: radius2['2xl'], borderTopRightRadius: radius2['2xl'] },
+  // Figma: 제목 줄(44)은 시트 위 22 — 손잡이 영역(20) 아래 2.
+  head: {
+    height: 44,
+    marginTop: space[2],
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.xs,
+    paddingLeft: space[20],
+    paddingRight: space[12],
   },
-  // paddingBottom 은 렌더에서 — 하단 바 높이 + 여유.
-  list: { padding: spacing.lg },
-  // 날짜 그룹 구분선. 첫 그룹이 목록 맨 위에 붙지 않도록 상단 여백을 조금 더 준다.
-  groupHeader: {
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.xs,
+  all: { height: 44, paddingHorizontal: space[8], justifyContent: 'center' },
+  group: { paddingHorizontal: space[20], paddingTop: space[4], paddingBottom: space[4] },
+  groupNext: { paddingTop: space[16] },
+  skeletons: { gap: space[12], paddingHorizontal: space[20], paddingTop: space[8] },
+  empty: { alignItems: 'center', gap: space[8], paddingTop: 54, paddingHorizontal: space[20] },
+  footer: {
+    paddingTop: space[10],
+    paddingBottom: 13,
+    borderTopColor: c2.border.subtle,
+    backgroundColor: c2.bg.canvas,
   },
 });

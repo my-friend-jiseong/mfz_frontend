@@ -42,6 +42,9 @@ interface ReportState {
   // 목록 조회 상태 — empty 와 error 를 화면에서 갈라내기 위한 것 (강령 3).
   // detailStatus 가 상세에서 하는 역할을 목록에서 한다.
   listStatus: 'idle' | 'loading' | 'ready' | 'error';
+  // 목록을 한 번이라도 받았는가. 포커스마다 다시 받는 동안(loading)에도 이전 목록을 믿고 쓸 수 있다 —
+  // 외근 내역의 [보고서 작성]은 이 값이 true 일 때만 보인다(보고서가 있는데 작성 전으로 보이면 중복 생성).
+  listLoaded: boolean;
   listError: string | null;
   // 상세 화면 진입 시 채워지는 캐시 (fieldReports 포함)
   detailCache: Record<string, Report>;
@@ -130,6 +133,7 @@ function detailToReport(d: ReportDetailResponse): Report {
 export const useReportStore = create<ReportState>((set, get) => ({
   reports: [],
   listStatus: 'idle',
+  listLoaded: false,
   listError: null,
   detailCache: {},
   detailStatus: {},
@@ -145,7 +149,7 @@ export const useReportStore = create<ReportState>((set, get) => ({
       const res = await reportsApi.list(params);
       const userId = useAuthStore.getState().user?.id ?? '';
       const items = res.items.map((it) => listItemToReport(it, userId));
-      set({ reports: items, listStatus: 'ready', listError: null });
+      set({ reports: items, listStatus: 'ready', listLoaded: true, listError: null });
     } catch (e) {
       // 삼키지 않는다 — 실패를 무시하면 reports 가 [] 로 남아 EmptyState 가 뜨고,
       // 사용자는 서버 오류를 '보고서 없음' 으로 오독한다 (강령 3).
@@ -425,6 +429,7 @@ export const useReportStore = create<ReportState>((set, get) => ({
     set({
       reports: [],
       listStatus: 'idle',
+      listLoaded: false,
       listError: null,
       detailCache: {},
       detailStatus: {},

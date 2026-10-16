@@ -204,6 +204,8 @@ interface Props {
   startPoint?: { lat: number; lng: number } | null;
   // true 면 모든 마커가 한 화면에 들어오도록 자동 프레이밍 (center 무시). 위치도 미리보기용.
   fitToMarkers?: boolean;
+  // fitToMarkers 여백(위·오른쪽·아래·왼쪽 px). 지도 위를 덮는 카드가 있으면 그만큼(3-8 경로 순서 카드).
+  fitPadding?: [number, number, number, number];
   // false 면 드래그/줌 비활성 — BottomSheet 안 등 pan 충돌 회피용 정적 위치도.
   interactive?: boolean;
   onMarkerPress?: (fieldId: string) => void;
@@ -387,6 +389,7 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
       circle = null,
       startPoint = null,
       fitToMarkers = false,
+      fitPadding,
       interactive = true,
       onMarkerPress,
       onViewChange,
@@ -511,12 +514,18 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
     }
     const bounds = new k.maps.LatLngBounds();
     markers.forEach((m) => bounds.extend(new k.maps.LatLng(m.lat, m.lng)));
-    mapRef.current.setBounds(bounds, 40, 40, 56, 40);
+    // 정적 지도 카드(120·132)는 기본 여백(위아래 96)이면 남는 높이가 30여 px 라 몇 배 멀리 보인다 —
+    // 2차 핀은 끝이 좌표라 위로만 44 가 솟으므로 위 48·아래 12 로 줄인다.
+    const h = containerRef.current?.clientHeight ?? 0;
+    if (fitPadding) mapRef.current.setBounds(bounds, ...fitPadding);
+    else if (h > 0 && h < 200) mapRef.current.setBounds(bounds, 48, 24, 12, 24);
+    else mapRef.current.setBounds(bounds, 40, 40, 56, 40);
   };
   useEffect(() => {
     if (!ready) return;
     fitRef.current();
-  }, [ready, markers, fitToMarkers]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, markers, fitToMarkers, fitPadding?.join(',')]);
 
   // 컨테이너 크기가 바뀌면(첫 레이아웃이 지도 생성보다 늦은 작은 카드 등) 카카오 지도는 스스로 다시 재지
   // 않아 중심이 어긋난다(MapPreviewCard 에서 핀이 카드 아래로 밀려 실측). relayout 후 다시 맞춘다.
@@ -541,6 +550,16 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
     if (!ready || !mapRef.current) return;
     mapRef.current.setDraggable(interactive);
     mapRef.current.setZoomable(interactive);
+    if (interactive) return;
+    // 정적 지도 카드에는 축척 막대를 숨긴다(카카오 로고는 약관상 남긴다). 축척은 줌이 바뀔 때마다 다시 그려진다.
+    const k = getKakao();
+    const root = containerRef.current;
+    if (!k || !root) return;
+    const map = mapRef.current;
+    const hide = () => hideKakaoScale(root);
+    hide();
+    k.maps.event.addListener(map, 'idle', hide);
+    return () => k.maps.event.removeListener(map, 'idle', hide);
   }, [ready, interactive]);
 
   // 베이스 지도 종류(일반/위성/하이브리드) — setMapTypeId 로 베이스 타일만 교체.
@@ -1174,3 +1193,13 @@ const styles = StyleSheet.create({
     color: colors.primary,
   },
 });
+
+/** 카카오 기본 축척 막대(숫자+km|m 글자를 가진 블록)를 숨긴다. 로고는 남긴다. 네이티브 HTML 도 같은 규칙. */
+function hideKakaoScale(root: HTMLElement) {
+  root.querySelectorAll('div').forEach((el) => {
+    if (el.children.length === 0 && /^\d+(km|m)$/.test(el.textContent?.trim() ?? '')) {
+      const block = el.parentElement;
+      if (block) block.style.visibility = 'hidden';
+    }
+  });
+}

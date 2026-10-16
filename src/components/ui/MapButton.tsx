@@ -8,8 +8,8 @@ interface Props {
   icon: IconName;
   onPress: () => void;
   accessibilityLabel: string;
-  /** 48 기본(레이어·내 위치·+), 44는 헤더의 뒤로·닫기 */
-  size?: 48 | 44;
+  /** 48 기본(내 위치·+), 52는 1 지도 검색창 옆 지도 설정, 44는 헤더의 뒤로·닫기 */
+  size?: 52 | 48 | 44;
   /** 기본값에서 벗어난 설정이 있다는 점 표시(지도 설정 버튼). */
   dot?: boolean;
   style?: StyleProp<ViewStyle>;

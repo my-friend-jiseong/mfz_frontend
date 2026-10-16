@@ -41,6 +41,8 @@ export const c2 = {
     inverse: palette.slate[800],
     ink: palette.slate[900],
     overlay: 'rgba(15, 23, 42, 0.45)',
+    // 사진 썸네일 위 시각 배지(3 외근 상세 방문 행). Figma 에 변수 없이 ink 0.7.
+    photoBadge: 'rgba(15, 23, 42, 0.7)',
   },
   border: {
     default: palette.slate[200],
@@ -123,6 +125,8 @@ export const type2 = {
   avatar: t(26, 32, 'heavy', -0.5),
   display: t(28, 36, 'heavy', -0.8),
   'title.l': t(22, 30, 'heavy', -0.5),
+  // 1-2 위치 권한 안내 시트 제목. 텍스트 스타일 없이 21 ExtraBold 로 박혀 있다.
+  'title.sheet': t(21, 29, 'heavy', -0.5),
   'title.m': t(20, 28, 'heavy', -0.4),
   'title.s': t(19, 27, 'heavy', -0.4),
   'title.xs': t(18, 26, 'heavy', -0.3),

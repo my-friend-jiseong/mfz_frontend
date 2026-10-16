@@ -31,6 +31,7 @@ import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { opacity } from '@/theme/motion';
 import { fmtDateTime, wasEdited } from '@/utils/datetime';
+import { tripTitle } from '@/utils/tripFormat';
 import type { Field, FieldReport } from '@/types/entities';
 
 // 현장별 전·중·후 사진 카드 (명세 v2 FE-RPT-06·13).
@@ -341,7 +342,7 @@ export default function ReportDetail() {
             >
               <Ionicons name="briefcase-outline" size={14} color={colors.primary} />
               <Text variant="bodySm" weight="semibold" color="primary" numberOfLines={1} style={styles.tripText}>
-                연결 외근: {trip.title ? `${trip.title} · ` : ''}
+                연결 외근: {`${tripTitle(trip)} · `}
                 {fmtDateTime(trip.startedAt)}
               </Text>
               <Ionicons name="chevron-forward" size={14} color={colors.primary} />

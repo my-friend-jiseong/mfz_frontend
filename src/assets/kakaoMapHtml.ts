@@ -150,6 +150,7 @@ MARKERS.forEach(function(m){
   var CENTER = { lat: ${center.lat}, lng: ${center.lng} };
   var LEVEL = ${level};
   var FIT_TO_MARKERS = ${fitToMarkers ? 'true' : 'false'};
+  var FIT_PADDING = null; // [위,오른쪽,아래,왼쪽] — __mfzSetFitPadding 으로 주입(3-8 경로 순서 카드 높이)
   var INTERACTIVE = ${interactive ? 'true' : 'false'};
   ${postMsgFn}
   // 조작 불가 지도(interactive=false, 예: 보고서 상세 위치도)는 신호를 보내지 않는다 —
@@ -166,6 +167,20 @@ MARKERS.forEach(function(m){
     window.__mfzMap = map;
     // 정적 위치도(figure) — 드래그/줌 차단. BottomSheet 등에서 pan 충돌 회피 + 보고서 그림용.
     if (!INTERACTIVE) { map.setDraggable(false); map.setZoomable(false); }
+    // 정적 지도 카드에는 축척 막대를 숨긴다(카카오 로고는 남긴다). 웹 KakaoMapWebView.web 의 hideKakaoScale 과 같은 규칙.
+    if (!INTERACTIVE) {
+      var hideScale = function(){
+        var divs = container.getElementsByTagName('div');
+        for (var i = 0; i < divs.length; i++) {
+          var el = divs[i];
+          if (el.children.length === 0 && /^[0-9]+(km|m)$/.test((el.textContent || '').trim()) && el.parentElement) {
+            el.parentElement.style.visibility = 'hidden';
+          }
+        }
+      };
+      kakao.maps.event.addListener(map, 'idle', hideScale);
+      setTimeout(hideScale, 0);
+    }
 
     // === 상태 (세터로 주입) ===
     var MARKERS = [];
@@ -472,7 +487,10 @@ MARKERS.forEach(function(m){
       var bounds = new kakao.maps.LatLngBounds();
       MARKERS.forEach(function(m){ bounds.extend(new kakao.maps.LatLng(m.lat, m.lng)); });
       // padding(px): top,right,bottom,left — 라벨이 마커 아래 떠서 하단 여유 더 줌.
-      map.setBounds(bounds, 40, 40, 56, 40);
+      // 정적 지도 카드(120·132)는 남는 높이가 너무 작아 위 48·아래 12 로 줄인다(웹 KakaoMapWebView 와 같은 규칙).
+      if (FIT_PADDING) map.setBounds(bounds, FIT_PADDING[0], FIT_PADDING[1], FIT_PADDING[2], FIT_PADDING[3]);
+      else if (window.innerHeight > 0 && window.innerHeight < 200) map.setBounds(bounds, 48, 24, 12, 24);
+      else map.setBounds(bounds, 40, 40, 56, 40);
     }
 
     function applyData(){
@@ -530,6 +548,7 @@ MARKERS.forEach(function(m){
 
     // === 세터 (RN injectJavaScript 진입점) ===
     window.__mfzSetMarkers = function(markers){ MARKERS = markers || []; applyData(); };
+    window.__mfzSetFitPadding = function(p){ FIT_PADDING = p; fitBounds(); };
     window.__mfzSetRoute = function(pts){ ROUTE = pts || []; applyRoute(); };
     // 히트맵 점 — [{lat,lng,value}]. value 는 동일좌표 군집 count(가중). 모드 가드는 heatSchedule 몫.
     window.__mfzSetHeatPoints = function(pts){ HEAT_POINTS = pts || []; heatSchedule(); };

@@ -1,477 +1,569 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TabRootRedirect } from '@/components/shell/TabRootRedirect';
-import { Alert, StyleSheet, View } from 'react-native';
-import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
-import { Ionicons } from '@expo/vector-icons';
+import { goToTabRoot } from '@/components/shell/tabNav';
+import { openFullMap, type FullMapLegendRow, type FullMapPin } from '@/components/shell/fullMap';
 import { useTripStore } from '@/stores/tripStore';
 import { useVisitStore } from '@/stores/visitStore';
 import { useDestinationStore } from '@/stores/destinationStore';
 import { useFieldStore } from '@/stores/fieldStore';
-import { EmptyState } from '@/components/EmptyState';
-import { MapSheetLayout, sheetScrollableStyle } from '@/components/MapSheetLayout';
-import { Card } from '@/components/ui/Card';
+import { useReportStore } from '@/stores/reportStore';
+import { MapPreviewCard } from '@/components/MapPreviewCard';
+import type { KakaoMapMarker, MapPath } from '@/components/KakaoMapWebView';
+import { STATUS_PIN_COLOR } from '@/components/shell/pinColors';
+import { TripStopRow } from '@/components/trips/TripStopRow';
+import { Icon } from '@/components/icons';
 import { Text } from '@/components/ui/Text';
-import { Badge } from '@/components/ui/Badge';
-import { DESTINATION_STATUS_BADGE } from '@/theme/statusBadge';
-import { Button } from '@/components/ui/Button';
-import { BottomActionBar, useBottomActionBarHeight } from '@/components/ui/BottomActionBar';
+import { Tag } from '@/components/ui/Tag';
+import { Touchable } from '@/components/ui/Touchable';
+import { Button2 } from '@/components/ui/Button2';
+import { BottomActionBar } from '@/components/ui/BottomActionBar';
 import { EditableTitle } from '@/components/ui/EditableTitle';
+import { showPopoverMenu } from '@/components/ui/PopoverMenu';
+import { STATUS_LABEL } from '@/components/ui/StatusMark';
 import { confirm, notice } from '@/components/ui/ConfirmDialog';
-import { toast } from '@/components/ui/Toast';
-import { ReviewVisitCard } from '@/components/trips/ReviewVisitCard';
-import { memoForVisit } from '@/utils/visitRecord';
-import { visitInReport } from '@/utils/visitGuards';
 import { safeBack } from '@/utils/backNavigation';
-import { colors } from '@/theme/colors';
-import { spacing, radius } from '@/theme/spacing';
-import { fmtDate, fmtDateTime, fmtDuration, fmtTime } from '@/utils/datetime';
+import { memoForVisit } from '@/utils/visitRecord';
+import { fieldActionStatus } from '@/utils/fieldStatus';
+import { useTripReportState, type TripReportState } from '@/utils/reportStatus';
+import { fmtTripDateLine, tripTitle } from '@/utils/tripFormat';
+import { findTripReportId, openReportForTrip } from '@/utils/reportEntry';
+import { fmtMonthDay, fmtTime } from '@/utils/datetime';
+import { c2, radius2, space } from '@/theme/v2';
+import type { Field, FieldStatus, Trip, Visit } from '@/types/entities';
 
-// 외근 상세 — 종료된 외근 전용. 진행 중인 외근은 activeTripId === id 가드로 active 화면에 위임.
-// 명세 v2 §4.3: 방문 카드는 읽기 전용 요약(펼침)이고, 고치는 곳은 방문 수정 화면이다.
-export default function TripDetail() {
-  const router = useRouter();
-  const params = useLocalSearchParams<{ id?: string }>();
-  const id = params.id ?? '';
+type Stop =
+  | { kind: 'visit'; key: string; order: number; visit: Visit; fieldId: string }
+  | { kind: 'skipped'; key: string; order: number; fieldId: string };
 
-  const trip = useTripStore((s) => (id ? s.getById(id) : undefined));
-  const activeTripId = useTripStore((s) => s.activeTripId);
-  const loadTripDetail = useTripStore((s) => s.loadDetail);
-  // selector 안에서 .filter().sort() 호출하면 매 호출마다 새 array reference →
-  // useSyncExternalStoreWithSelector 가 무한 re-render → React error #185.
-  // raw 배열 구독 + useMemo 로 도출 (fields/new 와 동일 패턴).
-  const allVisits = useVisitStore((s) => s.visits);
-  const allDestinations = useDestinationStore((s) => s.destinations);
-  const getField = useFieldStore((s) => s.getById);
-  const loadFieldDetail = useFieldStore((s) => s.loadDetail);
-  const directAttachments = useFieldStore((s) => s.directAttachments);
-  const photosByVisit = useVisitStore((s) => s.photosByVisit);
-  const loadVisitPhotos = useVisitStore((s) => s.loadPhotos);
-  const removeVisit = useVisitStore((s) => s.remove);
-  const updateTrip = useTripStore((s) => s.update);
-  const [expandedIds, setExpandedIds] = useState<ReadonlySet<string>>(new Set());
-  const barHeight = useBottomActionBarHeight();
-
-  const visits = useMemo(
-    () =>
-      id
-        ? allVisits
-            .filter((v) => v.tripId === id)
-            .sort((a, b) => a.visitedAt.localeCompare(b.visitedAt))
-        : [],
-    [allVisits, id],
-  );
-  const destinations = useMemo(
-    () =>
-      id
-        ? allDestinations
-            .filter((d) => d.tripId === id)
-            .sort((a, b) => a.order - b.order)
-        : [],
-    [allDestinations, id],
-  );
-
-  // 지도 마커용 현장 id — 계획된 destinations 우선(순서 보존), 누락분은 방문(visit) fieldId 로 보완.
-  // destinations 는 client-only(AsyncStorage)라 다른 세션/기기/캐시 정리 후엔 비어 있는데, 완료된 외근은
-  // timeline→visit 의 fieldId(라이브 확인됨)로 현장을 도출 가능 → 마커가 빈 회로 차단. (backend-backlog §11)
-  const tripFieldIds = useMemo(() => {
-    const ids: string[] = [];
-    const seen = new Set<string>();
-    for (const d of destinations) {
-      if (d.fieldId && !seen.has(d.fieldId)) {
-        seen.add(d.fieldId);
-        ids.push(d.fieldId);
-      }
-    }
-    for (const v of visits) {
-      if (v.fieldId && !seen.has(v.fieldId)) {
-        seen.add(v.fieldId);
-        ids.push(v.fieldId);
-      }
-    }
-    return ids;
-  }, [destinations, visits]);
-
-  // Hooks must be called unconditionally — 모든 useMemo/useEffect/useRef 를 가드 위로.
-  // 건너뛴 현장 = 직접 건너뛴 목적지 + 방문 없이 종료된 목적지(명세 FE-OUT-09: 외근 종료 시
-  // 남은 방문은 건너뜀·미정). **종료된 외근일 때만** — 콜드스타트·다른 기기에서 시작한 진행 중
-  // 외근이 activeTripId 가드를 빠져나와 이 화면에 오면, 아직 안 간 목적지까지 건너뜀으로 셌다(리뷰).
-  // 방문 없는 목적지 판정은 타임라인을 받은 뒤에만 — 받기 전엔 방문이 비어 모두 건너뜀으로 보인다.
-  // arrived 였는데 방문을 지운 목적지(FE-WRAP-03)도 결과가 미정이므로 여기 든다(리뷰: 어느 쪽에도 안 보였다).
-  const tripEnded = !!trip?.endedAt;
-  const timelineLoaded = useTripStore((s) => (id ? s.detailStatus[id] === 'success' : false));
-  const skippedDestinations = useMemo(() => {
-    // fieldId 가 빈 타임라인 항목(백로그 §16)은 판정에 쓰지 않는다 — '' 로는 아무것도 가리키지 못한다.
-    const visited = new Set(visits.map((v) => v.fieldId).filter(Boolean));
-    return destinations.filter((d) =>
-      d.status === 'skipped'
-        ? true
-        : tripEnded && timelineLoaded && !visited.has(d.fieldId),
-    );
-  }, [destinations, visits, tripEnded, timelineLoaded]);
-
-  // visit 을 카드 데이터의 진실값으로. destination 이 살아있으면 order 만 그쪽에서 가져옴.
-  const destinationByFieldId = useMemo(() => {
-    const map = new Map<string, typeof destinations[number]>();
-    for (const d of destinations) map.set(d.fieldId, d);
-    return map;
-  }, [destinations]);
-
-  // visit-기반 카드 — 정렬은 destination.order 우선, 없으면 visitedAt.
-  const visitCards = useMemo(() => {
-    const annotated = visits.map((v) => {
-      const d = destinationByFieldId.get(v.fieldId);
-      return {
+/**
+ * 외근의 들른 곳·건너뛴 곳을 순서대로. 계획 목적지 순서를 따르고, 목적지에 방문이 있으면 방문 행,
+ * 없으면 건너뜀(종료된 외근에서 타임라인을 받은 뒤에만 — 받기 전엔 모두 건너뜀으로 보인다).
+ * 목적지에 없는 방문(목적지 없이 기록한 곳)은 방문 시각 순으로 뒤에 붙인다.
+ */
+function buildStops(
+  destinations: {
+    id: string;
+    fieldId: string;
+    order: number;
+    status: string;
+  }[],
+  visits: Visit[],
+  judgeSkipped: boolean,
+): Stop[] {
+  const pool = [...visits].sort((a, b) => a.visitedAt.localeCompare(b.visitedAt));
+  const used = new Set<string>();
+  const out: Stop[] = [];
+  for (const d of [...destinations].sort((a, b) => a.order - b.order)) {
+    const v = pool.find((x) => !used.has(x.id) && x.fieldId === d.fieldId);
+    if (v) {
+      used.add(v.id);
+      out.push({
+        kind: 'visit',
+        key: v.id,
+        order: out.length + 1,
         visit: v,
         fieldId: v.fieldId,
-        order: d?.order ?? null,
-      };
+      });
+    } else if (d.status === 'skipped' || judgeSkipped) {
+      out.push({
+        kind: 'skipped',
+        key: `d:${d.id}`,
+        order: out.length + 1,
+        fieldId: d.fieldId,
+      });
+    }
+  }
+  for (const v of pool) {
+    if (used.has(v.id)) continue;
+    out.push({
+      kind: 'visit',
+      key: v.id,
+      order: out.length + 1,
+      visit: v,
+      fieldId: v.fieldId,
     });
-    annotated.sort((a, b) => {
-      if (a.order != null && b.order != null) return a.order - b.order;
-      if (a.order != null) return -1;
-      if (b.order != null) return 1;
-      return a.visit.visitedAt.localeCompare(b.visit.visitedAt);
-    });
-    // 표시 순번은 정렬된 위치(1-based) — destination.order 의 base(서버 0-based 등)에 비의존.
-    // 0-based order 를 raw 로 쓰면 "0번째" 가 나오던 회로 차단 (active.tsx 와 동일 규칙).
-    return annotated.map((c, i) => ({
-      ...c,
-      displayOrder: i + 1,
-    }));
-  }, [visits, destinationByFieldId]);
+  }
+  return out;
+}
 
-  // 진입 시 trip detail 페치 — visit timeline 을 visitStore 로 sync.
-  // 새로고침 / 다른 디바이스 진입 직후 visitStore 가 비어있어 카드가 안 보이는 회로 차단.
-  const fetchedTripRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!id) return;
-    if (fetchedTripRef.current === id) return;
-    fetchedTripRef.current = id;
-    void loadTripDetail(id);
-  }, [id, loadTripDetail]);
+const fieldName = (f: Field | undefined) => f?.name?.trim() || f?.address || '알 수 없는 현장';
+const hasCoord = (f: Field | undefined): f is Field => !!f && !(f.latitude === 0 && f.longitude === 0);
 
-  // 진입 시 각 visit field 의 메모/사진 캐시 페치 — directAttachments 가 비어 있을 수 있음.
-  //
-  // 무한 루프 차단 — 2중 가드:
-  //   1) deps 는 fieldIds 의 stable string key (같은 ids 면 effect 안 재실행)
-  //   2) ref guard 로 이미 페치한 fieldId 중복 호출 X
-  const fieldIdsKey = useMemo(
-    () =>
-      visitCards
-        .map((c) => c.fieldId)
-        .sort()
-        .join(','),
-    [visitCards],
+// 3·3-1·3-2 머리 오른쪽 보고서 상태(인수인계: 외근 상세는 '보고서'를 붙인다).
+const STAGE_TAG = {
+  none: { label: '보고서 작성 전', tone: 'neutral', icon: null },
+  draft: { label: '보고서 작성 중', tone: 'brand', icon: 'edit' },
+  done: { label: '보고서 작성 완료', tone: 'success', icon: 'check' },
+} as const;
+
+// 3-8 경로 순서 카드의 조치 상태 글자색.
+const LEGEND_TONE: Record<FieldStatus, FullMapLegendRow['trailingTone']> = {
+  pending: 'warning',
+  in_progress: 'brand',
+  done: 'success',
+};
+
+/**
+ * 3 외근 상세(Figma 687:3426) — 3-1 보고서 작성 중, 3-2 보고서 있음, 3-3 방문 0곳, 3-4 더보기, 3-5·3-6 삭제 확인,
+ * 3-8 경로 지도(공통 전체 지도). 종료된 외근 전용 — 진행 중이면 외근 탭 첫 화면(7)으로.
+ */
+export default function TripDetail() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { id = '' } = useLocalSearchParams<{ id?: string }>();
+
+  const storeTrip = useTripStore((s) => (id ? s.getById(id) : undefined));
+  // 삭제 직후 목록으로 돌아가는 동안 화면을 '없음'으로 뒤집지 않는다(떠나는 화면 플립 금지).
+  const lastTripRef = useRef<Trip | undefined>(undefined);
+  if (storeTrip) lastTripRef.current = storeTrip;
+  const [deleting, setDeleting] = useState(false);
+  const trip = storeTrip ?? (deleting ? lastTripRef.current : undefined);
+
+  const activeTripId = useTripStore((s) => s.activeTripId);
+  const timelineLoaded = useTripStore((s) => (id ? s.detailStatus[id] === 'success' : false));
+  const allVisits = useVisitStore((s) => s.visits);
+  const allDestinations = useDestinationStore((s) => s.destinations);
+  const fields = useFieldStore((s) => s.fields);
+  const directAttachments = useFieldStore((s) => s.directAttachments);
+  const photosByVisit = useVisitStore((s) => s.photosByVisit);
+  const liveReportState = useTripReportState(id);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const moreRef = useRef<View>(null);
+
+  const fieldById = useMemo(() => new Map(fields.map((f) => [f.id, f])), [fields]);
+  const visits = useMemo(() => allVisits.filter((v) => v.tripId === id), [allVisits, id]);
+  const destinations = useMemo(() => allDestinations.filter((d) => d.tripId === id), [allDestinations, id]);
+  const liveStops = useMemo(
+    () => buildStops(destinations, visits, !!trip?.endedAt && timelineLoaded),
+    [destinations, visits, trip?.endedAt, timelineLoaded],
   );
-  const fetchedRef = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    if (!fieldIdsKey) return;
-    for (const fid of fieldIdsKey.split(',')) {
-      if (fetchedRef.current.has(fid)) continue;
-      fetchedRef.current.add(fid);
-      void loadFieldDetail(fid);
-    }
-  }, [fieldIdsKey, loadFieldDetail]);
+  // 삭제 중에는 지운 방문·보고서가 store 에서 빠져도 떠나는 화면이 3-3 으로 바뀌지 않게 지운 순간의 모습을 쥔다.
+  const frozenRef = useRef<{ stops: Stop[]; reportState: TripReportState } | null>(null);
+  const frozen = deleting ? frozenRef.current : null;
+  const stops = frozen?.stops ?? liveStops;
+  const reportState = frozen?.reportState ?? liveReportState;
+  const visitCount = stops.filter((s) => s.kind === 'visit').length;
 
-  // 방문별 사진 — 펼친 요약에만 보이므로 처음 펼칠 때 받는다(방문 수만큼 요청이 나가지 않게).
-  const fetchedVisitPhotosRef = useRef<Set<string>>(new Set());
+  // 진입 시 타임라인(방문)·목적지 받기.
   useEffect(() => {
-    if (!id) return;
-    for (const vid of expandedIds) {
-      if (fetchedVisitPhotosRef.current.has(vid)) continue;
-      fetchedVisitPhotosRef.current.add(vid);
-      void loadVisitPhotos(id, vid);
-    }
-  }, [id, expandedIds, loadVisitPhotos]);
+    if (id) void useTripStore.getState().loadDetail(id);
+  }, [id]);
+  // 방문 현장의 메모(현장 첨부) — 펼친 행에 보인다.
+  const fieldKey = useMemo(() => [...new Set(visits.map((v) => v.fieldId).filter(Boolean))].sort().join(','), [visits]);
+  useEffect(() => {
+    if (!fieldKey) return;
+    for (const fid of fieldKey.split(',')) void useFieldStore.getState().loadDetail(fid);
+  }, [fieldKey]);
+  // 방문 사진은 처음 펼칠 때 받는다(방문 수만큼 요청이 나가지 않게).
+  useEffect(() => {
+    if (id && expandedId && !photosByVisit[expandedId]) void useVisitStore.getState().loadPhotos(id, expandedId);
+  }, [id, expandedId, photosByVisit]);
 
-  // 가드 — hooks 호출 끝난 뒤로 옮김 (Rules of Hooks).
-  // 잘못된 진입 — tripId 없음
-  if (!id) {
+  // 경로 카드·3-8 의 핀과 선. 방문한 곳은 조치 상태 색 순번 핀, 건너뛴 곳은 회색 순번 핀.
+  const route = useMemo(() => {
+    const pins: FullMapPin[] = [];
+    const visited: { lat: number; lng: number }[] = [];
+    const all: { lat: number; lng: number }[] = [];
+    for (const s of stops) {
+      const f = fieldById.get(s.fieldId);
+      if (!hasCoord(f)) continue;
+      const kind = s.kind === 'visit' ? fieldActionStatus(f) : 'visited';
+      pins.push({
+        id: s.key,
+        lat: f.latitude,
+        lng: f.longitude,
+        kind,
+        order: s.order,
+        label: fieldName(f),
+      });
+      all.push({ lat: f.latitude, lng: f.longitude });
+      if (s.kind === 'visit') visited.push({ lat: f.latitude, lng: f.longitude });
+    }
+    // 지나온 길은 진한 파랑 실선, 한 곳도 안 들렀으면 계획한 길을 회색 점선으로(3-3).
+    const paths: MapPath[] =
+      visited.length >= 2
+        ? [{ points: visited, tone: 'brand' }]
+        : visited.length === 0 && all.length >= 2
+          ? [{ points: all, tone: 'muted', dotted: true }]
+          : [];
+    // 건너뛴 회색 핀을 먼저 그려 방문한 핀이 위에 오게 한다(카드·전체 지도 공통).
+    pins.sort((a, b) => Number(b.kind === 'visited') - Number(a.kind === 'visited'));
+    return { pins, paths };
+  }, [stops, fieldById]);
+
+  const markers = useMemo<KakaoMapMarker[]>(
+    () =>
+      route.pins.map((p) => ({
+        id: p.id,
+        lat: p.lat,
+        lng: p.lng,
+        label: p.label ?? '',
+        color: STATUS_PIN_COLOR[p.kind],
+        pin: p.kind,
+        order: p.order,
+      })),
+    [route.pins],
+  );
+
+  if (!id || !trip) {
     return (
-      <MapSheetLayout title="외근 정리" onBack={() => safeBack(router)}>
-        <EmptyState
-          icon="alert-circle-outline"
-          title="외근 정보가 없습니다"
-          description="외근 목록에서 다시 진입해주세요"
-        />
-      </MapSheetLayout>
+      <View style={[styles.root, { paddingTop: insets.top }]}>
+        <Header onBack={() => safeBack(router)} />
+        <View style={styles.missing}>
+          <Text v2="bodyL.bold">외근을 찾을 수 없어요</Text>
+          <Text v2="bodyS.regular" tone="tertiary">
+            삭제됐거나 다른 사람의 외근일 수 있어요.
+          </Text>
+        </View>
+      </View>
     );
   }
+  if (activeTripId === id) return <TabRootRedirect tab="trips" />;
 
-  // 트립이 store 에 없으면 — race 가능성. 단순 EmptyState 로 (별도 fetch 없음).
-  if (!trip) {
-    return (
-      <MapSheetLayout title="외근 정리" onBack={() => safeBack(router)}>
-        <EmptyState
-          icon="search-outline"
-          title="외근을 찾을 수 없습니다"
-          description="삭제됐거나 다른 사용자의 외근일 수 있습니다"
-        />
-      </MapSheetLayout>
-    );
-  }
-
-  // 아직 진행 중인 트립으로 들어왔다면 active 화면으로 — 정리는 종료 후에만.
-  if (activeTripId === id) {
-    return <TabRootRedirect tab="trips" />;
-  }
-
-  const visitCount = visits.length;
-  const skippedCount = skippedDestinations.length;
-  // 계획 totalDest — destination 살아있으면 그 길이, 없으면 visit + skipped 합계로 추정.
-  // active.finalizeEnd 가 종료 직후 removeByTrip 으로 destinations 를 정리하므로
-  // 종료 후 review 재진입에선 destinations 가 비어있을 수 있음 — visit 으로 폴백.
-  const totalDest = destinations.length || visitCount + skippedCount;
-
-  const toggle = (visitId: string) =>
-    setExpandedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(visitId)) next.delete(visitId);
-      else next.add(visitId);
-      return next;
-    });
-
-  // FE-WRAP-05 — 빈 값은 EditableTitle 이 이전 제목으로 되돌린다. 실패하면 입력칸을 남긴다.
-  const saveTitle = async (title: string) => {
-    const r = await updateTrip(id, { title });
+  const title = tripTitle(trip);
+  const saveTitle = async (next: string) => {
+    const r = await useTripStore.getState().update(id, { title: next });
     if (!r.ok) {
-      Alert.alert('제목 저장 실패', r.error);
+      await notice('제목을 저장하지 못했어요', r.error);
       throw new Error(r.error);
     }
   };
 
-  // FE-WRAP-03 — 스와이프 삭제. 보고서에 반영된 방문이면 차단.
-  const deleteVisit = async (visitId: string, fieldId: string) => {
-    if (await visitInReport(id, fieldId)) {
-      await notice('삭제할 수 없습니다', '보고서에서 먼저 삭제해야 합니다.');
+  const openRouteMap = () => {
+    const legend: FullMapLegendRow[] = [
+      {
+        key: 'start',
+        marker: 'start',
+        label: '출발',
+        trailing: fmtTime(trip.startedAt),
+      },
+      ...stops.map((s): FullMapLegendRow => {
+        const f = fieldById.get(s.fieldId);
+        if (s.kind === 'skipped') {
+          return {
+            key: s.key,
+            marker: { order: s.order, kind: 'visited' },
+            label: fieldName(f),
+            trailing: '건너뜀',
+            dim: true,
+          };
+        }
+        const st = fieldActionStatus(f);
+        return {
+          key: s.key,
+          marker: { order: s.order, kind: st },
+          label: fieldName(f),
+          trailing: STATUS_LABEL[st],
+          trailingTone: LEGEND_TONE[st],
+        };
+      }),
+    ];
+    openFullMap({
+      title: `${title} · ${fmtMonthDay(trip.startedAt)}`,
+      pins: route.pins,
+      paths: route.paths,
+      legend,
+    });
+  };
+
+  const deleteTrip = async () => {
+    // 보고서가 있는지는 서버에서 확인한다 — 로컬 목록이 오래됐으면 3-6 경고 없이 보고서를 지우게 된다.
+    const reportId = await findTripReportId(id);
+    if (reportId === 'error') {
+      await notice('외근을 삭제하지 못했어요', '보고서가 있는지 확인하지 못했어요. 잠시 뒤 다시 해 주세요.');
       return;
     }
+    const reports = useReportStore.getState();
+    const reportTitle = reportId
+      ? (reports.getById(reportId) ?? (await reports.loadDetail(reportId)))?.title
+      : undefined;
     const ok = await confirm({
-      title: '이 방문을 삭제할까요?',
-      message: '현장은 남고, 이 방문의 기록만 지워집니다.',
+      title: '외근을 삭제할까요?',
+      warning: reportId
+        ? reportTitle
+          ? `이 외근으로 만든 보고서 '${reportTitle}'도 함께 지워져요.`
+          : '이 외근으로 만든 보고서도 함께 지워져요.'
+        : undefined,
+      message: '방문 기록과 이 외근에서만 들른 현장이 지워지고 되돌릴 수 없어요.',
       confirmLabel: '삭제',
       destructive: true,
     });
     if (!ok) return;
-    const r = await removeVisit(visitId);
-    if (r.ok) toast('방문을 삭제했습니다');
-    else if ('unsupported' in r) {
-      await notice('아직 지원되지 않는 기능입니다', '방문 삭제는 서버 준비 후 사용할 수 있습니다.');
-    } else Alert.alert('방문 삭제 실패', r.error);
+    frozenRef.current = { stops, reportState };
+    setDeleting(true);
+    // 서버의 외근 삭제(force)는 보고서를 남긴다(2026-10-17 실측, 백로그 C) — 보고서를 먼저 지운다.
+    if (reportId) {
+      const rr = await useReportStore.getState().remove(reportId);
+      if (!rr.ok) {
+        setDeleting(false);
+        await notice('외근을 삭제하지 못했어요', `보고서를 지우지 못했어요. ${rr.error}`);
+        return;
+      }
+    }
+    const store = useTripStore.getState();
+    let r = await store.remove(id);
+    // 방문이 붙은 외근은 409 — 확인 창에서 함께 지워진다고 이미 알렸으므로 바로 강제 삭제한다.
+    if (!r.ok && 'needsConfirm' in r) r = await store.remove(id, true);
+    if (!r.ok) {
+      setDeleting(false);
+      await notice('외근을 삭제하지 못했어요', 'error' in r ? r.error : r.message);
+      return;
+    }
+    void useReportStore.getState().refresh();
+    // 화면 상태 변경과 이동을 한 배치에 섞지 않는다.
+    requestAnimationFrame(() => goToTabRoot('trips'));
   };
 
+  const openMore = () =>
+    showPopoverMenu(moreRef.current, [
+      {
+        label: '외근 삭제',
+        icon: 'trash',
+        tone: 'danger',
+        onPress: () => void deleteTrip(),
+      },
+    ]);
+
+  // 방문 0곳(3-3)은 보고서를 만들 수 없어 상태를 보이지 않는다.
+  const stage = visitCount === 0 || reportState.stage === 'checking' ? null : STAGE_TAG[reportState.stage];
+
   return (
-    <View style={styles.screenRoot}>
-      <MapSheetLayout bottomBarHeight={barHeight}
-        title="외근 정리"
-        onBack={() => safeBack(router)}
-        initialIndex={2}
-        mapFieldIds={tripFieldIds}
-        // tripFieldIds 는 destination.order → visit 순으로 쌓인 방문 순서 그대로다(위 memo 참고).
-        routeFieldIds={tripFieldIds}
-      >
-        <BottomSheetScrollView
-          style={sheetScrollableStyle}
-          contentContainerStyle={[styles.scroll, { paddingBottom: barHeight + spacing.xxl * 3 }]}
-        >
-        <View style={styles.header}>
-          {/* 제목을 탭하면 그 자리에서 고친다(FE-WRAP-05). 헤더 수정 아이콘은 없다(FE-WRAP-04). */}
-          <EditableTitle
-            value={trip.title || `${fmtDate(trip.startedAt)} 외근`}
-            onSubmit={saveTitle}
-            maxLength={50}
-            label="외근 제목"
-          />
-          <View style={styles.metaRow}>
-            <Ionicons name="time-outline" size={14} color={colors.textMuted} />
-            <Text variant="bodySm" color="textMuted">
-              {/* Figma: "2026-08-28 09:00 ~ 14:20 · 5시간 20분" — 같은 날 종료면 시각만. */}
-              {fmtDateTime(trip.startedAt)}
-              {trip.endedAt
-                ? ` ~ ${
-                    fmtDate(trip.endedAt) === fmtDate(trip.startedAt)
-                      ? fmtTime(trip.endedAt)
-                      : fmtDateTime(trip.endedAt)
-                  }`
-                : ' · 진행 중'}
-              {trip.endedAt
-                ? ` · ${fmtDuration(trip.startedAt, trip.endedAt)}`
-                : ''}
-            </Text>
+    <View style={[styles.root, { paddingTop: insets.top }]}>
+      <Header onBack={() => safeBack(router)} moreRef={moreRef} onMore={openMore} />
+      <ScrollView contentContainerStyle={styles.scroll}>
+        <View style={styles.titleRow}>
+          <View style={styles.titleWrap}>
+            <EditableTitle value={title} onSubmit={saveTitle} maxLength={50} label="외근 제목" appearance="pencil" />
           </View>
-          {/* 이 화면의 focal — "이 외근이 어땠나" 에 답하는 집계 (강령 1·8).
-              방문이 답이고 건너뜀·계획은 그 답을 읽는 맥락이라 한 단계 낮춘다.
-              이전엔 셋 다 body(16) 동일 크기 + 세로 divider 3분할이라 무엇이 답인지
-              안 보였다. 구분은 divider 가 아니라 여백·크기로 한다. */}
-          <Card padding="lg" style={styles.statsCard}>
-            <View style={styles.statCol}>
-              <Text variant="caption" weight="semibold" color="textMuted">
-                방문
-              </Text>
-              <Text variant="metric" color="primary">
-                {visitCount}
-              </Text>
+          {stage ? (
+            <Tag
+              label={stage.label}
+              tone={stage.tone}
+              style={styles.tag}
+              leading={
+                stage.icon ? (
+                  <Icon name={stage.icon} size={13} color={stage.tone === 'brand' ? c2.text.brand : c2.text.success} />
+                ) : undefined
+              }
+            />
+          ) : null}
+        </View>
+        <Text v2="bodyS.regular" tone="tertiary" style={styles.dateLine}>
+          {fmtTripDateLine(trip)}
+        </Text>
+        <View style={styles.progress}>
+          {stops.length > 0 ? (
+            <View style={styles.dots}>
+              {stops.map((s) =>
+                s.kind === 'visit' ? (
+                  <View key={s.key} style={styles.dot} />
+                ) : (
+                  <Icon key={s.key} name="skipped" size={12} color={c2.text.disabled} />
+                ),
+              )}
             </View>
-            <View style={styles.statCol}>
-              <Text variant="caption" weight="semibold" color="textMuted">
-                건너뜀
-              </Text>
-              <Text variant="metricSm" color="textMuted">
-                {skippedCount}
-              </Text>
-            </View>
-            <View style={styles.statCol}>
-              <Text variant="caption" weight="semibold" color="textMuted">
-                계획
-              </Text>
-              <Text variant="metricSm">{totalDest}</Text>
-            </View>
-          </Card>
+          ) : null}
+          <Text v2="bodyS.bold" tone="body">
+            {`${visitCount}/${stops.length} 방문`}
+          </Text>
         </View>
 
-        {visitCount === 0 && skippedCount === 0 ? (
-          <EmptyState
-            icon="footsteps-outline"
-            title="방문 기록 없이 종료된 외근입니다"
-            description="현장에 들르지 않았거나, 강제 종료된 외근입니다"
-          />
-        ) : (
-          <>
-            {visitCards.length > 0 ? (
-              <>
-                <Text
-                  variant="bodySm"
-                  weight="bold"
-                  color="textMuted"
-                  style={styles.sectionTitle}
-                >
-                  방문한 현장 정리 ({visitCards.length})
-                </Text>
-                {visitCards.map((c) => {
-                  const field = getField(c.fieldId);
-                  const vid = c.visit.id;
-                  return (
-                    <ReviewVisitCard
-                      key={vid}
-                      visit={c.visit}
-                      order={c.displayOrder}
-                      fieldAddress={field?.address ?? '알 수 없는 현장'}
-                      fieldAddressDetail={field?.addressDetail || undefined}
-                      memo={memoForVisit(directAttachments[c.fieldId], c.visit.visitedAt)?.text}
-                      photos={photosByVisit[vid]}
-                      expanded={expandedIds.has(vid)}
-                      onToggle={() => toggle(vid)}
-                      onEdit={() => router.push(`/(tabs)/trips/${id}/visits/${vid}` as never)}
-                      onDelete={() => void deleteVisit(vid, c.fieldId)}
-                    />
-                  );
-                })}
-              </>
-            ) : null}
+        <MapPreviewCard
+          markers={markers}
+          paths={route.paths}
+          onExpand={openRouteMap}
+          accessibilityLabel="외근 경로 지도 크게 보기"
+          style={styles.map}
+        />
 
-            {skippedDestinations.length > 0 ? (
-              <View style={styles.skippedSection}>
-                <Text
-                  variant="bodySm"
-                  weight="bold"
-                  color="textMuted"
-                  style={styles.sectionTitle}
-                >
-                  건너뛴 현장 ({skippedDestinations.length})
-                </Text>
-                {skippedDestinations.map((d, i) => {
-                  const field = getField(d.fieldId);
-                  return (
-                    <Card key={d.id} padding="md" style={styles.skippedCard}>
-                      <View style={styles.skippedHead}>
-                        <View style={styles.skippedOrderBadge}>
-                          <Text variant="caption" weight="bold" color="textMuted" numeric>
-                            {i + 1}
-                          </Text>
-                        </View>
-                        <View style={styles.skippedBody}>
-                          <Text variant="body" weight="semibold" numberOfLines={1}>
-                            {field?.address ?? '알 수 없는 현장'}
-                          </Text>
-                        </View>
-                        {/* 결과는 미정 — 체크인 없이 건너뛴 방문(명세 §1.4·수락 기준 7). */}
-                        <Badge
-                          label={DESTINATION_STATUS_BADGE.skipped.label}
-                          tone={DESTINATION_STATUS_BADGE.skipped.tone}
-                          shape={DESTINATION_STATUS_BADGE.skipped.shape}
-                          size="sm"
-                        />
-                      </View>
-                    </Card>
-                  );
-                })}
-              </View>
-            ) : null}
-          </>
-        )}
-        </BottomSheetScrollView>
-      </MapSheetLayout>
-      {/* StickyBottomBar 는 BottomSheet 외부에 — 시트 내부 absolute 자식의 터치를
-          @gorhom/bottom-sheet 의 pan 제스처가 가로채는 회로 차단. (active.tsx 와 동일 패턴) */}
-      <BottomActionBar absolute>
-        <Button
-          onPress={() => router.push(`/(tabs)/reports/new?tripId=${id}` as never)}
-          size="lg"
-          fullWidth
-          leftIcon="document-text"
-        >
-          보고서 작성
-        </Button>
-      </BottomActionBar>
+        <Text v2="bodyM.bold" style={styles.sectionTitle}>
+          {visitCount === 0 ? '계획한 현장' : '방문한 현장'}
+        </Text>
+        {stops.map((s, i) => {
+          const f = fieldById.get(s.fieldId);
+          if (s.kind === 'skipped') {
+            return <TripStopRow key={s.key} kind="skipped" order={s.order} title={fieldName(f)} divider={i > 0} />;
+          }
+          const vid = s.visit.id;
+          return (
+            <TripStopRow
+              key={s.key}
+              kind="visit"
+              order={s.order}
+              title={fieldName(f)}
+              visitedAt={s.visit.visitedAt}
+              status={fieldActionStatus(f)}
+              expanded={expandedId === vid}
+              onToggle={() => setExpandedId((cur) => (cur === vid ? null : vid))}
+              photos={photosByVisit[vid]}
+              memo={memoForVisit(directAttachments[s.fieldId], s.visit.visitedAt)?.text}
+              // TODO(PR7): 3-7 방문 기록 수정(체크인 수정 모드)으로 바꾼다.
+              onEdit={() => router.push(`/(tabs)/trips/${id}/visits/${vid}` as never)}
+              onOpenField={() => router.push(`/(tabs)/trips/fields/${s.fieldId}` as never)}
+              divider={i > 0}
+            />
+          );
+        })}
+        {visitCount === 0 ? (
+          <View style={styles.info}>
+            <Text v2="bodyS.regular" tone="secondary">
+              방문한 현장이 없어 보고서를 만들 수 없어요.
+            </Text>
+          </View>
+        ) : null}
+      </ScrollView>
+      {visitCount > 0 ? <ReportFooter tripId={id} state={reportState} /> : null}
     </View>
   );
 }
 
+function Header({
+  onBack,
+  onMore,
+  moreRef,
+}: {
+  onBack: () => void;
+  onMore?: () => void;
+  moreRef?: React.RefObject<View | null>;
+}) {
+  return (
+    <View style={styles.header}>
+      <Touchable
+        onPress={onBack}
+        accessibilityRole="button"
+        accessibilityLabel="외근 내역으로"
+        style={styles.headerBtn}
+      >
+        <Icon name="arrow-left" size={24} color={c2.text.primary} />
+      </Touchable>
+      {onMore ? (
+        <Touchable
+          ref={moreRef}
+          onPress={onMore}
+          accessibilityRole="button"
+          accessibilityLabel="외근 더보기"
+          style={styles.headerBtn}
+        >
+          <Icon name="more" size={24} color={c2.text.primary} />
+        </Touchable>
+      ) : null}
+    </View>
+  );
+}
+
+/** 하단 바 — 작성 전 [보고서 작성] · 3-1 작성 중 '현장 N곳 중 M곳 작성했어요' + [이어서 작성] · 3-2 [보고서 보기]. */
+function ReportFooter({ tripId, state }: { tripId: string; state: TripReportState }) {
+  const router = useRouter();
+  const report = state.report;
+  // 상태를 모르는 동안엔 버튼을 두지 않는다 — 작성 전으로 잘못 보이면 같은 외근에 보고서가 둘 생긴다.
+  if (state.stage === 'checking') return null;
+  if (state.stage === 'none' || !report) {
+    return (
+      <BottomActionBar safeArea={false} style={styles.footer}>
+        {/* TODO(PR8): 9-2 보고서 작성으로 바꾼다. 지금은 기존 보고서 만들기 화면. */}
+        <Button2 onPress={() => void openReportForTrip(router, tripId)} fullWidth>
+          보고서 작성
+        </Button2>
+      </BottomActionBar>
+    );
+  }
+  const open = () => router.push(`/(tabs)/reports/${report.id}` as never);
+  if (state.stage === 'draft') {
+    return (
+      <BottomActionBar
+        safeArea={false}
+        style={[styles.footer, styles.footerDraft]}
+        header={
+          <Text v2="caption.regular" tone="tertiary" style={styles.center}>
+            <Text v2="caption.bold" tone="link">
+              {`현장 ${state.total ?? 0}곳 중 ${state.filled ?? 0}곳`}
+            </Text>
+            {' 작성했어요'}
+          </Text>
+        }
+      >
+        <Button2 onPress={open} fullWidth>
+          이어서 작성
+        </Button2>
+      </BottomActionBar>
+    );
+  }
+  return (
+    <BottomActionBar safeArea={false} style={styles.footer}>
+      <Button2 onPress={open} fullWidth>
+        보고서 보기
+      </Button2>
+    </BottomActionBar>
+  );
+}
+
 const styles = StyleSheet.create({
-  screenRoot: { flex: 1 },
-  // paddingBottom 은 렌더에서 — 하단 바 실제 높이(safe area 포함) + 여유.
-  scroll: { padding: spacing.lg },
-  header: { gap: spacing.sm, marginBottom: spacing.lg },
-  metaRow: {
+  root: { flex: 1, backgroundColor: c2.bg.canvas },
+  center: { textAlign: 'center' },
+  // Figma: 상태 표시줄 아래 4 에 44 버튼(좌 4·우 8).
+  header: {
+    height: 48,
+    paddingTop: space[4],
+    paddingLeft: space[4],
+    paddingRight: space[8],
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    justifyContent: 'space-between',
   },
-  // 정렬 기준은 라벨 줄(위)이다. 라벨은 셋 다 caption 이라 한 줄로 맞고, 크기가 큰
-  // 방문 숫자만 아래로 더 자란다 — 그게 위계로 읽힌다. 바닥을 맞추면(flex-end) 반대로
-  // 작은 열의 라벨이 6px 내려앉아 어긋난 것처럼 보인다(실측).
-  // 열을 flex 로 늘리지 않고 왼쪽에 모아 두고 오른쪽은 비운다 — 여백이 divider 를 대신한다.
-  // Figma statsCard 는 내용 폭(전체 폭으로 늘리지 않는다).
-  statsCard: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.xl,
-    marginTop: spacing.md,
-  },
-  statCol: { gap: spacing.xs },
-  sectionTitle: { marginBottom: spacing.sm },
-  skippedSection: { marginTop: spacing.lg },
-  skippedCard: {
-    marginBottom: spacing.xs,
-    backgroundColor: colors.surfaceMuted,
-    borderWidth: 0,
-  },
-  skippedHead: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  skippedOrderBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: radius.pill,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
+  headerBtn: {
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  skippedBody: { flex: 1 },
+  scroll: { paddingHorizontal: space[20], paddingBottom: space[24] },
+  // 제목 줄(44)은 머리 아래로 3 겹쳐 올라가고 날짜 줄과도 5 겹친다(Figma 좌표 그대로).
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: space[8],
+    marginTop: -3,
+  },
+  titleWrap: { flex: 1, minWidth: 0 },
+  tag: { height: 26, marginTop: 9 },
+  dateLine: { marginTop: -5 },
+  progress: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space[10],
+    marginTop: space[8],
+  },
+  dots: { flexDirection: 'row', alignItems: 'center', gap: space[6] },
+  dot: {
+    width: 12,
+    height: 12,
+    borderRadius: radius2.full,
+    backgroundColor: c2.bg.brand,
+  },
+  map: { marginTop: 22 },
+  sectionTitle: { marginTop: 22, marginBottom: space[4] },
+  info: {
+    marginTop: 22,
+    paddingVertical: space[14],
+    paddingHorizontal: space[16],
+    borderRadius: radius2.lg,
+    backgroundColor: c2.bg.subtle,
+  },
+  missing: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: space[8],
+    padding: space[20],
+  },
+  footer: {
+    paddingTop: space[12],
+    paddingBottom: 13,
+    borderTopColor: c2.border.default,
+    backgroundColor: c2.bg.canvas,
+  },
+  footerDraft: { paddingTop: space[10], paddingBottom: space[12] },
 });

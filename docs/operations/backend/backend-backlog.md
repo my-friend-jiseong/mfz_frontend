@@ -915,3 +915,54 @@ POST /auth/password/reset-confirm   { "resetToken": "...", "newPassword": "...",
 - `remainingAttempts` 가 0 이 되는 시도는 `password_reset_attempts_exceeded` 로 답해 주면 프론트가 바로 11-7 로 간다(0 으로 와도 11-7 로 처리한다).
 - 경로·필드 이름은 제안이다. 바꾸면 알려 주면 `auth.ts` 세 줄만 고친다.
 - 검토용: 개발 빌드에서 `/password-reset?mock=ok|wrong|locked|expired|limited` 로 가짜 응답을 골라 각 상태를 띄울 수 있다(운영 빌드는 무시).
+
+### B. 🟠 보고서 상태(작성 전·중·완료) — 외근 내역·외근 상세 배지 (인수인계 §3 '보고서 작성 중 판단', 결정 v110)
+
+화면 1·2(외근 내역 행), 3·3-1·3-2(외근 상세 머리·하단 바), 9(보고서 목록)가 보고서 상태를 3단계로 보인다: 작성 전(보고서 없음) / 작성 중 / 작성 완료. 3-1 하단에는 '현장 N곳 중 M곳 작성했어요'도 나온다. 지금 Report 에 상태 칸이 없어 프론트가 **상세(`GET /api/reports/{id}`)의 현장 보고 내용으로 계산**한다 — 사진·설명이 하나도 없는 현장 보고(`isFieldReportEmpty`)가 하나라도 있으면 작성 중(`src/utils/reportStage.ts`). 그래서 외근 내역을 열 때마다 **보고서 수만큼 상세 요청**이 나간다(`useTripReportStates`).
+
+요청(둘 중 하나면 된다):
+
+```jsonc
+// 1) 목록·상세에 파생 값만 — 프론트 계산을 그대로 서버로 옮김
+GET /api/reports        items[]: { ..., "fieldReportCount": 3, "filledFieldReportCount": 1 }
+GET /api/reports/{id}   { ..., "fieldReportCount": 3, "filledFieldReportCount": 1 }
+
+// 2) 상태 칸 — 9-2 [저장](9-12 '1곳이 아직 비어 있어요' → [저장])으로 완료를 확정
+reports.status: "draft" | "completed"     // 목록·상세 응답에 포함
+PATCH /api/reports/{id} { "status": "completed" }
+```
+
+- 2)가 정책(인수인계 '정책 결정': 빈 현장이 남아도 저장하면 완료)에 더 맞다. 지금 계산은 빈 현장을 남긴 채 저장한 보고서를 '작성 중'으로 보인다(알려진 차이).
+- 외근 목록(`GET /api/trips`) 항목에 그 외근 보고서의 `reportId`·상태가 같이 오면 보고서 목록을 따로 받지 않아도 된다(선택).
+- 함께 있으면 좋은 것: 외근 상세의 **출발 위치**(`startLat`·`startLng`, 외근 시작 시점). 3-8 경로 지도의 '출발' 점·첫 구간 선을 그리는 데 쓴다. 지금은 출발 시각만 카드에 적고 지도엔 점을 찍지 않는다.
+
+### C. 🟠 외근 삭제 범위 — 보고서·이 외근에서만 들른 현장까지 (3-5·3-6, 결정 v83·v84)
+
+3-5·3-6 확인 창은 '방문 기록과 이 외근에서만 들른 현장이 지워지고 되돌릴 수 없어요.'(보고서가 있으면 '이 외근으로 만든 보고서 …도 함께 지워져요.')라고 알린다. 지금 서버는 그만큼 지우지 않는다.
+
+실측(2026-10-17, demo3): 새 현장 1곳 → 외근 시작·체크인·종료 → 그 외근으로 보고서 생성 → `DELETE /api/trips/{id}` 는 409, `?force=true` 는 204. 그 뒤
+- `GET /api/reports/{id}` 200 — **보고서가 그대로 남는다**(tripId 도 지운 외근을 가리킨 채)
+- `GET /api/fields/{id}` 200 — **이 외근에서만 들른 현장도 남는다**
+
+프론트 선조치: 삭제 직전에 서버에서 그 외근의 보고서를 찾아(`reportsApi.list({tripId})`) 있으면 경고하고, `DELETE /api/reports/{id}` 를 먼저 부른 뒤 외근을 지운다(`app/(tabs)/trips/[id].tsx`). 현장은 다른 외근 방문 여부를 앱이 다 알 수 없어 지우지 않는다(확인 창 문구와 다름 — 알려진 차이).
+
+요청: `DELETE /api/trips/{id}?force=true` 가 한 트랜잭션에서
+1. 그 외근의 방문 기록(사진·메모 포함)
+2. 그 외근으로 만든 보고서(현장 보고·첨부 포함)
+3. 그 외근의 방문만 있는 현장(다른 외근 방문이 하나라도 있으면 유지)
+을 함께 지우기. 응답에 지운 개수(`{ deletedVisits, deletedReports, deletedFields }`)가 있으면 확인 창 문구를 숫자로 바꿀 수 있다(선택). 서버가 보고서까지 지우면 프론트의 보고서 선삭제는 빼겠다.
+
+### D. 🟠 방문 단위 조치 상태 + 현장의 최근 조치 상태 (인수인계 §3 '방문에 조치 상태 저장', 결정 v100)
+
+2차는 '현장 상태' 대신 방문마다 **조치 상태**(조치 전·중·완료)를 남기고, 지도 핀 색·외근 상세 방문 행·현장 목록은 **가장 최근 방문의 조치 상태**(파생 값)로 그린다. 지금은 방문에 조치 상태가 없어 현장 `status` 로 대신한다(`src/utils/fieldStatus.ts` `fieldActionStatus`, `Field.latestActionStatus` 를 optional 로 먼저 받아 둠).
+
+요청:
+- `visits.actionStatus: "pending" | "in_progress" | "done"` — 체크인·방문 수정에서 저장(`PATCH /api/visits/{id}` 또는 check-in body). 결과 6종(`status`)은 2차에서 쓰지 않으므로 그 칸을 재사용해도 된다(추론).
+- 현장 목록·상세(`GET /api/fields/mine`, `/api/fields/{id}`)에 `latestActionStatus`(가장 최근 방문의 actionStatus, 방문 없으면 null)
+- 외근 상세 타임라인 항목에 그 방문의 `actionStatus`(3 외근 상세 행·3-8 핀 색)
+
+### E. 🔴 저장된 사진 파일이 404 — 스토리지 복구 + Content-Type
+
+외근 상세에서 방문 사진을 펼치면 썸네일이 비어 있다. 운영의 `/storage/...` 파일 URL 이 기존 사진 전부 404(서버 쪽 파일 유실로 보임, 2026-10-17 확인). 프론트는 못 불러온 사진을 사진 아이콘 칸으로 보인다(`TripStopRow` onError).
+
+요청: 기존 첨부 파일 복구(백업이 있으면), 그리고 파일 응답에 올바른 `Content-Type`(image/jpeg 등)을 붙이기 — 브라우저·RN Image 가 확장자 없이도 그릴 수 있게.

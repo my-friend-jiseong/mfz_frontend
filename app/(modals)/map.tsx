@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -32,6 +32,8 @@ export default function FullMapScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const spec = getFullMapSpec(id);
   const fields = useFieldStore((s) => s.fields);
+  // 경로 순서 카드(3-8)가 지도 아래를 덮으므로 핀 맞춤 여백을 카드 높이만큼 준다.
+  const [legendH, setLegendH] = useState(0);
 
   const markers = useMemo<KakaoMapMarker[]>(() => {
     if (!spec) return [];
@@ -92,6 +94,11 @@ export default function FullMapScreen() {
         startPoint={spec?.startPoint ?? null}
         myLocation={spec?.myLocation ?? null}
         fitToMarkers={!circleView}
+        fitPadding={
+          legendH > 0
+            ? [insets.top + 64, 40, legendH + Math.max(insets.bottom, space[20]) + space[12] + space[24], 40]
+            : undefined
+        }
       />
       <View pointerEvents="box-none" style={[styles.header, { paddingTop: insets.top + space[4] }]}>
         <MapButton icon="close" size={44} accessibilityLabel="닫기" onPress={() => safeBack(router)} />
@@ -104,7 +111,10 @@ export default function FullMapScreen() {
         ) : null}
       </View>
       {spec?.legend?.length ? (
-        <View style={[styles.legend, { bottom: Math.max(insets.bottom, space[20]) + space[12] }]}>
+        <View
+          style={[styles.legend, { bottom: Math.max(insets.bottom, space[20]) + space[12] }]}
+          onLayout={(e) => setLegendH(Math.round(e.nativeEvent.layout.height))}
+        >
           {spec.legend.map((row) => (
             <LegendRow key={row.key} row={row} />
           ))}

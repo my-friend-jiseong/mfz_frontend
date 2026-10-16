@@ -1,4 +1,5 @@
-import { Alert } from 'react-native';
+import { Alert, Linking, Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 
 export interface LatLng {
@@ -133,5 +134,79 @@ export async function peekUserLocation(): Promise<LatLng | null> {
     return { lat: pos.coords.latitude, lng: pos.coords.longitude };
   } catch {
     return null;
+  }
+}
+
+// === 2차 위치 권한(1-1 위치 꺼짐 · 1-2 위치 권한 안내) ===
+// 1 지도는 앱을 열 때 묻지 않는다(배너 없이 기능만 줄임). 내 위치·외근 시작을 누를 때 1-2 시트로 이유를
+// 먼저 보이고, 시트의 [위치 권한 허용]에서 OS 팝업을 띄운다. OS 에서 두 번 거절하면(또는 '다시 묻지 않음')
+// 팝업이 더 뜨지 않으므로 버튼을 '설정에서 켜기'로 바꾼다 — 거절 횟수는 기기에 남긴다.
+
+/** granted: 허용 · off: 아직 안 물었거나 거절(다시 물을 수 있음) · blocked: 두 번 거절 또는 OS 가 더 묻지 않음 */
+export type LocationPermission = 'granted' | 'off' | 'blocked';
+
+const DENIALS_KEY = 'location.permissionDenials';
+/** 이 횟수만큼 거절하면 설정 앱으로 보낸다(1-2 캡션 '두 번 거절했으면'). */
+export const LOCATION_DENIALS_TO_SETTINGS = 2;
+
+async function readDenials(): Promise<number> {
+  try {
+    const v = await AsyncStorage.getItem(DENIALS_KEY);
+    const n = v ? Number(v) : 0;
+    return Number.isFinite(n) ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** 위치 요청을 끈 개발 스위치(EXPO_PUBLIC_DISABLE_GEOLOCATION)가 켜져 있는가 — 권한 안내도 건너뛴다. */
+export function isGeolocationDisabled(): boolean {
+  return GEOLOCATION_DISABLED;
+}
+
+/** 묻지 않고 지금 권한 상태만 읽는다. */
+export async function getLocationPermission(): Promise<LocationPermission> {
+  if (GEOLOCATION_DISABLED) return 'off';
+  try {
+    const p = await Location.getForegroundPermissionsAsync();
+    if (p.granted) {
+      // 설정 앱에서 켜고 돌아온 경우 — 다음에 다시 끄면 처음부터 센다.
+      await AsyncStorage.removeItem(DENIALS_KEY).catch(() => undefined);
+      return 'granted';
+    }
+    // 웹 브라우저는 한 번 막으면 페이지가 다시 물을 수 없다(사이트 설정에서만 풀림).
+    if (Platform.OS === 'web' && p.status === 'denied') return 'blocked';
+    if (!p.canAskAgain) return 'blocked';
+    return (await readDenials()) >= LOCATION_DENIALS_TO_SETTINGS ? 'blocked' : 'off';
+  } catch {
+    return 'off';
+  }
+}
+
+/** OS 권한 팝업을 띄운다(1-2 [위치 권한 허용]). 거절하면 횟수를 하나 올린다. 결과 상태를 돌려준다. */
+export async function requestLocationPermission(): Promise<LocationPermission> {
+  if (GEOLOCATION_DISABLED) return 'off';
+  try {
+    const { granted } = await Location.requestForegroundPermissionsAsync();
+    if (granted) {
+      await AsyncStorage.removeItem(DENIALS_KEY).catch(() => undefined);
+      return 'granted';
+    }
+    const n = (await readDenials()) + 1;
+    await AsyncStorage.setItem(DENIALS_KEY, String(n)).catch(() => undefined);
+  } catch {
+    // 웹에서 브라우저가 막은 경우 등 — 거절과 같게 본다.
+  }
+  return getLocationPermission();
+}
+
+/** 1-2 [설정에서 켜기]. 웹은 설정 앱이 없어(Linking.openSettings 없음) false — 시트가 브라우저 안내를 보인다. */
+export function openLocationSettings(): boolean {
+  if (Platform.OS === 'web') return false;
+  try {
+    void Linking.openSettings().catch(() => undefined);
+    return true;
+  } catch {
+    return false;
   }
 }

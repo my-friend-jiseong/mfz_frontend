@@ -15,10 +15,16 @@ import {
 import { MapLegend } from '@/components/MapLegend';
 import { elevation } from '@/theme/elevation';
 import { spacing, radius } from '@/theme/spacing';
-import { requestUserLocation, type LatLng } from '@/utils/geolocation';
+import { peekUserLocation, requestUserLocation, type LatLng } from '@/utils/geolocation';
 import { MapFilterBar } from '@/components/MapFilterBar';
 import { MapSearchBar } from '@/components/MapSearchBar';
-import { useMapSettingsStore } from '@/stores/mapSettingsStore';
+import { MapSettingsSheet } from '@/components/map/MapSettingsSheet';
+import { SearchBar } from '@/components/ui/SearchBar';
+import { MapButton } from '@/components/ui/MapButton';
+import { RANGE_DAYS, useMapSettingsStore } from '@/stores/mapSettingsStore';
+import { useLocationPermission, useLocationPermissionStore } from '@/stores/locationPermissionStore';
+import { fieldActionStatus } from '@/utils/fieldStatus';
+import { space } from '@/theme/v2';
 import { useCategoryStore } from '@/stores/categoryStore';
 import { mergeCategoryNames } from '@/utils/fieldFacets';
 import { colors } from '@/theme/colors';
@@ -57,6 +63,16 @@ interface MapDashboardProps {
   // 외근 목록의 '지도에서 보기' 는 상세 화면이 아니라 메인 탭 안의 임시 포커스라, 토글 한 번에
   // 검색창·레이어 버튼이 사라지고 히트맵 설정이 마커로 리셋되면 고장으로 보인다.
   keepGlobalChrome?: boolean;
+  /**
+   * 2차 지도 크롬(1 지도): 검색창은 4 현장 검색으로 가는 입구, 옆에 지도 설정(1-3), 2차 핀(최근 조치 상태 색).
+   * 위치는 앱을 열 때 묻지 않고(1-1), 권한이 없으면 내 위치 버튼이 꺼진 모양 — 누르면 onLocationOff(1-2).
+   */
+  v2?: {
+    onSearchPress: () => void;
+    onLocationOff: () => void;
+    /** 내 위치 버튼의 화면 아래 기준 위치(시트 위 16). */
+    locateBottom: number;
+  };
 }
 
 export function MapDashboard({
@@ -67,6 +83,7 @@ export function MapDashboard({
   routeFieldIds,
   routeVertexes,
   keepGlobalChrome = false,
+  v2,
 }: MapDashboardProps = {}) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -111,9 +128,10 @@ export function MapDashboard({
   const selectedTags = useMapSettingsStore((s) => s.selectedTags);
   const toggleTag = useMapSettingsStore((s) => s.toggleTag);
   const sharedVisibleAttachments = useMapSettingsStore((s) => s.visibleAttachments);
-  const toggleAttachment = useMapSettingsStore((s) => s.toggleAttachment);
   const sharedShowBoundary = useMapSettingsStore((s) => s.showBoundary);
-  const toggleBoundary = useMapSettingsStore((s) => s.toggleBoundary);
+  const setStatuses = useMapSettingsStore((s) => s.setStatuses);
+  const resetSettings = useMapSettingsStore((s) => s.reset);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // 공유 설정은 외근·현장 메인 탭(전역·비선택 지도)에만 적용한다. 스코프 상세·보고서 위치도는
   // 필터로 목적지가 가려지면 안 되고, 외근 시작 선택 화면은 히트맵이 되면 마커를 못 누른다 —
@@ -134,13 +152,48 @@ export function MapDashboard({
   // 검색에서 고른 '새 위치'(카카오 장소) — 지도에 비컨을 찍고 등록 여부를 묻는 카드를 띄운다.
   const [pendingPlace, setPendingPlace] = useState<AddressSearchItem | null>(null);
   const locationFetchedRef = useRef(false);
+  const isV2 = !!v2;
   useEffect(() => {
-    if (locationFetchedRef.current) return;
+    // 2차는 묻지 않는다 — 아래 권한 상태 effect 가 허용됐을 때만 읽는다.
+    if (isV2 || locationFetchedRef.current) return;
     locationFetchedRef.current = true;
     void requestUserLocation().then((loc) => {
       if (loc) setMyLocation(loc);
     });
-  }, []);
+  }, [isV2]);
+
+  // 2차(1-1·1-2): 권한 상태를 보고 허용됐을 때만 위치를 읽는다. 1-2 에서 허용하고 돌아오면 내 위치로 옮긴다.
+  const permission = useLocationPermission();
+  const recenterAfterGrantRef = useRef(false);
+  useEffect(() => {
+    if (!isV2 || permission !== 'granted') return;
+    let alive = true;
+    void peekUserLocation().then((loc) => {
+      if (!alive || !loc) return;
+      setMyLocation(loc);
+      if (recenterAfterGrantRef.current) {
+        recenterAfterGrantRef.current = false;
+        mapHandleRef.current?.recenter(loc);
+      }
+    });
+    return () => {
+      alive = false;
+    };
+  }, [isV2, permission]);
+  // 1-2 를 허용 없이 닫으면(나중에·스크림) 다음 허용 때 엉뚱하게 내 위치로 끌려가지 않게 잊는다.
+  const permissionSheetOpen = useLocationPermissionStore((s) => s.sheetOpen);
+  useEffect(() => {
+    if (!permissionSheetOpen && permission !== 'granted') recenterAfterGrantRef.current = false;
+  }, [permissionSheetOpen, permission]);
+  const locationOff = permission === 'off' || permission === 'blocked';
+  const onLocatePress = () => {
+    if (!v2 || !locationOff) {
+      mapHandleRef.current?.recenter();
+      return;
+    }
+    recenterAfterGrantRef.current = true;
+    v2.onLocationOff();
+  };
 
   // allFields 는 /api/fields/mine 출처 — 백엔드가 이미 "내 현장"으로 스코프해 내려준다.
   // 따라서 클라이언트에서 현장별 owner(userId)로 재필터하지 않는다(로그인 가드만 유지).
@@ -180,10 +233,10 @@ export function MapDashboard({
     // 스코프·선택 화면은 공유 필터를 적용하지 않는다 — 목적지/선택 후보가 가려지지 않게.
     if (!sharesSettings) return list;
     if (selectedStatuses.length > 0) {
-      list = list.filter((f) => selectedStatuses.includes(f.status));
+      list = list.filter((f) => selectedStatuses.includes(fieldActionStatus(f)));
     }
     if (rangePreset !== 'all') {
-      const days = rangePreset === '30d' ? 30 : rangePreset === '7d' ? 7 : 1;
+      const days = RANGE_DAYS[rangePreset];
       const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
       list = list.filter((f) => {
         const t = f.recentVisitedAt ?? f.updatedAt;
@@ -192,10 +245,9 @@ export function MapDashboard({
         return Number.isFinite(ms) && ms >= cutoff;
       });
     }
+    // 1-3 분류 칩: 고른 분류 중 하나라도 붙은 현장(여러 분류를 고르면 넓어진다).
     if (selectedTags.length > 0) {
-      list = list.filter((f) =>
-        selectedTags.every((tag) => f.categories?.includes(tag)),
-      );
+      list = list.filter((f) => selectedTags.some((tag) => f.categories?.includes(tag)));
     }
     return list;
   }, [scopedFields, sharesSettings, selectedStatuses, rangePreset, selectedTags]);
@@ -270,6 +322,8 @@ export function MapDashboard({
 
   const markers = useMemo(() => {
     const base = fieldsToMarkers(visibleFields);
+    // 2차 핀: 최근 조치 상태 색(fieldActionStatus). 핀 종류가 색을 정한다.
+    const pinOf = isV2 ? new Map(visibleFields.map((f) => [f.id, fieldActionStatus(f)])) : null;
     return base.map((m) => {
       const selected = selectedSet.has(m.id);
       const highlighted = m.id === highlightedFieldId;
@@ -281,9 +335,10 @@ export function MapDashboard({
         if (visibleAttachments.photo && presence.photo) tags.push('사진');
         if (tags.length > 0) label = `${m.label} · ${tags.join('·')}`;
       }
-      return { ...m, label, selected, highlighted, order: orderByFieldId.get(m.id) };
+      return { ...m, label, selected, highlighted, order: orderByFieldId.get(m.id), pin: pinOf?.get(m.id) };
     });
   }, [
+    isV2,
     visibleFields,
     attachmentPresenceByField,
     visibleAttachments,
@@ -312,6 +367,29 @@ export function MapDashboard({
     return pts.length >= 2 ? pts : undefined;
   }, [routeVertexes, routeFieldIds, scopedFields]);
 
+  // 1-3 지도 설정 — 1 지도(2차)와 아직 옮기지 않은 지도 화면이 같은 시트를 쓴다.
+  const settingsProps = {
+    displayMode,
+    onChangeDisplayMode: setDisplayMode,
+    baseMapType,
+    onChangeBaseMapType: setBaseMapType,
+    selectedStatuses,
+    onChangeStatuses: setStatuses,
+    rangePreset,
+    onChangeRangePreset: setRangePreset,
+    availableTags,
+    selectedTags,
+    onToggleTag: toggleTag,
+    visibleCount: visibleFields.length,
+    onReset: resetSettings,
+  };
+  const settingsChanged =
+    displayMode !== 'markers' ||
+    baseMapType !== 'roadmap' ||
+    selectedStatuses.length > 0 ||
+    rangePreset !== 'all' ||
+    selectedTags.length > 0;
+
   return (
     // 지도가 화면 위까지 꽉 차고, 설정은 우측 상단 떠 있는 '레이어' 버튼 오버레이로.
     // (이전엔 상단에 불투명 흰 필터 바가 지도를 눌러 답답해 보이던 회로 차단.)
@@ -338,7 +416,7 @@ export function MapDashboard({
       <MapLegend displayMode={displayMode} bottomInset={legendBottomInset} />
       {/* 지도 상단 검색창 — 현장을 이름(주소)으로 찾아 지도를 그 위치로 이동.
           레이어 패널과 동일하게 메인 탭(외근·현장)에만 노출. */}
-      {sharesSettings ? (
+      {sharesSettings && !v2 ? (
         <MapSearchBar
           fields={scopedFields}
           onSelectField={(f) => {
@@ -357,7 +435,7 @@ export function MapDashboard({
         />
       ) : null}
       {/* '새 위치' 비컨 확인 카드 — 검색창 아래에 떠서, 비컨 위치를 확인하고 등록 여부를 결정. */}
-      {sharesSettings && pendingPlace ? (
+      {sharesSettings && !v2 && pendingPlace ? (
         <View
           style={[styles.placeCard, { top: insets.top + spacing.sm + 44 + spacing.sm }]}
         >
@@ -413,39 +491,50 @@ export function MapDashboard({
           </Pressable>
         </View>
       ) : null}
-      {/* 내 위치로 복구 — 우측 하단 조준점 버튼. 시트 peek 위로 띄움. */}
-      <Pressable
-        onPress={() => mapHandleRef.current?.recenter()}
-        style={({ pressed }) => [
-          styles.locateBtn,
-          { bottom: (legendBottomInset ?? 0) + spacing.md },
-          pressed && styles.locateBtnPressed,
-        ]}
-        accessibilityRole="button"
-        accessibilityLabel="내 위치로 지도 이동"
-      >
-        <Ionicons name="locate" size={22} color={colors.text} />
-      </Pressable>
-      {/* 레이어 설정 패널은 공유 설정을 쓰는 메인 탭(외근·현장)에만 — 스코프·선택 화면은
-          작업 집중 위해 숨긴다(여기서 토글하면 전역 store 가 바뀌어 혼란하므로). */}
-      {sharesSettings ? (
-        <MapFilterBar
-          displayMode={displayMode}
-          onChangeDisplayMode={setDisplayMode}
-          baseMapType={baseMapType}
-          onChangeBaseMapType={setBaseMapType}
-          selectedStatuses={selectedStatuses}
-          onToggleStatus={toggleStatus}
-          rangePreset={rangePreset}
-          onChangeRangePreset={setRangePreset}
-          availableTags={availableTags}
-          selectedTags={selectedTags}
-          onToggleTag={toggleTag}
-          visibleAttachments={visibleAttachments}
-          onToggleAttachment={toggleAttachment}
-          showBoundary={showBoundary}
-          onToggleBoundary={toggleBoundary}
-        />
+      {v2 ? (
+        <>
+          {/* 1 지도 위쪽: 4 현장 검색으로 가는 검색창 + 지도 설정(1-3). */}
+          <View style={[styles.v2Top, { top: insets.top + space[8] }]} pointerEvents="box-none">
+            <SearchBar value="" onPressLauncher={v2.onSearchPress} style={styles.v2Search} />
+            {sharesSettings ? (
+              <MapButton
+                icon="layers"
+                size={52}
+                dot={settingsChanged}
+                accessibilityLabel="지도 설정"
+                onPress={() => setSettingsOpen(true)}
+              />
+            ) : null}
+          </View>
+          <MapButton
+            icon={locationOff ? 'locate-off' : 'locate'}
+            accessibilityLabel={locationOff ? '위치 권한 꺼짐 — 내 위치 켜기' : '내 위치로 지도 이동'}
+            onPress={onLocatePress}
+            style={[styles.v2Locate, { bottom: v2.locateBottom }]}
+          />
+        </>
+      ) : (
+        // 내 위치로 복구 — 우측 하단 조준점 버튼. 시트 peek 위로 띄움.
+        <Pressable
+          onPress={onLocatePress}
+          style={({ pressed }) => [
+            styles.locateBtn,
+            { bottom: (legendBottomInset ?? 0) + spacing.md },
+            pressed && styles.locateBtnPressed,
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel="내 위치로 지도 이동"
+        >
+          <Ionicons name="locate" size={22} color={colors.text} />
+        </Pressable>
+      )}
+      {/* 지도 설정은 공유 설정을 쓰는 메인 탭에만 — 스코프·선택 화면은 작업 집중 위해 숨긴다
+          (여기서 바꾸면 전역 store 가 바뀌어 혼란하므로). */}
+      {sharesSettings && !v2 ? (
+        <MapFilterBar changed={settingsChanged} {...settingsProps} />
+      ) : null}
+      {sharesSettings && v2 ? (
+        <MapSettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} {...settingsProps} />
       ) : null}
     </View>
   );
@@ -495,4 +584,14 @@ const styles = StyleSheet.create({
     ...elevation.raised,
   },
   locateBtnPressed: { backgroundColor: colors.surfaceMuted },
+  v2Top: {
+    position: 'absolute',
+    left: space[16],
+    right: space[16],
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space[8],
+  },
+  v2Search: { flex: 1 },
+  v2Locate: { position: 'absolute', right: space[16] },
 });

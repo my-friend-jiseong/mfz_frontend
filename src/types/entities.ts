@@ -75,6 +75,9 @@ export interface Field {
   categories?: string[];
   recentVisitedAt?: string | null;
   updatedAt?: string;
+  // 2차: 가장 최근 방문의 조치 상태(파생 값, 지도 핀 색·목록 조치 표시). 서버 미제공 — 오기 전엔
+  // status 로 대신한다(fieldActionStatus). 백로그 '2차 개편 요청'.
+  latestActionStatus?: FieldStatus | null;
 }
 
 export interface Visit {

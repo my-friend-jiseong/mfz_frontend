@@ -25,6 +25,7 @@ import { VISIT_STATUS_LABEL, type Visit } from '@/types/entities';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { fmtDate, fmtTime } from '@/utils/datetime';
+import { tripTitle } from '@/utils/tripFormat';
 import { useReportDuration } from '@/utils/useReportDuration';
 
 // 보고서 작성 (명세 v2 FE-RPT-02·02a·10).
@@ -121,7 +122,7 @@ export default function ComposeReport() {
   const openTripPicker = () =>
     showActionSheet(
       myTrips.map((t) => ({
-        label: `${t.title || `${fmtDate(t.startedAt)} 외근`} · ${fmtDate(t.startedAt)}`,
+        label: `${tripTitle(t)} · ${fmtDate(t.startedAt)}`,
         selected: t.id === tripId,
         onPress: () => setTripId(t.id),
       })),
@@ -198,7 +199,7 @@ export default function ComposeReport() {
               <View style={styles.tripCardHead}>
                 <Ionicons name="briefcase" size={16} color={colors.primary} />
                 <Text variant="body" weight="semibold" style={styles.flex}>
-                  {selectedTrip.title || `${fmtDate(selectedTrip.startedAt)} 외근`}
+                  {tripTitle(selectedTrip)}
                 </Text>
               </View>
               <Text variant="caption" color="textMuted">

@@ -109,6 +109,11 @@ export const palette = {
     950: '#3b0764',
   },
 
+  // 1-3 지도 설정 '히트맵' 그림의 가운데 링. 2차 Figma 에 이 한 곳만 쓰인다.
+  orange: {
+    400: '#fb923c',
+  },
+
   white: '#ffffff',
   black: '#000000',
   transparent: 'transparent',
