@@ -1,4 +1,4 @@
-import { Alert, Linking, Platform } from 'react-native';
+import { Alert, Linking, PermissionsAndroid, Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 
@@ -142,6 +142,22 @@ export function assetToUploadFile(a: ImagePicker.ImagePickerAsset): UploadFile {
 }
 
 /**
+ * 안드로이드 10+ 사진 위치 권한(ACCESS_MEDIA_LOCATION). 없으면 고른 사진의 EXIF GPS 가 0 으로 지워져 온다(실기기 확인
+ * 2026-10-18). 선언만으로는 허용되지 않아 실행 중에 묻는다. 거절해도 사진 등록은 그대로 진행(위치 없음 → 지도에서 지정).
+ * 원본을 읽는 쪽은 patches/expo-image-picker(setRequireOriginal).
+ */
+async function requestMediaLocation(): Promise<void> {
+  if (Platform.OS !== 'android' || Number(Platform.Version) < 29) return;
+  try {
+    const perm = PermissionsAndroid.PERMISSIONS.ACCESS_MEDIA_LOCATION;
+    if (await PermissionsAndroid.check(perm)) return;
+    await PermissionsAndroid.request(perm);
+  } catch {
+    // 권한 창을 못 띄워도 등록은 진행한다.
+  }
+}
+
+/**
  * 갤러리에서 사진 여러 장(8-7 사진으로 여러 곳 등록). 촬영 위치를 읽으려고 exif 를 함께 받는다.
  * 권한이 없으면 안내 후 null, 취소해도 null.
  */
@@ -154,6 +170,7 @@ export async function pickPhotos(limit: number): Promise<ImagePicker.ImagePicker
     ]);
     return null;
   }
+  await requestMediaLocation();
   const result = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ImagePicker.MediaTypeOptions.Images,
     allowsMultipleSelection: true,

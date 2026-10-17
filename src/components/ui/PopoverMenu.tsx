@@ -6,6 +6,7 @@ import { animEasing, duration, useReducedMotionPref } from '@/theme/motion';
 import { Text } from './Text';
 import { OverlayModal } from './OverlayModal';
 import { Touchable } from './Touchable';
+import { measureForOverlay, type Measurable } from '@/utils/measureForOverlay';
 
 export interface PopoverItem {
   label: string;
@@ -13,11 +14,6 @@ export interface PopoverItem {
   /** 삭제처럼 되돌릴 수 없는 항목 — 빨강. */
   tone?: 'default' | 'danger';
   onPress: () => void;
-}
-
-/** measureInWindow 를 가진 것(View ref) */
-interface Measurable {
-  measureInWindow: (cb: (x: number, y: number, w: number, h: number) => void) => void;
 }
 
 interface Rect {
@@ -60,7 +56,7 @@ export function showPopoverMenu(anchor: Measurable | null, items: PopoverItem[],
     return;
   }
   const width = opts?.width ?? MENU_W;
-  anchor.measureInWindow((x, y, w, h) =>
+  measureForOverlay(anchor, (x, y, w, h) =>
     open?.({ anchor: { x, y, w, h }, items, width, dim: !!opts?.dim, onClose: opts?.onClose }),
   );
 }

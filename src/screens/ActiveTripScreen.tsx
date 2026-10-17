@@ -41,6 +41,7 @@ import { c2, elevation2, radius2, space } from '@/theme/v2';
 import { duration, rEasing } from '@/theme/motion';
 import type { Destination, Field } from '@/types/entities';
 import type { MapPinKind } from '@/components/KakaoMapWebView';
+import { measureForOverlay } from '@/utils/measureForOverlay';
 
 // Figma 7(538:2149): 아래 패널 200(탭 바 위), 지도 버튼은 패널 위 16, 경고 줄(60)이 있으면 그 위로.
 const PANEL_H = 200;
@@ -338,7 +339,7 @@ export default function ActiveTrip() {
   };
 
   const openMenu = () => {
-    plusRef.current?.measureInWindow((x, y, w, h) => setMenuAnchor({ x, y, w, h }));
+    if (plusRef.current) measureForOverlay(plusRef.current, (x, y, w, h) => setMenuAnchor({ x, y, w, h }));
   };
 
   const finalizeEnd = (endedTripId: string) => {
