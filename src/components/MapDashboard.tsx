@@ -19,7 +19,8 @@ import { useLocationPermission, useLocationPermissionStore } from '@/stores/loca
 import { fieldActionStatus } from '@/utils/fieldStatus';
 import { c2, space } from '@/theme/v2';
 import { useCategoryStore } from '@/stores/categoryStore';
-import { mergeCategoryNames } from '@/utils/fieldFacets';
+import { fieldTitle, mergeCategoryNames } from '@/utils/fieldFacets';
+import { districtOf } from '@/utils/addressFormat';
 
 // 비로그인 시 myFields — 렌더마다 새 [] 를 만들면 하위 useMemo(scopedFields 등)가
 // 매번 무효화되므로 identity 고정 모듈 상수로.
@@ -302,6 +303,7 @@ export function MapDashboard({
     const base = fieldsToMarkers(visibleFields);
     // 2차 핀: 최근 조치 상태 색(fieldActionStatus). 핀 종류가 색을 정한다.
     const pinOf = new Map(visibleFields.map((f) => [f.id, fieldActionStatus(f)]));
+    const fieldOf = new Map(visibleFields.map((f) => [f.id, f]));
     return base.map((m) => {
       const selected = selectedSet.has(m.id);
       const presence = attachmentPresenceByField.get(m.id);
@@ -312,7 +314,10 @@ export function MapDashboard({
         if (visibleAttachments.photo && presence.photo) tags.push('사진');
         if (tags.length > 0) label = `${m.label} · ${tags.join('·')}`;
       }
-      return { ...m, label, selected, order: orderByFieldId.get(m.id), pin: pinOf.get(m.id) };
+      const f = fieldOf.get(m.id);
+      // 2차 핀은 라벨을 지도에 그리지 않는다 — 겹친 핀 고르기 시트의 이름·구동으로 쓴다.
+      const named = f ? { label: fieldTitle(f), sublabel: districtOf(f.address) } : { label };
+      return { ...m, ...named, selected, order: orderByFieldId.get(m.id), pin: pinOf.get(m.id) };
     });
   }, [
     visibleFields,

@@ -7,8 +7,8 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { Icon } from '@/components/icons';
+import { StyleSheet, View } from 'react-native';
+import { MapClusterSheet } from '@/components/map/MapClusterSheet';
 import { WebView } from 'react-native-webview';
 import {
   buildKakaoMapHtml,
@@ -24,10 +24,7 @@ import { fillOpacityForCount } from '@/theme/choroplethScale';
 import { KAKAO_WEBVIEW_BASE_URL } from '@/utils/kakaoMap';
 import type { Field, FieldStatus } from '@/types/entities';
 import { FIELD_STATUS_LABEL } from '@/types/entities';
-import { Text } from '@/components/ui/Text';
 import { colors } from '@/theme/colors';
-import { elevation } from '@/theme/elevation';
-import { spacing, radius } from '@/theme/spacing';
 import { groupSameLocationMarkers } from '@/utils/groupSameLocationMarkers';
 import { pathStyle, type AccuracyTone, type MapPath, type MapPinKind, type PinSelectedSize } from '@/assets/mapPins';
 
@@ -59,7 +56,8 @@ export interface KakaoMapMarker {
   // 검색 결과 하이라이트 — true 면 마커에 brand 링+핑 펄스(selected 와 독립).
   highlighted?: boolean;
   /**
-   * 2차 핀(Figma Pin·Pin/Number). 주면 shape·badge 대신 32×44 핀으로 그리고(끝이 좌표), 묶지 않는다.
+   * 2차 핀(Figma Pin·Pin/Number). 주면 shape·badge 대신 32×44 핀으로 그린다(끝이 좌표).
+   * 조치 상태 핀(순번·선택·이름표 없음)은 겹치면 묶고 넓은 줌에서 줄인다(mapPins isClusterablePin).
    * order 가 있으면 순번 핀, selected 면 1.19배 + 바닥 타원. color 는 무시된다(종류가 색을 정한다).
    */
   pin?: MapPinKind;
@@ -67,6 +65,8 @@ export interface KakaoMapMarker {
   selectedSize?: PinSelectedSize;
   /** 핀 아래 이름표(6·7 다음 목적지). */
   nameTag?: string;
+  /** 겹친 핀 고르기 시트에서 상태 뒤에 붙는 회색 글(구·동 등). */
+  sublabel?: string;
 }
 
 interface Props {
@@ -158,6 +158,10 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
   const [activeGroup, setActiveGroup] = useState<KakaoMapMarker[] | null>(null);
 
   const kakaoJsKey = process.env.EXPO_PUBLIC_KAKAO_JS_KEY ?? '';
+  const closeGroup = useCallback(() => setActiveGroup(null), []);
+  const onMarkerPressRef = useRef(onMarkerPress);
+  onMarkerPressRef.current = onMarkerPress;
+  const pickFromGroup = useCallback((id: string) => onMarkerPressRef.current?.(id), []);
 
   // 동일 좌표 군집 — 히트맵 가중치(value=count)용. 마커 표시 클러스터링은 webview 가 줌별로 따로 한다.
   const groupedMarkers = useMemo(() => {
@@ -436,8 +440,9 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
             } else if (msg.type === 'markerPress' && typeof msg.fieldId === 'string') {
               onMarkerPress?.(msg.fieldId);
             } else if (msg.type === 'markerGroupPress' && Array.isArray(msg.groupIds)) {
-              const ids = new Set<string>(msg.groupIds);
-              const group = markers.filter((m) => ids.has(m.id));
+              // 묶음 순서(급한 상태 먼저) 그대로.
+              const byId = new Map(markers.map((m) => [m.id, m]));
+              const group = (msg.groupIds as string[]).flatMap((id) => byId.get(id) ?? []);
               if (group.length > 0) setActiveGroup(group);
             }
           } catch {
@@ -446,57 +451,7 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
         }}
         style={styles.web}
       />
-      <Modal
-        visible={activeGroup !== null}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setActiveGroup(null)}
-      >
-        <Pressable
-          style={styles.modalBackdrop}
-          onPress={() => setActiveGroup(null)}
-        >
-          <Pressable
-            style={styles.modalCard}
-            onPress={(e) => e.stopPropagation()}
-          >
-            <Text variant="body" weight="bold" style={styles.modalTitle}>
-              이 위치의 현장 {activeGroup?.length ?? 0}건
-            </Text>
-            <ScrollView style={styles.modalList}>
-              {activeGroup?.map((m) => (
-                <Pressable
-                  key={m.id}
-                  style={({ pressed }) => [
-                    styles.modalItem,
-                    pressed && styles.modalItemPressed,
-                  ]}
-                  onPress={() => {
-                    setActiveGroup(null);
-                    onMarkerPress?.(m.id);
-                  }}
-                >
-                  {m.badge ? (
-                    <View
-                      style={[styles.modalItemBadge, { backgroundColor: m.color }]}
-                    >
-                      <Text variant="caption" weight="bold" color="onPrimary">
-                        {m.badge}
-                      </Text>
-                    </View>
-                  ) : null}
-                  <Text variant="bodySm" style={styles.modalItemLabel} numberOfLines={1}>
-                    {m.label}
-                  </Text>
-                  {m.selected ? (
-                    <Icon name="check" size={18} color={colors.primary} />
-                  ) : null}
-                </Pressable>
-              ))}
-            </ScrollView>
-          </Pressable>
-        </Pressable>
-      </Modal>
+      <MapClusterSheet items={activeGroup} onClose={closeGroup} onPick={pickFromGroup} />
     </View>
   );
   },
@@ -526,37 +481,4 @@ export function fieldsToMarkers(fields: Field[]): KakaoMapMarker[] {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   web: { flex: 1, backgroundColor: 'transparent' },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: colors.overlay,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.xl,
-  },
-  modalCard: {
-    width: '100%',
-    maxWidth: 360,
-    maxHeight: '80%',
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    ...elevation.modal,
-  },
-  modalTitle: { marginBottom: spacing.md },
-  modalList: { maxHeight: 360 },
-  modalItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.md,
-    gap: spacing.sm,
-  },
-  modalItemPressed: { backgroundColor: colors.background },
-  modalItemBadge: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radius.pill,
-  },
-  modalItemLabel: { flex: 1 },
 });

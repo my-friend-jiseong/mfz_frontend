@@ -1,12 +1,13 @@
 import {
   forwardRef,
+  useCallback,
   useEffect,
   useImperativeHandle,
   useMemo,
   useRef,
   useState,
 } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import type { Field, FieldStatus } from '@/types/entities';
 import { FIELD_STATUS_LABEL } from '@/types/entities';
 import h337 from 'heatmap.js';
@@ -15,16 +16,22 @@ import { HEAT_GRADIENT, HEAT_CONFIG, HEAT_MAX, heatRadiusForLevel } from '@/them
 import { loadSigunguGeoJson, aggregateByRegion } from '@/assets/boundaries/sigungu';
 import { fillOpacityForCount, CHOROPLETH_COLOR } from '@/theme/choroplethScale';
 import { colors } from '@/theme/colors';
-import { spacing, fontSize, radius } from '@/theme/spacing';
+import { spacing, fontSize } from '@/theme/spacing';
 import { withAlpha } from '@/theme/withAlpha';
 import { groupSameLocationMarkers } from '@/utils/groupSameLocationMarkers';
+import { MapClusterSheet } from '@/components/map/MapClusterSheet';
 import {
   ACCURACY_CIRCLE_STYLE,
   ACCURACY_CIRCLE_STYLE_BRAND,
+  CLUSTER_PIN_PRIORITY,
+  PIN_CLUSTER_PX,
   PIN_TIP_Y_RATIO,
   START_POINT_HTML,
   buildPinHtml,
+  isClusterablePin,
   pathStyle,
+  pinScaleForLevel,
+  wrapPinHtml,
   type AccuracyTone,
   type MapPath,
   type MapPinKind,
@@ -51,6 +58,8 @@ export interface KakaoMapMarker {
   pin?: MapPinKind;
   selectedSize?: PinSelectedSize;
   nameTag?: string;
+  /** 겹친 핀 고르기 시트에서 상태 뒤에 붙는 회색 글(구·동 등). */
+  sublabel?: string;
 }
 
 // KWCAG 1.4.1 — 색 + 형상 + 라벨 3중 인코딩.
@@ -136,14 +145,15 @@ function clusterByPixel(
   markers: KakaoMapMarker[],
   proj: MapProjection,
   makeLatLng: (lat: number, lng: number) => unknown,
+  radiusPx: number = CLUSTER_PX,
 ): PixelCluster[] {
   type Node = PixelCluster & { px: number; py: number };
   const buckets = new Map<string, Node[]>();
   const clusters: Node[] = [];
   for (const m of markers) {
     const pt = proj.containerPointFromCoords(makeLatLng(m.lat, m.lng));
-    const gx = Math.floor(pt.x / CLUSTER_PX);
-    const gy = Math.floor(pt.y / CLUSTER_PX);
+    const gx = Math.floor(pt.x / radiusPx);
+    const gy = Math.floor(pt.y / radiusPx);
     let placed: Node | null = null;
     for (let dx = -1; dx <= 1 && !placed; dx++) {
       for (let dy = -1; dy <= 1 && !placed; dy++) {
@@ -152,7 +162,7 @@ function clusterByPixel(
         for (const cl of arr) {
           const ddx = cl.px - pt.x;
           const ddy = cl.py - pt.y;
-          if (ddx * ddx + ddy * ddy <= CLUSTER_PX * CLUSTER_PX) {
+          if (ddx * ddx + ddy * ddy <= radiusPx * radiusPx) {
             placed = cl;
             break;
           }
@@ -432,6 +442,10 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
   const [error, setError] = useState<string | null>(null);
   const [activeGroup, setActiveGroup] = useState<KakaoMapMarker[] | null>(null);
   const kakaoJsKey = process.env.EXPO_PUBLIC_KAKAO_JS_KEY ?? '';
+  const closeGroup = useCallback(() => setActiveGroup(null), []);
+  const onMarkerPressRef = useRef(onMarkerPress);
+  onMarkerPressRef.current = onMarkerPress;
+  const pickFromGroup = useCallback((id: string) => onMarkerPressRef.current?.(id), []);
 
   // 명령형 복구 — '내 위치' 버튼이 드래그된 지도를 다시 내 위치로 끌어온다.
   useImperativeHandle(
@@ -725,6 +739,8 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
       yAnchor: 0.5,
       zIndex: 5,
     });
+    // 내 위치 점은 누를 것이 아니다 — 카카오가 씌우는 바깥 상자가 그 아래 핀 누르기를 가로채지 않게.
+    if (content.parentElement) content.parentElement.style.pointerEvents = 'none';
     myLocOverlayRef.current = overlay;
   }, [ready, myLocation]);
 
@@ -905,16 +921,14 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
       if (displayMode !== 'markers') return;
       const proj = map.getProjection();
       const showLabel = map.getLevel() <= LABEL_MAX_LEVEL;
-      // 2차 핀은 묶지 않는다(네이티브 renderMarkers 와 같은 규칙).
+      // 2차 핀: 조치 상태 핀(순번·선택·이름표 없음)은 화면 거리로 묶고 넓은 줌에서 줄인다.
+      // 순번·선택 핀은 하나하나가 의미라 묶지 않고 그 위에 그린다(네이티브 renderMarkers 와 같은 규칙).
       const legacy: KakaoMapMarker[] = [];
-      markers.forEach((m) => {
-        if (!m.pin) {
-          legacy.push(m);
-          return;
-        }
+      const loose: KakaoMapMarker[] = [];
+      const addPin = (m: KakaoMapMarker, html: string, zIndex: number, onClick: () => void) => {
         const content = document.createElement('div');
-        content.innerHTML = buildPinHtml(m.pin, m.order ?? null, m.selected ? m.selectedSize ?? 'sm' : null, m.nameTag ?? null);
-        (content.firstChild as HTMLElement | null)?.addEventListener('click', () => onMarkerPress?.(m.id));
+        content.innerHTML = html;
+        (content.firstChild as HTMLElement | null)?.addEventListener('click', onClick);
         overlaysRef.current.push(
           new k.maps.CustomOverlay({
             position: new k.maps.LatLng(m.lat, m.lng),
@@ -922,9 +936,35 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
             map,
             xAnchor: 0.5,
             yAnchor: PIN_TIP_Y_RATIO,
-            zIndex: m.selected ? 4 : 3,
+            zIndex,
           }),
         );
+      };
+      markers.forEach((m) => {
+        if (!m.pin) legacy.push(m);
+        else if (isClusterablePin(m)) loose.push(m);
+        else
+          addPin(
+            m,
+            buildPinHtml(m.pin, m.order ?? null, m.selected ? m.selectedSize ?? 'sm' : null, m.nameTag ?? null),
+            m.selected ? 5 : 4,
+            () => onMarkerPress?.(m.id),
+          );
+      });
+      const scale = pinScaleForLevel(map.getLevel());
+      // 급한 상태가 앞에 오게 — 묶음의 대표(첫 핀)가 조치 전 > 조치 중 > 조치 완료 순.
+      const byPriority = [...loose].sort(
+        (a, b) => (CLUSTER_PIN_PRIORITY[a.pin!] ?? 9) - (CLUSTER_PIN_PRIORITY[b.pin!] ?? 9),
+      );
+      clusterByPixel(byPriority, proj, (lat, lng) => new k.maps.LatLng(lat, lng), PIN_CLUSTER_PX).forEach((cl) => {
+        const head = cl.head;
+        addPin(head, wrapPinHtml(buildPinHtml(head.pin!), scale, cl.count), 3, () => {
+          if (cl.count === 1) onMarkerPress?.(head.id);
+          else {
+            const idSet = new Set(cl.ids);
+            setActiveGroup(byPriority.filter((m) => idSet.has(m.id)));
+          }
+        });
       });
       const clusters = clusterByPixel(
         legacy,
@@ -1132,52 +1172,7 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
           </Text>
         </View>
       ) : null}
-      <Modal
-        visible={activeGroup !== null}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setActiveGroup(null)}
-      >
-        <Pressable
-          style={styles.modalBackdrop}
-          onPress={() => setActiveGroup(null)}
-        >
-          <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
-            <Text style={styles.modalTitle}>
-              이 위치의 현장 {activeGroup?.length ?? 0}건
-            </Text>
-            <ScrollView style={styles.modalList}>
-              {activeGroup?.map((m) => (
-                <Pressable
-                  key={m.id}
-                  style={({ pressed }) => [
-                    styles.modalItem,
-                    pressed && styles.modalItemPressed,
-                  ]}
-                  onPress={() => {
-                    setActiveGroup(null);
-                    onMarkerPress?.(m.id);
-                  }}
-                >
-                  {m.badge ? (
-                    <View
-                      style={[styles.modalItemBadge, { backgroundColor: m.color }]}
-                    >
-                      <Text style={styles.modalItemBadgeText}>{m.badge}</Text>
-                    </View>
-                  ) : null}
-                  <Text style={styles.modalItemLabel} numberOfLines={1}>
-                    {m.label}
-                  </Text>
-                  {m.selected ? (
-                    <Text style={styles.modalItemCheck}>✓</Text>
-                  ) : null}
-                </Pressable>
-              ))}
-            </ScrollView>
-          </Pressable>
-        </Pressable>
-      </Modal>
+      <MapClusterSheet items={activeGroup} onClose={closeGroup} onPick={pickFromGroup} />
     </View>
   );
   },
@@ -1253,62 +1248,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   warnText: { color: '#fff', fontSize: fontSize.sm, fontWeight: '600' },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.xl,
-  },
-  modalCard: {
-    width: '100%',
-    maxWidth: 360,
-    maxHeight: '80%',
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    shadowColor: '#000',
-    shadowOpacity: 0.18,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 8,
-  },
-  modalTitle: {
-    fontSize: fontSize.base,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: spacing.md,
-  },
-  modalList: { maxHeight: 360 },
-  modalItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.md,
-    gap: spacing.sm,
-  },
-  modalItemPressed: { backgroundColor: colors.background },
-  modalItemBadge: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radius.pill,
-  },
-  modalItemBadgeText: {
-    color: '#fff',
-    fontSize: fontSize.xs,
-    fontWeight: '700',
-  },
-  modalItemLabel: {
-    flex: 1,
-    fontSize: fontSize.sm,
-    color: colors.text,
-  },
-  modalItemCheck: {
-    fontSize: fontSize.base,
-    fontWeight: '700',
-    color: colors.primary,
-  },
 });
 
 /** 카카오 기본 축척 막대(숫자+km|m 글자를 가진 블록)를 숨긴다. 로고는 남긴다. 네이티브 HTML 도 같은 규칙. */

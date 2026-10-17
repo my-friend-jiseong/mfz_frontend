@@ -27,6 +27,7 @@ import { useTripPrepStore } from '@/stores/tripPrepStore';
 import { useTripStore } from '@/stores/tripStore';
 import { fieldActionStatus } from '@/utils/fieldStatus';
 import { fieldTitle } from '@/utils/fieldFacets';
+import { districtOf } from '@/utils/addressFormat';
 import { fmtMonthDay } from '@/utils/datetime';
 import { formatDistanceM } from '@/utils/nearestField';
 import { haversineKm, nearestNeighborOrder } from '@/utils/routeOptimize';
@@ -145,7 +146,7 @@ export default function TripPrepScreen() {
   const markers = useMemo<KakaoMapMarker[]>(() => {
     const bg: KakaoMapMarker[] = filterFields(myFields.filter((f) => !selectedSet.has(f.id) && hasCoords(f))).map((f) => {
       const kind = fieldActionStatus(f);
-      return { id: f.id, lat: f.latitude, lng: f.longitude, label: fieldTitle(f), color: STATUS_PIN_COLOR[kind], pin: kind };
+      return { id: f.id, lat: f.latitude, lng: f.longitude, label: fieldTitle(f), sublabel: districtOf(f.address), color: STATUS_PIN_COLOR[kind], pin: kind };
     });
     const mine: KakaoMapMarker[] = selected.filter(hasCoords).map((f, i) => {
       const kind = fieldActionStatus(f);

@@ -30,6 +30,9 @@ import {
   ACCURACY_CIRCLE_STYLE_BRAND,
   PIN_TAG_TEMPLATE,
   PIN_TAG_TOP,
+  PIN_WRAP_TEMPLATES,
+  PIN_CLUSTER_PX,
+  CLUSTER_PIN_PRIORITY,
 } from '@/assets/mapPins';
 
 export type MapDisplayMode = 'markers' | 'heatmap' | 'choropleth';
@@ -55,7 +58,7 @@ interface MapHtmlOptions {
     groupIds?: string[];
     selected?: boolean;
     highlighted?: boolean;
-    // 2차 핀(mapPins.ts). 있으면 아래 형상 마커 대신 Figma 핀으로 그리고 묶지 않는다.
+    // 2차 핀(mapPins.ts). 있으면 아래 형상 마커 대신 Figma 핀으로 그린다. 조치 상태 핀만 묶는다(renderMarkers).
     pin?: string;
     selectedSize?: string;
   }[];
@@ -231,6 +234,19 @@ MARKERS.forEach(function(m){
     // 핀 아래 이름표(6·7 다음 목적지) — 템플릿 끝 '</div>' 앞에 붙인다.
     var PIN_TAG = ${JSON.stringify(PIN_TAG_TEMPLATE)};
     var PIN_TAG_TOP = ${JSON.stringify(PIN_TAG_TOP)};
+    // 상태 핀 묶기·줌 축소 — mapPins.ts isClusterablePin·pinScaleForLevel·wrapPinHtml 과 같은 규칙.
+    var PIN_WRAP = ${JSON.stringify(PIN_WRAP_TEMPLATES)};
+    var PIN_CLUSTER_PX = ${PIN_CLUSTER_PX};
+    var PIN_PRIORITY = ${JSON.stringify(CLUSTER_PIN_PRIORITY)};
+    function isClusterablePin(m){
+      return !!m.pin && PIN_PRIORITY[m.pin] !== undefined && typeof m.order !== 'number' && !m.selected && !m.nameTag;
+    }
+    function pinScaleForLevel(lvl){ return lvl >= 9 ? 0.6 : lvl >= 7 ? 0.75 : 1; }
+    function wrapPin(html, scale, count){
+      var t = PIN_WRAP[scale + '|' + (count > 1 ? 1 : 0)];
+      if (!t) return html;
+      return t.replace('__PIN__', function(){ return html; }).replace('__C__', String(count));
+    }
     function escHtml(t){
       return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
@@ -325,7 +341,7 @@ MARKERS.forEach(function(m){
     var LABEL_MAX_LEVEL = 5;
     // 화면상 이 픽셀 반경 안의 마커는 한 클러스터로 묶는다(줌마다 재계산).
     // 마커 SVG 가 26px 이라 28 이면 사실상 겹치는 것만 묶음 — 점을 최대한 살려 허전함 방지.
-    var CLUSTER_PX = 28;
+    var CLUSTER_PX_DEFAULT = 28;
 
     // KWCAG 1.4.1 — status 별 색 + 형상 + 라벨 3중 인코딩 SVG.
     // count>1: 우상단 카운트 뱃지. showLabel 일 때만 동 이름 라벨을 SVG 아래에 띄움.
@@ -393,7 +409,8 @@ MARKERS.forEach(function(m){
     // 화면 픽셀 거리 기반 클러스터링. 두 좌표의 화면상 거리는 pan 에 불변(평행이동)이고
     // 줌에만 의존하므로 줌 변화 시에만 재계산하면 된다. 그리드 버킷으로 인접 3×3 셀만 검사해
     // O(n) 에 가깝게 묶는다. 각 클러스터는 head(첫 마커) 좌표에 그려 좌표 무손실.
-    function clusterMarkers(list){
+    function clusterMarkers(list, radiusPx){
+      var CLUSTER_PX = radiusPx || CLUSTER_PX_DEFAULT;
       var proj = map.getProjection();
       var buckets = {}; // "gx:gy" -> [cluster]
       var clusters = [];
@@ -464,25 +481,42 @@ MARKERS.forEach(function(m){
 
     function renderMarkers(){
       var showLabel = map.getLevel() <= LABEL_MAX_LEVEL;
-      // 2차 핀은 묶지 않는다 — 외근 목적지·체크인 위치처럼 몇 개 안 되고 하나하나가 의미다.
+      // 2차 핀: 조치 상태 핀(순번·선택·이름표 없음)은 화면 거리로 묶고 넓은 줌에서 줄인다.
+      // 순번·선택 핀(외근 목적지·체크인 위치)은 하나하나가 의미라 묶지 않고 그 위에 그린다.
       var legacy = [];
+      var loose = [];
+      function addPin(m, html, zIndex, onClick){
+        var content = document.createElement('div');
+        content.innerHTML = html;
+        content.firstChild.addEventListener('click', function(){ if (lpRecent()) return; onClick(); });
+        markerOverlays.push(new kakao.maps.CustomOverlay({
+          position: new kakao.maps.LatLng(m.lat, m.lng),
+          content: content,
+          map: map,
+          xAnchor: 0.5,
+          yAnchor: PIN_TIP,
+          zIndex: zIndex,
+        }));
+      }
       for (var pi = 0; pi < MARKERS.length; pi++) {
         var pm = MARKERS[pi];
         if (!pm.pin) { legacy.push(pm); continue; }
+        if (isClusterablePin(pm)) { loose.push(pm); continue; }
         (function(m){
-          var content = document.createElement('div');
-          content.innerHTML = pinHtml(m);
-          content.firstChild.addEventListener('click', function(){ if (lpRecent()) return; postMsg({ type: 'markerPress', fieldId: m.id }); });
-          markerOverlays.push(new kakao.maps.CustomOverlay({
-            position: new kakao.maps.LatLng(m.lat, m.lng),
-            content: content,
-            map: map,
-            xAnchor: 0.5,
-            yAnchor: PIN_TIP,
-            zIndex: m.selected ? 4 : 3,
-          }));
+          addPin(m, pinHtml(m), m.selected ? 5 : 4, function(){ postMsg({ type: 'markerPress', fieldId: m.id }); });
         })(pm);
       }
+      var scale = pinScaleForLevel(map.getLevel());
+      // 급한 상태가 앞에 오게 — 묶음의 대표(첫 핀)가 조치 전 > 조치 중 > 조치 완료 순. 같은 순위는 원래 순서.
+      var byPriority = loose.map(function(m, i){ return { m: m, i: i }; }).sort(function(a, b){
+        return (PIN_PRIORITY[a.m.pin] - PIN_PRIORITY[b.m.pin]) || (a.i - b.i);
+      }).map(function(x){ return x.m; });
+      clusterMarkers(byPriority, PIN_CLUSTER_PX).forEach(function(cl){
+        addPin(cl.head, wrapPin(pinHtml(cl.head), scale, cl.count), 3, function(){
+          if (cl.count > 1) postMsg({ type: 'markerGroupPress', groupIds: cl.ids });
+          else postMsg({ type: 'markerPress', fieldId: cl.head.id });
+        });
+      });
       clusterMarkers(legacy).forEach(function(cl){
         var head = cl.head;
         var content = document.createElement('div');
@@ -599,6 +633,8 @@ MARKERS.forEach(function(m){
         yAnchor: 0.5,
         zIndex: 5,
       });
+      // 내 위치 점은 누를 것이 아니다 — 카카오가 씌우는 바깥 상자가 그 아래 핀 누르기를 가로채지 않게.
+      if (content.parentElement) content.parentElement.style.pointerEvents = 'none';
     }
 
     // === 세터 (RN injectJavaScript 진입점) ===

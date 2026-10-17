@@ -252,6 +252,7 @@ export default function FieldSearchScreen() {
           lat: f.latitude,
           lng: f.longitude,
           label: fieldTitle(f),
+          sublabel: districtOf(f.address),
           color: STATUS_PIN_COLOR[kind],
           pin: kind,
           selected: picked?.kind === 'field' && picked.field.id === f.id,

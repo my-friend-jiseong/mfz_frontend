@@ -2,7 +2,7 @@
 // 네이티브 WebView(kakaoMapHtml.ts)와 웹(KakaoMapWebView.web.tsx)이 같은 문자열을 쓴다.
 // 네이티브는 함수를 HTML 에 넣을 수 없어서(Hermes 는 Function#toString 이 소스를 안 준다)
 // 조합별 템플릿을 미리 만들어 JSON 으로 넣고, 순번 자리 __N__ 만 페이지 안에서 바꾼다.
-import { c2, pinShadowFilterCss } from '@/theme/v2';
+import { c2, pinShadowFilterCss, shadowCss } from '@/theme/v2';
 
 /**
  * 조치 전·중·완료, 새 현장(검은 핀), 검색 위치(돋보기), 방문함(회색), 건너뜀(흰 바탕 회색 점선),
@@ -159,6 +159,72 @@ export const PIN_TEMPLATES: Record<string, string> = Object.fromEntries(
       ]),
     ),
   ),
+);
+
+// === 상태 핀 묶기·줌 축소(1·4·6 지도의 현장 핀) ===
+// 32×44 핀은 넓은 줌에서 서로 겹쳐 아래 핀을 누를 수 없게 된다. 순번·선택·이름표가 없는 조치 상태 핀만
+// 화면 거리로 묶고(가장 급한 상태가 대표), 넓은 줌에서는 작게 그린다. 순번 핀(6·7)은 하나하나가 의미라 그대로 둔다.
+
+/** 묶음 대표를 고르는 순서 — 조치 전이 가장 급하다. */
+export const CLUSTER_PIN_PRIORITY: Partial<Record<MapPinKind, number>> = { pending: 0, in_progress: 1, done: 2 };
+
+/** 묶고 줄여도 되는 핀인가 — 조치 상태 핀이면서 순번·선택·이름표가 없는 것. */
+export function isClusterablePin(m: { pin?: string; order?: number; selected?: boolean; nameTag?: string }): boolean {
+  return m.pin != null && m.pin in CLUSTER_PIN_PRIORITY && typeof m.order !== 'number' && !m.selected && !m.nameTag;
+}
+
+/** 카카오 레벨(클수록 넓게)별 상태 핀 배율. 가까이서는 Figma 크기 그대로. */
+export function pinScaleForLevel(level: number): number {
+  if (level >= 9) return 0.6;
+  if (level >= 7) return 0.75;
+  return 1;
+}
+export const PIN_SCALES = [1, 0.75, 0.6] as const;
+
+/**
+ * 이 화면 거리(px) 안의 상태 핀은 한 묶음 — 핀 폭(32)보다 조금 좁게 잡아 실제로 겹치는 것만.
+ * 핀을 줄여도 거리는 줄이지 않는다: 배지(20)는 그대로라 거리를 같이 줄이면 넓은 줌에서 배지끼리 겹친다(웹 실측).
+ */
+export const PIN_CLUSTER_PX = 28;
+
+// 묶음 수 배지 — 작은 목적지 버튼(DestinationFAB 44)의 흰 배지와 같은 모양(흰 원 20, 브랜드 글 12 ExtraBold).
+function countBadgeHtml(left: number, top: number, count: string): string {
+  return (
+    `<div style="position:absolute;left:${left.toFixed(1)}px;top:${top.toFixed(1)}px;min-width:20px;height:20px;padding:0 4px;box-sizing:border-box;border-radius:10px;` +
+    `background:${c2.bg.canvas};box-shadow:${shadowCss.badge};display:flex;align-items:center;justify-content:center;` +
+    `color:${c2.text.brand};font-family:Pretendard,-apple-system,system-ui,sans-serif;font-size:12px;font-weight:800;line-height:16px;letter-spacing:-0.2px;">${count}</div>`
+  );
+}
+
+/**
+ * 기본 크기 핀 HTML(pinHtml)을 배율·묶음 수와 함께 감싼다. 바깥 상자는 32×44 그대로라 CustomOverlay 의
+ * xAnchor 0.5 · yAnchor PIN_TIP_Y_RATIO 가 그대로 맞고, 핀은 끝을 중심으로 줄어든다.
+ * 배지는 줄이지 않는다(글자가 안 읽힌다) — 줄어든 핀의 오른쪽 위에 붙인다.
+ * count 는 2 이상 숫자 또는 네이티브 템플릿 자리표시('__C__'), 1 이면 배지 없음.
+ */
+export function wrapPinHtml(pin: string, scale: number, count: number | string): string {
+  const hasBadge = typeof count === 'string' || count > 1;
+  if (scale === 1 && !hasBadge) return pin;
+  const tipX = W / 2;
+  const tipY = H * PIN_TIP_Y_RATIO;
+  // 줄어든 핀 본체의 오른쪽 위(실제 그림은 viewBox 기준 폭 26 → 오른쪽 끝 ≈ tipX + 13·scale, 위 ≈ 3.3·scale).
+  const right = tipX + 13 * scale;
+  const top = tipY - (tipY - 3.3) * scale;
+  const badge = hasBadge ? countBadgeHtml(right - 9, top - 8, String(count)) : '';
+  return (
+    `<div style="position:relative;width:${W}px;height:${H}px;pointer-events:none;">` +
+    `<div style="position:absolute;inset:0;transform:scale(${scale});transform-origin:${tipX}px ${tipY.toFixed(2)}px;pointer-events:auto;">${pin}</div>` +
+    (badge ? badge.replace('position:absolute;', 'position:absolute;pointer-events:auto;cursor:pointer;') : '') +
+    `</div>`
+  );
+}
+
+/** 네이티브 HTML 용 감싸기 템플릿. 키: `${scale}|${badge?1:0}`, 자리표시 __PIN__ · __C__. */
+export const PIN_WRAP_TEMPLATES: Record<string, string> = Object.fromEntries(
+  PIN_SCALES.flatMap((s) => [
+    [`${s}|0`, wrapPinHtml('__PIN__', s, 1)],
+    [`${s}|1`, wrapPinHtml('__PIN__', s, '__C__')],
+  ]),
 );
 
 /** 출발 위치(3-8): 흰 원 + 4px 검은 테두리 18. */

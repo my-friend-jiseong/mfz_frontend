@@ -1,4 +1,5 @@
 import { fieldTitle } from '@/utils/fieldFacets';
+import { districtOf } from '@/utils/addressFormat';
 import React, { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -62,6 +63,7 @@ export default function FullMapScreen() {
           lat: f.latitude,
           lng: f.longitude,
           label: fieldTitle(f),
+          sublabel: districtOf(f.address),
           color: STATUS_PIN_COLOR[fieldActionStatus(f)],
           pin: fieldActionStatus(f),
         });
