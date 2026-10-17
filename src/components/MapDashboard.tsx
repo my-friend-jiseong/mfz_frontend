@@ -14,7 +14,8 @@ import { peekUserLocation, type LatLng } from '@/utils/geolocation';
 import { MapSettingsSheet } from '@/components/map/MapSettingsSheet';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { MapButton } from '@/components/ui/MapButton';
-import { RANGE_DAYS, useMapSettingsStore } from '@/stores/mapSettingsStore';
+import { useMapSettingsStore } from '@/stores/mapSettingsStore';
+import { filterMapFields, hasMapFilter } from '@/utils/visitRange';
 import { useLocationPermission, useLocationPermissionStore } from '@/stores/locationPermissionStore';
 import { fieldActionStatus } from '@/utils/fieldStatus';
 import { c2, space } from '@/theme/v2';
@@ -115,9 +116,8 @@ export function MapDashboard({
   const sharedBaseMapType = useMapSettingsStore((s) => s.baseMapType);
   const setBaseMapType = useMapSettingsStore((s) => s.setBaseMapType);
   const selectedStatuses = useMapSettingsStore((s) => s.selectedStatuses);
-  const toggleStatus = useMapSettingsStore((s) => s.toggleStatus);
-  const rangePreset = useMapSettingsStore((s) => s.rangePreset);
-  const setRangePreset = useMapSettingsStore((s) => s.setRangePreset);
+  const visitRange = useMapSettingsStore((s) => s.visitRange);
+  const setVisitRange = useMapSettingsStore((s) => s.setVisitRange);
   const selectedTags = useMapSettingsStore((s) => s.selectedTags);
   const toggleTag = useMapSettingsStore((s) => s.toggleTag);
   const sharedVisibleAttachments = useMapSettingsStore((s) => s.visibleAttachments);
@@ -208,28 +208,10 @@ export function MapDashboard({
   }, [scopedFields, masterCategories]);
 
   const visibleFields = useMemo(() => {
-    let list = scopedFields;
     // 스코프·선택 화면은 공유 필터를 적용하지 않는다 — 목적지/선택 후보가 가려지지 않게.
-    if (!sharesSettings) return list;
-    if (selectedStatuses.length > 0) {
-      list = list.filter((f) => selectedStatuses.includes(fieldActionStatus(f)));
-    }
-    if (rangePreset !== 'all') {
-      const days = RANGE_DAYS[rangePreset];
-      const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
-      list = list.filter((f) => {
-        const t = f.recentVisitedAt ?? f.updatedAt;
-        if (!t) return false;
-        const ms = new Date(t).getTime();
-        return Number.isFinite(ms) && ms >= cutoff;
-      });
-    }
-    // 1-3 분류 칩: 고른 분류 중 하나라도 붙은 현장(여러 분류를 고르면 넓어진다).
-    if (selectedTags.length > 0) {
-      list = list.filter((f) => selectedTags.some((tag) => f.categories?.includes(tag)));
-    }
-    return list;
-  }, [scopedFields, sharesSettings, selectedStatuses, rangePreset, selectedTags]);
+    if (!sharesSettings) return scopedFields;
+    return filterMapFields(scopedFields,{ statuses: selectedStatuses, range: visitRange, tags: selectedTags });
+  }, [scopedFields, sharesSettings, selectedStatuses, visitRange, selectedTags]);
 
   // ERD v2: 메모·사진은 현장(field) 전용 — directAttachments 에서만 집계 (음성 폐기).
   const attachmentPresenceByField = useMemo(() => {
@@ -355,8 +337,8 @@ export function MapDashboard({
     onChangeBaseMapType: setBaseMapType,
     selectedStatuses,
     onChangeStatuses: setStatuses,
-    rangePreset,
-    onChangeRangePreset: setRangePreset,
+    visitRange,
+    onChangeVisitRange: setVisitRange,
     availableTags,
     selectedTags,
     onToggleTag: toggleTag,
@@ -366,9 +348,7 @@ export function MapDashboard({
   const settingsChanged =
     displayMode !== 'markers' ||
     baseMapType !== 'roadmap' ||
-    selectedStatuses.length > 0 ||
-    rangePreset !== 'all' ||
-    selectedTags.length > 0;
+    hasMapFilter({ statuses: selectedStatuses, range: visitRange, tags: selectedTags });
 
   return (
     // 지도가 화면 위까지 꽉 차고, 설정은 우측 상단 떠 있는 '레이어' 버튼 오버레이로.

@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { MapSettingsSheet } from './MapSettingsSheet';
-import { RANGE_DAYS, useMapSettingsStore } from '@/stores/mapSettingsStore';
+import { useMapSettingsStore } from '@/stores/mapSettingsStore';
 import { useCategoryStore } from '@/stores/categoryStore';
-import { fieldActionStatus } from '@/utils/fieldStatus';
+import { filterMapFields, hasMapFilter } from '@/utils/visitRange';
 import { mergeCategoryNames } from '@/utils/fieldFacets';
 import type { Field } from '@/types/entities';
 
@@ -25,30 +25,18 @@ export function useSharedMapSettings(backgroundFields: readonly Field[], section
     return mergeCategoryNames(masterCategories.map((c) => c.name), fromFields);
   }, [backgroundFields, masterCategories]);
 
-  const { selectedStatuses, rangePreset, selectedTags } = s;
+  const { selectedStatuses, visitRange, selectedTags } = s;
   const filterFields = useCallback(
-    (list: readonly Field[]): Field[] => {
-      let out = [...list];
-      if (selectedStatuses.length > 0) out = out.filter((f) => selectedStatuses.includes(fieldActionStatus(f)));
-      if (rangePreset !== 'all') {
-        const cutoff = Date.now() - RANGE_DAYS[rangePreset] * 24 * 60 * 60 * 1000;
-        out = out.filter((f) => {
-          const t = f.recentVisitedAt ?? f.updatedAt;
-          const ms = t ? new Date(t).getTime() : NaN;
-          return Number.isFinite(ms) && ms >= cutoff;
-        });
-      }
-      if (selectedTags.length > 0) out = out.filter((f) => selectedTags.some((tag) => f.categories?.includes(tag)));
-      return out;
-    },
-    [selectedStatuses, rangePreset, selectedTags],
+    (list: readonly Field[]): Field[] =>
+      filterMapFields(list, { statuses: selectedStatuses, range: visitRange, tags: selectedTags }),
+    [selectedStatuses, visitRange, selectedTags],
   );
 
   const visibleCount = useMemo(() => filterFields(backgroundFields).length, [filterFields, backgroundFields]);
   // 표시 방식은 이 화면들에서 쓰지 않는다(항상 마커) — 바뀐 표시 점에도 넣지 않는다.
   const changed =
     s.baseMapType !== 'roadmap' ||
-    (sections === 'filters' && (selectedStatuses.length > 0 || rangePreset !== 'all' || selectedTags.length > 0));
+    (sections === 'filters' && hasMapFilter({ statuses: selectedStatuses, range: visitRange, tags: selectedTags }));
 
   const sheet = (
     <MapSettingsSheet
@@ -61,8 +49,8 @@ export function useSharedMapSettings(backgroundFields: readonly Field[], section
       onChangeBaseMapType={s.setBaseMapType}
       selectedStatuses={selectedStatuses}
       onChangeStatuses={s.setStatuses}
-      rangePreset={rangePreset}
-      onChangeRangePreset={s.setRangePreset}
+      visitRange={visitRange}
+      onChangeVisitRange={s.setVisitRange}
       availableTags={availableTags}
       selectedTags={selectedTags}
       onToggleTag={s.toggleTag}

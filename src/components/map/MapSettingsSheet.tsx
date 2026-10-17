@@ -1,5 +1,5 @@
-import React from 'react';
-import { Image, ScrollView, StyleSheet, View, type ImageSourcePropType } from 'react-native';
+import React, { useState } from 'react';
+import { Image, StyleSheet, View, type ImageSourcePropType } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { AppSheet } from '@/components/ui/AppSheet';
 import { Button2 } from '@/components/ui/Button2';
@@ -9,7 +9,9 @@ import { Touchable } from '@/components/ui/Touchable';
 import { Icon } from '@/components/icons';
 import { STATUS_LABEL } from '@/components/ui/StatusMark';
 import type { FieldStatus } from '@/types/entities';
-import type { BaseMapType, DisplayMode, RangePreset } from '@/stores/mapSettingsStore';
+import type { BaseMapType, DisplayMode } from '@/stores/mapSettingsStore';
+import { formatVisitRange, type VisitRange } from '@/utils/visitRange';
+import { VisitRangeSheet } from './VisitRangeSheet';
 import { palette } from '@/theme/palette';
 import { c2, radius2, space } from '@/theme/v2';
 
@@ -18,11 +20,11 @@ export interface MapSettingsProps {
   onChangeDisplayMode: (mode: DisplayMode) => void;
   baseMapType: BaseMapType;
   onChangeBaseMapType: (type: BaseMapType) => void;
-  /** 빈 배열 = 셋 다 보임. */
+  /** 빈 배열 = 아무것도 안 고름 = 셋 다 보임. 고르면 고른 상태만 보인다. */
   selectedStatuses: FieldStatus[];
   onChangeStatuses: (next: FieldStatus[]) => void;
-  rangePreset: RangePreset;
-  onChangeRangePreset: (preset: RangePreset) => void;
+  visitRange: VisitRange;
+  onChangeVisitRange: (range: VisitRange) => void;
   availableTags: string[];
   selectedTags: string[];
   onToggleTag: (tag: string) => void;
@@ -50,12 +52,8 @@ const DISPLAY: { mode: DisplayMode; label: string }[] = [
 
 const STATUSES: FieldStatus[] = ['pending', 'in_progress', 'done'];
 
-const RANGES: { value: RangePreset; label: string }[] = [
-  { value: 'all', label: '전체' },
-  { value: '7d', label: '1주' },
-  { value: '30d', label: '1달' },
-  { value: '90d', label: '3달' },
-];
+// 분류가 이보다 많으면 접어 두고 '+N개 더 보기' 칩으로 펼친다.
+const TAG_LIMIT = 8;
 
 const BASE_MAPS: { type: BaseMapType; label: string; thumb: ImageSourcePropType }[] = [
   { type: 'roadmap', label: '일반', thumb: require('@/assets/mapThumbnails/roadmap.png') },
@@ -70,83 +68,51 @@ const CARD_RADIUS = radius2.xl;
 export function MapSettingsSheet({ open, onClose, sections = 'all', ...p }: Props) {
   const showDisplay = sections === 'all';
   const showFilters = sections !== 'baseMap';
-  const statusOn = (s: FieldStatus) => p.selectedStatuses.length === 0 || p.selectedStatuses.includes(s);
+  // 고른 상태만 보인다. 다 끄면(빈 배열) 거르지 않는다.
   const toggleStatus = (s: FieldStatus) => {
-    const current = p.selectedStatuses.length === 0 ? STATUSES : p.selectedStatuses;
-    const next = current.includes(s) ? current.filter((x) => x !== s) : [...current, s];
-    // 하나도 안 고르면 지도가 비므로 마지막 하나는 끄지 않는다. 셋 다면 '전체'(빈 배열)로.
-    if (next.length === 0) return;
-    p.onChangeStatuses(next.length === STATUSES.length ? [] : STATUSES.filter((x) => next.includes(x)));
+    const cur = p.selectedStatuses;
+    const next = cur.includes(s) ? cur.filter((x) => x !== s) : [...cur, s];
+    p.onChangeStatuses(STATUSES.filter((x) => next.includes(x)));
   };
 
+  const [rangeOpen, setRangeOpen] = useState(false);
+  const [tagsExpanded, setTagsExpanded] = useState(false);
+  // 접힌 뒤쪽에 고른 분류가 있으면 펼친 채로 둔다 — 걸린 필터가 안 보이지 않게.
+  const tagsOpen =
+    tagsExpanded ||
+    p.availableTags.length <= TAG_LIMIT ||
+    p.availableTags.slice(TAG_LIMIT).some((t) => p.selectedTags.includes(t));
+  const shownTags = tagsOpen ? p.availableTags : p.availableTags.slice(0, TAG_LIMIT);
+  const rangeLabel = formatVisitRange(p.visitRange);
+  const rangeChanged = p.visitRange.kind !== 'all';
+
   return (
-    <AppSheet open={open} onClose={onClose} closeButton={false} scrollable topRadius={radius2['3xl']}>
-      <View style={styles.head}>
-        <Text v2="title.m" style={styles.flex} accessibilityRole="header">
-          지도 설정
-        </Text>
-        <Touchable onPress={onClose} accessibilityRole="button" accessibilityLabel="닫기" style={styles.close}>
-          <Icon name="close" size={22} color={c2.text.primary} />
-        </Touchable>
-      </View>
+    <>
+      <AppSheet open={open} onClose={onClose} closeButton={false} scrollable topRadius={radius2['3xl']}>
+        <View style={styles.head}>
+          <Text v2="title.m" style={styles.flex} accessibilityRole="header">
+            지도 설정
+          </Text>
+          <Touchable onPress={onClose} accessibilityRole="button" accessibilityLabel="닫기" style={styles.close}>
+            <Icon name="close" size={22} color={c2.text.primary} />
+          </Touchable>
+        </View>
 
-      {showDisplay ? (
-        <Section label="표시 방식">
-          <View style={styles.row3}>
-            {DISPLAY.map(({ mode, label }) => {
-              const on = p.displayMode === mode;
-              return (
-                <Touchable
-                  key={mode}
-                  onPress={() => p.onChangeDisplayMode(mode)}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: on }}
-                  style={[styles.modeCard, on ? styles.modeOn : styles.modeOff]}
-                >
-                  <ModeGlyph mode={mode} />
-                  <Text v2={on ? 'bodyS.bold' : 'bodyS.semibold'} tone={on ? 'brand' : 'body'}>
-                    {label}
-                  </Text>
-                </Touchable>
-              );
-            })}
-          </View>
-        </Section>
-      ) : null}
-
-      {showFilters ? (
-        <>
-          <Section label="최근 조치 상태">
-            <View style={styles.chips}>
-              {STATUSES.map((s) => (
-                <FilterChip2 key={s} label={STATUS_LABEL[s]} status={s} selected={statusOn(s)} onPress={() => toggleStatus(s)} />
-              ))}
-            </View>
-          </Section>
-
-          {p.availableTags.length > 0 ? (
-            <Section label="분류" bleed>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tagRow}>
-                {p.availableTags.map((tag) => (
-                  <FilterChip2 key={tag} label={tag} selected={p.selectedTags.includes(tag)} onPress={() => p.onToggleTag(tag)} />
-                ))}
-              </ScrollView>
-            </Section>
-          ) : null}
-
-          <Section label="최근 방문일">
-            <View style={styles.segment}>
-              {RANGES.map(({ value, label }) => {
-                const on = p.rangePreset === value;
+        {showDisplay ? (
+          <Section label="표시 방식">
+            <View style={styles.row3}>
+              {DISPLAY.map(({ mode, label }) => {
+                const on = p.displayMode === mode;
                 return (
                   <Touchable
-                    key={value}
-                    onPress={() => p.onChangeRangePreset(value)}
+                    key={mode}
+                    onPress={() => p.onChangeDisplayMode(mode)}
                     accessibilityRole="button"
                     accessibilityState={{ selected: on }}
-                    style={[styles.segItem, on && styles.segOn]}
+                    style={[styles.modeCard, on ? styles.modeOn : styles.modeOff]}
                   >
-                    <Text v2={on ? 'bodyS.bold' : 'bodyS.semibold'} tone={on ? 'inverse' : 'secondary'}>
+                    <ModeGlyph mode={mode} />
+                    <Text v2={on ? 'bodyS.bold' : 'bodyS.semibold'} tone={on ? 'brand' : 'body'}>
                       {label}
                     </Text>
                   </Touchable>
@@ -154,50 +120,109 @@ export function MapSettingsSheet({ open, onClose, sections = 'all', ...p }: Prop
               })}
             </View>
           </Section>
-        </>
-      ) : null}
+        ) : null}
 
-      <Section label="배경 지도">
-        <View style={styles.row3}>
-          {BASE_MAPS.map(({ type, label, thumb }) => {
-            const on = p.baseMapType === type;
-            return (
-              <Touchable
-                key={type}
-                onPress={() => p.onChangeBaseMapType(type)}
-                accessibilityRole="button"
-                accessibilityState={{ selected: on }}
-                accessibilityLabel={`배경 지도 ${label}`}
-                style={styles.baseItem}
-              >
-                <View style={styles.thumb}>
-                  <Image source={thumb} style={styles.thumbImg} />
+        {showFilters ? (
+          <>
+            <Section label="최근 조치 상태">
+              <View style={styles.chips}>
+                {STATUSES.map((s) => (
+                  <FilterChip2
+                    key={s}
+                    label={STATUS_LABEL[s]}
+                    status={s}
+                    selected={p.selectedStatuses.includes(s)}
+                    onPress={() => toggleStatus(s)}
+                  />
+                ))}
+              </View>
+            </Section>
+
+            {p.availableTags.length > 0 ? (
+              <Section label="분류">
+                <View style={styles.chips}>
+                  {shownTags.map((tag) => (
+                    <FilterChip2 key={tag} label={tag} selected={p.selectedTags.includes(tag)} onPress={() => p.onToggleTag(tag)} />
+                  ))}
+                  {tagsOpen ? null : (
+                    <FilterChip2
+                      label={`+${p.availableTags.length - TAG_LIMIT}개 더 보기`}
+                      selected={false}
+                      onPress={() => setTagsExpanded(true)}
+                    />
+                  )}
                 </View>
-                <Text v2={on ? 'caption.bold' : 'caption.semibold'} tone={on ? 'brand' : 'secondary'}>
-                  {label}
-                </Text>
-              </Touchable>
-            );
-          })}
-        </View>
-      </Section>
+              </Section>
+            ) : null}
 
-      <View style={styles.footer}>
-        <Button2 variant="secondary" onPress={p.onReset}>
-          초기화
-        </Button2>
-        <Button2 onPress={onClose} style={styles.flex}>
-          {`현장 ${p.visibleCount}곳 보기`}
-        </Button2>
-      </View>
-    </AppSheet>
+            <Touchable
+              onPress={() => setRangeOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel={`최근 방문일, ${rangeLabel}`}
+              style={styles.rangeRow}
+            >
+              <Text v2="bodyS.bold" tone="secondary" style={styles.flex}>
+                최근 방문일
+              </Text>
+              <Text v2={rangeChanged ? 'bodyM.bold' : 'bodyM.semibold'} tone={rangeChanged ? 'brand' : 'body'} numberOfLines={1}>
+                {rangeLabel}
+              </Text>
+              <Icon name="chevron-right" size={18} color={c2.text.tertiary} />
+            </Touchable>
+          </>
+        ) : null}
+
+        <Section label="배경 지도">
+          <View style={styles.row3}>
+            {BASE_MAPS.map(({ type, label, thumb }) => {
+              const on = p.baseMapType === type;
+              return (
+                <Touchable
+                  key={type}
+                  onPress={() => p.onChangeBaseMapType(type)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: on }}
+                  accessibilityLabel={`배경 지도 ${label}`}
+                  style={styles.baseItem}
+                >
+                  <View style={[styles.thumb, on && styles.thumbOn]}>
+                    <Image source={thumb} style={styles.thumbImg} />
+                  </View>
+                  <Text v2={on ? 'caption.bold' : 'caption.semibold'} tone={on ? 'brand' : 'secondary'}>
+                    {label}
+                  </Text>
+                </Touchable>
+              );
+            })}
+          </View>
+        </Section>
+
+        <View style={styles.footer}>
+          <Button2 variant="secondary" onPress={p.onReset}>
+            초기화
+          </Button2>
+          <Button2 onPress={onClose} style={styles.flex}>
+            {`현장 ${p.visibleCount}곳 보기`}
+          </Button2>
+        </View>
+      </AppSheet>
+      <VisitRangeSheet
+        open={open && rangeOpen}
+        onClose={() => setRangeOpen(false)}
+        value={p.visitRange}
+        onApply={(range) => {
+          p.onChangeVisitRange(range);
+          setRangeOpen(false);
+        }}
+      />
+    </>
   );
 }
 
-function Section({ label, bleed, children }: { label: string; bleed?: boolean; children: React.ReactNode }) {
+function Section({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <View style={[styles.section, bleed && styles.bleed]}>
-      <Text v2="bodyS.bold" tone="secondary" style={[styles.label, bleed && styles.labelBleed]}>
+    <View style={styles.section}>
+      <Text v2="bodyS.bold" tone="secondary" style={styles.label}>
         {label}
       </Text>
       {children}
@@ -249,9 +274,7 @@ const styles = StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'center', paddingLeft: space[20], paddingRight: space[10], marginTop: space[6] },
   close: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   section: { paddingHorizontal: space[20], marginTop: 22 },
-  bleed: { paddingHorizontal: 0 },
   label: { marginBottom: space[10] },
-  labelBleed: { paddingHorizontal: space[20] },
   row3: { flexDirection: 'row', gap: space[8] },
   modeCard: {
     flex: 1,
@@ -264,16 +287,16 @@ const styles = StyleSheet.create({
   modeOn: { backgroundColor: c2.bg.brandSubtle, borderWidth: 2, borderColor: c2.border.brand },
   modeOff: { borderWidth: 1.5, borderColor: c2.border.default },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space[8] },
-  tagRow: { gap: space[8], paddingHorizontal: space[20] },
-  segment: {
-    height: 48,
+  // 최근 방문일 — 값을 보여 주고 누르면 고르기 시트(VisitRangeSheet).
+  rangeRow: {
+    minHeight: 48,
     flexDirection: 'row',
-    padding: space[4],
-    borderRadius: radius2.lg,
-    backgroundColor: c2.bg.muted,
+    alignItems: 'center',
+    gap: space[4],
+    paddingLeft: space[20],
+    paddingRight: space[16],
+    marginTop: space[14],
   },
-  segItem: { flex: 1, borderRadius: radius2.sm, alignItems: 'center', justifyContent: 'center' },
-  segOn: { backgroundColor: c2.bg.brand, boxShadow: '0px 1px 1.5px rgba(37, 99, 235, 0.3)' },
   baseItem: { flex: 1, alignItems: 'center', gap: space[4] },
   thumb: {
     alignSelf: 'stretch',
@@ -283,7 +306,10 @@ const styles = StyleSheet.create({
     backgroundColor: c2.bg.placeholder,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
   },
+  thumbOn: { borderColor: c2.border.brand },
   // 썸네일 원본(640×400)은 2배 해상도 캡처 — 반으로 줄여 가운데만 보이면 글자가 지도 화면과 같은 크기다(Figma 1-3).
   thumbImg: { width: 320, height: 200 },
   footer: { flexDirection: 'row', gap: space[8], paddingHorizontal: space[20], marginTop: space[24] },
