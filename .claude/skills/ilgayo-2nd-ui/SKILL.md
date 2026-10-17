@@ -6,10 +6,10 @@ description: 2차 개선본 화면을 Figma(UI - 2차 개선본 페이지)에서
 # 2차 UI 구현
 
 ## 기준 문서 (우선순위 순)
-1. `docs/handoff/2차-구현-서버-인수인계.md`: 동작·정책·문구 규칙·서버 요청. Figma와 다르면 이 문서가 이김
-2. `docs/handoff/2차-화면-구분표.md`: Figma 프레임마다 무엇을 만들지(화면·상태·시트·메뉴·확인 창·전체 지도)
+1. `docs/features/ui-2nd/2차-구현-서버-인수인계.md`: 동작·정책·문구 규칙·서버 요청. Figma와 다르면 이 문서가 이김
+2. `docs/features/ui-2nd/2차-화면-구분표.md`: Figma 프레임마다 무엇을 만들지(화면·상태·시트·메뉴·확인 창·전체 지도)
 3. Figma: 화면 모양과 문구. `fileKey` `MlfpDS0wOeN90iNl5JCPWp`, 페이지 `UI - 2차 개선본`(`480:3282`). 프레임 node id는 구분표에 있음
-4. `docs/handoff/2차-결정-기록.md`: 왜 그렇게 정했는지. 판단이 필요할 때만 읽기
+4. `docs/features/ui-2nd/2차-결정-기록.md`: 왜 그렇게 정했는지. 판단이 필요할 때만 읽기
 
 ## 범위
 - `.claude/skills/figma-design-system`, `docs/conventions/design-system.md`의 "코드가 원본, Figma가 사본"은 1차 `DesignSystem` 페이지 이야기. 2차 화면은 Figma `UI - 2차 개선본`이 목표 모양
