@@ -7,7 +7,7 @@
 | [`features/`](features/) | 앱을 바꾸는 일. 일 하나 = 폴더 하나 (기획·설계·인수인계·결과) | [기능 목록·작업 순서](features/README.md) · [IA 다이어그램](features/IAD.drawio) |
 | [`conventions/`](conventions/) | 모든 일에 공통으로 적용하는 규칙 | [디자인 시스템](conventions/design-system.md) · [기술 스택](conventions/tech-stack.md) · [문서 규칙](conventions/documentation.md) |
 | [`operations/`](operations/) | 앱 코드를 바꾸지 않는 일 — 백엔드 협업·출시·장애 | 아래 표 |
-| [`deliverables/`](deliverables/) | 외부 사람에게 보여주려고 만든 결과물 — 주간보고·발표·자산 | — |
+| [`deliverables/`](deliverables/) | 외부 사람에게 보여주려고 만든 결과물 — 주간보고·발표·자산 | [주간보고](deliverables/weekly-reports/) · [자산](deliverables/assets/) |
 
 ## operations
 
