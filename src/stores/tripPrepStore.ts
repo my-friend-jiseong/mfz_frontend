@@ -14,7 +14,7 @@ interface TripPrepState {
   hydrate: () => Promise<void>;
   add: (fieldIds: string[]) => void;
   remove: (fieldId: string) => void;
-  /** 순서를 바꾼다(6 가까운 순으로·순서 변경). */
+  /** 순서를 바꾼다(6 가까운 순으로·꾹 눌러 끌기). */
   setOrder: (fieldIds: string[]) => void;
   clear: () => void;
 }

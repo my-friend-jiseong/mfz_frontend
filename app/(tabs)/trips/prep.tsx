@@ -17,6 +17,7 @@ import { notice } from '@/components/ui/ConfirmDialog';
 import { MapButton } from '@/components/ui/MapButton';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { SheetHandle } from '@/components/ui/AppSheet';
+import { SortableList, useSortableScroll } from '@/components/ui/SortableList';
 import { STATUS_LABEL } from '@/components/ui/StatusMark';
 import { Text } from '@/components/ui/Text';
 import { Touchable } from '@/components/ui/Touchable';
@@ -45,6 +46,9 @@ const HEADER_H = 52;
 const FOOTER_H = 79;
 const SHEET_HANDLE_H = 20;
 const MAX_RECENT = 20;
+// 목적지 줄 높이(Figma 60). 끌어서 옮기는 목록은 줄 높이가 같아야 한다 — 글자를 키우면 두 줄 글자(약 40)만큼 늘린다.
+const DEST_ROW_H = 60;
+const destRowHeight = (fontScale: number) => Math.max(DEST_ROW_H, Math.ceil(40 * fontScale + 20));
 
 const SheetHandleSlot = () => <SheetHandle />;
 
@@ -87,7 +91,9 @@ const hasCoords = (f: Pick<Field, 'latitude' | 'longitude'>) =>
 export default function TripPrepScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { width: winW } = useWindowDimensions();
+  const { width: winW, fontScale } = useWindowDimensions();
+  const rowH = destRowHeight(fontScale);
+  const rootRef = useRef<View>(null);
   const userId = useAuthStore((s) => s.user?.id);
   const allFields = useFieldStore((s) => s.fields);
   const listReady = useFieldStore((s) => s.listStatus === 'ready');
@@ -100,7 +106,6 @@ export default function TripPrepScreen() {
   const sheetRef = useRef<BottomSheet>(null);
   const [containerH, setContainerH] = useState<number | null>(null);
   const [myLoc, setMyLoc] = useState<LatLng | null>(null);
-  const [reordering, setReordering] = useState(false);
   const [starting, setStarting] = useState(false);
   // 지도에서 누른 현장(4-3 '선택한 현장' 카드). 담은 핀·안 담은 핀 모두.
   const [pickedId, setPickedId] = useState<string | null>(null);
@@ -239,12 +244,16 @@ export default function TripPrepScreen() {
     );
     prep().setOrder([...ordered.map((n) => n.id), ...without.map((f) => f.id)]);
   };
+  // 스크린리더용 한 칸 옮기기(끌기는 SortableList).
   const move = (from: number, to: number) => {
-    if (to < 0 || to >= selected.length) return;
+    if (!ready || to < 0 || to >= selected.length) return;
     const ids = selected.map((f) => f.id);
     [ids[from], ids[to]] = [ids[to], ids[from]];
     prep().setOrder(ids);
   };
+  const reorder = useCallback((ids: string[]) => useTripPrepStore.getState().setOrder(ids), []);
+  const keyOfField = useCallback((f: Field) => f.id, []);
+  const sortScroll = useSortableScroll();
 
   const depart = async () => {
     if (starting || busy) return;
@@ -282,7 +291,7 @@ export default function TripPrepScreen() {
   const count = listError && prepHydrated ? prepIds.length : selected.length;
 
   return (
-    <View style={styles.root} onLayout={(e) => setContainerH(e.nativeEvent.layout.height)}>
+    <View ref={rootRef} style={styles.root} onLayout={(e) => setContainerH(e.nativeEvent.layout.height)}>
       <KakaoMapWebView
         ref={mapRef}
         markers={markers}
@@ -359,23 +368,13 @@ export default function TripPrepScreen() {
               </Text>
               {count > 0 ? (
                 <View style={styles.actions}>
-                  {reordering ? null : (
-                    <>
-                      <HeadAction label="모두 빼기" tone="secondary" disabled={!canClear} onPress={() => prep().setOrder([])} />
-                      <View style={styles.sep} />
-                      <HeadAction label="가까운 순으로" disabled={!ready} onPress={sortNearest} />
-                      <View style={styles.sep} />
-                    </>
-                  )}
-                  <HeadAction
-                    label={reordering ? '완료' : '순서 변경'}
-                    disabled={!ready}
-                    onPress={() => setReordering((v) => !v)}
-                  />
+                  <HeadAction label="모두 빼기" tone="secondary" disabled={!canClear} onPress={() => prep().setOrder([])} />
+                  <View style={styles.sep} />
+                  <HeadAction label="가까운 순으로" disabled={!ready} onPress={sortNearest} />
                 </View>
               ) : null}
             </View>
-            <BottomSheetScrollView style={styles.flex} contentContainerStyle={{ paddingBottom: FOOTER_H + space[16] }}>
+            <BottomSheetScrollView {...sortScroll.props} style={styles.flex} contentContainerStyle={{ paddingBottom: FOOTER_H + space[16] }}>
               {listError ? (
                 <ErrorState message={listError} onRetry={() => void useFieldStore.getState().hydrate()} />
               ) : null}
@@ -386,65 +385,83 @@ export default function TripPrepScreen() {
                 </Text>
               ) : (
                 <View style={styles.list}>
-                  {selected.map((f, i) => {
-                    const kind = fieldActionStatus(f);
-                    // 첫 목적지는 내 위치에서, 그다음부터는 앞 목적지에서의 거리.
-                    const prev = i > 0 ? selected[i - 1] : null;
-                    const origin = prev ? (hasCoords(prev) ? { lat: prev.latitude, lng: prev.longitude } : null) : myLoc;
-                    const d = distanceM(origin, f);
-                    const from = i === 0 ? '현 위치에서' : `${i}번에서`;
-                    return (
-                      <View key={f.id} style={[styles.destRow, i > 0 && styles.divider]}>
-                        <View style={[styles.orderDot, { backgroundColor: STATUS_PIN_COLOR[kind] }]}>
-                          <Text v2="bodyS.extrabold" tone="inverse" numeric>
-                            {i + 1}
-                          </Text>
-                        </View>
-                        <View style={styles.flex}>
-                          <Text v2="bodyL.semibold" numberOfLines={1}>
-                            {fieldTitle(f)}
-                          </Text>
-                          <Text v2="caption.regular" tone="tertiary" numberOfLines={1}>
-                            <Text v2="caption.semibold" tone={STATUS_TONE[kind]}>
-                              {STATUS_LABEL[kind]}
+                  {count >= 2 && ready ? (
+                    <Text v2="caption.regular" tone="tertiary" style={styles.hint}>
+                      꾹 눌러 순서를 바꿀 수 있어요
+                    </Text>
+                  ) : null}
+                  <SortableList
+                    data={selected}
+                    keyOf={keyOfField}
+                    rowHeight={rowH}
+                    // 현장 목록을 받기 전엔 안 보이는 목적지가 있다 — 그때 옮기면 그것이 빠진다.
+                    enabled={ready}
+                    onReorder={reorder}
+                    scroll={sortScroll}
+                    bottomInset={FOOTER_H}
+                    clipRef={rootRef}
+                    renderRow={(f, i, { prev, justDropped }) => {
+                      const kind = fieldActionStatus(f);
+                      // 첫 목적지는 내 위치에서, 그다음부터는 앞 목적지에서의 거리(끄는 동안의 순서 기준).
+                      const origin = prev ? (hasCoords(prev) ? { lat: prev.latitude, lng: prev.longitude } : null) : myLoc;
+                      const d = distanceM(origin, f);
+                      const from = i === 0 ? '현 위치에서' : `${i}번에서`;
+                      const title = fieldTitle(f);
+                      const at = selected.findIndex((x) => x.id === f.id);
+                      return (
+                        <View style={[styles.destRow, { height: rowH }]}>
+                          <View style={[styles.orderDot, { backgroundColor: STATUS_PIN_COLOR[kind] }]}>
+                            <Text v2="bodyS.extrabold" tone="inverse" numeric>
+                              {i + 1}
                             </Text>
-                            {d != null ? ` ${from} ${formatDistanceM(d)}` : ''}
-                          </Text>
-                        </View>
-                        {reordering ? (
-                          <View style={styles.reorder}>
-                            <Touchable
-                              onPress={() => move(i, i - 1)}
-                              disabled={i === 0}
-                              accessibilityRole="button"
-                              accessibilityLabel={`${fieldTitle(f)} 위로`}
-                              style={[styles.iconBtn, i === 0 && styles.dim]}
-                            >
-                              <Icon name="chevron-down" size={20} color={c2.text.secondary} style={styles.up} />
-                            </Touchable>
-                            <Touchable
-                              onPress={() => move(i, i + 1)}
-                              disabled={i === selected.length - 1}
-                              accessibilityRole="button"
-                              accessibilityLabel={`${fieldTitle(f)} 아래로`}
-                              style={[styles.iconBtn, i === selected.length - 1 && styles.dim]}
-                            >
-                              <Icon name="chevron-down" size={20} color={c2.text.secondary} />
-                            </Touchable>
                           </View>
-                        ) : (
+                          <View style={styles.flex}>
+                            <Text v2="bodyL.semibold" numberOfLines={1}>
+                              {title}
+                            </Text>
+                            <Text v2="caption.regular" tone="tertiary" numberOfLines={1}>
+                              <Text v2="caption.semibold" tone={STATUS_TONE[kind]}>
+                                {STATUS_LABEL[kind]}
+                              </Text>
+                              {d != null ? ` ${from} ${formatDistanceM(d)}` : ''}
+                            </Text>
+                          </View>
                           <Touchable
-                            onPress={() => prep().remove(f.id)}
+                            onPress={() => {
+                              if (!justDropped()) prep().remove(f.id);
+                            }}
                             accessibilityRole="button"
-                            accessibilityLabel={`${fieldTitle(f)} 목적지에서 빼기`}
+                            accessibilityLabel={`${title} 목적지에서 빼기`}
                             style={styles.iconBtn}
                           >
                             <Icon name="close" size={18} color={c2.text.tertiary} />
                           </Touchable>
-                        )}
-                      </View>
-                    );
-                  })}
+                          {/* 끌기 손잡이 — 줄 어디를 꾹 눌러도 끌린다. 스크린리더는 여기서 한 칸씩 옮긴다. */}
+                          <View
+                            accessible
+                            accessibilityLabel={`${title}, ${i + 1}번째`}
+                            accessibilityHint={ready && selected.length > 1 ? '위로 옮기기·아래로 옮기기 동작으로 순서를 바꿀 수 있어요' : undefined}
+                            // 웹(react-native-web)은 accessibilityActions 를 지원하지 않는다 — 웹은 끌기·[가까운 순으로]만.
+                            accessibilityActions={
+                              ready && selected.length > 1
+                                ? [
+                                    ...(at > 0 ? [{ name: 'moveUp', label: '위로 옮기기' }] : []),
+                                    ...(at < selected.length - 1 ? [{ name: 'moveDown', label: '아래로 옮기기' }] : []),
+                                  ]
+                                : []
+                            }
+                            onAccessibilityAction={(e) => {
+                              if (e.nativeEvent.actionName === 'moveUp') move(at, at - 1);
+                              else if (e.nativeEvent.actionName === 'moveDown') move(at, at + 1);
+                            }}
+                            style={[styles.grip, (!ready || selected.length < 2) && styles.dim]}
+                          >
+                            <Icon name="grip" size={20} color={c2.text.tertiary} />
+                          </View>
+                        </View>
+                      );
+                    }}
+                  />
                 </View>
               )}
               {recent.length > 0 ? (
@@ -544,12 +561,11 @@ const styles = StyleSheet.create({
   sep: { width: 1, height: 14, backgroundColor: c2.bg.placeholder },
   emptyText: { paddingHorizontal: space[20], paddingTop: space[4], paddingBottom: space[8] },
   list: { paddingLeft: space[20], paddingRight: space[8] },
-  destRow: { minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: space[14] },
-  divider: { borderTopWidth: 1, borderTopColor: c2.border.subtle },
+  destRow: { flexDirection: 'row', alignItems: 'center', gap: space[14] },
   orderDot: { width: 28, height: 28, borderRadius: radius2.full, alignItems: 'center', justifyContent: 'center' },
-  reorder: { flexDirection: 'row' },
   iconBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  up: { transform: [{ rotate: '180deg' }] },
+  grip: { width: 28, height: 44, alignItems: 'center', justifyContent: 'center', marginLeft: -space[4] },
+  hint: { paddingBottom: space[4] },
   dim: { opacity: 0.3 },
   section: { paddingHorizontal: space[20], paddingTop: space[10] },
   sectionTitle: { paddingBottom: space[2] },

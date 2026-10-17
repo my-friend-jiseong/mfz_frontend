@@ -9,7 +9,7 @@
     "web": "expo start --web",
     "build:web": "expo export -p web",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/utils/__tests__/nearestField.test.ts src/utils/__tests__/contact.test.ts src/utils/__tests__/analytics.test.ts src/utils/__tests__/password.test.ts src/utils/__tests__/tripFormat.test.ts src/utils/__tests__/addressFormat.test.ts src/utils/__tests__/josa.test.ts src/utils/__tests__/exifGps.test.ts src/utils/__tests__/photoGroups.test.ts src/utils/__tests__/findRecentVisit.test.ts src/utils/__tests__/cardMapFit.test.ts"
+    "test": "tsx --test src/utils/__tests__/nearestField.test.ts src/utils/__tests__/contact.test.ts src/utils/__tests__/analytics.test.ts src/utils/__tests__/password.test.ts src/utils/__tests__/tripFormat.test.ts src/utils/__tests__/addressFormat.test.ts src/utils/__tests__/josa.test.ts src/utils/__tests__/exifGps.test.ts src/utils/__tests__/photoGroups.test.ts src/utils/__tests__/findRecentVisit.test.ts src/utils/__tests__/cardMapFit.test.ts src/utils/__tests__/visitRange.test.ts"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
@@ -27,6 +27,7 @@
     "expo-constants": "~18.0.13",
     "expo-file-system": "~19.0.21",
     "expo-font": "~14.0.11",
+    "expo-haptics": "~15.0.8",
     "expo-image-picker": "~17.0.10",
     "expo-linking": "~8.0.11",
     "expo-location": "~19.0.8",
