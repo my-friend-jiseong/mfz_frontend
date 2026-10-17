@@ -4,7 +4,7 @@ import { OverlayModal } from '@/components/ui/OverlayModal';
 import { useRouter } from 'expo-router';
 import { useSessionGuardStore } from '@/stores/sessionGuardStore';
 import { Text } from '@/components/ui/Text';
-import { Button } from '@/components/ui/Button';
+import { Button2 } from '@/components/ui/Button2';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 
@@ -40,9 +40,9 @@ export function SessionGuardModal() {
           <Text variant="body" color="textMuted" style={styles.message}>
             {notice.message}
           </Text>
-          <Button onPress={handleConfirm} size="lg" fullWidth>
+          <Button2 onPress={handleConfirm} size="L" fullWidth>
             다시 로그인
-          </Button>
+          </Button2>
         </View>
       </View>
     </OverlayModal>
