@@ -145,7 +145,7 @@ Play 는 앱 내 삭제 경로와 별개로 **앱 밖에서 접근 가능한 삭
 
 **소스 확인 — 현재 서빙 방식이 이번 작업의 실제 범위를 바꾼다.**
 
-두 페이지는 [`src/legal/registerLegalRoutes.js`](../../../../mfz_backend/src/legal/registerLegalRoutes.js) 안에
+두 페이지는 [`src/legal/registerLegalRoutes.js`](../../../../../mfz_backend/src/legal/registerLegalRoutes.js) 안에
 **`PRIVACY_HTML`·`TERMS_HTML` 템플릿 리터럴로 하드코딩**돼 있고 `app.get` 이 그대로 `send` 한다.
 파일에서 읽지 않는다. 그래서 아래 두 가지가 **드러나 있다**:
 
@@ -374,6 +374,6 @@ docs/legal/
 ## 참조
 
 - 원본 백로그: [`backend-backlog.md`](../backend-backlog.md) §30 (A~E)
-- 프론트 계획서: [`../roadmap/05_legal-docs.md`](../../roadmap/05_legal-docs.md)
-- 출시 준비도: [`../roadmap/00_store-release-readiness.md`](../../roadmap/00_store-release-readiness.md) ⛔-2·⛔-5
+- 프론트 계획서: [`../roadmap/05_legal-docs.md`](../../../features/legal-docs/README.md)
+- 출시 준비도: [`../roadmap/00_store-release-readiness.md`](../../release/store-readiness.md) ⛔-2·⛔-5
 - 약관 원본: Notion 「📄 이용약관 (조성민)」 DB (v1.0, 2026-07-29 작성)

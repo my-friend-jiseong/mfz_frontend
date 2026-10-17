@@ -2,14 +2,14 @@
 
 ## 이 파일의 역할
 
-**토큰·컴포넌트 명세는 여기 없다. `docs/reference/design-system.md` 가 단일 진실 출처다.**
+**토큰·컴포넌트 명세는 여기 없다. `docs/conventions/design-system.md` 가 단일 진실 출처다.**
 이 파일은 interface-design 스킬이 그 문서를 올바로 적용하기 위한 **어댑터** 3가지만 담는다.
 
 1. RN 번역 — 스킬 본문이 CSS/HTML 전제라 그대로 쓰면 안 되는 부분
 2. 우선순위 규칙 — 스킬과 프로젝트가 다를 때 무엇이 이기는가
 3. 미결 — 스킬 기준으로 아직 결정되지 않은 것
 
-값이 필요하면 `docs/reference/design-system.md` → `src/theme/*` 순으로 본다.
+값이 필요하면 `docs/conventions/design-system.md` → `src/theme/*` 순으로 본다.
 마지막 동기화: 2026-07-30
 
 ---
@@ -19,7 +19,7 @@
 > **문서화된 프로젝트 결정이 스킬을 이긴다. 그 외에는 스킬을 따른다.**
 
 "문서화된 결정"은 다음 둘 중 하나에 **이유와 함께** 적혀 있는 것만 인정한다:
-- `docs/reference/design-system.md` 13절 강령
+- `docs/conventions/design-system.md` 13절 강령
 - `src/theme/*` · `src/components/ui/*` 의 코드 주석 (예: `colors.ts` tripBanner, `Button.tsx` dangerGhost)
 
 코드에 그렇게 되어 있다는 사실만으로는 결정이 아니다 — 관성일 수 있다.
@@ -102,13 +102,13 @@
 
 > 2026-07-30 에 닫힌 것: Depth 전략 · Input inset · 토큰 이름 · focal element · 간격 리듬 · Direction
 > · 다크 모드(안 함).
-> 전부 `docs/reference/design-system.md` 에 이유와 함께 들어갔다.
+> 전부 `docs/conventions/design-system.md` 에 이유와 함께 들어갔다.
 
 ---
 
 ## 4. Direction — 확정됨
 
-**야외 계측기** (2026-07-30, 사용자 확정). 전문은 `docs/reference/design-system.md` 최상단 "Direction" 절.
+**야외 계측기** (2026-07-30, 사용자 확정). 전문은 `docs/conventions/design-system.md` 최상단 "Direction" 절.
 
 요약: 이동 중이거나 현장에 서 있는 점검 담당자의 **계측기**. cold neutral + blue 유지(햇빛 대비),
 focal element 는 거의 항상 **숫자**, 터치 타깃 44px 사수, signature 는 색+형상+라벨 3중 인코딩 배지.

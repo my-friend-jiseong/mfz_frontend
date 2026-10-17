@@ -1,7 +1,7 @@
 # 보고서 내보내기 포맷 확장 — PDF · HWP
 
 > **상태**: **PDF 구현 완료 (2026-07-28)** · HWP 미착수 — 남은 건 HWP 뿐이라 로드맵에 유지한다.
-> **백로그**: PDF = [§19](../backend/backend-backlog.md) ✅ · 위치도 = §20 ✅ · HWP 는 방식 확정 후 등재
+> **백로그**: PDF = [§19](../../operations/backend/backend-backlog.md) ✅ · 위치도 = §20 ✅ · HWP 는 방식 확정 후 등재
 > **현황**: Word(docx)·PDF 모두 내보내기 가능. 이 명세의 잔여 범위는 HWP(HWPX 타깃) 한 가지다.
 > **결정 이력**: 2026-06-06 사용자 결정 — HWP 는 기술 제약상 HWPX 타깃 권장(하단).
 

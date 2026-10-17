@@ -96,7 +96,7 @@ export function findNearbyFields(pos: LatLng, fields: Field[], maxDistanceM?: nu
 ## 5. 백엔드 영향 — **없음**
 
 매칭은 100% 클라이언트(이미 받은 현장 목록 + 기기 좌표). 업로드는 기존
-`POST /api/fields/{fieldId}/photos` 그대로. `docs/backend/backend-backlog.md` 추가 항목 없음.
+`POST /api/fields/{fieldId}/photos` 그대로. `docs/operations/backend/backend-backlog.md` 추가 항목 없음.
 
 (선택, 후속) 사진에 촬영 좌표 메타를 남기고 싶어지면 — 프론트 optional 필드 선행 후
 백로그 문서로 요청하는 기존 절차([[feedback_frontend_first]])를 따른다. 이번 범위 아님.

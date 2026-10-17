@@ -10,8 +10,8 @@ description: |
 
 # UI v2 구현
 
-계획·화면 대응표·백엔드 차단점은 **`docs/roadmap/07_ui-v2-redesign.md`** 에 있다. 먼저 읽는다.
-명세는 `docs/일가요-프론트엔드-요구사항-명세-v2.md`. 이 스킬은 **어떻게** 옮기는지만 다룬다.
+계획·화면 대응표·백엔드 차단점은 **`docs/features/ui-v2/README.md`** 에 있다. 먼저 읽는다.
+명세는 `docs/features/ui-v2/requirements-v2.md`. 이 스킬은 **어떻게** 옮기는지만 다룬다.
 
 ---
 
@@ -23,7 +23,7 @@ description: |
 
 ## 2. 화면 하나를 옮기는 순서
 
-1. 대응표(로드맵 §3)에서 프레임 id·라우트·명세 ID 를 찾는다. 상태 변형(`· 펼침`, `· 더보기` 등)도 함께 본다.
+1. 대응표(`docs/features/ui-v2/README.md` §3)에서 프레임 id·라우트·명세 ID 를 찾는다. 상태 변형(`· 펼침`, `· 더보기` 등)도 함께 본다.
 2. `get_screenshot`(프레임, `maxDimension` 1200) 으로 전체를 본다.
 3. `get_design_context` 는 **프레임 전체가 아니라 바뀐 영역 노드**로 좁혀 호출한다. 호출 시 `clientFrameworks: "react-native"`, `clientLanguages: "typescript"`. 출력은 React+Tailwind 라 **번역 대상일 뿐 복사 대상이 아니다**.
 4. 현재 코드와 차이만 고친다. 화면을 새로 쓰지 않는다 — 원본 페이지는 이 코드에서 조립됐으니 대부분 이미 맞다.
@@ -51,8 +51,8 @@ description: |
 - **시트 안에서 `SectionList` 금지** — 웹에서 크래시. FlatList 에 헤더 행을 섞는다.
 - **같은 틱에 setState + navigate 금지** — 무음 Fabric 크래시. 떠나는 화면의 폼 상태를 바꾸지 않는다.
 - `Alert.alert` 는 웹에서도 동작한다(`webAlertPatch`). 다만 v2 의 확인 창은 `ConfirmDialog` 로 옮긴다.
-- 스와이프는 RNGH #3720(우리 스택 iOS 크래시) 때문에 **스파이크 결과가 나오기 전엔 쓰지 않는다**. 로드맵 §6 S1.
-- 서버에 없는 API 는 프론트에서 optional 로 먼저 만들고 `docs/backend/backend-backlog.md` 에 적는다. 없는 엔드포인트를 추측해 호출하지 않는다.
+- 스와이프는 RNGH #3720(우리 스택 iOS 크래시) 때문에 **스파이크 결과가 나오기 전엔 쓰지 않는다**. 계획 문서 §6 S1.
+- 서버에 없는 API 는 프론트에서 optional 로 먼저 만들고 `docs/operations/backend/backend-backlog.md` 에 적는다. 없는 엔드포인트를 추측해 호출하지 않는다.
 - **이 저장소 파일은 CRLF 다.** node/sed 로 `
 ` 이 들어간 문자열을 치환하면 매치 실패가 **조용히** 지나간다(Phase 1 에서 호스트 마운트가 이렇게 빠졌다). 여러 줄 치환은 Edit 도구로 하거나, 치환 후 grep 으로 반영을 확인한다.
 - **55% 로 여는 지도 시트의 목록 하단 여백은 `useSheetBottomInset()`** — 콘텐츠 래퍼가 최대 detent 높이라 약 45% 가 화면 밖이다. 고정 숫자(240)는 탭바를 숨기자 모자랐다(실측 303px).

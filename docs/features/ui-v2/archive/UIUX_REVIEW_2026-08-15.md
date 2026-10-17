@@ -3,7 +3,7 @@
 **작성일** 2026-08-15
 **대상** 하단 탭 4개(외근·현장·보고서·내 정보) + 현장 상세
 **근거** Galaxy Note 20(SM-N981N) 실기기 스크린샷 + 코드 검증
-**판정 기준** `docs/reference/design-system.md` Direction·강령 (일반론 아님, **이 앱의 자체 기준**)
+**판정 기준** `docs/conventions/design-system.md` Direction·강령 (일반론 아님, **이 앱의 자체 기준**)
 **용도** Figma UI/UX 개편 작업 선행 문서
 
 ---

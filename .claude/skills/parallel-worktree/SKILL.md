@@ -171,11 +171,11 @@ PLANS_DIR="$MAIN_ROOT/.claude/worktrees/plans"
 | 작업 성격 | files 에 반드시 포함 |
 |---|---|
 | 서버 데이터에 **새 필드/타입** 도입 | `src/types/entities.ts` (프론트 우선 원칙상 `optional`로 먼저 선언) |
-| 백엔드 작업이 필요한 요청 발생 | `docs/backend/backend-backlog.md` (여러 세션이 동시 append 하는 대표적 cross-cutting 파일) |
-| 디자인 토큰·공용 컴포넌트 변경 | `src/theme/**`, `src/components/ui/**`, `docs/reference/design-system.md` |
-| 화면·네비게이션 **구조** 변경(라우트 신설/삭제/이동, 탭 구성) | `app/_layout.tsx` 또는 `app/(tabs)/_layout.tsx`, `docs/diagram/IAD.drawio` |
-| 데이터 모델 구조 변경 | `docs/diagram/ERD.drawio` (백로그 §12-B 와 연동) |
-| 로드맵 항목 착수/완료 | `docs/roadmap/NN_*.md` (상태 표기 갱신·`docs/reference/` 이동) |
+| 백엔드 작업이 필요한 요청 발생 | `docs/operations/backend/backend-backlog.md` (여러 세션이 동시 append 하는 대표적 cross-cutting 파일) |
+| 디자인 토큰·공용 컴포넌트 변경 | `src/theme/**`, `src/components/ui/**`, `docs/conventions/design-system.md` |
+| 화면·네비게이션 **구조** 변경(라우트 신설/삭제/이동, 탭 구성) | `app/_layout.tsx` 또는 `app/(tabs)/_layout.tsx`, `docs/features/IAD.drawio` |
+| 데이터 모델 구조 변경 | `docs/operations/backend/ERD.drawio` (백로그 §12-B 와 연동) |
+| 기능(일) 착수/완료 | `docs/features/<일>/README.md` 상태 표기 + `docs/features/README.md` 순서표 |
 | 전역 회로 변경 | `src/api/client.ts`, `src/api/errors.ts`, `src/utils/webAlertPatch.ts`, `src/utils/backNavigation.ts` |
 | 의존성 추가·버전 변경 | `package.json`, `package-lock.json` (+ §5-2 node_modules 규칙이 달라진다) |
 | 앱 메타/빌드 설정 | `app.json`, `eas.json`, `vercel.json` |
@@ -194,7 +194,7 @@ PLANS_DIR="$MAIN_ROOT/.claude/worktrees/plans"
 
 - glob 비교는 의미 기준으로 한다 (`app/(tabs)/trips/**`와 `app/(tabs)/trips/active.tsx`는 겹침).
 - **교차 레이어(§3-2: map · visits · ui/theme) 작업은 병렬 후보가 아니다.** 소비 화면이 슬라이스를 가로지르므로 사실상 모든 활성 작업과 겹친다 — 다른 작업이 도는 중이면 그 사실을 알리고 **단독 사이클로 미루자고 제안**한다. 강행 시엔 소비 화면을 files 에 전부 적어 다른 세션이 오탐 없이 보게 한다.
-- **`docs/backend/backend-backlog.md` 는 append-only 라 예외**다. 두 작업이 서로 다른 §항목을 추가하는 것뿐이면 강충돌로 보지 않고 **약충돌로 낮춘다** — 대신 머지 순서가 뒤인 쪽이 §번호 중복을 직접 확인한다(§번호는 고정 식별자라 재번호 금지).
+- **`docs/operations/backend/backend-backlog.md` 는 append-only 라 예외**다. 두 작업이 서로 다른 §항목을 추가하는 것뿐이면 강충돌로 보지 않고 **약충돌로 낮춘다** — 대신 머지 순서가 뒤인 쪽이 §번호 중복을 직접 확인한다(§번호는 고정 식별자라 재번호 금지).
 - 포트가 겹치면 새 작업의 포트를 비어 있는 번호로 올린다 (판정 대상 아님, 그냥 조정).
 - 사용자가 강행을 택하면 그 결정을 계획서에 기록한다.
 
@@ -267,7 +267,7 @@ PLANS_DIR="$MAIN_ROOT/.claude/worktrees/plans"
 
 - `plans/{slug}.md`를 참조하며 구현한다.
 - 같은 파일군은 **순차 편집**하고, `Edit` 전 반드시 `Read`한다.
-- 컨벤션은 `docs/reference/design-system.md`(토큰·공용 컴포넌트가 SSoT — 색·간격 하드코딩 금지)와 주변 코드의 관용을 따른다. 신규 화면은 `SafeScreen` + `src/components/ui/**` 조합을 기본으로 한다.
+- 컨벤션은 `docs/conventions/design-system.md`(토큰·공용 컴포넌트가 SSoT — 색·간격 하드코딩 금지)와 주변 코드의 관용을 따른다. 신규 화면은 `SafeScreen` + `src/components/ui/**` 조합을 기본으로 한다.
 - 커밋은 한국어 본문, `type(scope): 요약 — 근거` 형태(예: `feat(trips,map): 진행 중 외근 실도로 경로 — 백로그 §22 2단계 연동`). **`Co-Authored-By` 트레일러는 넣지 않는다** (hook 이 impersonation 사유로 차단).
 - 워크트리 안에서는 커밋까지만 하고 push 는 작업 브랜치로 한다. main 직행 push 는 §8 에서만.
 
@@ -277,7 +277,7 @@ PLANS_DIR="$MAIN_ROOT/.claude/worktrees/plans"
 
 1. 새 필드는 `src/types/entities.ts` 에 `optional`(`?`)로 선언 — 백엔드 미구현 상태에서도 타입 안전.
 2. UI·스토어·API 페이로드를 먼저 구현. 서버가 무시해도 앱이 동작하도록.
-3. `docs/backend/backend-backlog.md` 에 요청을 추가한다 — **§번호는 고정 식별자라 기존 번호 재사용·재번호 금지**, 새 항목은 다음 번호로 append. 완료 항목은 하단 아카이브로 한 줄 압축.
+3. `docs/operations/backend/backend-backlog.md` 에 요청을 추가한다 — **§번호는 고정 식별자라 기존 번호 재사용·재번호 금지**, 새 항목은 다음 번호로 append. 완료 항목은 하단 아카이브로 한 줄 압축.
 4. 백로그를 건드렸으면 그 사실을 §3 의무 선언대로 레지스트리 files 에 이미 반영돼 있어야 한다.
 
 ---
@@ -290,7 +290,7 @@ PLANS_DIR="$MAIN_ROOT/.claude/worktrees/plans"
 2. **정적 검증**: `npm run typecheck` (필수). 유틸 로직을 건드렸으면 `npm test` 도.
 3. **시각 변경이면 실물 렌더 확인 (필수)** — 목업·추측으로 끝내지 않는다. `npx expo start --web --port {port}` 로 띄워 브라우저에서 직접 본다. 지도가 포함된 화면이면 §5-2 의 카카오 도메인 제약 때문에 8081 이 필요할 수 있다. 기기 전용 이슈(제스처·바텀시트·안전영역)는 Expo Go + `console.log` 계측으로 **수치를 먼저 확정**한 뒤 고친다.
 4. **contract 의심 시 실측**: 응답 형태를 OpenAPI(`https://ilgayo.co.kr/api-docs.json`)만 보고 단정하지 않는다 — 변경계 200 본문이 문서에 누락돼 있다. 실제 호출로 확인.
-5. **백로그 반영 확인**: 이번 작업에서 백엔드 요청이 생겼다면 `docs/backend/backend-backlog.md` 에 빠짐없이 들어갔는지 점검(§6).
+5. **백로그 반영 확인**: 이번 작업에서 백엔드 요청이 생겼다면 `docs/operations/backend/backend-backlog.md` 에 빠짐없이 들어갔는지 점검(§6).
 6. **`/code-review` (high effort)** 실행 → 지적사항 조치 → 통과까지 반복.
 
 레지스트리 status=`review` → 통과 후 `ready` 로 갱신.
@@ -363,5 +363,5 @@ git push origin --delete {branch}                            # 원격에 올렸�
 9. **self-review 먼저, 그 다음 사용자 확인** — typecheck green ≠ 화면이 맞음.
 10. **커밋에 `Co-Authored-By` 금지**, 한국어 커밋 본문.
 11. **프로젝트 고정 제약**: 지도·길찾기는 **카카오 전용**(구글·네이버 옵션 노출 금지), 데모/시드 데이터는 **부산 실주소**, `Alert.alert` 는 web 에서도 전역 패치로 동작하므로 web 분기 불필요.
-12. **범위 제외**: `docs/roadmap/03_field-redefinition.md`(현장 → 점 자산 재정의, ERD v3급)는 2학기 과제다. 병렬 작업 후보로 올리지 않는다.
+12. **범위 제외**: `docs/features/field-redefinition/README.md`(현장 → 점 자산 재정의, ERD v3급)는 2학기 과제다. 병렬 작업 후보로 올리지 않는다.
 13. **OS**: PowerShell 이 주력이나 `git`/`gh` 는 Bash 도구로 실행. 경로 스니펫은 Bash 기준이고, junction 생성만 PowerShell/cmd 다.

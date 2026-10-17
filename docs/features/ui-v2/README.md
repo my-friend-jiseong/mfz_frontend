@@ -1,7 +1,7 @@
 # UI v2 개편 — 디자이너 개선안 반영
 
 > **상태**: 구현 완료·검증 대기 (2026-09-30) — Phase 0~5 main 반영. **release 머지 전 사용자 확인 필요**(§10 ⏳)
-> **입력**: Figma `UI - 개선본` [`336:1078`](https://www.figma.com/design/MlfpDS0wOeN90iNl5JCPWp/%EC%9D%BC%EA%B0%80%EC%9A%94?node-id=336-1078) · [요구사항 명세 v2](../일가요-프론트엔드-요구사항-명세-v2.md)(디자이너 작성, 2026-09-25)
+> **입력**: Figma `UI - 개선본` [`336:1078`](https://www.figma.com/design/MlfpDS0wOeN90iNl5JCPWp/%EC%9D%BC%EA%B0%80%EC%9A%94?node-id=336-1078) · [요구사항 명세 v2](requirements-v2.md)(디자이너 작성, 2026-09-25)
 > **백로그**: §35~§40 (§4)
 > **구현 스킬**: `.claude/skills/ui-v2/SKILL.md`
 

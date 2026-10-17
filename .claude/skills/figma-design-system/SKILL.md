@@ -10,7 +10,7 @@ description: |
 # 일가요 Figma 디자인 시스템
 
 **코드가 원본이고 Figma 가 사본이다.** 값이 어긋나면 `src/theme/` 이 이긴다.
-근거 문서는 `docs/reference/design-system.md` §15.
+근거 문서는 `docs/conventions/design-system.md` §15.
 
 ---
 

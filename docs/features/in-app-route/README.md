@@ -1,7 +1,7 @@
 # 인앱 경로 표시 — 차량 한정 (구현 완료)
 
-> **상태**: **구현 완료** (2026-07-28). 1·2단계 모두 배포됨 — 로드맵에서 `docs/reference/` 로 이관.
-> **백로그**: [backend-backlog §22](../backend/backend-backlog.md) ✅ (백엔드 프록시 2026-07-26 배포)
+> **상태**: **구현 완료** (2026-07-28). 1·2단계 모두 배포됨 — 로드맵에서 이관(현 위치 `docs/features/in-app-route/`).
+> **백로그**: [backend-backlog §22](../../operations/backend/backend-backlog.md) ✅ (백엔드 프록시 2026-07-26 배포)
 > **결정 이력**: 2026-06-06 사용자 결정 — **차량 경로만 추진**, 도보·대중교통은 보류.
 > **배경**: 길찾기가 카카오 외부 앱 deep-link 뿐이라 앱 안에서 목적지 간 동선이 안 보이는 불편.
 
@@ -34,7 +34,7 @@
 ## 후속 — 백엔드 하드닝 (2026-08-18)
 `/api/trips/:tripId/route` 가 경유지 POST(1~30개, `v1/waypoints/directions`)·8초 타임아웃·
 5분 캐시·오류 세분화(`kakao_route_unavailable`/`kakao_route_quota_exceeded`/`kakao_route_timeout`)
-로 보강됐다(`docs/backend/archive/release-2026-08-18-kakao-routing.md`). 프론트 계약은
+로 보강됐다(`docs/operations/backend/archive/release-2026-08-18-kakao-routing.md`). 프론트 계약은
 그대로라 이 문서의 코드 변경은 없다 — 호출부는 여전히 실패를 구분 없이 직선 폴백으로 삼킨다.
 
 ## 보류 (결정 기록)

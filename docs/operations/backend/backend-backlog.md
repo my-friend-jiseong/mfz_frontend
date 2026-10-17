@@ -78,8 +78,8 @@ reportId · tripId · title · outputFileUrl · overviewMapUrl · fieldReportCou
 
 ### 관련 코드
 
-- 프론트 타입 [`src/api/endpoints/reports.ts`](../../src/api/endpoints/reports.ts) `ReportListItem`
-- 그룹 구성 [`app/(tabs)/reports/index.tsx`](../../app/\(tabs\)/reports/index.tsx) `groups` useMemo
+- 프론트 타입 [`src/api/endpoints/reports.ts`](../../../src/api/endpoints/reports.ts) `ReportListItem`
+- 그룹 구성 [`app/(tabs)/reports/index.tsx`](../../../app/\(tabs\)/reports/index.tsx) `groups` useMemo
 - 상세는 이미 요약을 준다 — `ReportDetailResponse.trip`
 
 ---
@@ -261,7 +261,7 @@ cron·스케줄러·`setInterval`·retention/cleanup/purge 코드 0건. 코드�
 
 ### 우선순위
 
-🔴 **높음 — (A) 는 스토어 출시 차단.** [`docs/roadmap/00_store-release-readiness.md`](../roadmap/00_store-release-readiness.md)
+🔴 **높음 — (A) 는 스토어 출시 차단.** [`docs/operations/release/store-readiness.md`](../release/store-readiness.md)
 가 "코드 쪽 차단은 없다" 로 닫혀 있었는데, 그 판단은 계정 삭제 요건을 보지 않은 상태였다.
 (B) 는 심사 리스크, (C) 는 편의.
 (D) 는 **차단은 아니지만 지연 비용이 계속 쌓인다** — 지금 가입하는 사용자마다 버전 없는
@@ -271,7 +271,7 @@ cron·스케줄러·`setInterval`·retention/cleanup/purge 코드 0건. 코드�
 
 ### 발견 시점
 
-2026-07-29, `docs/REQUIREMENTS_BEFORE_LAUNCHING.md` 검토 중 OpenAPI 대조로 확인.
+2026-07-29, `docs/operations/release/REQUIREMENTS_BEFORE_LAUNCHING.md` 검토 중 OpenAPI 대조로 확인.
 
 ---
 
@@ -396,7 +396,7 @@ Word 를 못 받아도 PDF 로 대체 시연 가능).
 ## 32. 🟠 주소검색이 **`roadAddress: null`** 을 보낸다 — 타입은 `string`, 프론트가 죽었다
 
 `AddressSearchItem.roadAddress` 는 프론트 타입에서 `string` 이다
-([`fields.ts:163`](../../src/api/endpoints/fields.ts#L163)). 그런데 **동(洞) 단위 결과에는 `null`** 이
+([`fields.ts:163`](../../../src/api/endpoints/fields.ts#L163)). 그런데 **동(洞) 단위 결과에는 `null`** 이
 온다. 그 값이 그대로 흘러 `selected.roadAddress.trim()` 에서 **화면이 죽었다**
 (`TypeError: Cannot read properties of null (reading 'trim')`).
 
@@ -480,8 +480,8 @@ Word 를 못 받아도 PDF 로 대체 시연 가능).
 > `PATCH /api/fields/:id/memos/:id` 전부 Express 기본 HTML 404(라우트 없음). `GET /api/fields/:id` 의 `photos[]` 는
 > 여전히 현장 직접 첨부만이고 `visitId` 를 가진 항목 0건.
 
-명세 v2(`docs/일가요-프론트엔드-요구사항-명세-v2.md` §1.3·§4.4)는 메모·사진을 **방문 단위**로
-쓰고 고친다. 사진은 서버에 있는데 메모는 없다. 로드맵 [`07_ui-v2-redesign.md`](../roadmap/07_ui-v2-redesign.md) §4-A.
+명세 v2(`docs/features/ui-v2/requirements-v2.md` §1.3·§4.4)는 메모·사진을 **방문 단위**로
+쓰고 고친다. 사진은 서버에 있는데 메모는 없다. 계획 [`features/ui-v2`](../../features/ui-v2/README.md) §4-A.
 
 ### 실측 (2026-09-30, 더미계정 `demo3`, 운영)
 
@@ -661,13 +661,13 @@ UI(스와이프·`방문 삭제` 버튼·확인 대화상자)는 만들고, 호�
 - **§2 ✅ `PATCH`/`DELETE /api/trips/:tripId`** (release 2026-06) — PATCH 제목·시간 보정(응답 비의존, 로컬 패치), DELETE 관련 레코드 시 `409 has_related_trip_records`→`?force=true`. `tripStore.update`/`remove`. 커밋 `18414f6`·`10b4cd0`·`ec6ab90`.
 - **§3 ✅ 주소검색 `address.json`+`keyword.json` 병합 — 기구현 확인** (2026-07-26) — 백엔드 `searchFieldAddress` 가 이미 두 API 를 병렬 호출·병합·중복제거하고 있음(추가 커밋 없음). 백엔드 측 요청 충족(매칭 기준). ⚠️ **2026-07-28 정정**: "잔여는 프론트 선택 정리뿐" 은 틀렸다 — 응답에 **장소명이 없어** 프론트가 클라이언트 SDK 를 걷어낼 수 없다. → **§28**.
 - **§4 ✅ `detailAddress` optional 완화** (release 2026-06) — `detail_address_required` 400 제거, point 성 현장(가로수·광장) 등록 OK. 프론트 무변경.
-- **§5 ✅ `POST /trips/navigation/optimize-preview` 404 → 클라이언트 only 확정** (2026-05-31) — `optimizePreview`·관련 타입 삭제, `order.tsx` 는 `nearestNeighborOrder` 만. (외근 시작 후 `/optimize` 는 유지.) ⚠️ **2026-08-29 정정 — 재개.** 백엔드가 `docs/roadmap/06_kakao-routing-api-report.md` 제안을 반영해 endpoint 를 실제로 구현·배포했다(`docs/backend/archive/release-2026-08-18-kakao-routing.md`). 경로가 `/api/trips/navigation/optimize-preview` → **`/api/trips/optimize-preview`** 로 바뀌었다. `tripsApi.optimizePreview`·타입 복원, `order.tsx` 는 백엔드 우선 + 실패 시 nearest-neighbor 폴백으로 재통합.
+- **§5 ✅ `POST /trips/navigation/optimize-preview` 404 → 클라이언트 only 확정** (2026-05-31) — `optimizePreview`·관련 타입 삭제, `order.tsx` 는 `nearestNeighborOrder` 만. (외근 시작 후 `/optimize` 는 유지.) ⚠️ **2026-08-29 정정 — 재개.** 백엔드가 `docs/features/kakao-routing/README.md` 제안을 반영해 endpoint 를 실제로 구현·배포했다(`docs/operations/backend/archive/release-2026-08-18-kakao-routing.md`). 경로가 `/api/trips/navigation/optimize-preview` → **`/api/trips/optimize-preview`** 로 바뀌었다. `tripsApi.optimizePreview`·타입 복원, `order.tsx` 는 백엔드 우선 + 실패 시 nearest-neighbor 폴백으로 재통합.
 - **§7 ✅ 보고서 본문 검증 완화 + 사진 첨부 → 새 양식으로 해소** (2026-06-04) — content·보고서 레벨 사진 개념 제거(본문=`field_reports`), 사진은 `POST /reports/:id/field-reports`.
 - **§8 ✅ 자동 체크인 — 현 반자동 정책 유지(변경 없음)** (2026-05-10) — arrival→Alert→사용자 탭→checkIn confirm 안전망이 의도된 동작. 재개 조건: 현장 작업자 "확인 번거로움" 신호 누적 시.
 - **§9 ✅ visit 단계 모델(phase: 조치 전/중/후)** (release 2026-07-26) — `visit_photos.phase`(`before|during|after|null`), `POST /visits/:visitId/photos` multipart `phase?`, 응답 `attachment.phase` + 파생 `phaseProgress`(trip timeline·visit 상세 포함), `POST /reports/from-trip/:tripId` 이 phase→`beforePhotoUrl`/`pendingPhotoUrl`/`afterPhotoUrl` 자동 매핑. `visit_phase_invalid`(400). 커밋 `5a53b02`. ⚠️ **배포됐으나 프론트에 도달하지 않음** — phase 가 붙은 곳은 visit 사진인데 프론트는 현장 사진 엔드포인트를 쓴다(2026-07-28 OpenAPI 실측). → **§27 로 재요청.**
 - **§10 ✅ 파일 저장 인프라 — MinIO/S3 + 사진 정규화** (release 2026-07-26) — `FILE_STORAGE_DRIVER=disk|s3|minio`(`@aws-sdk/client-s3`), 업로드 사진 long edge **1920**·JPEG **q=72**. 커밋 `3603a31`·`2a97fab`. 서버측 드라이버 교체라 **프론트 contract 무변경**. ⚠️ 잔여 2건은 2026-07-28 전제 정정으로 **둘 다 소멸** — ①음성 비트레이트: 음성 메모가 ERD v2 폐기라 녹음·업로드 경로 자체가 없다(요청 철회), ②"보고서 zip < 20MB": **zip 패키지가 존재하지 않는다**(내보내기는 Word·PDF 단일 파일뿐). 전송 크기 억제 의도만 살려 **프론트 관찰 항목**으로 강등 — 현장보고 10건+ 슬롯 3장 보고서로 export 크기를 재고, 임계 초과가 실제 관측되면 그때 압축을 요청한다(현재 실측 PDF 263KB). bucket 정책 분리·presigned upload·lifecycle 은 결과보고서에 언급 없어 필요 시 별도 확인.
 - **§11 ✅ 외근 destinations 영속화 + GET/PATCH** (release 2026-06 batch3) — `trips/start` plannedFields 수용·`destinations[]`, `GET/PATCH /trips/:id/destinations`, 체크인 자동 arrived. `destinationStore` 서버+캐시 전환. 커밋 `ea9a33f`·`caf2d1f`. (진행 중 단건 add 는 §24.)
-- **§12 ✅ ERD 최신화 — (A) 백엔드 스키마 dump + (B) `ERD.drawio` 갱신** (2026-07-28) — (A) 백엔드 `docs/db-schema.md`(커밋 `62bc3dd`). (B) 프론트가 백엔드 `scripts/gen-erd.mjs` 를 `docs/diagram/gen-erd.mjs` 로 들여와 스키마 기준 재생성: **`categories`·`trip_destinations`·`visit_photos` 3개 테이블 신설**, `trips.deleted_at`·`reports.overview_map_url`·`visits.status_reason` 컬럼 추가, 관계 4개(users→categories, trips/fields→trip_destinations, visits→visit_photos) 연결, 복합제약·파생값 노트 추가. 생성기 자가검증(겹침·앵커중복·엣지관통·포개짐) 통과. ⚠️ 기존 ERD 의 `destinations` 는 실제 테이블명이 `trip_destinations` 이고 `order`→`sort_order` 였다 — 이름·컬럼 모두 틀려 있었다.
+- **§12 ✅ ERD 최신화 — (A) 백엔드 스키마 dump + (B) `ERD.drawio` 갱신** (2026-07-28) — (A) 백엔드 `docs/db-schema.md`(커밋 `62bc3dd`). (B) 프론트가 백엔드 `scripts/gen-erd.mjs` 를 `docs/operations/backend/gen-erd.mjs` 로 들여와 스키마 기준 재생성: **`categories`·`trip_destinations`·`visit_photos` 3개 테이블 신설**, `trips.deleted_at`·`reports.overview_map_url`·`visits.status_reason` 컬럼 추가, 관계 4개(users→categories, trips/fields→trip_destinations, visits→visit_photos) 연결, 복합제약·파생값 노트 추가. 생성기 자가검증(겹침·앵커중복·엣지관통·포개짐) 통과. ⚠️ 기존 ERD 의 `destinations` 는 실제 테이블명이 `trip_destinations` 이고 `order`→`sort_order` 였다 — 이름·컬럼 모두 틀려 있었다.
 - **§13 ✅ `POST /reports/generate` 500 → 프론트 미사용으로 종결** (2026-06-04) — AI 초안 분기 프론트 완전 제거(`/reports/generate`는 redirect만). 백엔드엔 미사용 endpoint 정리(제거/410) 권고만 잔존.
 - **§14 ✅ 현장 메모/사진 개별 삭제** (release 2026-06) — `DELETE /fields/:id/memos/:memoId`·`.../photos/:photoId` 204(디스크 객체 정리). 프론트 `removeTextMemo`/`removePhoto` 선반영.
 - **§15 ✅ 프로필 수정 `PATCH /api/me` · `PATCH /api/me/password`** (release 2026-07-26) — `{name?}`→`{user}`, 비밀번호는 `{updated:true}`. 에러 `name_required`·`current_password_invalid`·`password_confirm_mismatch`·`password_policy_violation`(정책은 signup 과 동일, 현재 최소 8자). 커밋 `37135e6`. **프론트 미배선** — `src/api/endpoints/` 에 me 파일 없음.
@@ -683,7 +683,7 @@ UI(스와이프·`방문 삭제` 버튼·확인 대화상자)는 만들고, 호�
 - **§26 ✅ 외근 목록에 계획 목적지 수 `destinationCount`** (release 2026-07-29, 프론트 연동 2026-08-03) — 요청 2건 모두 반영: `siteCount` 에 설명이 붙었고(= 방문한 distinct 현장 수), `destinationCount`/`plannedSiteCount`(별칭) 가 신설됐다. 프론트는 `TripListItem.destinationCount?` → `Trip.destinationCount?` → `TripCard.plannedCount` 로 배선. ⚠️ **이 항목은 겉보기보다 컸다** — 목록 카드의 진행률 바가 그동안 **한 번도 그려지지 않고 있었다.** 분모로 쓰던 `siteCount` 가 정의상 항상 `≤ visitCount` 라 "분모가 방문 수보다 작으면 신뢰 불가" 가드가 100% 발동했기 때문이다. 가드는 유지(구 백엔드·미계획 외근). 같은 실측에서 `durationHHMM: string` 이 **존재하지 않는 필드**임도 드러나 `durationMinutes?: number` 로 정정(소비처 0곳이라 무증상이었다).
 - **§27 ✅ 현장 사진 엔드포인트에 `phase` 추가 — 프론트 변경 0 으로 발화** (release 2026-07-29) — 요청 3안 중 **1번안 채택**: `POST /api/fields/{fieldId}/photos` multipart 에 `phase?`(`before|during|after`), 응답에 `phaseProgress`(+`done`) 와 `photo.phase` echo, `POST /reports/from-trip/:tripId` 이 **field_photos** phase 로 슬롯 매핑. 프론트는 이미 `addPhoto(..., { phase })` 로 보내고 있었으므로 **배포 즉시 동작**했다(코드 변경 없음, 주석만 정정). 잔여: 배포 **이전**에 올린 사진은 `phase: null` 이라 계속 수동 선택(`pickFromField`)이 필요하다 — 소급 백필은 요청하지 않는다(어느 슬롯이었는지 서버가 알 수 없다). `phaseProgress` 는 프론트 미사용(체크인 화면이 슬롯별 사진 유무로 이미 그린다).
 - **§25 ✅ 사용자 커스텀 카테고리 마스터 `categories` CRUD** (release 2026-07-26) — `GET/POST /api/categories`, `PATCH/DELETE /api/categories/:categoryId`, user 스코프 `(user_id, name)` UQ. 에러 `category_name_required`(400)·`category_name_taken`(409)·`category_not_found`(404). `Field.categories: string[]`/`field_categories` **계약 무변경**. 커밋 `8cc8e12`. **프론트 잔여**: `categoryStore` 가 아직 AsyncStorage 진실원(`TODO(backend)`). 후속(별도 결정): `field_categories`→`category_id` FK / rename cascade.
-- **§33 ✅ 운영 TLS 인증서 만료 — 복구 확인** (장애 2026-08-03, 복구 실측 2026-08-29) — 원인: `--manual`/DNS-01 로 발급된 인증서라 `manual-auth-hook` 없이는 비대화식 자동갱신이 불가능했음(certbot.timer 는 90일 내내 정상 실행되며 매번 조용히 건너뜀). 상세·재발 방지안(Cloudflare DNS-01 자동화 등)은 `docs/infra/2026-08-03-tls-expiry-incident.md`. 덤: 같은 진단에서 `mfz-studio` 컨테이너 크래시 루프 발견(장애 무관, 급하지 않음, 미확인 상태로 방치돼 있을 수 있음). **재발 방지 적용 여부는 미확인 → §34.**
+- **§33 ✅ 운영 TLS 인증서 만료 — 복구 확인** (장애 2026-08-03, 복구 실측 2026-08-29) — 원인: `--manual`/DNS-01 로 발급된 인증서라 `manual-auth-hook` 없이는 비대화식 자동갱신이 불가능했음(certbot.timer 는 90일 내내 정상 실행되며 매번 조용히 건너뜀). 상세·재발 방지안(Cloudflare DNS-01 자동화 등)은 `docs/operations/incidents/2026-08-03-tls-expiry-incident.md`. 덤: 같은 진단에서 `mfz-studio` 컨테이너 크래시 루프 발견(장애 무관, 급하지 않음, 미확인 상태로 방치돼 있을 수 있음). **재발 방지 적용 여부는 미확인 → §34.**
 - **§28 ✅ 주소검색 `buildingName`** (백엔드 2026-07-29 배포, 백엔드 종결 확인 2026-08-03, 활성 큐에서 내림 2026-10-01) — 키워드(POI) 출처 item 에 Kakao `place_name` 을 `buildingName` 으로 싣는다. 2026-10-01 실측: `동아대학교`·`다대포` 각 10/10 채움, 동 단위 결과(`하단동`)만 null(정상). **백엔드 할 일 없음.** 남은 건 **프론트 판단** — 서버 응답만으로 클라이언트 카카오 SDK 키워드검색(`useKakaoPlaceSearch`·`mergeSearchItems`, 소비처 `MapSearchBar`·`fields/new`·`fields/[id]/edit`)을 걷어낼 수 있는지 커버리지 대조. 원문(실측 표·제거 범위 약 236줄)은 git 이력 `df09a61` 의 이 파일 §28.
 
 ---
@@ -718,7 +718,7 @@ UI(스와이프·`방문 삭제` 버튼·확인 대화상자)는 만들고, 호�
   즉 그 사이 재발급됨). 즉시 장애는 해소됐지만 **재발 방지 자동화가 실제로 걸렸는지는 서버
   SSH 없이 확인 불가** — 다음 만료(11/2) 전 재확인 필요해 §34 로 남겨뒀다. §33 은 아카이브로.
 - **2026-08-29**: **§5 재개 — 카카오 라우팅 API 결과보고서(2026-08-18) 반영.** 백엔드가
-  `docs/roadmap/06_kakao-routing-api-report.md` 제안대로 `/api/trips/optimize-preview`
+  `docs/features/kakao-routing/README.md` 제안대로 `/api/trips/optimize-preview`
   (경로가 예전 `/navigation/optimize-preview` 에서 바뀜) 와 `/api/trips/:tripId/route`(다중
   경유지·타임아웃·캐시·오류 세분화)를 구현·배포했다. 프론트 반영: `tripsApi.optimizePreview`
   복원, `order.tsx`(외근 시작 전) 를 백엔드 우선 + client nearest-neighbor 폴백으로 재통합,
@@ -819,7 +819,7 @@ UI(스와이프·`방문 삭제` 버튼·확인 대화상자)는 만들고, 호�
   라벨이 장소명에서 도로명으로 바뀌는 회귀를 배포할 뻔했다.
 
 - **2026-07-28**: **§12 ✅ 종결** — (B) `ERD.drawio` 갱신 완료. 백엔드 저장소를 pull 해
-  `docs/db-schema.md` 를 확보하고, 백엔드 `scripts/gen-erd.mjs` 를 `docs/diagram/gen-erd.mjs` 로
+  `docs/db-schema.md` 를 확보하고, 백엔드 `scripts/gen-erd.mjs` 를 `docs/operations/backend/gen-erd.mjs` 로
   들여와 스키마 기준 재생성(자가검증 통과). 누락 테이블 3개(`categories`·`trip_destinations`·
   `visit_photos`) 신설, 컬럼 3개(`trips.deleted_at`·`reports.overview_map_url`·`visits.status_reason`)
   반영. 기존 ERD 의 `destinations` 는 테이블명·컬럼명이 모두 실제와 달랐다(`trip_destinations`,

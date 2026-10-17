@@ -1,5 +1,5 @@
 // ERD 재생성기 — 백엔드 저장소 scripts/gen-erd.mjs 의 프론트 사본(백로그 §12-B).
-// `node docs/diagram/gen-erd.mjs` → docs/diagram/ERD.drawio 재생성 + 자가검증.
+// `node docs/operations/backend/gen-erd.mjs` → docs/operations/backend/ERD.drawio 재생성 + 자가검증.
 //
 // 진실 출처는 백엔드 prisma/schema.prisma, 그 dump 가 백엔드 docs/db-schema.md 다.
 // 손으로 mxCell 을 찍으면 좌표·높이·앵커 실수가 반드시 나므로 항상 이 스크립트로 재생성한다.
@@ -306,7 +306,7 @@ out.push("    </mxGraphModel>");
 out.push("  </diagram>");
 out.push("</mxfile>");
 
-writeFileSync("docs/diagram/ERD.drawio", out.join("\n"), "utf8");
+writeFileSync("docs/operations/backend/ERD.drawio", out.join("\n"), "utf8");
 console.log("ERD.drawio written:", tables.length, "tables,", edges.length, "edges");
 
 // ===== 자가 검증 (§2.4 겹침 / §4.3 앵커 중복) =====

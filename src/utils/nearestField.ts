@@ -1,5 +1,5 @@
 // Quick Photo(빠른 촬영) — 촬영 위치에서 가까운 현장 매칭.
-// 계획: docs/reference/AUTO_PICTURE_REGISTRATION_PLAN.md §4-2
+// 계획: docs/features/quick-photo/README.md §4-2
 //
 // RN/expo import 없는 순수 모듈로 유지할 것 — node 단독 단위 테스트 대상
 // (npm test → src/utils/__tests__/nearestField.test.ts).

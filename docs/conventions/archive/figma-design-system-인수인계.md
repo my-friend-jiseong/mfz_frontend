@@ -15,7 +15,7 @@ RN 앱(`src/theme/`, `src/components/`)을 역설계해 Figma 파일 `일가요`
 **`UI` 페이지 화면 이식 완료** — 24/24(코드에 UI 가 있는 전 화면). 리다이렉트 4개(`app/index`·`(tabs)/index`·`reports/generate`·`+not-found`)는 프레임 없음. 상세는 §4.4.
 
 **대원칙: 코드가 원본이고 Figma 가 사본이다.** 값이 어긋나면 `src/theme/` 이 이긴다.
-근거 문서는 `docs/reference/design-system.md`, 특히 §15.
+근거 문서는 `docs/conventions/design-system.md`, 특히 §15.
 
 ---
 
@@ -24,7 +24,7 @@ RN 앱(`src/theme/`, `src/components/`)을 역설계해 Figma 파일 `일가요`
 | 파일 | 왜 |
 |---|---|
 | `.claude/skills/figma-design-system/SKILL.md` | **필수.** 반복해서 어긴 문서 톤 규칙 + 런타임 함정 6종 + 파일 좌표표. 이걸 안 읽고 손대면 같은 실수를 반복한다 |
-| `docs/reference/design-system.md` | 디자인 시스템의 근거 문서. §15 가 Figma 라이브러리 절 |
+| `docs/conventions/design-system.md` | 디자인 시스템의 근거 문서. §15 가 Figma 라이브러리 절 |
 | `src/theme/` | `palette.ts` → `colors.ts` → `spacing/typography/elevation/motion/statusBadge/heatScale/choroplethScale/withAlpha` |
 
 MCP 도구는 `mcp__claude_ai_Figma__use_figma` 하나면 된다(`ToolSearch` 로 로드).
@@ -161,7 +161,7 @@ return JSON.stringify(s.absoluteBoundingBox);
 ```
 
 
-### 4.2 ~~P1 — `docs/reference/design-system.md` §15 갱신~~ ✅ 완료 (2026-08-29)
+### 4.2 ~~P1 — `docs/conventions/design-system.md` §15 갱신~~ ✅ 완료 (2026-08-29)
 
 §15 가 담고 있던 틀린 수치를 정정했다:
 
@@ -296,7 +296,7 @@ INSTANCE_SWAP 과 얽히면 벡터가 6×11 로 뭉개진다(실제로 당함). 
 - 지도 홈 `(tabs)/index` — `MapSheetLayout` 스냅(`['18%','55%','92%']`)이 얽혀 있어 정지 프레임 3장이 필요하다
 - 서브 화면 — `trips/visit` · `reports/[id]/edit` · `trips/[id]/edit` · `fields/categories` · `fields/[id]/checkin`
 
-화면별 디자인 결정은 이미 `docs/reference/design-system.md` **§14(미적용 / 차후 과제)** 의 탭·서브 화면 패스 기록에 적혀 있다. 새로 판단하지 말고 그걸 근거로 옮긴다.
+화면별 디자인 결정은 이미 `docs/conventions/design-system.md` **§14(미적용 / 차후 과제)** 의 탭·서브 화면 패스 기록에 적혀 있다. 새로 판단하지 말고 그걸 근거로 옮긴다.
 `reports/generate` 는 19줄짜리 redirect 라 UI 가 없다 — 대상에서 뺀다.
 
 **빠진 아이콘은 먼저 채운다.** 회원가입에서 `eye-outline` · `eye-off-outline` · `checkbox` · `square-outline` 4개가 없어
@@ -446,7 +446,7 @@ return JSON.stringify({
 
 ## 8. 이번 라운드에 실제로 한 일 (이력)
 
-1. `docs/reference/design-system.md` §9·§10 에 `ErrorState` 행 추가 — "실패를 empty 로 렌더하면 '데이터 없음' 으로 오독된다"는 코드 주석의 의도를 문서로 올린 것.
+1. `docs/conventions/design-system.md` §9·§10 에 `ErrorState` 행 추가 — "실패를 empty 로 렌더하면 '데이터 없음' 으로 오독된다"는 코드 주석의 의도를 문서로 올린 것.
 2. 텍스트 스타일 `body-semibold`(16/24 SemiBold) 신설.
 3. Figma 컴포넌트 5개 신설 — `EmptyState` `101:3` · `ErrorState` `101:11` ·
    `FilterOptionRow` `102:14` · `FilterHead` `102:27` · `FilterAccordion` `103:54`.

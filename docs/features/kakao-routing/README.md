@@ -7,8 +7,8 @@
 >
 > **상태 (2026-08-29)**: **백엔드 반영 완료.** 이 문서의 제안을 근거로 백엔드가
 > `/api/trips/:tripId/route`(다중 경유지 지원)·`/api/trips/optimize-preview` 를 구현·배포했다
-> (`docs/backend/archive/release-2026-08-18-kakao-routing.md`). **프론트 반영은 진행 중** —
-> `docs/backend/backend-backlog.md` §5·§22 참조.
+> (`docs/operations/backend/archive/release-2026-08-18-kakao-routing.md`). **프론트 반영은 진행 중** —
+> `docs/operations/backend/backend-backlog.md` §5·§22 참조.
 
 ## 개정 이력
 

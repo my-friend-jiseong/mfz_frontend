@@ -11,7 +11,7 @@ import { useAuthStore } from '@/stores/authStore';
 import type { Field } from '@/types/entities';
 
 // Quick Photo — 카메라 촬영 → 현 위치 최근접 현장 자동 매칭 → 확인 1탭 등록.
-// 계획: docs/reference/AUTO_PICTURE_REGISTRATION_PLAN.md §4-4
+// 계획: docs/features/quick-photo/README.md §4-4
 // 화면이 아닌 훅으로 분리 — 현장 목록 외 진입점(지도 등)에서도 재사용 가능.
 // UI 는 QuickPhotoSheet 가 session/uploading 을 받아 렌더.
 

@@ -162,6 +162,6 @@ docs/legal/            ← 백엔드 repo
 ## 참조
 
 - 문서 원본: Notion 「📄 이용약관 (조성민)」 DB (작성 2026-07-29)
-- 백엔드 요청: [`docs/backend/backend-backlog.md`](../backend/backend-backlog.md) **§30-B**·**§30-D**
-- 출시 차단: [`docs/roadmap/00_store-release-readiness.md`](./00_store-release-readiness.md) ⛔-2·⛔-5
+- 백엔드 요청: [`docs/operations/backend/backend-backlog.md`](../../operations/backend/backend-backlog.md) **§30-B**·**§30-D**
+- 출시 차단: [`docs/operations/release/store-readiness.md`](../../operations/release/store-readiness.md) ⛔-2·⛔-5
 - 프론트 상수: `src/utils/contact.ts` (`LOCATION_TERMS_AVAILABLE`, `SUPPORT_EMAIL`)

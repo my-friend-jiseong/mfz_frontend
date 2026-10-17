@@ -227,7 +227,7 @@ export const ROUTE_MAX_WAYPOINTS = 30;
  * 200곳짜리 목록·지도 마커·경로 계산이 만드는 성능 부담도 미리 막는다.
  * 그래서 백엔드 상한보다 낮은 50 을 쓴다.
  *
- * ※ 로드맵 03(현장 재정의: 거점 → 점/가로수)이 들어오면 한 외근의 목적지 수가
+ * ※ docs/features/field-redefinition(현장 재정의: 거점 → 점/가로수)이 들어오면 한 외근의 목적지 수가
  *   구조적으로 늘 수 있다. 그때 이 값을 재검토할 것.
  */
 export const TRIP_MAX_PLANNED_FIELDS = 50;
