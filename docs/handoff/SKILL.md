@@ -12,7 +12,7 @@ description: 2차 개선본 화면을 Figma(UI - 2차 개선본 페이지)에서
 4. `docs/handoff/2차-결정-기록.md`: 왜 그렇게 정했는지. 판단이 필요할 때만 읽기
 
 ## 범위
-- `.claude/skills/figma-design-system`, `docs/reference/design-system.md`의 "코드가 원본, Figma가 사본"은 1차 `DesignSystem` 페이지 이야기. 2차 화면은 Figma `UI - 2차 개선본`이 목표 모양
+- `.claude/skills/figma-design-system`, `docs/conventions/design-system.md`의 "코드가 원본, Figma가 사본"은 1차 `DesignSystem` 페이지 이야기. 2차 화면은 Figma `UI - 2차 개선본`이 목표 모양
 - 2차 토큰: Figma 변수 `2차 · Color`, `2차 · Spacing`, `2차 · Radius`, 텍스트 스타일 `2차/…`. `src/theme`에 없는 값이면 하드코딩하지 말고 theme에 먼저 추가
 
 ## Figma 읽는 법
