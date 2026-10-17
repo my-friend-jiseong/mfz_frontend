@@ -635,6 +635,24 @@ UI(스와이프·`방문 삭제` 버튼·확인 대화상자)는 만들고, 호�
 
 ---
 
+## 41. 🟢 보고서 위치도의 **사용자 지정 범위**를 저장할 곳이 없다
+
+보고서 상세에서 위치도 범위(지도 중심·줌)를 사용자가 직접 정할 수 있게 했다. 문서에 들어가는 건 내보내기 직전
+그 범위로 캡처해 `uploadOverviewPhoto` 로 올린 이미지라 결과물은 이미 맞다. 남는 문제는 **범위 설정 자체**가
+기기에만 있다는 것 — 다른 기기·다른 작성자가 다시 내보내면 자동 맞춤(현장 전체)으로 돌아간다.
+
+### 요청 (낮음)
+`Report` 에 `overviewView: { lat: number, lng: number, level: number } | null` (nullable, 기본 null = 자동 맞춤)
+과 `PATCH /api/reports/:id` 로 갱신.
+
+### 프론트 선조치
+AsyncStorage `report-overview-view:<reportId>` 에 저장(`src/utils/overviewMapView.ts`). 서버 필드가 생기면 그쪽을 우선한다.
+
+### 발견 시점
+2026-10-12, 위치도 범위 조정 기능 추가.
+
+---
+
 ## 🔗 2026-07-26 배치 프론트 연동 — ✅ 종결 (이력)
 
 > 2026-07-26 백엔드 배치([release-2026-07-26-backend-backlog.md](./archive/release-2026-07-26-backend-backlog.md))로
