@@ -88,16 +88,18 @@ export function Button2({
         style,
       ]}
     >
+      {/* 로딩 중에도 글자 자리를 남겨 폭이 줄지 않게 한다 — 글자는 투명, 스피너는 위에 겹친다. */}
+      <View style={[styles.row, loading && styles.hidden]}>
+        {icon ? <Icon name={icon} size={20} color={v.fg} /> : null}
+        <Text v2={s.text} style={{ color: v.fg }} numberOfLines={1}>
+          {children}
+        </Text>
+      </View>
       {loading ? (
-        <ActivityIndicator color={v.fg} size="small" />
-      ) : (
-        <View style={styles.row}>
-          {icon ? <Icon name={icon} size={20} color={v.fg} /> : null}
-          <Text v2={s.text} style={{ color: v.fg }} numberOfLines={1}>
-            {children}
-          </Text>
+        <View style={styles.spinner} pointerEvents="none">
+          <ActivityIndicator color={v.fg} size="small" />
         </View>
-      )}
+      ) : null}
     </Touchable>
   );
 }
@@ -105,5 +107,7 @@ export function Button2({
 const styles = StyleSheet.create({
   base: { borderRadius: radius2.lg, alignItems: 'center', justifyContent: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', gap: space[6] },
+  hidden: { opacity: 0 },
+  spinner: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
   full: { alignSelf: 'stretch' },
 });

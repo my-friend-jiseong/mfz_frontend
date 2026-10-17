@@ -1,5 +1,5 @@
 import { fieldTitle } from '@/utils/fieldFacets';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { forwardRef, useEffect, useMemo, useRef, useState } from 'react';
 import { Image, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,7 +9,7 @@ import { Icon } from '@/components/icons';
 import { DashedBox, OrderBadge, SLOTS, SLOT_CAPTION, SLOT_URL, useReportRows, type Slot } from '@/components/reports/ReportParts';
 import { ReportModalHeader } from '@/components/reports/ReportModalHeader';
 import { STATUS_TONE } from '@/components/trips/TripStopRow';
-import { showActionSheet } from '@/components/ui/ActionSheet';
+import { showPopoverMenu } from '@/components/ui/PopoverMenu';
 import { BottomActionBar } from '@/components/ui/BottomActionBar';
 import { Button2 } from '@/components/ui/Button2';
 import { confirm, notice } from '@/components/ui/ConfirmDialog';
@@ -159,9 +159,13 @@ export default function FieldReportScreen() {
     setSlot(empty.key, { url: p.fileUrl, file: undefined });
   };
 
+  const slotRefs = useRef<Partial<Record<Slot, View | null>>>({});
   const onSlotPress = (k: Slot) => {
     if (filled(slots[k])) {
-      showActionSheet([{ label: '사진 빼기', icon: 'trash', tone: 'danger', onPress: () => setSlot(k, { url: null, file: undefined }) }]);
+      // 항목 하나짜리라 아래 시트(옛 액션 시트) 대신 누른 칸에 붙는 메뉴로 — 손가락 옆에서 바로 고른다.
+      showPopoverMenu(slotRefs.current[k] ?? null, [
+        { label: '사진 빼기', icon: 'trash', tone: 'danger', onPress: () => setSlot(k, { url: null, file: undefined }) },
+      ]);
       return;
     }
     promptPhotoSource((src) => {
@@ -302,6 +306,9 @@ export default function FieldReportScreen() {
                       {s.label}
                     </Text>
                     <SlotPhoto
+                      ref={(r) => {
+                        slotRefs.current[s.key] = r;
+                      }}
                       uri={uri}
                       time={time}
                       label={s.label}
@@ -402,10 +409,14 @@ export default function FieldReportScreen() {
 }
 
 /** 전·중·후 칸(110 정사각). 비었으면 점선 + '사진 넣기'. */
-function SlotPhoto({ uri, time, label, onPress }: { uri: string | null | undefined; time: string | null; label: string; onPress: () => void }) {
+const SlotPhoto = forwardRef<View, { uri: string | null | undefined; time: string | null; label: string; onPress: () => void }>(function SlotPhoto(
+  { uri, time, label, onPress },
+  ref,
+) {
   const [size, setSize] = useState(0);
   return (
     <Touchable
+      ref={ref}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={uri ? `${label} 사진, 눌러서 빼기` : `${label} 사진 넣기`}
@@ -434,7 +445,7 @@ function SlotPhoto({ uri, time, label, onPress }: { uri: string | null | undefin
       )}
     </Touchable>
   );
-}
+});
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: c2.bg.canvas },

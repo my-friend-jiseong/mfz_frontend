@@ -1,3 +1,6 @@
+import { Easing as RNEasing } from 'react-native';
+import { Easing as REasing, useReducedMotion } from 'react-native-reanimated';
+
 // 모션은 의미가 있을 때만. transition 200ms 넘으면 사용자가 기다린다.
 export const duration = {
   instant: 80,
@@ -7,12 +10,41 @@ export const duration = {
 } as const;
 
 export const easing = {
-  // RN Animated 와 reanimated Easing 호환되도록 곡선 파라미터만 정의.
+  // 곡선 파라미터. 실제 애니메이션에는 아래 animEasing(RN Animated)·rEasing(reanimated)을 쓴다.
   standard: [0.2, 0, 0, 1] as const, // 표준 진입/퇴장
   emphasized: [0.3, 0, 0, 1] as const, // 강조 (큰 모션)
   decel: [0, 0, 0, 1] as const, // 들어옴
   accel: [0.4, 0, 1, 1] as const, // 나감
 } as const;
+
+type Curve = readonly [number, number, number, number];
+
+// RN Animated.timing 용. 들어올 때 decel(enter), 나갈 때 accel(exit).
+const rn = (c: Curve) => RNEasing.bezier(c[0], c[1], c[2], c[3]);
+export const animEasing = {
+  standard: rn(easing.standard),
+  emphasized: rn(easing.emphasized),
+  enter: rn(easing.decel),
+  exit: rn(easing.accel),
+} as const;
+
+// reanimated withTiming·레이아웃 애니메이션 용(워클릿 팩토리라 RN Animated 와 섞어 쓸 수 없다).
+const re = (c: Curve) => REasing.bezier(c[0], c[1], c[2], c[3]);
+export const rEasing = {
+  standard: re(easing.standard),
+  emphasized: re(easing.emphasized),
+  enter: re(easing.decel),
+  exit: re(easing.accel),
+} as const;
+
+/**
+ * 시스템 '동작 줄이기'(iOS 동작 줄이기·안드로이드 애니메이션 제거·웹 prefers-reduced-motion).
+ * 켜져 있으면 오버레이는 움직임(이동·확대) 없이 투명도만, duration.instant 로 바꾼다.
+ * 앱 시작 시점 값이다(reanimated 와 같음) — 설정을 바꾸면 앱을 다시 열어야 반영된다.
+ */
+export function useReducedMotionPref(): boolean {
+  return useReducedMotion();
+}
 
 export const opacity = {
   pressed: 0.85,

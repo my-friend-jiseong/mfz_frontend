@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AppState, ScrollView, StyleSheet, View } from 'react-native';
+import { AppState, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
+import Animated, { FadeIn, FadeOut, LinearTransition, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import { KakaoMapWebView, type KakaoMapHandle, type KakaoMapMarker, type MapPath } from '@/components/KakaoMapWebView';
 import { Icon } from '@/components/icons';
 import { STATUS_PIN_COLOR } from '@/components/shell/pinColors';
@@ -37,6 +38,7 @@ import { haversineKm } from '@/utils/routeOptimize';
 import { fmtSpan } from '@/utils/tripFormat';
 import { loadTripStartPoint } from '@/utils/tripStartPoint';
 import { c2, elevation2, radius2, space } from '@/theme/v2';
+import { duration, rEasing } from '@/theme/motion';
 import type { Destination, Field } from '@/types/entities';
 import type { MapPinKind } from '@/components/KakaoMapWebView';
 
@@ -80,8 +82,9 @@ export default function ActiveTrip() {
   const [now, setNow] = useState(() => Date.now());
   const [expanded, setExpanded] = useState(false);
   const [menuAnchor, setMenuAnchor] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
-  // 스낵바(7-6·7-9)가 떠 있는 동안 지도 버튼을 그 위로 올린다(Figma 7-9).
-  const [snackUntil, setSnackUntil] = useState(0);
+  // 스낵바(7-6·7-9)가 떠 있는 동안 지도 버튼을 그 위로 올린다(Figma 7-9). 스낵바가 다 사라진 뒤(onHidden)에 내린다.
+  const [snackUp, setSnackUp] = useState(false);
+  const snackSeq = useRef(0);
   // 길찾기를 연 목적지 — 앱으로 돌아왔을 때 그 근처면 7-6 도착 스낵바.
   const navTargetRef = useRef<string | null>(null);
 
@@ -235,6 +238,12 @@ export default function ActiveTrip() {
     // 건너뛴·방문한 핀을 먼저 그려 남은 목적지가 위에 오게 한다.
     return out.sort((a, b) => Number(a.pin === 'visited' || a.pin === 'skipped') > Number(b.pin === 'visited' || b.pin === 'skipped') ? -1 : 0);
   }, [destinations, fieldById, next?.id]);
+  // 지도 맞춤은 목적지 좌표 묶음이 바뀔 때만 — 건너뛰기·체크인으로 핀 모양만 바뀌어 마커 배열을 새로 만들 때는
+  // 다시 맞추지 않는다. 사용자가 지도를 움직인 뒤에는 지도가 알아서 맞추지 않는다(KakaoMapWebView fitKey).
+  const fitKey = useMemo(
+    () => markers.map((m) => `${m.lat.toFixed(5)},${m.lng.toFixed(5)}`).sort().join('|'),
+    [markers],
+  );
 
   const paths = useMemo<MapPath[]>(() => {
     const out: MapPath[] = [];
@@ -267,35 +276,23 @@ export default function ActiveTrip() {
   const warning: 'failed' | 'offline' | null = failedQ.length > 0 ? 'failed' : pendingQ.length > 0 ? 'offline' : null;
   const retry = () => void useCheckinQueueStore.getState().flush({ retryFailed: true });
 
-  // 스낵바가 닫힐 때 지도 버튼을 내리는 타이머 — 화면이 내려가면 지운다.
-  const snackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(
-    () => () => {
-      if (snackTimerRef.current) clearTimeout(snackTimerRef.current);
-    },
-    [],
-  );
-
   // === 동작 ===
   const showSnack = (message: string, action: { label: string; onPress: () => void }) => {
     // 탭 바 + 아래 패널 + 16 위(Figma 7-6·7-9 스낵바 484~544). bottomOffset 은 창 safe area 를 뺀 값이고
     // 탭 바 실측 높이(tabBarH)는 safe area 를 포함한다.
     const bottomOffset = Math.max(0, tabBarH - realInsets.bottom) + PANEL_H + space[16];
+    // 이어서 다른 스낵바를 띄우면 앞 스낵바의 onHidden 이 오지만 버튼은 그대로 둔다(순번으로 거른다).
+    const seq = ++snackSeq.current;
+    setSnackUp(true);
     snackbar.show({
       message,
-      action: {
-        label: action.label,
-        onPress: () => {
-          setSnackUntil(0);
-          action.onPress();
-        },
-      },
+      action,
       duration: UNDO_WINDOW_MS,
       bottomOffset,
+      onHidden: () => {
+        if (snackSeq.current === seq) setSnackUp(false);
+      },
     });
-    setSnackUntil(Date.now() + UNDO_WINDOW_MS);
-    if (snackTimerRef.current) clearTimeout(snackTimerRef.current);
-    snackTimerRef.current = setTimeout(() => setSnackUntil((u) => (u <= Date.now() ? 0 : u)), UNDO_WINDOW_MS + 50);
   };
 
   const openRoute = () => {
@@ -421,7 +418,7 @@ export default function ActiveTrip() {
   const fromOrigin = hasCoords(nextField) && origin ? haversineKm(origin, ll(nextField)) * 1000 : null;
   const fromLive = hasCoords(nextField) && liveLoc ? haversineKm(liveLoc, ll(nextField)) * 1000 : null;
   const arrived = fromLive != null && fromLive <= ARRIVE_M;
-  const bottomStack = warning || snackUntil > now ? ROW_H + space[16] : 0;
+  const bottomStack = warning || snackUp ? ROW_H + space[16] : 0;
   const listMax = Math.max(120, containerH * LIST_MAX_RATIO);
 
   return (
@@ -429,6 +426,7 @@ export default function ActiveTrip() {
       <KakaoMapWebView
         ref={mapRef}
         markers={markers}
+        fitKey={fitKey}
         paths={paths}
         startPoint={startPoint}
         myLocation={myDot}
@@ -502,14 +500,17 @@ export default function ActiveTrip() {
       </SafeTop>
 
       {/* 지도 버튼: 내 위치 · + (8-6) */}
-      <View pointerEvents="box-none" style={[styles.fabs, { bottom: PANEL_H + space[16] + bottomStack }]}>
+      <MapFabs bottom={PANEL_H + space[16] + bottomStack}>
         <MapButton icon="locate" accessibilityLabel="내 위치" onPress={() => mapRef.current?.recenter(myDot ?? undefined)} />
         <MapButton ref={plusRef} icon="plus" accessibilityLabel="기록 메뉴" onPress={openMenu} />
-      </View>
+      </MapFabs>
 
       {/* 7-2 · 7-3 화면 안 경고 줄 */}
       {warning ? (
-        <View
+        <Animated.View
+          key={warning}
+          entering={FadeIn.duration(duration.base)}
+          exiting={FadeOut.duration(duration.fast)}
           accessibilityRole="alert"
           accessibilityLiveRegion="polite"
           style={[styles.warn, warning === 'failed' ? styles.warnFailed : styles.warnOffline, { bottom: PANEL_H + space[16] }]}
@@ -529,11 +530,11 @@ export default function ActiveTrip() {
               </Text>
             </Touchable>
           ) : null}
-        </View>
+        </Animated.View>
       ) : null}
 
-      {/* 아래 패널 */}
-      <View style={styles.panel}>
+      {/* 아래 패널 — 목록을 펼치고 접을 때 높이가 미끄러지게(LinearTransition), 목록은 페이드. */}
+      <Animated.View layout={PANEL_LAYOUT} style={styles.panel}>
         <Touchable
           onPress={() => setExpanded((v) => !v)}
           accessibilityRole="button"
@@ -626,6 +627,7 @@ export default function ActiveTrip() {
           )}
         </View>
         {expanded ? (
+          <Animated.View entering={FadeIn.duration(duration.base)} exiting={LIST_OUT}>
           <ScrollView style={{ maxHeight: listMax }} contentContainerStyle={styles.list}>
             <Text v2="bodyS.bold" tone="secondary" style={styles.listTitle}>
               목적지 {destinations.length}
@@ -654,8 +656,9 @@ export default function ActiveTrip() {
               ))
             )}
           </ScrollView>
+          </Animated.View>
         ) : null}
-      </View>
+      </Animated.View>
 
       <RecordMenu
         anchor={menuAnchor}
@@ -667,6 +670,22 @@ export default function ActiveTrip() {
       />
       {settings.sheet}
     </View>
+  );
+}
+
+// 웹은 뺀다 — reanimated 웹 LinearTransition 이 높이 변화를 scale 로 흉내 내 패널 글자가 늘어난다(Accordion 과 같은 이유).
+const PANEL_LAYOUT = Platform.OS === 'web' ? undefined : LinearTransition.duration(duration.base).easing(rEasing.standard);
+const LIST_OUT = Platform.OS === 'web' ? undefined : FadeOut.duration(duration.fast);
+
+/** 지도 버튼 열 — 경고 줄·스낵바가 생기고 사라질 때 순간이동하지 않고 미끄러진다. */
+function MapFabs({ bottom, children }: { bottom: number; children: React.ReactNode }) {
+  const style = useAnimatedStyle(() => ({
+    bottom: withTiming(bottom, { duration: duration.base, easing: rEasing.enter }),
+  }));
+  return (
+    <Animated.View pointerEvents="box-none" style={[styles.fabs, style]}>
+      {children}
+    </Animated.View>
   );
 }
 

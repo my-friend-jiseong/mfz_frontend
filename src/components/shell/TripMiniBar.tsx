@@ -1,7 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Keyboard, Platform, StyleSheet, View } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { goToTabRoot } from './tabNav';
 import { Icon } from '@/components/icons';
 import { Text } from '@/components/ui/Text';
@@ -41,6 +41,40 @@ function useSilentLocation(enabled: boolean): LatLng | null {
     };
   }, [enabled]);
   return pos;
+}
+
+// iOS 는 키보드가 올라오기 시작할 때(Will) 숨겨 키보드 위로 잠깐 떠오르지 않게 한다. 안드로이드는 Will 이벤트가 없다.
+function useKeyboardVisible(): boolean {
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const ios = Platform.OS === 'ios';
+    const show = Keyboard.addListener(ios ? 'keyboardWillShow' : 'keyboardDidShow', () => setVisible(true));
+    const hide = Keyboard.addListener(ios ? 'keyboardWillHide' : 'keyboardDidHide', () => setVisible(false));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+  return visible;
+}
+
+/**
+ * 탭 첫 화면(9 보고서 목록·10 내 정보) 안에 두는 미니 바. 화면 안에 있어서 푸시·팝 때 화면과 함께 밀려 나간다 —
+ * 탭 레이아웃에 두면 푸시 순간 사라졌다 팝 끝에 다시 나타나 깜빡였다. 화면 바닥 = 탭 바 위라 bottom 0.
+ * 화면이 포커스일 때만 높이를 bottomChromeStore 에 알린다(스낵바·useMiniBarInset).
+ */
+export function TabRootMiniBar() {
+  const tripActive = useTripStore((s) => s.activeTripId !== null);
+  const keyboardVisible = useKeyboardVisible();
+  const show = tripActive && !keyboardVisible;
+  const setMiniBar = useBottomChromeStore((s) => s.setMiniBar);
+  useFocusEffect(
+    useCallback(() => {
+      setMiniBar(show ? MINI_BAR_HEIGHT : 0);
+      return () => setMiniBar(0);
+    }, [show, setMiniBar]),
+  );
+  return show ? <TripMiniBar bottom={0} /> : null;
 }
 
 /**

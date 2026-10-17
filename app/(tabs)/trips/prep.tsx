@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
+import Animated, { LinearTransition } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KakaoMapWebView, type KakaoMapHandle, type KakaoMapMarker } from '@/components/KakaoMapWebView';
@@ -16,7 +17,7 @@ import { Button2 } from '@/components/ui/Button2';
 import { notice } from '@/components/ui/ConfirmDialog';
 import { MapButton } from '@/components/ui/MapButton';
 import { SearchBar } from '@/components/ui/SearchBar';
-import { SheetHandle } from '@/components/ui/AppSheet';
+import { SheetHandle, useSheetMountConfigs } from '@/components/ui/AppSheet';
 import { SortableList, useSortableScroll } from '@/components/ui/SortableList';
 import { STATUS_LABEL } from '@/components/ui/StatusMark';
 import { Text } from '@/components/ui/Text';
@@ -38,6 +39,7 @@ import { safeBack } from '@/utils/backNavigation';
 import { defaultTripTitle } from '@/utils/tripFormat';
 import { saveTripStartPoint } from '@/utils/tripStartPoint';
 import { c2, elevation2, radius2, space } from '@/theme/v2';
+import { duration, rEasing } from '@/theme/motion';
 import type { Field } from '@/types/entities';
 
 // Figma 6(636:3138): 접힌 시트는 탭 바 위 396(출발 줄 79 포함). 지도 위 머리(52)는 위 52.
@@ -220,8 +222,16 @@ export default function TripPrepScreen() {
     skipFitRef.current = false;
   }
   const mapView = appliedRef.current.view;
+  // 첫 구도는 바로(지도 생성 위치·center), 그 뒤 담기·빼기로 바뀌는 구도는 카메라를 움직여 옮긴다.
+  // center 는 첫 구도로 고정한다 — 바뀔 때마다 넘기면 지도가 center 를 먼저 순간이동한 뒤 줌만 움직인다.
+  const firstViewRef = useRef<typeof mapView>(null);
+  if (!firstViewRef.current && mapView) firstViewRef.current = mapView;
+  const firstView = firstViewRef.current;
+  const appliedOnceRef = useRef(false);
   useEffect(() => {
-    if (mapView) mapRef.current?.setView(mapView);
+    if (!mapView) return;
+    mapRef.current?.setView(mapView, { animate: appliedOnceRef.current });
+    appliedOnceRef.current = true;
   }, [mapView]);
 
   const distanceM = useCallback(
@@ -279,6 +289,7 @@ export default function TripPrepScreen() {
     containerH != null && containerH > 0
       ? Math.max(SHEET_COLLAPSED + 1, containerH - (insets.top + space[8] + HEADER_H + space[8]))
       : null;
+  const sheetMountConfigs = useSheetMountConfigs(!!maxSheet);
   const snapPoints = useMemo(() => (maxSheet ? [SHEET_COLLAPSED, maxSheet] : [SHEET_COLLAPSED]), [maxSheet]);
   // === 지도 핀 → 선택 카드(4-3 과 같은 카드·문구) ===
   const onMarkerPress = useCallback((id: string) => setPickedId(id), []);
@@ -296,8 +307,8 @@ export default function TripPrepScreen() {
         ref={mapRef}
         markers={markers}
         paths={paths}
-        center={mapView ? { lat: mapView.lat, lng: mapView.lng } : undefined}
-        initialLevel={mapView?.level ?? 5}
+        center={firstView ? { lat: firstView.lat, lng: firstView.lng } : undefined}
+        initialLevel={firstView?.level ?? 5}
         myLocation={myLoc}
         baseMapType={settings.baseMapType}
         onMarkerPress={onMarkerPress}
@@ -316,12 +327,14 @@ export default function TripPrepScreen() {
       </View>
 
       <View style={[styles.pickArea, { bottom: SHEET_COLLAPSED + space[8] }]} pointerEvents="box-none">
-        <MapButton
-          icon="locate"
-          accessibilityLabel="내 위치"
-          onPress={() => (view ? mapRef.current?.setView(view) : mapRef.current?.recenter(myLoc ?? undefined))}
-          style={[styles.locate, !pickedField && styles.locateAlone]}
-        />
+        {/* 카드가 뜨고 사라질 때 내 위치 버튼이 순간이동하지 않고 미끄러진다. */}
+        <Animated.View layout={PICK_LAYOUT} style={[styles.locate, !pickedField && styles.locateAlone]}>
+          <MapButton
+            icon="locate"
+            accessibilityLabel="내 위치"
+            onPress={() => (view ? mapRef.current?.setView(view, { animate: true }) : mapRef.current?.recenter(myLoc ?? undefined))}
+          />
+        </Animated.View>
         {pickedField ? (
           <MapPickCard
             label="선택한 현장"
@@ -344,6 +357,9 @@ export default function TripPrepScreen() {
 
       {maxSheet ? (
         <BottomSheet
+          // 푸시 전환 중에 시트가 아래에서 또 올라오면 움직임이 두 겹이다 — 화면과 함께 들어온다(useSheetMountConfigs).
+          animateOnMount={false}
+          animationConfigs={sheetMountConfigs}
           ref={sheetRef}
           index={0}
           snapPoints={snapPoints}
@@ -524,6 +540,8 @@ function HeadAction({
     </Touchable>
   );
 }
+
+const PICK_LAYOUT = LinearTransition.duration(duration.base).easing(rEasing.standard);
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: c2.bg.muted },

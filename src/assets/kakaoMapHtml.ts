@@ -22,6 +22,8 @@ const HEAT_RADIUS_BY_LEVEL_JSON = JSON.stringify(
   ),
 );
 import { HEATMAP_JS_SOURCE } from '@/assets/heatmapLib';
+// 카메라 이동 시간 = theme/motion duration.slow(240). motion 은 RN·reanimated 를 불러 HTML 빌더에 넣지 않는다.
+const CAMERA_MS = 240;
 import { CARD_DOT_PAD, CARD_FIT_PADDING, CARD_MIN_LEVEL, CARD_PIN_SCALE } from '@/utils/cardMapFit';
 import {
   PIN_TEMPLATES,
@@ -156,6 +158,8 @@ MARKERS.forEach(function(m){
   @keyframes mfzBeaconPulse { 0% { transform: translateX(-50%) scale(0.6); opacity:0.65; } 100% { transform: translateX(-50%) scale(2.6); opacity:0; } }
   .mfz-beacon { position:relative; width:30px; height:42px; pointer-events:none; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.3)); }
   .mfz-beacon-pulse { position:absolute; left:50%; bottom:2px; width:14px; height:14px; border-radius:50%; background:rgba(37,99,235,0.4); transform:translateX(-50%); animation: mfzBeaconPulse 1.5s ease-out infinite; }
+  /* 동작 줄이기: 반복 맥동을 멈춘다(정지된 링은 남는다). 웹 KakaoMapWebView.web 과 같다. */
+  @media (prefers-reduced-motion: reduce) { .mfz-me-ring, .mfz-hl-ping, .mfz-beacon-pulse { animation: none !important; } }
 </style>
 <script>${HEATMAP_JS_SOURCE}</script>
 <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=${kakaoJsKey}&autoload=false"></script>
@@ -184,6 +188,33 @@ MARKERS.forEach(function(m){
     });
     // RN 측 injectJavaScript 에서 in-place 갱신을 위해 전역에 노출.
     window.__mfzMap = map;
+    // 사용자가 지도를 끌거나 줌했는가 — fitKey 모드(7)는 그 뒤 자동으로 다시 맞추지 않는다.
+    // 카카오 zoom_start 는 코드로 줌할 때도 와서 손가락·휠·두 번 탭으로 직접 본다.
+    var USER_MOVED = false;
+    kakao.maps.event.addListener(map, 'dragstart', function(){ USER_MOVED = true; });
+    container.addEventListener('touchstart', function(e){ if (e.touches && e.touches.length >= 2) USER_MOVED = true; }, { passive: true });
+    container.addEventListener('wheel', function(){ USER_MOVED = true; }, { passive: true });
+    container.addEventListener('dblclick', function(){ USER_MOVED = true; });
+    var REDUCED_MOTION = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    // 카메라 옮기기 — 웹 KakaoMapWebView.web moveCamera·utils/mapCamera(zoomAnchor) 와 같은 규칙. target 은 지금 레벨 px.
+    // 레벨이 같으면 panTo, 다르면 기준점을 잡아 줌 하나로(줌과 이동을 따로 하면 두 애니메이션이 겹쳐 흔들린다).
+    // 카메라가 움직이는 중(${CAMERA_MS}ms 안)에 또 움직이라는 요청이 오면 겹치지 않게 마지막 구도로 바로 옮긴다.
+    var CAM_UNTIL = 0;
+    function moveCamera(target, level, animate){
+      var proj = map.getProjection();
+      var t = proj.coordsFromContainerPoint(new kakao.maps.Point(target.x, target.y));
+      var cur = map.getLevel();
+      if (!animate || REDUCED_MOTION || Date.now() < CAM_UNTIL) { map.setLevel(level); map.setCenter(t); return; }
+      CAM_UNTIL = Date.now() + ${CAMERA_MS};
+      if (cur === level) { map.panTo(t); return; }
+      var s = Math.pow(2, cur - level);
+      var cx = container.clientWidth / 2, cy = container.clientHeight / 2;
+      var ax = (s * target.x - cx) / (s - 1), ay = (s * target.y - cy) / (s - 1);
+      map.setLevel(level, { animate: { duration: ${CAMERA_MS} }, anchor: proj.coordsFromContainerPoint(new kakao.maps.Point(ax, ay)) });
+    }
+    window.__mfzSetView = function(v, animate){
+      moveCamera(map.getProjection().containerPointFromCoords(new kakao.maps.LatLng(v.lat, v.lng)), v.level, !!animate);
+    };
     // 정적 위치도(figure) — 드래그/줌 차단. BottomSheet 등에서 pan 충돌 회피 + 보고서 그림용.
     if (!INTERACTIVE) { map.setDraggable(false); map.setZoomable(false); }
     // 길게 누르기(4-3 지도에서 위치 고르기) — 손가락이 600ms 동안 10px 안에 머물면 그 지점 좌표를 보낸다.
@@ -599,11 +630,43 @@ MARKERS.forEach(function(m){
     // 1개면 setBounds 가 최대 줌으로 튀어 부적절 → 그 점에 센터 + 적당한 level.
     // 핀 말고도 화면에 넣을 점(체크인 카드의 가까운 내 위치) — RN 이 __mfzSetFitExtra 로 넣는다.
     var FIT_EXTRA = [];
-    window.__mfzSetFitExtra = function(a){ FIT_EXTRA = a || []; fitBounds(); };
+    // 값이 실제로 바뀔 때만 다시 맞춘다 — 같은 값을 다시 넣을 때마다(마운트 직후 주입 순서 등) 지도가 튀지 않게.
+    window.__mfzSetFitExtra = function(a){
+      var next = a || [];
+      if (JSON.stringify(next) === JSON.stringify(FIT_EXTRA)) return;
+      FIT_EXTRA = next; fitBounds();
+    };
+    // 첫 맞춤(마운트·첫 좌표)은 바로, 그 뒤는 카메라를 움직인다. KEYED(fitKey 모드)면 키가 바뀔 때만 맞추고
+    // 사용자가 손댄 뒤에는 맞추지 않는다.
+    // ANIM_OK: 첫 맞춤 뒤 한 틱이 지나야 움직이는 카메라를 쓴다 — 마운트 직후 같은 틱에 연달아 오는 주입(마커·여백·추가 점)은
+    // 모두 첫 맞춤의 일부라 바로 옮긴다.
+    var FITTED = false, KEYED = false, FIT_KEY = null, ANIM_OK = false;
     function fitBounds(){
       if (!FIT_TO_MARKERS || MARKERS.length === 0) return;
+      if (KEYED && FITTED && USER_MOVED) return;
       var pts = MARKERS.concat(FIT_EXTRA);
       if (COMPACT) { fitTight(CIRCLE ? pts.concat(circleExtremes(CIRCLE)) : pts); return; }
+      var animate = FITTED && ANIM_OK;
+      if (!FITTED) setTimeout(function(){ ANIM_OK = true; }, 0);
+      FITTED = true;
+      if (animate) {
+        var proj = map.getProjection();
+        var w = container.clientWidth, h = container.clientHeight;
+        var p = FIT_PADDING || (h > 0 && h < 200 ? [48, 24, 12, 24] : [40, 40, 56, 40]);
+        var xy = pts.map(function(q){ return proj.containerPointFromCoords(new kakao.maps.LatLng(q.lat, q.lng)); });
+        if (xy.length === 1) { moveCamera(xy[0], 5, true); return; }
+        // utils/mapCamera fitCamera 와 같은 계산.
+        var boxW = w - p[1] - p[3], boxH = h - p[0] - p[2];
+        if (boxW > 0 && boxH > 0) {
+          var x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+          xy.forEach(function(c){ x0 = Math.min(x0, c.x); x1 = Math.max(x1, c.x); y0 = Math.min(y0, c.y); y1 = Math.max(y1, c.y); });
+          var cur = map.getLevel(), level = 14;
+          for (var L = 1; L < 14; L++) { var f = Math.pow(2, cur - L); if ((x1 - x0) * f <= boxW && (y1 - y0) * f <= boxH) { level = L; break; } }
+          var sc = Math.pow(2, cur - level);
+          moveCamera({ x: (x0 + x1) / 2 + (w / 2 - (p[3] + boxW / 2)) / sc, y: (y0 + y1) / 2 + (h / 2 - (p[0] + boxH / 2)) / sc }, level, true);
+          return;
+        }
+      }
       if (pts.length === 1) {
         map.setCenter(new kakao.maps.LatLng(pts[0].lat, pts[0].lng));
         map.setLevel(5);
@@ -658,7 +721,7 @@ MARKERS.forEach(function(m){
     function applyData(){
       clearMarkerLayer();
       if (MODE === 'markers') renderMarkers(); // heatmap=캔버스 오버레이, choropleth=구역 색만
-      fitBounds();
+      if (!KEYED || !FITTED) fitBounds();
     }
 
     // === 경계 / 단계구분도 폴리곤 ===
@@ -711,8 +774,19 @@ MARKERS.forEach(function(m){
     }
 
     // === 세터 (RN injectJavaScript 진입점) ===
-    window.__mfzSetMarkers = function(markers){ MARKERS = markers || []; applyData(); };
-    window.__mfzSetFitPadding = function(p){ FIT_PADDING = p; fitBounds(); };
+    // key: fitKey(없으면 null) — 있으면 키가 바뀔 때만 다시 맞춘다(마커 배열을 새로 만들 때마다가 아니라).
+    window.__mfzSetMarkers = function(markers, key){
+      MARKERS = markers || [];
+      var changed = key != null && KEYED && key !== FIT_KEY;
+      KEYED = key != null;
+      FIT_KEY = key == null ? null : key;
+      applyData();
+      if (changed && FITTED) fitBounds();
+    };
+    window.__mfzSetFitPadding = function(p){
+      if (FIT_PADDING && p && FIT_PADDING.join(',') === p.join(',')) return;
+      FIT_PADDING = p; fitBounds();
+    };
     window.__mfzSetRoute = function(pts){ ROUTE = pts || []; applyRoute(); };
     // 히트맵 점 — [{lat,lng,value}]. value 는 동일좌표 군집 count(가중). 모드 가드는 heatSchedule 몫.
     window.__mfzSetHeatPoints = function(pts){ HEAT_POINTS = pts || []; heatSchedule(); };

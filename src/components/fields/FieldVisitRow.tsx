@@ -3,6 +3,7 @@ import { Image, StyleSheet, View } from 'react-native';
 import { Icon } from '@/components/icons';
 import { Text } from '@/components/ui/Text';
 import { Touchable } from '@/components/ui/Touchable';
+import { AccordionBody, AccordionChevron, AccordionRow } from '@/components/ui/Accordion';
 import { STATUS_LABEL } from '@/components/ui/StatusMark';
 import { STATUS_TONE } from '@/components/trips/TripStopRow';
 import type { FieldStatus } from '@/types/entities';
@@ -47,7 +48,7 @@ export function FieldVisitRow({ visitedAt, tripTitle, status, photos, memo, expa
     .filter(Boolean)
     .join(' · ');
   return (
-    <View style={[divider && styles.divider, expanded && styles.expandedPad]} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
+    <AccordionRow style={[divider && styles.divider, expanded && styles.expandedPad]} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
       <Touchable
         onPress={onToggle}
         accessibilityRole="button"
@@ -80,10 +81,10 @@ export function FieldVisitRow({ visitedAt, tripTitle, status, photos, memo, expa
             {STATUS_LABEL[status]}
           </Text>
         ) : null}
-        <Icon name="chevron-down" size={20} color={c2.text.tertiary} style={expanded ? styles.up : undefined} />
+        <AccordionChevron expanded={expanded} color={c2.text.tertiary} />
       </Touchable>
       {expanded ? (
-        <View style={styles.detail}>
+        <AccordionBody style={styles.detail}>
           {photos.length > 0 && cell > 0 ? (
             <View style={styles.photos}>
               {photos.map((p) => (
@@ -110,9 +111,9 @@ export function FieldVisitRow({ visitedAt, tripTitle, status, photos, memo, expa
               <Icon name="chevron-right" size={16} color={c2.text.link} />
             </Touchable>
           </View>
-        </View>
+        </AccordionBody>
       ) : null}
-    </View>
+    </AccordionRow>
   );
 }
 
@@ -148,7 +149,6 @@ const styles = StyleSheet.create({
   head: { height: 72, flexDirection: 'row', alignItems: 'center', gap: space[10] },
   date: { width: 44, alignItems: 'center', marginRight: space[4] },
   body: { flex: 1, gap: space[2] },
-  up: { transform: [{ rotate: '180deg' }] },
   detail: { gap: space[12], paddingTop: space[2] },
   photos: { flexDirection: 'row', flexWrap: 'wrap', gap: space[8] },
   photo: { borderRadius: radius2.lg, overflow: 'hidden', backgroundColor: c2.bg.placeholder },

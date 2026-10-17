@@ -35,6 +35,8 @@ import { useOverviewMapView } from '@/utils/overviewMapView';
 import { reportDetailHref } from '@/utils/reportEntry';
 import { useReportDuration } from '@/utils/useReportDuration';
 import { c2, radius2, space } from '@/theme/v2';
+import Animated, { FadeIn, LayoutAnimationConfig } from 'react-native-reanimated';
+import { duration } from '@/theme/motion';
 
 const TITLE_MAX = 100;
 
@@ -285,14 +287,16 @@ export default function ReportEditScreen() {
               </Text>
             </Touchable>
           </View>
+          {/* 처음 그린 줄은 그대로, [현장 추가]로 새로 들어온 줄(9-14)만 흐려졌다 나타난다. */}
+          <LayoutAnimationConfig skipEntering>
           <View style={styles.list}>
             {rows.map((r, i) => {
               const empty = isFieldReportEmpty(r.fr);
               const { photos, captions } = fieldReportCounts(r.fr);
               const name = fieldTitle(r.field);
               return (
+                <Animated.View key={r.fr.id} entering={FadeIn.duration(duration.base)}>
                 <Touchable
-                  key={r.fr.id}
                   onPress={() => openRow(r)}
                   accessibilityRole="button"
                   accessibilityLabel={`${r.order}. ${name}, ${empty ? '작성 전' : `사진 ${photos}, 설명 ${captions}`}`}
@@ -311,6 +315,7 @@ export default function ReportEditScreen() {
                   <SlotMiniBoxes fr={r.fr} />
                   <Icon name="chevron-right" size={18} color={c2.text.disabled} />
                 </Touchable>
+                </Animated.View>
               );
             })}
             {rows.length === 0 ? (
@@ -319,6 +324,7 @@ export default function ReportEditScreen() {
               </Text>
             ) : null}
           </View>
+          </LayoutAnimationConfig>
         </ScrollView>
         <BottomActionBar style={styles.footer}>
           <Button2 onPress={() => void save()} loading={saving} fullWidth>

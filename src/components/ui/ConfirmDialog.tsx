@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, View } from 'react-native';
 import { Text } from './Text';
 import { OverlayModal } from './OverlayModal';
 import { Button2 } from './Button2';
 import { Icon } from '@/components/icons';
 import { c2, elevation2, radius2, space } from '@/theme/v2';
-import { duration } from '@/theme/motion';
+import { animEasing, duration, useReducedMotionPref } from '@/theme/motion';
 
 export interface ConfirmOptions {
   title: string;
@@ -54,12 +54,15 @@ export function notice(title: string, message?: string): Promise<void> {
   return confirm({ title, message, alertOnly: true, cancelLabel: '확인' }).then(() => undefined);
 }
 
-const AFTER_CLOSE_MS = Platform.OS === 'ios' ? 350 : 0;
 
 export function ConfirmDialogHost() {
   const [pending, setPending] = useState<Pending | null>(null);
   const anim = useRef(new Animated.Value(0)).current;
   const finishing = useRef(false);
+  // 동작 줄이기: 확대 없이 투명도만, 짧게.
+  const reduced = useReducedMotionPref();
+  const reducedRef = useRef(reduced);
+  reducedRef.current = reduced;
 
   useEffect(() => {
     open = (p) => {
@@ -70,7 +73,12 @@ export function ConfirmDialogHost() {
         return p;
       });
       anim.setValue(0);
-      Animated.timing(anim, { toValue: 1, duration: duration.base, useNativeDriver: true }).start();
+      Animated.timing(anim, {
+        toValue: 1,
+        duration: reducedRef.current ? duration.instant : duration.base,
+        easing: animEasing.enter,
+        useNativeDriver: true,
+      }).start();
     };
     return () => {
       open = null;
@@ -84,11 +92,17 @@ export function ConfirmDialogHost() {
     finishing.current = true;
     const current = pending;
     const { resolve } = current;
-    Animated.timing(anim, { toValue: 0, duration: duration.fast, useNativeDriver: true }).start(() => {
+    Animated.timing(anim, {
+      toValue: 0,
+      duration: reduced ? duration.instant : duration.fast,
+      easing: animEasing.exit,
+      useNativeDriver: true,
+    }).start(() => {
       finishing.current = false;
       // 닫히는 사이 새 대화상자가 열렸으면 그것을 지우지 않는다.
       setPending((cur) => (cur === current ? null : cur));
-      setTimeout(() => resolve(ok), AFTER_CLOSE_MS);
+      // iOS 도 OverlayModal 이 RN Modal 이 아닌 View 라 dismiss 를 기다릴 필요가 없다(다음 틱이면 충분).
+      setTimeout(() => resolve(ok), 0);
     });
   };
 
@@ -112,7 +126,7 @@ export function ConfirmDialogHost() {
           accessibilityRole="alert"
           style={[
             styles.card,
-            { transform: [{ scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) }] },
+            reduced ? null : { transform: [{ scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) }] },
           ]}
         >
           <Text v2="title.m">{pending.title}</Text>

@@ -100,6 +100,9 @@ interface Props {
   fitExtra?: { lat: number; lng: number }[];
   // fitToMarkers 여백(위·오른쪽·아래·왼쪽 px). 지도 위를 덮는 카드가 있으면 그만큼(3-8 경로 순서 카드).
   fitPadding?: [number, number, number, number];
+  // 있으면 fitToMarkers 는 이 값이 바뀔 때만 다시 맞춘다(마커 배열을 새로 만들 때마다가 아니라). 사용자가 지도를
+  // 끌거나 줌한 뒤에는 다시 맞추지 않는다(7 외근 진행 — 목적지 좌표 묶음을 키로 넘긴다).
+  fitKey?: string;
   // 카카오 축척 막대 숨김(정적 지도 카드 MapPreviewCard 전용). 로고는 남는다.
   hideScale?: boolean;
   // 정적 지도 카드(3·5·8 MapPreviewCard, 9 보고서 위치도·9-7) 전용: 핀 0.75배·선택 확대 없음, fitToMarkers 는
@@ -128,8 +131,8 @@ const DEFAULT_CENTER = { lat: 35.17, lng: 129.07 }; // 부산 중심
 export interface KakaoMapHandle {
   // target 미지정 시 myLocation > center > 기본(부산) 순으로 복구. 멀리 줌아웃돼 있으면 적당히 당김.
   recenter: (target?: { lat: number; lng: number }) => void;
-  // center+level 을 정확히(애니메이션 없이) 즉시 설정 — 탭 포커스 시 마지막 공유 뷰로 동기화용.
-  setView: (view: { lat: number; lng: number; level: number }) => void;
+  // center+level 설정. 기본은 즉시(탭 포커스 시 마지막 공유 뷰로 동기화), animate 면 카메라를 움직여 옮긴다.
+  setView: (view: { lat: number; lng: number; level: number }, opts?: { animate?: boolean }) => void;
 }
 
 export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
@@ -150,6 +153,7 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
       fitToMarkers = false,
       fitExtra,
       fitPadding,
+      fitKey,
       hideScale = false,
       compactPins = false,
       interactive = true,
@@ -288,22 +292,36 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
           `window.__mfzMap&&(function(m){var ll=new kakao.maps.LatLng(${t.lat},${t.lng});if(m.getLevel()>6)m.setLevel(5);m.panTo(ll);})(window.__mfzMap)`,
         );
       },
-      setView: (view) => {
+      setView: (view, opts) => {
         inject(
-          `window.__mfzMap&&(window.__mfzMap.setLevel(${view.level}),window.__mfzMap.setCenter(new kakao.maps.LatLng(${view.lat},${view.lng})))`,
+          `window.__mfzSetView&&window.__mfzSetView(${JSON.stringify({ lat: view.lat, lng: view.lng, level: view.level })},${opts?.animate ? 'true' : 'false'})`,
         );
       },
     }),
     [myLocation, center, inject],
   );
 
+  // 맞춤 여백·추가 점은 마커보다 먼저 넣는다 — 첫 맞춤이 최종 여백으로 한 번에 끝나게(뒤에 오면 다시 맞추며 튄다).
+  const fitPaddingKey = fitPadding?.join(',') ?? '';
+  useEffect(() => {
+    if (!ready || !fitPaddingKey) return;
+    inject(`window.__mfzSetFitPadding&&window.__mfzSetFitPadding([${fitPaddingKey}])`);
+  }, [ready, fitPaddingKey, inject]);
+
+  // fitToMarkers 에 함께 넣을 점.
+  useEffect(() => {
+    if (!ready) return;
+    inject(`window.__mfzSetFitExtra&&window.__mfzSetFitExtra(${JSON.stringify(fitExtra ?? [])})`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, JSON.stringify(fitExtra ?? []), inject]);
+
   // 마커 — 원본 배열 주입(클러스터링은 webview 가 줌별로 수행). 변경마다 in-place 재렌더.
   useEffect(() => {
     if (!ready) return;
     inject(
-      `window.__mfzSetMarkers&&window.__mfzSetMarkers(${JSON.stringify(markers)})`,
+      `window.__mfzSetMarkers&&window.__mfzSetMarkers(${JSON.stringify(markers)},${JSON.stringify(fitKey ?? null)})`,
     );
-  }, [ready, markers, inject]);
+  }, [ready, markers, fitKey, inject]);
 
   // 히트맵 점 — {lat,lng,value}. 동일좌표 군집 count 를 value 로 실어 밀도에 가중(10건>1건).
   const heatPoints = useMemo(
@@ -355,13 +373,6 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
     );
   }, [ready, regionFill, inject]);
 
-  // fitToMarkers 에 함께 넣을 점.
-  useEffect(() => {
-    if (!ready) return;
-    inject(`window.__mfzSetFitExtra&&window.__mfzSetFitExtra(${JSON.stringify(fitExtra ?? [])})`);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, JSON.stringify(fitExtra ?? []), inject]);
-
   // 현재 위치 오버레이.
   useEffect(() => {
     if (!ready) return;
@@ -392,12 +403,6 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
     const payload = (paths ?? []).map((p) => ({ points: p.points, style: pathStyle(p) }));
     inject(`window.__mfzSetPaths&&window.__mfzSetPaths(${JSON.stringify(payload)})`);
   }, [ready, paths, inject]);
-
-  const fitPaddingKey = fitPadding?.join(',') ?? '';
-  useEffect(() => {
-    if (!ready || !fitPaddingKey) return;
-    inject(`window.__mfzSetFitPadding&&window.__mfzSetFitPadding([${fitPaddingKey}])`);
-  }, [ready, fitPaddingKey, inject]);
 
   // 2차 GPS 오차 원.
   useEffect(() => {

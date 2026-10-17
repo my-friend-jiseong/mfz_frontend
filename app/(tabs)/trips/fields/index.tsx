@@ -1,12 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, View, type TextInput } from 'react-native';
+import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
+import { useNavigation, type ParamListBase } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KakaoMapWebView, type KakaoMapMarker } from '@/components/KakaoMapWebView';
 import { useKakaoPlaceSearch } from '@/components/fields/useKakaoPlaceSearch';
 import { FieldSearchRow, PlaceSearchRow, ProjectSearchRow } from '@/components/fields/SearchRows';
-import { SheetHandle } from '@/components/ui/AppSheet';
+import { SheetHandle, useSheetMountConfigs, SHEET_SNAP } from '@/components/ui/AppSheet';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { MapButton } from '@/components/ui/MapButton';
 import { DestinationFAB } from '@/components/ui/DestinationFAB';
@@ -35,6 +38,7 @@ import { peekUserLocation, type LatLng } from '@/utils/geolocation';
 import { safeBack } from '@/utils/backNavigation';
 import { placeParams } from '@/utils/placeParams';
 import { c2, elevation2, radius2, space } from '@/theme/v2';
+import { duration, rEasing } from '@/theme/motion';
 import type { Field } from '@/types/entities';
 
 // 시트를 내렸을 때 보이는 높이(4-3 '올리면 목록'). Figma 537:1715 는 탭 바 위 62.
@@ -72,6 +76,29 @@ export default function FieldSearchScreen() {
   const { search: searchPlaces, reverse, element: placeBridge } = useKakaoPlaceSearch();
 
   const [query, setQuery] = useState(params.q ?? '');
+  // 검색창 자동 포커스는 푸시 전환이 끝난 뒤에 — 전환 중에 키보드가 같이 올라오면 화면이 두 번 움직인다.
+  // 딥 링크처럼 전환이 없으면 transitionEnd 가 오지 않으니 잠깐 뒤 대신 맞춘다.
+  const searchRef = useRef<TextInput>(null);
+  const navigation = useNavigation<NativeStackNavigationProp<ParamListBase>>();
+  useEffect(() => {
+    if (params.q) return;
+    let done = false;
+    const focus = () => {
+      if (done) return;
+      done = true;
+      searchRef.current?.focus();
+    };
+    const unsub = navigation.addListener('transitionEnd', (e) => {
+      if (!e.data.closing) focus();
+    });
+    const fallback = setTimeout(focus, 600);
+    return () => {
+      unsub();
+      clearTimeout(fallback);
+    };
+    // 첫 진입에만.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // 5 에서 머리의 검색창·지우기·삭제로 돌아오면 그 검색어로 맞춘다. 같은 검색어로 다시 와도 맞추도록
   // 보낼 때마다 바뀌는 n(시각)을 함께 받는다 — 그냥 뒤로 오면(n 그대로) 입력하던 검색어를 그대로 둔다.
   useEffect(() => {
@@ -194,9 +221,10 @@ export default function FieldSearchScreen() {
   const [sheetIndex, setSheetIndex] = useState(1);
   const headerBottom = insets.top + space[4] + SEARCH_H;
   const maxSheet = containerH ? Math.max(SHEET_PEEK + 1, containerH - headerBottom - space[16]) : null;
+  const sheetMountConfigs = useSheetMountConfigs(!!maxSheet);
   const snapPoints = useMemo(() => (maxSheet ? [SHEET_PEEK, maxSheet] : [SHEET_PEEK]), [maxSheet]);
   const picking = sheetIndex === 0;
-  const openPicking = () => sheetRef.current?.snapToIndex(0);
+  const openPicking = () => sheetRef.current?.snapToIndex(0, SHEET_SNAP);
 
   // === 지도에서 고르기(4-3) ===
   const [picked, setPicked] = useState<Picked | null>(null);
@@ -491,31 +519,48 @@ export default function FieldSearchScreen() {
           value={query}
           onChangeText={(v) => {
             setQuery(v);
-            if (picking) sheetRef.current?.snapToIndex(1);
+            if (picking) sheetRef.current?.snapToIndex(1, SHEET_SNAP);
           }}
           onFocus={() => {
-            if (picking) sheetRef.current?.snapToIndex(1);
+            if (picking) sheetRef.current?.snapToIndex(1, SHEET_SNAP);
           }}
+          ref={searchRef}
           placeholder="현장 이름이나 주소"
-          autoFocus={!params.q}
           style={styles.search}
         />
-        {!picking ? <DestinationFAB size={44} count={cart.count} onPress={cart.open} /> : null}
+        {!picking ? (
+          <Animated.View entering={FADE_IN} exiting={FADE_OUT}>
+            <DestinationFAB size={44} count={cart.count} onPress={cart.open} />
+          </Animated.View>
+        ) : null}
       </View>
 
       {picking ? (
-        <View style={[styles.hintWrap, { top: headerBottom + space[12] }]} pointerEvents="none">
+        <Animated.View
+          entering={FADE_IN}
+          exiting={FADE_OUT}
+          style={[styles.hintWrap, { top: headerBottom + space[12] }]}
+          pointerEvents="none"
+        >
           <View style={styles.hint}>
             <Text v2="caption.semibold" tone="inverse">
               현장 핀을 누르거나, 빈 곳을 길게 눌러 위치를 골라 주세요
             </Text>
           </View>
-        </View>
+        </Animated.View>
       ) : null}
 
       {picking ? (
-        <View style={[styles.pickArea, { bottom: SHEET_PEEK + space[8] }]} pointerEvents="box-none">
-          <DestinationFAB count={cart.count} onPress={cart.open} style={styles.fabLg} />
+        <Animated.View
+          entering={FADE_IN}
+          exiting={FADE_OUT}
+          style={[styles.pickArea, { bottom: SHEET_PEEK + space[8] }]}
+          pointerEvents="box-none"
+        >
+          {/* 카드가 뜨고 사라질 때 위의 버튼도 미끄러지게. */}
+          <Animated.View layout={PICK_LAYOUT}>
+            <DestinationFAB count={cart.count} onPress={cart.open} style={styles.fabLg} />
+          </Animated.View>
           {card ? (
             <MapPickCard
               label={card.label}
@@ -528,17 +573,24 @@ export default function FieldSearchScreen() {
               disabled={picked?.kind === 'point' && picked.resolving}
             />
           ) : null}
-        </View>
+        </Animated.View>
       ) : null}
 
       {/* 높이를 재기 전엔 시트를 그리지 않는다 — snapPoints 를 마운트 뒤 바꾸면 gorhom 이 시트를 엉뚱한 곳에 둔다. */}
       {maxSheet ? (
         <BottomSheet
+          // 푸시 전환 중에 시트가 아래에서 또 올라오면 움직임이 두 겹이다 — 화면과 함께 들어온다(useSheetMountConfigs).
+          animateOnMount={false}
+          animationConfigs={sheetMountConfigs}
           ref={sheetRef}
           index={1}
           snapPoints={snapPoints}
           enableDynamicSizing={false}
           enablePanDownToClose={false}
+          // 손을 뗀 순간(움직이기 시작할 때) 4 ↔ 4-3 내용을 바꾼다 — onChange 는 시트가 다 내려간 뒤라 늦다.
+          onAnimate={(_from, to) => {
+            if (to >= 0) setSheetIndex(to);
+          }}
           onChange={setSheetIndex}
           handleComponent={SheetHandleSlot}
           backgroundStyle={styles.sheetBg}
@@ -547,7 +599,7 @@ export default function FieldSearchScreen() {
           {/* 명시적 height — gorhom 콘텐츠 높이 미적용(Fabric+reanimated 4) 우회(MapSheetLayout 주석). */}
           <View style={{ height: maxSheet - SHEET_HANDLE_H }}>
             {picking ? (
-              <Touchable onPress={() => sheetRef.current?.snapToIndex(1)} accessibilityRole="button" style={styles.peek}>
+              <Touchable onPress={() => sheetRef.current?.snapToIndex(1, SHEET_SNAP)} accessibilityRole="button" style={styles.peek}>
                 <Text v2="caption.semibold" tone="secondary">
                   올리면 목록
                 </Text>
@@ -563,6 +615,10 @@ export default function FieldSearchScreen() {
     </View>
   );
 }
+
+const FADE_IN = FadeIn.duration(duration.fast);
+const FADE_OUT = FadeOut.duration(duration.fast);
+const PICK_LAYOUT = LinearTransition.duration(duration.base).easing(rEasing.standard);
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: c2.bg.muted },

@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, Platform, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Animated, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { Icon, type IconName } from '@/components/icons';
 import { c2, elevation2, radius2, space } from '@/theme/v2';
-import { duration } from '@/theme/motion';
+import { animEasing, duration, useReducedMotionPref } from '@/theme/motion';
 import { Text } from './Text';
 import { OverlayModal } from './OverlayModal';
 import { Touchable } from './Touchable';
@@ -69,7 +69,6 @@ const MENU_W = 202;
 const ITEM_H = 52;
 const EDGE = 12;
 const GAP = 4;
-const AFTER_CLOSE_MS = Platform.OS === 'ios' ? 350 : 0;
 
 export function PopoverMenuHost() {
   const { width: winW, height: winH } = useWindowDimensions();
@@ -77,6 +76,8 @@ export function PopoverMenuHost() {
   const anim = useRef(new Animated.Value(0)).current;
   const closing = useRef(false);
   const pendingRef = useRef<Pending | null>(null);
+  const reduced = useReducedMotionPref();
+  const dur = reduced ? duration.instant : duration.fast;
 
   useEffect(() => {
     open = (p) => {
@@ -86,12 +87,12 @@ export function PopoverMenuHost() {
       pendingRef.current = p;
       setPending(p);
       anim.setValue(0);
-      Animated.timing(anim, { toValue: 1, duration: duration.fast, useNativeDriver: true }).start();
+      Animated.timing(anim, { toValue: 1, duration: dur, easing: animEasing.enter, useNativeDriver: true }).start();
     };
     return () => {
       open = null;
     };
-  }, [anim]);
+  }, [anim, dur]);
 
   const close = useCallback(
     (then?: () => void) => {
@@ -100,15 +101,16 @@ export function PopoverMenuHost() {
       const closingPending = pendingRef.current;
       closingPending?.onClose?.();
       pendingRef.current = null;
-      Animated.timing(anim, { toValue: 0, duration: duration.fast, useNativeDriver: true }).start(({ finished }) => {
+      Animated.timing(anim, { toValue: 0, duration: dur, easing: animEasing.exit, useNativeDriver: true }).start(({ finished }) => {
         // 닫히는 사이 새 메뉴가 열렸으면(애니메이션이 끊김) 새 메뉴를 지우지 않는다.
         if (!finished) return;
         closing.current = false;
         setPending((cur) => (cur === closingPending ? null : cur));
-        if (then) setTimeout(then, AFTER_CLOSE_MS);
+        // iOS 도 OverlayModal 이 View 라 내려가길 기다릴 필요가 없다 — 다음 틱에 실행(확인 창이 바로 뜬다).
+        if (then) setTimeout(then, 0);
       });
     },
-    [anim],
+    [anim, dur],
   );
 
   if (!pending) return null;
@@ -131,7 +133,7 @@ export function PopoverMenuHost() {
             right,
             width,
             opacity: anim,
-            transform: [{ scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) }],
+            transform: reduced ? [] : [{ scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) }],
           },
         ]}
       >

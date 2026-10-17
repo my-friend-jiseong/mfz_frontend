@@ -19,7 +19,9 @@ export default function ModalsLayout() {
   // iOS 의 네이티브 모달은 별도 창이라 루트 provider 의 포털(AppSheet)이 모달 뒤에 그려진다 — 모달 안에 provider 를 하나 더 둔다.
   return (
     <BottomSheetModalProvider>
-      <Stack screenOptions={{ headerShown: false }} />
+      {/* 모달 위에 여는 모달(8 체크인 → 현장 정보 수정, 9-2 → 현장 보고·위치도)도 아래에서 올라오게 — 기본은 옆에서 밀려 들어와
+          '모달 안의 다음 단계'처럼 보였다. */}
+      <Stack screenOptions={{ headerShown: false, animation: 'slide_from_bottom' }} />
     </BottomSheetModalProvider>
   );
 }

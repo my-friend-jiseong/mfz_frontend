@@ -15,7 +15,8 @@ import { MapSettingsSheet } from '@/components/map/MapSettingsSheet';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { MapButton } from '@/components/ui/MapButton';
 import { useMapSettingsStore } from '@/stores/mapSettingsStore';
-import { filterMapFields, hasMapFilter } from '@/utils/visitRange';
+import { filterMapFields, hasMapFilter, parseYmd } from '@/utils/visitRange';
+import { useToday } from '@/utils/useToday';
 import { useLocationPermission, useLocationPermissionStore } from '@/stores/locationPermissionStore';
 import { fieldActionStatus } from '@/utils/fieldStatus';
 import { c2, space } from '@/theme/v2';
@@ -207,11 +208,13 @@ export function MapDashboard({
     return mergeCategoryNames(masterCategories.map((c) => c.name), fromFields);
   }, [scopedFields, masterCategories]);
 
+  // 자정이 지나면 '최근 방문일' 기준도 넘어가게(useSharedMapSettings 와 같다).
+  const today = useToday();
   const visibleFields = useMemo(() => {
     // 스코프·선택 화면은 공유 필터를 적용하지 않는다 — 목적지/선택 후보가 가려지지 않게.
     if (!sharesSettings) return scopedFields;
-    return filterMapFields(scopedFields,{ statuses: selectedStatuses, range: visitRange, tags: selectedTags });
-  }, [scopedFields, sharesSettings, selectedStatuses, visitRange, selectedTags]);
+    return filterMapFields(scopedFields, { statuses: selectedStatuses, range: visitRange, tags: selectedTags }, parseYmd(today));
+  }, [scopedFields, sharesSettings, selectedStatuses, visitRange, selectedTags, today]);
 
   // ERD v2: 메모·사진은 현장(field) 전용 — directAttachments 에서만 집계 (음성 폐기).
   const attachmentPresenceByField = useMemo(() => {

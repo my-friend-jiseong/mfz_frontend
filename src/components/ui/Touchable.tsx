@@ -10,9 +10,10 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { touchMin } from '@/theme/v2';
+import { opacity } from '@/theme/motion';
 
 export interface TouchableProps extends PressableProps {
-  /** 누르는 동안 투명도. 기본 0.85(기존 opacity.pressed). 0 이나 1 이면 효과 없음. */
+  /** 누르는 동안 투명도. 기본 opacity.pressed(0.85). 0 이나 1 이면 효과 없음. */
   pressedOpacity?: number;
   /** hitSlop 자동 보충을 끈다(이미 48 이상인 행 등). */
   noAutoHitSlop?: boolean;
@@ -32,7 +33,7 @@ const slopFor = (w?: number, h?: number): Insets | undefined => {
  * 이웃 요소와 겹치지 않게 촘촘한 줄은 간격을 space[8] 이상 둔다(Figma Touch 규칙).
  */
 export const Touchable = forwardRef<View, TouchableProps>(function Touchable(
-  { style, hitSlop, onLayout, pressedOpacity = 0.85, noAutoHitSlop, disabled, ...rest },
+  { style, hitSlop, onLayout, pressedOpacity = opacity.pressed, noAutoHitSlop, disabled, ...rest },
   ref,
 ) {
   const flat = typeof style === 'function' ? undefined : StyleSheet.flatten(style as StyleProp<ViewStyle>);

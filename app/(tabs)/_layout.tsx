@@ -1,44 +1,25 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Keyboard, StyleSheet, View } from 'react-native';
-import { Redirect, Tabs, useSegments } from 'expo-router';
+import { StyleSheet, View } from 'react-native';
+import { Redirect, Tabs } from 'expo-router';
 import { SafeAreaInsetsContext, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppTabBar, tabBarHeight } from '@/components/shell/AppTabBar';
 import { RealSafeAreaInsetsContext } from '@/components/shell/realInsets';
 import { needsStackReset, resetTabStack } from '@/components/shell/tabNav';
-import { TripMiniBar, MINI_BAR_HEIGHT } from '@/components/shell/TripMiniBar';
 import { useAuthStore } from '@/stores/authStore';
 import { useTripStore } from '@/stores/tripStore';
 import { useFieldStore } from '@/stores/fieldStore';
 import { useBottomChromeStore } from '@/stores/bottomChromeStore';
 
-// 미니 바(7-4)를 띄우는 탭. 외근 탭은 첫 화면이 곧 외근 진행(7)이라 띄우지 않는다.
-// 그 탭의 첫 화면(9 보고서 목록·10 내 정보)에서만 — 푸시된 입력 화면(현장 보고·보고서 작성 등)에서는
-// 하단 버튼 바와 겹치므로 띄우지 않는다.
-const MINI_BAR_TABS = new Set(['reports', 'profile']);
-
-function useKeyboardVisible(): boolean {
-  const [visible, setVisible] = useState(false);
-  useEffect(() => {
-    const show = Keyboard.addListener('keyboardDidShow', () => setVisible(true));
-    const hide = Keyboard.addListener('keyboardDidHide', () => setVisible(false));
-    return () => {
-      show.remove();
-      hide.remove();
-    };
-  }, []);
-  return visible;
-}
+// 미니 바(7-4)는 보고서·내 정보 탭 첫 화면이 직접 그린다(TabRootMiniBar) — 화면과 함께 밀려 나가게.
 
 export default function TabsLayout() {
   // deep-link 새로고침 시 hydrate 가 실패한 케이스 (refresh 토큰 만료·무효 등) 에서
   // (tabs) 가 토큰 없이 hydrateTrips/Fields 를 호출해 401 을 흘리는 회로 차단.
   // index.tsx 의 redirect 는 / 진입에서만 동작하므로 여기 별도 게이트가 필요.
   const insets = useSafeAreaInsets();
-  const segments = useSegments() as string[];
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const hydrateTrips = useTripStore((s) => s.hydrate);
   const hydrateFields = useFieldStore((s) => s.hydrate);
-  const tripActive = useTripStore((s) => s.activeTripId !== null);
 
   // 인증 후 진입 시 외근/현장 초기 페치 — trips 탭이 첫 화면이라도 지도(MapDashboard)에
   // 마커가 즉시 그려지도록 fields 도 함께 hydrate.
@@ -67,21 +48,11 @@ export default function TabsLayout() {
   // 하단 버튼 바·시트가 탭 바 위에 홈 인디케이터 여백을 또 얹지 않게 한다.
   const barH = tabBarHeight(insets.bottom);
   const screenInsets = useMemo(() => ({ ...insets, bottom: 0 }), [insets]);
-  const keyboardVisible = useKeyboardVisible();
-  // segments: 탭 첫 화면은 ['(tabs)', 'reports'], 푸시 화면은 그보다 길다.
-  const showMiniBar =
-    tripActive && !keyboardVisible && segments.length === 2 && MINI_BAR_TABS.has(segments[1] ?? '');
-
   const setTabBar = useBottomChromeStore((s) => s.setTabBar);
-  const setMiniBar = useBottomChromeStore((s) => s.setMiniBar);
   useEffect(() => {
     setTabBar(barH);
     return () => setTabBar(0);
   }, [barH, setTabBar]);
-  useEffect(() => {
-    setMiniBar(showMiniBar ? MINI_BAR_HEIGHT : 0);
-  }, [showMiniBar, setMiniBar]);
-  useEffect(() => () => setMiniBar(0), [setMiniBar]);
 
   if (!isAuthenticated) {
     return graceExpired ? <Redirect href="/(auth)/login" /> : null;
@@ -113,7 +84,6 @@ export default function TabsLayout() {
           </Tabs>
         </SafeAreaInsetsContext.Provider>
       </RealSafeAreaInsetsContext.Provider>
-      {showMiniBar ? <TripMiniBar bottom={barH} /> : null}
     </View>
   );
 }

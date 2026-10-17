@@ -1,13 +1,16 @@
-import React, { useCallback, useEffect, useRef } from 'react';
-import { StyleSheet, View, useWindowDimensions, type StyleProp, type ViewStyle } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Platform, StyleSheet, View, useWindowDimensions, type StyleProp, type ViewStyle } from 'react-native';
 import { useRealSafeAreaInsets } from '@/components/shell/realInsets';
 import {
   BottomSheetBackdrop,
   BottomSheetModal,
   BottomSheetScrollView,
   BottomSheetView,
+  useBottomSheetTimingConfigs,
   type BottomSheetBackdropProps,
 } from '@gorhom/bottom-sheet';
+import { Easing } from 'react-native-reanimated';
+import { duration, rEasing } from '@/theme/motion';
 import { Icon } from '@/components/icons';
 import { c2, elevation2, radius2, space } from '@/theme/v2';
 import { Text } from './Text';
@@ -21,6 +24,32 @@ export function SheetHandle({ style }: { style?: StyleProp<ViewStyle> }) {
     </View>
   );
 }
+
+/**
+ * 화면에 붙박인 시트(1·4·6 지도 화면의 BottomSheet)가 화면이 뜰 때 아래에서 따로 올라오지 않게 하는 animationConfigs.
+ * gorhom 5.2 는 animateOnMount={false} 여도 레이아웃이 잡히는 순간 첫 자리로 '움직여' 간다(isAnimatedOnMount 가 처음부터
+ * true 라 마운트 분기를 건너뛴다, 웹 실측 0.5초). 그래서 시트가 마운트된 뒤(sheetMounted) 잠깐은 시간 0 으로 두고, 그 뒤 기본으로
+ * 돌린다. 반환값을 animationConfigs 에 넘기고 animateOnMount={false} 와 함께 쓴다.
+ * 그 잠깐 사이에도 사용자가 누른 스냅은 움직여야 하므로, 코드로 하는 snapToIndex 에는 SHEET_SNAP 을 직접 넘긴다.
+ */
+export function useSheetMountConfigs(sheetMounted: boolean): { duration: number } | undefined {
+  const [cfg, setCfg] = useState<{ duration: number } | undefined>(INSTANT);
+  useEffect(() => {
+    if (!sheetMounted) return;
+    const t = setTimeout(() => setCfg(undefined), SETTLE_MS);
+    return () => clearTimeout(t);
+  }, [sheetMounted]);
+  return cfg;
+}
+const INSTANT = { duration: 0 };
+// 컨테이너 높이 측정 → 첫 자리 잡기까지 넉넉히.
+const SETTLE_MS = 600;
+
+/** gorhom 기본 스냅 애니메이션(안드로이드 timing 250·exp out, 그 밖 스프링)과 같은 값 — 코드로 스냅할 때 넘긴다. */
+export const SHEET_SNAP =
+  Platform.OS === 'android'
+    ? { duration: 250, easing: Easing.out(Easing.exp) }
+    : { damping: 500, stiffness: 1000, mass: 3, overshootClamping: true, restDisplacementThreshold: 10, restSpeedThreshold: 10 };
 
 // gorhom handleComponent 는 시트 상태 props 를 넘긴다 — 모양만 쓰므로 무시한다.
 const SheetHandleSlot = () => <SheetHandle />;
@@ -150,6 +179,11 @@ export function AppSheet({
     ) : null;
 
   const bottomPad = { paddingBottom: insets.bottom + space[16] };
+  // 안드로이드 gorhom 기본(250ms·exp out)을 토큰(slow·emphasized)으로 맞춘다. iOS·웹은 gorhom 기본 스프링을
+  // 그대로 둔다 — 끌다 놓을 때 손가락 속도를 이어받는 게 시트의 자연스러운 감각이고, 시간이 정해진 timing 은
+  // 빠르게 튕겨 닫을 때 오히려 굼뜨게 느껴진다(결정).
+  const androidTiming = useBottomSheetTimingConfigs({ duration: duration.slow, easing: rEasing.emphasized });
+  const animationConfigs = Platform.OS === 'android' ? androidTiming : undefined;
 
   return (
     <BottomSheetModal
@@ -158,6 +192,7 @@ export function AppSheet({
       enableDynamicSizing={!snapPoints}
       maxDynamicContentSize={height * 0.85}
       enablePanDownToClose
+      animationConfigs={animationConfigs}
       onDismiss={handleDismiss}
       backdropComponent={renderBackdrop}
       handleComponent={SheetHandleSlot}

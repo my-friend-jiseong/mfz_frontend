@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { Animated, StyleSheet, View } from 'react-native';
+import { animEasing, duration, useReducedMotionPref } from '@/theme/motion';
 import { OverlayModal } from '@/components/ui/OverlayModal';
 import { useRouter } from 'expo-router';
 import { useSessionGuardStore } from '@/stores/sessionGuardStore';
@@ -17,6 +18,23 @@ export function SessionGuardModal() {
   const notice = useSessionGuardStore((s) => s.notice);
   const ack = useSessionGuardStore((s) => s.ack);
   const router = useRouter();
+  // 페이드는 안에서 RN Animated 로 — 다른 오버레이 호스트와 같다. iOS 는 OverlayModal 이 RN Modal 이 아니라
+  // animationType 이 먹지 않아 툭 나타났고, FullWindowOverlay 안에서 reanimated entering 은 믿기 어렵다.
+  const fade = useRef(new Animated.Value(0)).current;
+  const reduced = useReducedMotionPref();
+  const shown = !!notice;
+  useEffect(() => {
+    if (!shown) {
+      fade.setValue(0);
+      return;
+    }
+    Animated.timing(fade, {
+      toValue: 1,
+      duration: reduced ? duration.instant : duration.base,
+      easing: animEasing.enter,
+      useNativeDriver: true,
+    }).start();
+  }, [shown, fade, reduced]);
 
   // 안내 ack 시 로그인 화면으로 (refresh 분기에서 이미 store 비워짐)
   useEffect(() => {
@@ -31,8 +49,8 @@ export function SessionGuardModal() {
   };
 
   return (
-    <OverlayModal animationType="fade" visible={!!notice} onRequestClose={handleConfirm}>
-      <View style={styles.backdrop}>
+    <OverlayModal visible={!!notice} onRequestClose={handleConfirm}>
+      <Animated.View style={[styles.backdrop, { opacity: fade }]}>
         <View style={styles.box}>
           <Text variant="h3" style={styles.title}>
             {TITLE[notice.type]}
@@ -44,7 +62,7 @@ export function SessionGuardModal() {
             다시 로그인
           </Button2>
         </View>
-      </View>
+      </Animated.View>
     </OverlayModal>
   );
 }

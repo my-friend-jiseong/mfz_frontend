@@ -7,7 +7,7 @@ export const unstable_settings = { initialRouteName: 'index' };
 // (문의는 메일 앱, 분류는 현장 화면의 분류 시트).
 export default function ProfileLayout() {
   return (
-    <Stack screenOptions={{ headerShown: false }}>
+    <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="edit" />
       <Stack.Screen name="delete-account" />

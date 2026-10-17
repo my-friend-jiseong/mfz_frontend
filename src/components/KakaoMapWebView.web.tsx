@@ -38,6 +38,8 @@ import {
   type PinSelectedSize,
 } from '@/assets/mapPins';
 import { CARD_DOT_PAD, CARD_FIT_PADDING, CARD_PIN_SCALE, circleExtremes, closestFitLevel } from '@/utils/cardMapFit';
+import { fitCamera, zoomAnchor, type Pt } from '@/utils/mapCamera';
+import { duration } from '@/theme/motion';
 
 export type { MapPath, MapPinKind, PinSelectedSize };
 
@@ -222,6 +224,9 @@ interface Props {
   fitExtra?: { lat: number; lng: number }[];
   // fitToMarkers 여백(위·오른쪽·아래·왼쪽 px). 지도 위를 덮는 카드가 있으면 그만큼(3-8 경로 순서 카드).
   fitPadding?: [number, number, number, number];
+  // 있으면 fitToMarkers 는 이 값이 바뀔 때만 다시 맞춘다(마커 배열을 새로 만들 때마다가 아니라). 사용자가 지도를
+  // 끌거나 줌한 뒤에는 다시 맞추지 않는다(7 외근 진행 — 목적지 좌표 묶음을 키로 넘긴다). 네이티브와 같다.
+  fitKey?: string;
   // 카카오 축척 막대 숨김(정적 지도 카드 MapPreviewCard 전용). 로고는 남는다.
   hideScale?: boolean;
   // 정적 지도 카드(3·5·8 MapPreviewCard, 9 보고서 위치도·9-7) 전용: 핀 0.75배·선택 확대 없음, fitToMarkers 는
@@ -244,6 +249,9 @@ interface Props {
 }
 
 const DEFAULT_CENTER = { lat: 35.17, lng: 129.07 };
+// 동작 줄이기면 카메라를 움직이지 않고 바로 옮긴다.
+const reducedMotion = () =>
+  typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 const MAP_PRESS_PIN_GAP_MS = 400;
 const SDK_SCRIPT_ID = '__kakao_maps_sdk__';
 const MY_LOC_PULSE_KEYFRAMES_ID = '__mfz_me_pulse__';
@@ -254,7 +262,10 @@ function ensureMyLocPulseStyle() {
   const style = document.createElement('style');
   style.id = MY_LOC_PULSE_KEYFRAMES_ID;
   style.textContent =
-    '@keyframes mfzPulse { 0% { transform: scale(0.6); opacity: 0.7; } 100% { transform: scale(2.4); opacity: 0; } }';
+    '@keyframes mfzPulse { 0% { transform: scale(0.6); opacity: 0.7; } 100% { transform: scale(2.4); opacity: 0; } }' +
+    '.mfz-me-ring { animation: mfzPulse 1.6s ease-out infinite; }' +
+    // 동작 줄이기: 내 위치·검색 하이라이트·비컨의 반복 맥동을 멈춘다(정지된 링은 남는다). 네이티브 HTML 과 같다.
+    '@media (prefers-reduced-motion: reduce) { .mfz-me-ring, .mfz-hl-ping, .mfz-beacon-pulse { animation: none !important; } }';
   document.head.appendChild(style);
 }
 
@@ -305,7 +316,7 @@ type MapProjection = {
 type KakaoMap = {
   setCenter: (latlng: unknown) => void;
   panTo: (latlng: unknown) => void;
-  setLevel: (level: number) => void;
+  setLevel: (level: number, opts?: { animate?: { duration: number }; anchor?: unknown }) => void;
   getLevel: () => number;
   getCenter: () => { getLat: () => number; getLng: () => number };
   setBounds: (bounds: LatLngBounds, pt?: number, pr?: number, pb?: number, pl?: number) => void;
@@ -399,7 +410,8 @@ function loadKakaoSdk(appkey: string): Promise<void> {
 // 외부('내 위치' 버튼·탭 포커스 동기화)에서 지도를 명령형으로 제어하기 위한 핸들 — native 변형과 동일.
 export interface KakaoMapHandle {
   recenter: (target?: { lat: number; lng: number }) => void;
-  setView: (view: { lat: number; lng: number; level: number }) => void;
+  // animate: 카메라를 움직여 옮긴다(기본은 바로). 탭 포커스 동기화처럼 보이기 전 맞춤은 바로.
+  setView: (view: { lat: number; lng: number; level: number }, opts?: { animate?: boolean }) => void;
 }
 
 export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
@@ -420,6 +432,7 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
       fitToMarkers = false,
       fitExtra,
       fitPadding,
+      fitKey,
       hideScale = false,
       compactPins = false,
       interactive = true,
@@ -476,12 +489,16 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
         if (m.getLevel() > 6) m.setLevel(5);
         m.panTo(new k.maps.LatLng(t.lat, t.lng));
       },
-      setView: (view) => {
+      setView: (view, opts) => {
         const m = mapRef.current;
         const k = getKakao();
         if (!m || !k) return;
-        m.setLevel(view.level);
-        m.setCenter(new k.maps.LatLng(view.lat, view.lng));
+        if (!opts?.animate) {
+          m.setLevel(view.level);
+          m.setCenter(new k.maps.LatLng(view.lat, view.lng));
+          return;
+        }
+        moveCamera(m, k, m.getProjection().containerPointFromCoords(new k.maps.LatLng(view.lat, view.lng)), view.level, true);
       },
     }),
     [myLocation, center],
@@ -521,6 +538,13 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
         k.maps.event.addListener(map, 'dragstart', () => {
           userMovedRef.current = true;
         });
+        // 휠·두 손가락 줌·두 번 탭 줌도 사용자가 손댄 것이다(카카오 zoom_start 는 코드로 줌할 때도 와서 못 쓴다).
+        const markMoved = (e: Event) => {
+          if (e.type !== 'touchstart' || (e as TouchEvent).touches.length >= 2) userMovedRef.current = true;
+        };
+        containerRef.current.addEventListener('wheel', markMoved, { passive: true });
+        containerRef.current.addEventListener('touchstart', markMoved, { passive: true });
+        containerRef.current.addEventListener('dblclick', markMoved);
         // 사용자가 직접 끌거나 줌한 뒤에만 현재 뷰 보고 — 지도 생성 시 자동 발화하는 idle 로
         // 보고하면 안 보이는 탭의 지도가 초기 위치로 값을 덮어쓴다. 상위가 기억해 재마운트 시 복원.
         if (onViewChange) {
@@ -561,15 +585,44 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
   fitToMarkersRef.current = fitToMarkers;
   const holdCenterRef = useRef(holdCenterOnResize);
   holdCenterRef.current = holdCenterOnResize;
-  const fitRef = useRef<() => void>(() => {});
-  fitRef.current = () => {
+  // 첫 맞춤(마운트·첫 좌표)은 바로, 그 뒤 바뀔 때는 카메라를 움직여 옮긴다.
+  const fittedRef = useRef(false);
+  // 첫 맞춤 뒤 한 틱이 지나야 카메라를 움직인다 — 같은 틱에 이어 오는 맞춤(여백·추가 점)은 첫 맞춤의 일부라 바로.
+  const animOkRef = useRef(false);
+  const fitRef = useRef<(opts?: { auto?: boolean }) => void>(() => {});
+  fitRef.current = (opts) => {
     if (!mapRef.current || !fitToMarkers || markers.length === 0) return;
     const k = getKakao();
     if (!k) return;
+    // fitKey 모드: 사용자가 손댄 구도는 자동으로 덮지 않는다.
+    if (fitKey != null && fittedRef.current && userMovedRef.current) return;
     const pts: { lat: number; lng: number }[] = [...markers, ...(fitExtra ?? [])];
     if (compactPins) {
       fitTight(mapRef.current, k, circle ? [...pts, ...circleExtremes(circle)] : pts);
       return;
+    }
+    const animate = fittedRef.current && animOkRef.current && !opts?.auto;
+    if (!fittedRef.current) setTimeout(() => (animOkRef.current = true), 0);
+    fittedRef.current = true;
+    if (animate) {
+      const map = mapRef.current;
+      const proj = map.getProjection();
+      const el = containerRef.current;
+      const w = el?.clientWidth ?? 0;
+      const h = el?.clientHeight ?? 0;
+      const pad: [number, number, number, number] =
+        fitPadding ?? (h > 0 && h < 200 ? [48, 24, 12, 24] : [40, 40, 56, 40]);
+      const cam = fitCamera(
+        pts.map((p) => proj.containerPointFromCoords(new k.maps.LatLng(p.lat, p.lng))),
+        map.getLevel(),
+        w,
+        h,
+        pad,
+      );
+      if (cam) {
+        moveCamera(map, k, cam.center, cam.level, true);
+        return;
+      }
     }
     if (pts.length === 1) {
       mapRef.current.setCenter(new k.maps.LatLng(pts[0].lat, pts[0].lng));
@@ -584,6 +637,32 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
     if (fitPadding) mapRef.current.setBounds(bounds, ...fitPadding);
     else if (h > 0 && h < 200) mapRef.current.setBounds(bounds, 48, 24, 12, 24);
     else mapRef.current.setBounds(bounds, 40, 40, 56, 40);
+  };
+  // 카메라 옮기기. 레벨이 같으면 panTo, 다르면 기준점(zoomAnchor)을 잡아 줌 하나로 — 줌과 이동을 따로 하면
+  // 두 애니메이션이 겹쳐 흔들린다. target 은 지금 레벨 컨테이너 px.
+  // 카메라가 움직이는 중(duration.slow 안)에 또 요청이 오면 겹치지 않게 마지막 구도로 바로 옮긴다.
+  const camUntilRef = useRef(0);
+  const moveCamera = (map: KakaoMap, k: KakaoGlobal, target: Pt, level: number, animate: boolean) => {
+    const proj = map.getProjection();
+    const t = proj.coordsFromContainerPoint(new k.maps.Point(target.x, target.y));
+    const cur = map.getLevel();
+    if (!animate || reducedMotion() || Date.now() < camUntilRef.current) {
+      map.setLevel(level);
+      map.setCenter(t);
+      return;
+    }
+    camUntilRef.current = Date.now() + duration.slow;
+    if (cur === level) {
+      map.panTo(t);
+      return;
+    }
+    const el = containerRef.current;
+    const c = { x: (el?.clientWidth ?? 0) / 2, y: (el?.clientHeight ?? 0) / 2 };
+    const a = zoomAnchor(c, target, Math.pow(2, cur - level));
+    map.setLevel(level, {
+      animate: { duration: duration.slow },
+      anchor: proj.coordsFromContainerPoint(new k.maps.Point(a.x, a.y)),
+    });
   };
   // 정적 카드 맞춤: 가운데로 옮겨 지금 레벨에서 점들의 화면 폭을 재고, 여백 안에 들어가는 가장 가까운 레벨로 바꾼 뒤
   // 점들의 화면 범위 가운데가 여백 안쪽 가운데에 오게 중심을 옮긴다.
@@ -618,9 +697,9 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
   useEffect(() => {
     if (!ready) return;
     fitRef.current();
+    // fitKey 가 있으면 마커 배열이 아니라 키가 바뀔 때만.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, markers, fitToMarkers, fitPadding?.join(','), JSON.stringify(fitExtra ?? []), compactPins && circle ? `${circle.lat},${circle.lng},${circle.radius}` : '']);
+  }, [ready, fitKey ?? markers, fitToMarkers, fitPadding?.join(','), JSON.stringify(fitExtra ?? []), compactPins && circle ? `${circle.lat},${circle.lng},${circle.radius}` : '']);
 
   // 컨테이너 크기가 바뀌면(첫 레이아웃이 지도 생성보다 늦은 작은 카드 등) 카카오 지도는 스스로 다시 재지
   // 않아 중심이 어긋난다(MapPreviewCard 에서 핀이 카드 아래로 밀려 실측). relayout 후 다시 맞춘다.
@@ -634,7 +713,8 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
       if (key === last) return;
       last = key;
       map.relayout();
-      fitRef.current();
+      // 크기 변화로 다시 맞출 때는 바로(움직이는 카메라는 크기 변화와 겹치면 어긋난다).
+      fitRef.current({ auto: true });
       // holdCenterOnResize: relayout 이 왼쪽 위를 붙잡아 중심이 어긋난다 — 사용자가 끌기 전이면 center 로 다시 맞춘다.
       const c = centerRef.current;
       const k = getKakao();
@@ -797,7 +877,7 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
     const content = document.createElement('div');
     content.style.cssText = 'position:relative;width:22px;height:22px;pointer-events:none;';
     content.innerHTML =
-      '<div style="position:absolute;top:50%;left:50%;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;background:#2563eb;opacity:0.35;animation:mfzPulse 1.6s ease-out infinite;"></div>' +
+      '<div style="position:absolute;top:50%;left:50%;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;background:#2563eb;opacity:0.35;" class="mfz-me-ring"></div>' +
       '<div style="position:absolute;top:50%;left:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:#2563eb;border:3px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.35);"></div>';
     const overlay = new (k.maps as unknown as {
       CustomOverlay: new (opts: {

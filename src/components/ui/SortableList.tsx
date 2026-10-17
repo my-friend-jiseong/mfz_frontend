@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Platform, StyleSheet, View, type NativeScrollEvent, type NativeSyntheticEvent, type ScrollView } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
+  FadeIn,
+  LayoutAnimationConfig,
   runOnJS,
   useAnimatedReaction,
   useAnimatedStyle,
@@ -11,13 +13,15 @@ import Animated, {
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { c2, elevation2, radius2 } from '@/theme/v2';
+import { duration, rEasing } from '@/theme/motion';
 
 // 꾹 누르기(ms). 이보다 먼저 손가락이 움직이면 끌기가 아니라 스크롤이다.
 const LONG_PRESS_MS = 350;
 // 화면 끝에서 이 거리 안으로 끌면 목록을 굴린다(px). 끝에 가까울수록 빠르다.
 const EDGE = 56;
 const MAX_SPEED = 14;
-const SETTLE_MS = 160;
+// 내려놓기·밀려나기. 예전 160 리터럴을 base(180) 토큰으로.
+const SETTLE = { duration: duration.base, easing: rEasing.standard };
 
 /**
  * 끌어서 순서를 바꾸는 목록이 들어 있는 스크롤 뷰 연결. 반환값을 스크롤 뷰 props 에 펼친다.
@@ -238,6 +242,8 @@ export function SortableList<T>({
   const order = preview ?? keys;
   const byKey = useMemo(() => new Map(data.map((d) => [keyOf(d), d])), [data, keyOf]);
   return (
+    // 처음 그릴 때는 그대로, 나중에 담긴 줄만 흐려졌다 나타난다(skipEntering).
+    <LayoutAnimationConfig skipEntering>
     <View style={{ height: keys.length * rowHeight }}>
       {keys.slice(1).map((k, i) => (
         <View key={`sep-${k}`} style={[styles.sep, { top: (i + 1) * rowHeight }, dividerStyle]} />
@@ -270,6 +276,7 @@ export function SortableList<T>({
         );
       })}
     </View>
+    </LayoutAnimationConfig>
   );
 }
 
@@ -320,7 +327,7 @@ function SortableRow({
           dragY.value = 0;
           scrollDelta.value = 0;
           activeKey.value = id;
-          lifted.value = withTiming(1, { duration: 120 });
+          lifted.value = withTiming(1, { duration: duration.fast, easing: rEasing.enter });
           runOnJS(onLift)(id, e.absoluteY);
         })
         .onUpdate((e) => {
@@ -333,10 +340,10 @@ function SortableRow({
           const order = Object.keys(pos).sort((a, b) => pos[a] - pos[b]);
           const changed = order.some((k, i) => initialOrder[i] !== k);
           runOnJS(onDrop)(order, changed);
-          lifted.value = withTiming(0, { duration: SETTLE_MS });
+          lifted.value = withTiming(0, SETTLE);
           // 끄던 줄을 새 자리로 내려놓은 뒤 들기를 푼다.
           const target = (pos[id] ?? index) * rowHeight - startIndex.value * rowHeight - scrollDelta.value;
-          dragY.value = withTiming(target, { duration: SETTLE_MS }, (done) => {
+          dragY.value = withTiming(target, SETTLE, (done) => {
             if (!done) return;
             if (activeKey.value === id) activeKey.value = null;
             runOnJS(onSettled)();
@@ -349,7 +356,7 @@ function SortableRow({
     const isActive = activeKey.value === id;
     const y = isActive
       ? startIndex.value * rowHeight + dragY.value + scrollDelta.value
-      : withTiming((positions.value[id] ?? index) * rowHeight, { duration: SETTLE_MS });
+      : withTiming((positions.value[id] ?? index) * rowHeight, SETTLE);
     return {
       transform: [{ translateY: y }, { scale: 1 + 0.03 * lifted.value }],
       zIndex: isActive ? 10 : 0,
@@ -359,12 +366,20 @@ function SortableRow({
   return (
     // 웹 터치: 줄 위를 쓸면 목록이 스크롤되게(기본 none 이면 모바일 브라우저에서 스크롤이 막힌다).
     <GestureDetector gesture={gesture} touchAction="pan-y">
-      <Animated.View style={[styles.row, { height: rowHeight }, active && styles.rowActive, style]}>{children}</Animated.View>
+      <Animated.View style={[styles.row, { height: rowHeight }, active && styles.rowActive, style]}>
+        {/* 투명도는 안쪽에서 — 줄 위치(transform)를 움직이는 바깥 애니메이션과 섞지 않는다. */}
+        <Animated.View entering={ROW_ENTER} style={styles.fill}>
+          {children}
+        </Animated.View>
+      </Animated.View>
     </GestureDetector>
   );
 }
 
+const ROW_ENTER = FadeIn.duration(duration.base);
+
 const styles = StyleSheet.create({
+  fill: { flex: 1 },
   row: {
     position: 'absolute',
     top: 0,

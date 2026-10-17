@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,7 +13,7 @@ import { Text } from './Text';
 import { OverlayModal } from './OverlayModal';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
-import { duration, opacity } from '@/theme/motion';
+import { animEasing, duration, opacity, useReducedMotionPref } from '@/theme/motion';
 
 
 export interface ActionSheetOption {
@@ -46,9 +45,9 @@ export function showActionSheet(options: ActionSheetOption[], title?: string) {
   open?.({ title, options });
 }
 
-// 모달이 완전히 내려간 뒤에 콜백을 부른다. iOS 는 모달 dismiss 가 끝나기 전에 다른 모달
-// (이미지 피커·확인 대화상자)을 띄우면 조용히 무시한다.
-const AFTER_CLOSE_MS = Platform.OS === 'ios' ? 350 : 0;
+// 닫힘 애니메이션이 끝난 다음 틱에 콜백을 부른다. iOS 도 OverlayModal 이 RN Modal 이 아닌 View 라
+// dismiss 완료를 기다릴 필요가 없다(예전 350ms 는 RN Modal 시절 값).
+const AFTER_CLOSE_MS = 0;
 
 export function ActionSheetHost() {
   const insets = useSafeAreaInsets();
@@ -58,6 +57,7 @@ export function ActionSheetHost() {
   // 여는 순번. 닫힘 애니메이션 도중 다시 열리면 이전 닫힘 콜백이 새 시트를 지우지 않게 한다.
   const openSeq = useRef(0);
   const closing = useRef(false);
+  const reduced = useReducedMotionPref();
 
   useEffect(() => {
     open = (p) => {
@@ -65,12 +65,17 @@ export function ActionSheetHost() {
       closing.current = false;
       setPending(p);
       anim.setValue(0);
-      Animated.timing(anim, { toValue: 1, duration: duration.slow, useNativeDriver: true }).start();
+      Animated.timing(anim, {
+        toValue: 1,
+        duration: reduced ? duration.instant : duration.slow,
+        easing: animEasing.enter,
+        useNativeDriver: true,
+      }).start();
     };
     return () => {
       open = null;
     };
-  }, [anim]);
+  }, [anim, reduced]);
 
   const close = useCallback(
     (then?: () => void) => {
@@ -78,14 +83,19 @@ export function ActionSheetHost() {
       if (closing.current) return;
       closing.current = true;
       const seq = openSeq.current;
-      Animated.timing(anim, { toValue: 0, duration: duration.base, useNativeDriver: true }).start(() => {
+      Animated.timing(anim, {
+        toValue: 0,
+        duration: reduced ? duration.instant : duration.base,
+        easing: animEasing.exit,
+        useNativeDriver: true,
+      }).start(() => {
         if (seq !== openSeq.current) return;
         closing.current = false;
         setPending(null);
         if (then) setTimeout(then, AFTER_CLOSE_MS);
       });
     },
-    [anim],
+    [anim, reduced],
   );
 
   if (!pending) return null;
@@ -107,9 +117,9 @@ export function ActionSheetHost() {
             {
               paddingBottom: Math.max(insets.bottom, spacing.xl),
               maxHeight: windowH * 0.7,
-              transform: [
-                { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [windowH * 0.4, 0] }) },
-              ],
+              ...(reduced
+                ? { opacity: anim }
+                : { transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [windowH * 0.4, 0] }) }] }),
             },
           ]}
         >

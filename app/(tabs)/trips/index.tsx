@@ -2,10 +2,9 @@ import { useCallback } from 'react';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useTripStore } from '@/stores/tripStore';
 import { StyleSheet, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { SkeletonCard } from '@/components/ui/SkeletonCard';
-import { c2, space } from '@/theme/v2';
-import TripsListScreen from '@/screens/TripsListScreen';
+import { SheetHandle } from '@/components/ui/AppSheet';
+import { c2, elevation2, radius2, space } from '@/theme/v2';
+import TripsListScreen, { SHEET_COLLAPSED } from '@/screens/TripsListScreen';
 import ActiveTrip from '@/screens/ActiveTripScreen';
 
 // 외근 탭 첫 화면 — 진행 중 외근이 있으면 7 외근 진행, 없으면 1 지도(외근 내역).
@@ -21,13 +20,17 @@ export default function TripsTabRoot() {
   return showActive ? <ActiveTrip /> : <TripsListScreen />;
 }
 
+// 1 지도·7 외근 진행 어느 쪽이든 '지도 + 아래 시트' 모양이라 그 윤곽만 잡는다 — 목록 카드 자리표시는
+// 곧 지도로 바뀌며 화면 전체가 갈아 끼워지는 것처럼 보였다.
 function TripsRootSkeleton() {
-  const insets = useSafeAreaInsets();
   return (
-    <View style={[styles.skeleton, { paddingTop: insets.top + space[16] }]}>
-      <SkeletonCard />
-      <SkeletonCard />
-      <SkeletonCard />
+    <View style={styles.skeleton} accessible accessibilityRole="progressbar" accessibilityLabel="불러오는 중">
+      <View style={styles.sheet}>
+        <SheetHandle />
+        <View style={[styles.bar, styles.barTitle]} />
+        <View style={[styles.bar, styles.barLine]} />
+        <View style={[styles.bar, styles.barShort]} />
+      </View>
     </View>
   );
 }
@@ -48,5 +51,22 @@ function useDropInheritedParams() {
 }
 
 const styles = StyleSheet.create({
-  skeleton: { flex: 1, gap: space[12], paddingHorizontal: space[16], backgroundColor: c2.bg.canvas },
+  skeleton: { flex: 1, backgroundColor: c2.bg.muted },
+  sheet: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: SHEET_COLLAPSED,
+    gap: space[12],
+    paddingHorizontal: space[20],
+    borderTopLeftRadius: radius2['2xl'],
+    borderTopRightRadius: radius2['2xl'],
+    backgroundColor: c2.bg.canvas,
+    ...elevation2.sheet,
+  },
+  bar: { height: 14, borderRadius: radius2.xs, backgroundColor: c2.bg.muted },
+  barTitle: { height: 20, width: '40%', marginTop: space[8] },
+  barLine: { width: '84%' },
+  barShort: { width: '56%' },
 });

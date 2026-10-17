@@ -7,7 +7,7 @@ export const unstable_settings = { initialRouteName: 'index' };
 // 루트 (modals) 스택에 있다(탭 바를 가림).
 export default function ReportsLayout() {
   return (
-    <Stack screenOptions={{ headerShown: false }}>
+    <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="[id]/index" />
     </Stack>

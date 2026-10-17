@@ -4,7 +4,7 @@ import { Icon, type IconName } from '@/components/icons';
 import { Text } from '@/components/ui/Text';
 import { Touchable } from '@/components/ui/Touchable';
 import { c2, elevation2, radius2, space } from '@/theme/v2';
-import { duration } from '@/theme/motion';
+import { animEasing, duration, useReducedMotionPref } from '@/theme/motion';
 
 export interface RecordMenuItem {
   label: string;
@@ -25,6 +25,9 @@ const PILL_GAP = 8;
 const PILL_TO_FAB = 18;
 // iOS 는 떠 있는 Modal 위에 새 화면을 띄우지 못한다 — 닫힌 모달이 완전히 내려간 뒤에 이동한다(ConfirmDialog 와 같은 값).
 const AFTER_CLOSE_MS = Platform.OS === 'ios' ? 350 : 0;
+// 알약은 '+' 에 가까운 것부터 30ms 간격으로 8px 아래에서 올라온다(열 때만).
+const STAGGER_MS = 30;
+const PILL_RISE = 8;
 
 /**
  * 8-6 기록 메뉴 — 7 외근 진행의 '+' 를 누르면 화면을 어둡게 덮고, '+' 자리에 검은 닫기 버튼, 그 위로 알약 버튼을 쌓는다.
@@ -33,20 +36,34 @@ const AFTER_CLOSE_MS = Platform.OS === 'ios' ? 350 : 0;
  */
 export function RecordMenu({ anchor, items, onClose }: Props) {
   const anim = useRef(new Animated.Value(0)).current;
+  const rise = useRef(new Animated.Value(1)).current;
+  const reduced = useReducedMotionPref();
   const [shown, setShown] = useState(anchor);
   // 닫힌 뒤 실행할 항목 동작.
   const pendingRef = useRef<(() => void) | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const riseTotal = duration.fast + STAGGER_MS * Math.max(0, items.length - 1);
   useEffect(() => {
     if (anchor) setShown(anchor);
-    Animated.timing(anim, { toValue: anchor ? 1 : 0, duration: duration.fast, useNativeDriver: true }).start(({ finished }) => {
+    if (anchor && !reduced) {
+      rise.setValue(0);
+      Animated.timing(rise, { toValue: 1, duration: riseTotal, easing: animEasing.enter, useNativeDriver: true }).start();
+    }
+    Animated.timing(anim, {
+      toValue: anchor ? 1 : 0,
+      duration: reduced ? duration.instant : duration.fast,
+      easing: anchor ? animEasing.enter : animEasing.exit,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
       if (!finished || anchor) return;
       setShown(null);
       const fn = pendingRef.current;
       pendingRef.current = null;
       if (fn) timerRef.current = setTimeout(fn, AFTER_CLOSE_MS);
     });
-  }, [anchor, anim]);
+    // riseTotal 은 항목 수에서 나온다 — 메뉴가 열려 있는 동안 바뀌지 않는다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [anchor, anim, rise, reduced]);
   // 내려간 뒤(외근 종료 등) 늦게 이동하지 않게.
   useEffect(
     () => () => {
@@ -70,18 +87,28 @@ export function RecordMenu({ anchor, items, onClose }: Props) {
           pointerEvents="box-none"
           style={[styles.pills, { top: shown.y - fabBottomGap - items.length * PILL_H - (items.length - 1) * PILL_GAP, right: undefined, left: 0, width: shown.x + shown.w }]}
         >
-          {items.map((it) => (
-            <Touchable
-              key={it.label}
-              onPress={() => pick(it.onPress)}
-              accessibilityRole="menuitem"
-              accessibilityLabel={it.label}
-              style={styles.pill}
-            >
-              <Icon name={it.icon} size={20} color={c2.text.link} />
-              <Text v2="bodyL.bold">{it.label}</Text>
-            </Touchable>
-          ))}
+          {items.map((it, i) => {
+            // 아래(‘+’ 쪽)부터 차례로.
+            const start = (STAGGER_MS * (items.length - 1 - i)) / riseTotal;
+            const end = Math.min(1, start + duration.fast / riseTotal);
+            const t = rise.interpolate({ inputRange: [0, start, end, 1], outputRange: [0, 0, 1, 1] });
+            return (
+              <Animated.View
+                key={it.label}
+                style={{ opacity: t, transform: [{ translateY: t.interpolate({ inputRange: [0, 1], outputRange: [PILL_RISE, 0] }) }] }}
+              >
+                <Touchable
+                  onPress={() => pick(it.onPress)}
+                  accessibilityRole="menuitem"
+                  accessibilityLabel={it.label}
+                  style={styles.pill}
+                >
+                  <Icon name={it.icon} size={20} color={c2.text.link} />
+                  <Text v2="bodyL.bold">{it.label}</Text>
+                </Touchable>
+              </Animated.View>
+            );
+          })}
         </View>
         <Touchable
           onPress={onClose}

@@ -4,7 +4,9 @@ import { Button2 } from '@/components/ui/Button2';
 import { Text } from '@/components/ui/Text';
 import { Touchable } from '@/components/ui/Touchable';
 import { Icon } from '@/components/icons';
+import Animated, { FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated';
 import { c2, elevation2, radius2, space } from '@/theme/v2';
+import { duration, rEasing, useReducedMotionPref } from '@/theme/motion';
 
 interface Props {
   /** '선택한 현장' / '선택한 위치'. */
@@ -30,8 +32,18 @@ export function MapPickCard({ label, title, meta, added, onOpen, onToggle, loadi
   useEffect(() => {
     if (Platform.OS === 'ios') AccessibilityInfo.announceForAccessibility(announcement);
   }, [announcement]);
+  // 나타날 때 살짝 아래에서 올라오고, 사라질 때는 제자리에서 흐려진다. 동작 줄이기면 투명도만.
+  const reduced = useReducedMotionPref();
+  const entering = reduced
+    ? FadeIn.duration(duration.instant)
+    : FadeInDown.duration(duration.base).easing(rEasing.enter).withInitialValues({ transform: [{ translateY: space[8] }] });
   return (
-    <View style={[styles.card, style]} accessibilityLiveRegion="polite">
+    <Animated.View
+      entering={entering}
+      exiting={FadeOut.duration(reduced ? duration.instant : duration.fast)}
+      style={[styles.card, style]}
+      accessibilityLiveRegion="polite"
+    >
       <View style={styles.labelRow}>
         <Text v2="small.semibold" tone="tertiary" style={styles.flex}>
           {label}
@@ -67,7 +79,7 @@ export function MapPickCard({ label, title, meta, added, onOpen, onToggle, loadi
       >
         {added ? '외근 목적지에 추가됨' : '외근 목적지에 추가'}
       </Button2>
-    </View>
+    </Animated.View>
   );
 }
 

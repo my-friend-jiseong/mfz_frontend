@@ -3,6 +3,7 @@ import { Image, ScrollView, StyleSheet, View } from 'react-native';
 import { Icon } from '@/components/icons';
 import { Text } from '@/components/ui/Text';
 import { Touchable } from '@/components/ui/Touchable';
+import { AccordionBody, AccordionChevron, AccordionRow } from '@/components/ui/Accordion';
 import { STATUS_LABEL } from '@/components/ui/StatusMark';
 import type { FieldStatus } from '@/types/entities';
 import type { VisitPhoto } from '@/api';
@@ -49,8 +50,9 @@ type Props =
 export function TripStopRow(props: Props) {
   const { order, title, divider } = props;
   if (props.kind === 'skipped') {
+    // 위 줄을 펼치면 같이 밀려 내려가게 같은 layout 을 쓴다.
     return (
-      <View style={[styles.head, divider && styles.divider]}>
+      <AccordionRow style={[styles.head, divider && styles.divider]}>
         <View style={[styles.num, { backgroundColor: c2.bg.placeholder }]}>
           <Text v2="bodyS.extrabold" tone="tertiary">
             {order}
@@ -67,13 +69,13 @@ export function TripStopRow(props: Props) {
         <Text v2="caption.bold" tone="tertiary">
           건너뜀
         </Text>
-      </View>
+      </AccordionRow>
     );
   }
 
   const { status, expanded, onToggle, photos, memo, onEdit, onOpenField, visitedAt } = props;
   return (
-    <View style={[divider && styles.divider, expanded && styles.expandedPad]}>
+    <AccordionRow style={[divider && styles.divider, expanded && styles.expandedPad]}>
       <Touchable
         onPress={onToggle}
         accessibilityRole="button"
@@ -98,15 +100,10 @@ export function TripStopRow(props: Props) {
         <Text v2="caption.bold" tone={STATUS_TONE[status]}>
           {STATUS_LABEL[status]}
         </Text>
-        <Icon
-          name="chevron-down"
-          size={20}
-          color={c2.text.tertiary}
-          style={[styles.chevron, expanded && styles.chevronUp]}
-        />
+        <AccordionChevron expanded={expanded} color={c2.text.tertiary} style={styles.chevron} />
       </Touchable>
       {expanded ? (
-        <View style={styles.detail}>
+        <AccordionBody style={styles.detail}>
           {photos && photos.length > 0 ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photos}>
               {photos.map((p) => (
@@ -133,9 +130,9 @@ export function TripStopRow(props: Props) {
               <Icon name="chevron-right" size={16} color={c2.text.link} />
             </Touchable>
           </View>
-        </View>
+        </AccordionBody>
       ) : null}
-    </View>
+    </AccordionRow>
   );
 }
 
@@ -171,7 +168,6 @@ const styles = StyleSheet.create({
   num: { width: 28, height: 28, borderRadius: radius2.full, alignItems: 'center', justifyContent: 'center' },
   body: { flex: 1, gap: space[2] },
   chevron: { marginLeft: space[2] },
-  chevronUp: { transform: [{ rotate: '180deg' }] },
   expandedPad: { paddingBottom: space[14] },
   // 펼친 내용은 현장 이름 줄에 맞춘다(순번 원 28 + 14).
   detail: { paddingLeft: 42, gap: space[10] },

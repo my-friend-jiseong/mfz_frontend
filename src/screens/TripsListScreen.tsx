@@ -14,7 +14,7 @@ import { LocationPermissionSheet } from '@/components/map/LocationPermissionShee
 import { TripHistoryRow } from '@/components/trips/TripHistoryRow';
 import { BottomActionBar } from '@/components/ui/BottomActionBar';
 import { Button2 } from '@/components/ui/Button2';
-import { SheetHandle } from '@/components/ui/AppSheet';
+import { SheetHandle, useSheetMountConfigs, SHEET_SNAP } from '@/components/ui/AppSheet';
 import { SkeletonCard } from '@/components/ui/SkeletonCard';
 import { Text } from '@/components/ui/Text';
 import { Touchable } from '@/components/ui/Touchable';
@@ -26,7 +26,7 @@ import { c2, elevation2, radius2, space } from '@/theme/v2';
 import type { Trip } from '@/types/entities';
 
 // 1 지도: 접힌 시트 높이(외근 시작 줄 포함). Figma 634:3004 는 탭 바 위 304.
-const SHEET_COLLAPSED = 304;
+export const SHEET_COLLAPSED = 304;
 // 지도 위 검색창(52) — 시트를 끝까지 올려도 이 아래(+8)에서 멈춘다(Figma 2: 검색창 아래 8).
 const SEARCH_BAR_H = 52;
 // 외근 시작 줄: 위 10 + 버튼 56 + 아래 13(Figma 1 'Frame' 79).
@@ -136,6 +136,7 @@ export default function TripsListScreen() {
     containerH != null && containerH > 0
       ? Math.max(SHEET_COLLAPSED + 1, containerH - (insets.top + space[8] + SEARCH_BAR_H + space[8]))
       : null;
+  const sheetMountConfigs = useSheetMountConfigs(!!maxSheet);
   const snapPoints = useMemo(() => (maxSheet ? [SHEET_COLLAPSED, maxSheet] : [SHEET_COLLAPSED]), [maxSheet]);
 
   const empty = trips.length === 0 && listStatus !== 'loading' && listStatus !== 'error';
@@ -174,6 +175,9 @@ export default function TripsListScreen() {
           (MapSheetLayout 주석, 실측). */}
       {maxSheet ? (
         <BottomSheet
+          // 첫 화면이 뜰 때 시트만 따로 아래에서 올라오지 않게 — 지도와 함께 바로 그린다(useSheetMountConfigs).
+          animateOnMount={false}
+          animationConfigs={sheetMountConfigs}
           ref={sheetRef}
           index={0}
           snapPoints={snapPoints}
@@ -191,7 +195,7 @@ export default function TripsListScreen() {
                 외근 내역
               </Text>
               {!expanded && !empty && trips.length > 0 ? (
-                <Touchable onPress={() => sheetRef.current?.snapToIndex(1)} accessibilityRole="button" style={styles.all}>
+                <Touchable onPress={() => sheetRef.current?.snapToIndex(1, SHEET_SNAP)} accessibilityRole="button" style={styles.all}>
                   <Text v2="bodyS.semibold" tone="link">
                     전체 보기
                   </Text>

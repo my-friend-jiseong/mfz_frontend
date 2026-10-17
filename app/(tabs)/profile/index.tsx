@@ -5,6 +5,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useCheckinQueueStore } from '@/stores/checkinQueueStore';
 import { confirm } from '@/components/ui/ConfirmDialog';
 import { useMiniBarInset } from '@/stores/bottomChromeStore';
+import { TabRootMiniBar } from '@/components/shell/TripMiniBar';
 import { Button2 } from '@/components/ui/Button2';
 import { Text } from '@/components/ui/Text';
 import { Touchable } from '@/components/ui/Touchable';
@@ -239,6 +240,7 @@ export default function Profile() {
           로그아웃
         </Button2>
       </ScrollView>
+      <TabRootMiniBar />
     </SafeScreen>
   );
 }

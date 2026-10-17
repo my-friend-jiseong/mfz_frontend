@@ -9,6 +9,7 @@ import { Text } from '@/components/ui/Text';
 import { Touchable } from '@/components/ui/Touchable';
 import { useAuthStore } from '@/stores/authStore';
 import { useMiniBarInset } from '@/stores/bottomChromeStore';
+import { TabRootMiniBar } from '@/components/shell/TripMiniBar';
 import { useReportStore } from '@/stores/reportStore';
 import { useTripStore } from '@/stores/tripStore';
 import { fmtMonthDay } from '@/utils/datetime';
@@ -155,6 +156,7 @@ export default function ReportsIndex() {
           </>
         )}
       </ScrollView>
+      <TabRootMiniBar />
     </SafeScreen>
   );
 }

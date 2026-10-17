@@ -9,7 +9,8 @@ export const unstable_settings = { initialRouteName: 'index' };
 export default function TripsLayout() {
   return (
     <Stack
-      screenOptions={{ headerShown: false }}
+      // 플랫폼 기본에 맡기지 않고 (auth)·다른 탭 스택과 같은 전환으로 명시한다.
+      screenOptions={{ headerShown: false, animation: 'slide_from_right' }}
       // 외근 종료 직후 정리(첫 화면을 목록으로 되돌리기 등)는 상세 화면 push 전환이 끝난 뒤에(afterPush.ts).
       screenListeners={{
         transitionEnd: (e) => {
