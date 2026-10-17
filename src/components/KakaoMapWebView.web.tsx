@@ -231,6 +231,8 @@ interface Props {
   interactive?: boolean;
   onMarkerPress?: (fieldId: string) => void;
   onLongPress?: (p: { lat: number; lng: number }) => void;
+  // 핀이 아닌 빈 곳을 눌렀을 때(선택 카드 닫기 등). 핀을 누른 직후·길게 누른 직후의 지도 click 은 오지 않는다.
+  onMapPress?: () => void;
   // 지도 뷰(center+level)가 정착할 때마다 보고 — 상위가 기억해 재마운트 시 복원에 사용.
   onViewChange?: (view: { lat: number; lng: number; level: number }) => void;
   // 크기가 바뀌면(첫 레이아웃) center 로 다시 맞춘다 — 사용자가 끌기 전까지만. 저장한 구도로 그리는 보고서 위치도 카드 전용.
@@ -242,6 +244,7 @@ interface Props {
 }
 
 const DEFAULT_CENTER = { lat: 35.17, lng: 129.07 };
+const MAP_PRESS_PIN_GAP_MS = 400;
 const SDK_SCRIPT_ID = '__kakao_maps_sdk__';
 const MY_LOC_PULSE_KEYFRAMES_ID = '__mfz_me_pulse__';
 
@@ -422,6 +425,7 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
       interactive = true,
       onMarkerPress,
       onLongPress,
+      onMapPress,
       onViewChange,
       holdCenterOnResize = false,
     }: Props,
@@ -453,6 +457,12 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
   const onMarkerPressRef = useRef(onMarkerPress);
   onMarkerPressRef.current = onMarkerPress;
   const pickFromGroup = useCallback((id: string) => onMarkerPressRef.current?.(id), []);
+  // 핀을 누른 시각 — 카카오 지도 click 이 핀 click 과 함께 와도 빈 곳 누르기로 치지 않게.
+  const pinTapAtRef = useRef(0);
+  // 길게 누르기가 터졌는가 — 다음 손가락이 닿을 때까지. 그 손을 떼며 생기는 지도 click 은 빈 곳 누르기가 아니다.
+  const longPressedRef = useRef(false);
+  const onMapPressRef = useRef(onMapPress);
+  onMapPressRef.current = onMapPress;
 
   // 명령형 복구 — '내 위치' 버튼이 드래그된 지도를 다시 내 위치로 끌어온다.
   useImperativeHandle(
@@ -654,12 +664,14 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
     const start = (x: number, y: number) => {
       cancel();
       swallow = false;
+      longPressedRef.current = false;
       if (!onLongPressRef.current) return;
       sx = x;
       sy = y;
       timer = setTimeout(() => {
         timer = null;
         swallow = true;
+        longPressedRef.current = true;
         const k = getKakao();
         const map = mapRef.current;
         if (!k || !map) return;
@@ -717,6 +729,29 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
       root.removeEventListener('touchcancel', cancel, opts);
     };
   }, [ready, interactive]);
+
+  // 빈 곳 누르기 — 핀 click 과 지도 click 의 순서가 일정하지 않아 잠깐 기다렸다가, 핀을 누르지 않았고
+  // 길게 누르기 직후도 아닐 때만 보낸다(네이티브 HTML 과 같은 규칙).
+  const hasMapPress = !!onMapPress;
+  useEffect(() => {
+    const k = getKakao();
+    const map = mapRef.current;
+    if (!ready || !k || !map || !interactive || !hasMapPress) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const onClick = () => {
+      if (longPressedRef.current) return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        timer = null;
+        if (Date.now() - pinTapAtRef.current > MAP_PRESS_PIN_GAP_MS) onMapPressRef.current?.();
+      }, 50);
+    };
+    k.maps.event.addListener(map, 'click', onClick);
+    return () => {
+      if (timer) clearTimeout(timer);
+      k.maps.event.removeListener(map, 'click', onClick);
+    };
+  }, [ready, interactive, hasMapPress]);
 
   // 정적 위치도(figure) — 드래그/줌 차단. BottomSheet pan 충돌 회피 + 보고서 그림용.
   useEffect(() => {
@@ -973,7 +1008,10 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
         const content = document.createElement('div');
         content.innerHTML = html;
         const box = content.firstChild as HTMLElement | null;
-        box?.addEventListener('click', onClick);
+        box?.addEventListener('click', () => {
+          pinTapAtRef.current = Date.now();
+          onClick();
+        });
         overlaysRef.current.push(
           new k.maps.CustomOverlay({
             position: new k.maps.LatLng(m.lat, m.lng),
@@ -1035,6 +1073,7 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
         const child = content.firstChild as HTMLElement | null;
         if (child) {
           child.addEventListener('click', () => {
+            pinTapAtRef.current = Date.now();
             if (cl.count === 1) {
               onMarkerPress?.(cl.head.id);
             } else {

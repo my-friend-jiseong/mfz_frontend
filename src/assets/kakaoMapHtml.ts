@@ -75,6 +75,8 @@ interface MapHtmlOptions {
   hideScale?: boolean;
   // 정적 지도 카드 전용 — 핀 0.75배·선택 확대 없음, 가장 가까운 레벨로 맞춤(KakaoMapWebView compactPins, utils/cardMapFit).
   compactPins?: boolean;
+  // 빈 곳 누르기(mapPress)를 받는 화면만 지도 click 리스너를 단다(KakaoMapWebView onMapPress).
+  mapPress?: boolean;
 }
 
 export function buildKakaoMapHtml({
@@ -86,6 +88,7 @@ export function buildKakaoMapHtml({
   interactive = true,
   hideScale = false,
   compactPins = false,
+  mapPress = false,
 }: MapHtmlOptions): string {
   // RN WebView와 웹 iframe 양쪽에서 메시지 전송 가능한 브리지 스크립트
   const postMsgFn = `function postMsg(msg){var s=JSON.stringify(msg);if(window.ReactNativeWebView){window.ReactNativeWebView.postMessage(s);}else if(window.parent&&window.parent!==window){window.parent.postMessage(s,'*');}}`;
@@ -167,6 +170,7 @@ MARKERS.forEach(function(m){
   var INTERACTIVE = ${interactive ? 'true' : 'false'};
   var HIDE_SCALE = ${hideScale ? 'true' : 'false'};
   var COMPACT = ${compactPins ? 'true' : 'false'};
+  var MAP_PRESS = ${mapPress ? 'true' : 'false'};
   ${postMsgFn}
   // 조작 불가 지도(interactive=false, 예: 보고서 상세 위치도)는 신호를 보내지 않는다 —
   // 끌 수 없는 지도 때문에 부모 스크롤이 잠기면 손해만 남는다.
@@ -188,6 +192,20 @@ MARKERS.forEach(function(m){
     var lpRecent = function(){ if (lpSwallow) { lpSwallow = false; return true; } return false; };
     // 길게 누르면 뜨는 브라우저 메뉴(이미지 저장·텍스트 선택)를 막는다.
     container.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+    // 빈 곳 누르기(선택 카드 닫기) — 핀 click 과 지도 click 의 순서가 일정하지 않아 잠깐 기다렸다가
+    // 핀을 누르지 않았고 길게 누르기 직후도 아닐 때만 보낸다(웹 KakaoMapWebView.web 과 같은 규칙).
+    var pinTapAt = 0;
+    if (INTERACTIVE && MAP_PRESS) {
+      var mapPressTimer = null;
+      kakao.maps.event.addListener(map, 'click', function(){
+        if (lpSwallow) return;
+        if (mapPressTimer) clearTimeout(mapPressTimer);
+        mapPressTimer = setTimeout(function(){
+          mapPressTimer = null;
+          if (Date.now() - pinTapAt > 400) postMsg({ type: 'mapPress' });
+        }, 50);
+      });
+    }
     if (INTERACTIVE) {
       var lpTimer = null, lpX = 0, lpY = 0;
       var lpCancel = function(){ if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } };
@@ -499,7 +517,7 @@ MARKERS.forEach(function(m){
       function addPin(m, html, zIndex, onClick){
         var content = document.createElement('div');
         content.innerHTML = html;
-        content.firstChild.addEventListener('click', function(){ if (lpRecent()) return; onClick(); });
+        content.firstChild.addEventListener('click', function(){ pinTapAt = Date.now(); if (lpRecent()) return; onClick(); });
         markerOverlays.push(new kakao.maps.CustomOverlay({
           position: new kakao.maps.LatLng(m.lat, m.lng),
           content: content,
@@ -540,6 +558,7 @@ MARKERS.forEach(function(m){
         content.innerHTML = buildMarkerHtml(head, cl.count, showLabel && cl.count === 1, cl.minOrder);
         (function(c){
           content.firstChild.addEventListener('click', function(){
+            pinTapAt = Date.now();
             if (lpRecent()) return;
             if (c.count > 1) {
               postMsg({ type: 'markerGroupPress', groupIds: c.ids });

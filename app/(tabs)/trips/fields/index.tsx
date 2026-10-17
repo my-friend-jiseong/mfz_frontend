@@ -10,6 +10,7 @@ import { SheetHandle } from '@/components/ui/AppSheet';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { MapButton } from '@/components/ui/MapButton';
 import { DestinationFAB } from '@/components/ui/DestinationFAB';
+import { MapPickCard } from '@/components/fields/MapPickCard';
 import { Button2 } from '@/components/ui/Button2';
 import { Text } from '@/components/ui/Text';
 import { Touchable } from '@/components/ui/Touchable';
@@ -516,36 +517,16 @@ export default function FieldSearchScreen() {
         <View style={[styles.pickArea, { bottom: SHEET_PEEK + space[8] }]} pointerEvents="box-none">
           <DestinationFAB count={cart.count} onPress={cart.open} style={styles.fabLg} />
           {card ? (
-            <View style={styles.card}>
-              <Text v2="small.semibold" tone="tertiary">
-                {card.label}
-              </Text>
-              <Touchable
-                onPress={card.onOpen}
-                disabled={!card.onOpen}
-                accessibilityRole="button"
-                pressedOpacity={card.onOpen ? 0.6 : 1}
-                noAutoHitSlop
-              >
-                <Text v2="title.s" numberOfLines={1}>
-                  {card.title}
-                </Text>
-              </Touchable>
-              <Text v2="bodyS.regular" tone="tertiary" numberOfLines={1}>
-                {card.meta}
-              </Text>
-              <Button2
-                variant={card.added ? 'tonal' : 'primary'}
-                icon={card.added ? 'check' : undefined}
-                loading={addingKey === '__picked'}
-                disabled={picked?.kind === 'point' && picked.resolving}
-                onPress={card.onAdd}
-                fullWidth
-                style={styles.cardBtn}
-              >
-                {card.added ? '외근 목적지에 추가됨' : '외근 목적지에 추가'}
-              </Button2>
-            </View>
+            <MapPickCard
+              label={card.label}
+              title={card.title}
+              meta={card.meta}
+              added={card.added}
+              onOpen={card.onOpen}
+              onToggle={card.onAdd}
+              loading={addingKey === '__picked'}
+              disabled={picked?.kind === 'point' && picked.resolving}
+            />
           ) : null}
         </View>
       ) : null}
@@ -596,15 +577,6 @@ const styles = StyleSheet.create({
   },
   pickArea: { position: 'absolute', left: space[12], right: space[12], alignItems: 'flex-end', gap: space[12] },
   fabLg: { marginRight: space[4] },
-  card: {
-    alignSelf: 'stretch',
-    padding: space[16],
-    gap: space[2],
-    borderRadius: radius2['2xl'],
-    backgroundColor: c2.bg.canvas,
-    ...elevation2.popover,
-  },
-  cardBtn: { marginTop: space[12] },
   sheetBg: { backgroundColor: c2.bg.canvas, borderTopLeftRadius: radius2['2xl'], borderTopRightRadius: radius2['2xl'] },
   sheetShadow: { ...elevation2.sheet, borderTopLeftRadius: radius2['2xl'], borderTopRightRadius: radius2['2xl'] },
   sheetContent: { paddingBottom: space[32] },

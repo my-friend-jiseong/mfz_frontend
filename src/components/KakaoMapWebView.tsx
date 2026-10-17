@@ -110,6 +110,9 @@ interface Props {
   onMarkerPress?: (fieldId: string) => void;
   // 빈 곳을 길게 누르면(4-3 지도에서 위치 고르기) 그 지점 좌표. interactive=false 면 오지 않는다.
   onLongPress?: (p: { lat: number; lng: number }) => void;
+  // 핀이 아닌 빈 곳을 눌렀을 때(선택 카드 닫기 등). 핀을 누른 직후·길게 누른 직후의 지도 click 은 오지 않는다.
+  // 마운트할 때 있어야 한다(HTML 에 리스너를 그때 단다).
+  onMapPress?: () => void;
   // 지도에 손이 닿아 있는 동안 true — 스크롤 화면 안에 박힌 지도에서 부모 ScrollView 의
   // scrollEnabled 를 끄는 데 쓴다. 안드로이드는 부모가 세로 드래그를 먼저 가로채 지도가
   // pan 을 못 받는데, 터치가 실제로 떨어지는 WebView 내부에서 신호를 올려 이를 푼다.
@@ -152,6 +155,7 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
       interactive = true,
       onMarkerPress,
       onLongPress,
+      onMapPress,
       onTilesLoaded,
       onViewChange,
       onInteractionChange,
@@ -215,6 +219,8 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
   const initialLevelRef = useRef(initialLevel);
   // webview 가 줌별 픽셀 클러스터링을 직접 하므로 원본(미그룹) 마커를 넘긴다.
   const initialMarkersRef = useRef(markers);
+  // 지도 click 리스너는 HTML 을 만들 때 정한다 — 마운트 뒤 onMapPress 유무가 바뀌어도 HTML 을 다시 만들지 않는다.
+  const mapPressRef = useRef(!!onMapPress);
   const html = useMemo(
     () =>
       buildKakaoMapHtml({
@@ -226,6 +232,7 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
         interactive,
         hideScale,
         compactPins,
+        mapPress: mapPressRef.current,
       }),
     [kakaoJsKey, fitToMarkers, interactive, hideScale, compactPins],
   );
@@ -442,6 +449,8 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
               onViewChange?.({ lat: msg.lat, lng: msg.lng, level: msg.level });
             } else if (msg.type === 'longPress' && typeof msg.lat === 'number' && typeof msg.lng === 'number') {
               onLongPress?.({ lat: msg.lat, lng: msg.lng });
+            } else if (msg.type === 'mapPress') {
+              onMapPress?.();
             } else if (msg.type === 'markerPress' && typeof msg.fieldId === 'string') {
               onMarkerPress?.(msg.fieldId);
             } else if (msg.type === 'markerGroupPress' && Array.isArray(msg.groupIds)) {

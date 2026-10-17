@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KakaoMapWebView, type KakaoMapHandle, type KakaoMapMarker } from '@/components/KakaoMapWebView';
 import { FieldSearchRow } from '@/components/fields/SearchRows';
+import { MapPickCard } from '@/components/fields/MapPickCard';
 import { ErrorState } from '@/components/ErrorState';
 import { useSharedMapSettings } from '@/components/map/useSharedMapSettings';
 import { goToTabRoot } from '@/components/shell/tabNav';
@@ -101,6 +102,8 @@ export default function TripPrepScreen() {
   const [myLoc, setMyLoc] = useState<LatLng | null>(null);
   const [reordering, setReordering] = useState(false);
   const [starting, setStarting] = useState(false);
+  // 지도에서 누른 현장(4-3 '선택한 현장' 카드). 담은 핀·안 담은 핀 모두.
+  const [pickedId, setPickedId] = useState<string | null>(null);
 
   useEffect(() => {
     // 담은 목록은 저장본을 다 읽은 뒤에 보인다 — 읽기 전에 그리면 빈 목록(6-1)이 잠깐 보인다.
@@ -144,9 +147,22 @@ export default function TripPrepScreen() {
   const { filterFields } = settings;
 
   const markers = useMemo<KakaoMapMarker[]>(() => {
-    const bg: KakaoMapMarker[] = filterFields(myFields.filter((f) => !selectedSet.has(f.id) && hasCoords(f))).map((f) => {
+    const notAdded = myFields.filter((f) => !selectedSet.has(f.id) && hasCoords(f));
+    const shown = filterFields(notAdded);
+    // 카드로 고른 현장은 지도 필터에 걸려도 핀을 남긴다(카드에서 뺀 직후 등).
+    const picked = pickedId && !shown.some((f) => f.id === pickedId) ? notAdded.find((f) => f.id === pickedId) : undefined;
+    const bg: KakaoMapMarker[] = (picked ? [...shown, picked] : shown).map((f) => {
       const kind = fieldActionStatus(f);
-      return { id: f.id, lat: f.latitude, lng: f.longitude, label: fieldTitle(f), sublabel: districtOf(f.address), color: STATUS_PIN_COLOR[kind], pin: kind };
+      return {
+        id: f.id,
+        lat: f.latitude,
+        lng: f.longitude,
+        label: fieldTitle(f),
+        sublabel: districtOf(f.address),
+        color: STATUS_PIN_COLOR[kind],
+        pin: kind,
+        selected: f.id === pickedId,
+      };
     });
     const mine: KakaoMapMarker[] = selected.filter(hasCoords).map((f, i) => {
       const kind = fieldActionStatus(f);
@@ -159,13 +175,14 @@ export default function TripPrepScreen() {
         pin: kind,
         order: i + 1,
         // 첫 목적지가 다음에 갈 곳 — 크게(Figma 6 의 1번 핀 38×52, 바닥 타원 없음) + 이름표.
-        selected: i === 0,
+        // 지도에서 누른 목적지는 선택 핀(sm)으로 키운다.
+        selected: i === 0 || f.id === pickedId,
         selectedSize: i === 0 ? 'next' : undefined,
         nameTag: i === 0 ? fieldTitle(f) : undefined,
       };
     });
     return [...bg, ...mine];
-  }, [myFields, selected, selectedSet, filterFields]);
+  }, [myFields, selected, selectedSet, filterFields, pickedId]);
 
   const paths = useMemo(() => {
     const pts = [
@@ -187,9 +204,20 @@ export default function TripPrepScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [fitKey, containerH, winW, insets.top],
   );
+  // 카드에서 목적지를 뺀 직후에는 다시 맞추지 않는다 — 맞추면 카드가 가리키는 핀이 화면 밖으로 나갈 수 있다.
+  // 지도는 center 가 바뀌어도 옮겨 가니, 그때는 지난 구도를 그대로 넘긴다(맞춤 조건이 바뀔 때만 정한다).
+  const skipFitRef = useRef(false);
+  const fitSig = `${fitKey}|${containerH}|${winW}|${insets.top}`;
+  const appliedRef = useRef<{ sig: string; view: typeof view }>({ sig: '', view: null });
+  if (appliedRef.current.sig !== fitSig) {
+    const keep = skipFitRef.current && appliedRef.current.view;
+    appliedRef.current = { sig: fitSig, view: keep ? appliedRef.current.view : view };
+    skipFitRef.current = false;
+  }
+  const mapView = appliedRef.current.view;
   useEffect(() => {
-    if (view) mapRef.current?.setView(view);
-  }, [view]);
+    if (mapView) mapRef.current?.setView(mapView);
+  }, [mapView]);
 
   const distanceM = useCallback(
     (a: LatLng | null, f: Field) => (a && hasCoords(f) ? haversineKm(a, { lat: f.latitude, lng: f.longitude }) * 1000 : null),
@@ -243,6 +271,13 @@ export default function TripPrepScreen() {
       ? Math.max(SHEET_COLLAPSED + 1, containerH - (insets.top + space[8] + HEADER_H + space[8]))
       : null;
   const snapPoints = useMemo(() => (maxSheet ? [SHEET_COLLAPSED, maxSheet] : [SHEET_COLLAPSED]), [maxSheet]);
+  // === 지도 핀 → 선택 카드(4-3 과 같은 카드·문구) ===
+  const onMarkerPress = useCallback((id: string) => setPickedId(id), []);
+  const closeCard = useCallback(() => setPickedId(null), []);
+  const pickedField = pickedId ? fieldById.get(pickedId) ?? null : null;
+  const pickedAdded = pickedField ? selectedSet.has(pickedField.id) : false;
+  const pickedDist = pickedField ? distanceM(myLoc, pickedField) : null;
+
   // 현장 목록을 못 받았으면 담은 id 수로 센다(목록이 비어 보여도 [모두 빼기]로 비울 수 있게).
   const count = listError && prepHydrated ? prepIds.length : selected.length;
 
@@ -252,10 +287,12 @@ export default function TripPrepScreen() {
         ref={mapRef}
         markers={markers}
         paths={paths}
-        center={view ? { lat: view.lat, lng: view.lng } : undefined}
-        initialLevel={view?.level ?? 5}
+        center={mapView ? { lat: mapView.lat, lng: mapView.lng } : undefined}
+        initialLevel={mapView?.level ?? 5}
         myLocation={myLoc}
         baseMapType={settings.baseMapType}
+        onMarkerPress={onMarkerPress}
+        onMapPress={closeCard}
       />
 
       <View style={[styles.header, { top: insets.top + space[8] }]} pointerEvents="box-none">
@@ -269,12 +306,32 @@ export default function TripPrepScreen() {
         <MapButton icon="layers" size={52} dot={settings.changed} accessibilityLabel="지도 설정" onPress={settings.openSettings} />
       </View>
 
-      <MapButton
-        icon="locate"
-        accessibilityLabel="내 위치"
-        onPress={() => (view ? mapRef.current?.setView(view) : mapRef.current?.recenter(myLoc ?? undefined))}
-        style={[styles.locate, { bottom: SHEET_COLLAPSED + space[16] }]}
-      />
+      <View style={[styles.pickArea, { bottom: SHEET_COLLAPSED + space[8] }]} pointerEvents="box-none">
+        <MapButton
+          icon="locate"
+          accessibilityLabel="내 위치"
+          onPress={() => (view ? mapRef.current?.setView(view) : mapRef.current?.recenter(myLoc ?? undefined))}
+          style={[styles.locate, !pickedField && styles.locateAlone]}
+        />
+        {pickedField ? (
+          <MapPickCard
+            label="선택한 현장"
+            title={fieldTitle(pickedField)}
+            meta={[STATUS_LABEL[fieldActionStatus(pickedField)], pickedDist != null ? `현 위치에서 ${formatDistanceM(pickedDist)}` : null]
+              .filter(Boolean)
+              .join(' · ')}
+            added={pickedAdded}
+            onOpen={() => router.push({ pathname: '/(tabs)/trips/fields/[id]', params: { id: pickedField.id } } as never)}
+            onToggle={() => {
+              if (pickedAdded) {
+                skipFitRef.current = true;
+                prep().remove(pickedField.id);
+              } else prep().add([pickedField.id]);
+            }}
+            onClose={closeCard}
+          />
+        ) : null}
+      </View>
 
       {maxSheet ? (
         <BottomSheet
@@ -286,6 +343,10 @@ export default function TripPrepScreen() {
           handleComponent={SheetHandleSlot}
           backgroundStyle={styles.sheetBg}
           style={styles.sheetShadow}
+          // 시트를 올리면 카드가 시트 뒤로 가려지니 닫는다.
+          onChange={(i) => {
+            if (i > 0) closeCard();
+          }}
         >
           {/* 명시적 height — gorhom 콘텐츠 높이 미적용(Fabric+reanimated 4) 우회(MapSheetLayout 주석). */}
           <View style={{ height: maxSheet - SHEET_HANDLE_H }}>
@@ -459,7 +520,10 @@ const styles = StyleSheet.create({
     gap: space[8],
   },
   search: { flex: 1 },
-  locate: { position: 'absolute', right: space[16] },
+  // 카드가 없으면 내 위치 버튼은 시트 위 16, 있으면 카드 위 12. 오른쪽은 둘 다 16.
+  pickArea: { position: 'absolute', left: space[12], right: space[12], alignItems: 'flex-end', gap: space[12] },
+  locate: { marginRight: space[4] },
+  locateAlone: { marginBottom: space[8] },
   sheetBg: {
     backgroundColor: c2.bg.canvas,
     borderTopLeftRadius: radius2['2xl'],
