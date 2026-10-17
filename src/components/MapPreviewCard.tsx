@@ -43,7 +43,6 @@ export function MapPreviewCard({
   accessibilityLabel = '위치 지도 크게 보기',
   style,
 }: Props) {
-  // 선택 핀 크기는 카드 높이로 정해진다: 132(현장 상세) = lg 1.44배, 120(체크인) = sm 1.19배.
   const nearMe = useMemo(
     () =>
       myLocation && markers.some((m) => haversineKm(myLocation, { lat: m.lat, lng: m.lng }) * 1000 <= MY_LOCATION_NEAR_M)
@@ -52,15 +51,11 @@ export function MapPreviewCard({
     [myLocation, markers],
   );
   const fitExtra = useMemo(() => (nearMe ? [nearMe] : undefined), [nearMe]);
-  const sized = useMemo(
-    () => markers.map((m) => (m.selected && !m.selectedSize ? { ...m, selectedSize: height === 132 ? ('lg' as const) : ('sm' as const) } : m)),
-    [markers, height],
-  );
   return (
     <View style={[styles.card, { height }, style]}>
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
         <KakaoMapWebView
-          markers={sized}
+          markers={markers}
           circle={circle}
           paths={paths}
           startPoint={startPoint}
@@ -69,6 +64,8 @@ export function MapPreviewCard({
           interactive={false}
           fitToMarkers
           hideScale
+          // 카드는 작은 핀(선택 확대 없음)으로, 현장이 골목까지 보이게 가장 가까이 맞춘다(사용자 피드백: 핀이 크고 너무 멀다).
+          compactPins
         />
       </View>
       <Touchable

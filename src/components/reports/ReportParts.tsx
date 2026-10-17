@@ -8,6 +8,7 @@ import { Text } from '@/components/ui/Text';
 import { useFieldStore } from '@/stores/fieldStore';
 import { fieldActionStatus } from '@/utils/fieldStatus';
 import type { OverviewMapView } from '@/utils/overviewMapView';
+import { CARD_FIT_PADDING } from '@/utils/cardMapFit';
 import { c2, radius2, space } from '@/theme/v2';
 import type { Field, FieldReport, FieldStatus } from '@/types/entities';
 
@@ -32,11 +33,11 @@ export const SLOT_CAPTION = {
 
 /**
  * 보고서 위치도 카드(Figma 9-2·9-3 Map 350×152 = 화면 폭 − 좌우 20). 9-7 구도 틀도 이 크기로 그린다 — 캡처가 이 카드를 찍는다.
- * 자동 맞춤 여백도 9-7 과 같이 쓴다(위 48: 핀이 좌표 위로 44 솟는다).
+ * 자동 맞춤 여백·작은 핀도 9-7 과 같이 쓴다(정적 카드 규칙 utils/cardMapFit — 9-7 의 처음 구도가 카드 자동 구도와 같아야 한다).
  */
 export const OVERVIEW_MAP_HEIGHT = 152;
 export const OVERVIEW_MAP_SIDE = 20;
-export const OVERVIEW_FIT_PADDING: [number, number, number, number] = [48, 24, 12, 24];
+export const OVERVIEW_FIT_PADDING: [number, number, number, number] = CARD_FIT_PADDING;
 
 
 const hasCoord = (f: Field | undefined): f is Field => !!f && !(f.latitude === 0 && f.longitude === 0);
@@ -130,6 +131,7 @@ export function ReportOverviewMap({
           interactive={false}
           fitToMarkers={!view}
           fitPadding={OVERVIEW_FIT_PADDING}
+          compactPins
           holdCenterOnResize
           center={view ? { lat: view.lat, lng: view.lng } : undefined}
           initialLevel={view?.level}

@@ -114,6 +114,8 @@ export default function ReportOverviewScreen() {
             fitToMarkers={mountView === null}
             // 자동 맞춤은 틀 안에서 카드와 같은 여백으로.
             fitPadding={[frameTop + pt, OVERVIEW_MAP_SIDE + pr, frameBottom + pb, OVERVIEW_MAP_SIDE + pl]}
+            // 틀 안이 카드 그대로 보이게 핀·맞춤도 카드 규칙(작은 핀, 가장 가까운 레벨).
+            compactPins
             center={mountView ? { lat: mountView.lat, lng: mountView.lng } : undefined}
             initialLevel={mountView?.level}
             holdCenterOnResize

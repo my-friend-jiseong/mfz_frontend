@@ -22,6 +22,7 @@ const HEAT_RADIUS_BY_LEVEL_JSON = JSON.stringify(
   ),
 );
 import { HEATMAP_JS_SOURCE } from '@/assets/heatmapLib';
+import { CARD_DOT_PAD, CARD_FIT_PADDING, CARD_MIN_LEVEL, CARD_PIN_SCALE } from '@/utils/cardMapFit';
 import {
   PIN_TEMPLATES,
   PIN_TIP_Y_RATIO,
@@ -72,6 +73,8 @@ interface MapHtmlOptions {
   interactive?: boolean;
   // true 면 카카오 축척 막대를 숨긴다(정적 지도 카드 MapPreviewCard 전용 — 보고서 위치도는 축척을 남긴다).
   hideScale?: boolean;
+  // 정적 지도 카드 전용 — 핀 0.75배·선택 확대 없음, 가장 가까운 레벨로 맞춤(KakaoMapWebView compactPins, utils/cardMapFit).
+  compactPins?: boolean;
 }
 
 export function buildKakaoMapHtml({
@@ -82,6 +85,7 @@ export function buildKakaoMapHtml({
   fitToMarkers = false,
   interactive = true,
   hideScale = false,
+  compactPins = false,
 }: MapHtmlOptions): string {
   // RN WebView와 웹 iframe 양쪽에서 메시지 전송 가능한 브리지 스크립트
   const postMsgFn = `function postMsg(msg){var s=JSON.stringify(msg);if(window.ReactNativeWebView){window.ReactNativeWebView.postMessage(s);}else if(window.parent&&window.parent!==window){window.parent.postMessage(s,'*');}}`;
@@ -162,6 +166,7 @@ MARKERS.forEach(function(m){
   var FIT_PADDING = null; // [위,오른쪽,아래,왼쪽] — __mfzSetFitPadding 으로 주입(3-8 경로 순서 카드 높이)
   var INTERACTIVE = ${interactive ? 'true' : 'false'};
   var HIDE_SCALE = ${hideScale ? 'true' : 'false'};
+  var COMPACT = ${compactPins ? 'true' : 'false'};
   ${postMsgFn}
   // 조작 불가 지도(interactive=false, 예: 보고서 상세 위치도)는 신호를 보내지 않는다 —
   // 끌 수 없는 지도 때문에 부모 스크롤이 잠기면 손해만 남는다.
@@ -252,7 +257,7 @@ MARKERS.forEach(function(m){
     }
     function pinHtml(m){
       var hasN = typeof m.order === 'number';
-      var sel = m.selected ? (m.selectedSize || 'sm') : '0';
+      var sel = m.selected && !COMPACT ? (m.selectedSize || 'sm') : '0';
       var t = PIN_TPL[m.pin + '|' + (hasN ? 1 : 0) + '|' + sel] || PIN_TPL['pending|0|0'];
       if (hasN) t = t.replace('__N__', String(m.order));
       if (m.nameTag) {
@@ -485,6 +490,8 @@ MARKERS.forEach(function(m){
       // 순번·선택 핀(외근 목적지·체크인 위치)은 하나하나가 의미라 묶지 않고 그 위에 그린다.
       var legacy = [];
       var loose = [];
+      // 카드 핀은 0.75배, 넓은 줌에서는 전체 지도처럼 더 줄인다(0.6).
+      var cardScale = Math.min(${CARD_PIN_SCALE}, pinScaleForLevel(map.getLevel()));
       function addPin(m, html, zIndex, onClick){
         var content = document.createElement('div');
         content.innerHTML = html;
@@ -503,10 +510,10 @@ MARKERS.forEach(function(m){
         if (!pm.pin) { legacy.push(pm); continue; }
         if (isClusterablePin(pm)) { loose.push(pm); continue; }
         (function(m){
-          addPin(m, pinHtml(m), m.selected ? 5 : 4, function(){ postMsg({ type: 'markerPress', fieldId: m.id }); });
+          addPin(m, COMPACT && m.pin !== 'group' ? wrapPin(pinHtml(m), cardScale, 1) : pinHtml(m), m.selected ? 5 : 4, function(){ postMsg({ type: 'markerPress', fieldId: m.id }); });
         })(pm);
       }
-      var scale = pinScaleForLevel(map.getLevel());
+      var scale = COMPACT ? cardScale : pinScaleForLevel(map.getLevel());
       // 급한 상태가 앞에 오게 — 묶음의 대표(첫 핀)가 조치 전 > 조치 중 > 조치 완료 순. 같은 순위는 원래 순서.
       var byPriority = loose.map(function(m, i){ return { m: m, i: i }; }).sort(function(a, b){
         return (PIN_PRIORITY[a.m.pin] - PIN_PRIORITY[b.m.pin]) || (a.i - b.i);
@@ -568,6 +575,7 @@ MARKERS.forEach(function(m){
     function fitBounds(){
       if (!FIT_TO_MARKERS || MARKERS.length === 0) return;
       var pts = MARKERS.concat(FIT_EXTRA);
+      if (COMPACT) { fitTight(CIRCLE ? pts.concat(circleExtremes(CIRCLE)) : pts); return; }
       if (pts.length === 1) {
         map.setCenter(new kakao.maps.LatLng(pts[0].lat, pts[0].lng));
         map.setLevel(5);
@@ -580,6 +588,41 @@ MARKERS.forEach(function(m){
       if (FIT_PADDING) map.setBounds(bounds, FIT_PADDING[0], FIT_PADDING[1], FIT_PADDING[2], FIT_PADDING[3]);
       else if (window.innerHeight > 0 && window.innerHeight < 200) map.setBounds(bounds, 48, 24, 12, 24);
       else map.setBounds(bounds, 40, 40, 56, 40);
+    }
+
+    // 정적 카드 맞춤 — utils/cardMapFit(closestFitLevel·circleExtremes)·웹 fitTight 와 같은 규칙.
+    function circleExtremes(c){
+      var dLat = c.radius / 111320;
+      var dLng = c.radius / (111320 * Math.cos(c.lat * Math.PI / 180));
+      return [{lat:c.lat+dLat,lng:c.lng},{lat:c.lat-dLat,lng:c.lng},{lat:c.lat,lng:c.lng+dLng},{lat:c.lat,lng:c.lng-dLng}];
+    }
+    function fitTight(pts){
+      var w = window.innerWidth, h = window.innerHeight;
+      var p = (FIT_PADDING || ${JSON.stringify(CARD_FIT_PADDING)}).slice();
+      if (FIT_EXTRA.length) p[2] = Math.max(p[2], ${CARD_DOT_PAD});
+      var boxW = w - p[1] - p[3], boxH = h - p[0] - p[2];
+      if (boxW <= 0 || boxH <= 0) return;
+      var la0 = Infinity, la1 = -Infinity, ln0 = Infinity, ln1 = -Infinity;
+      pts.forEach(function(q){ la0 = Math.min(la0, q.lat); la1 = Math.max(la1, q.lat); ln0 = Math.min(ln0, q.lng); ln1 = Math.max(ln1, q.lng); });
+      map.setCenter(new kakao.maps.LatLng((la0 + la1) / 2, (ln0 + ln1) / 2));
+      function extent(){
+        var proj = map.getProjection();
+        var e = { x0: Infinity, x1: -Infinity, y0: Infinity, y1: -Infinity };
+        pts.forEach(function(q){
+          var c = proj.containerPointFromCoords(new kakao.maps.LatLng(q.lat, q.lng));
+          e.x0 = Math.min(e.x0, c.x); e.x1 = Math.max(e.x1, c.x); e.y0 = Math.min(e.y0, c.y); e.y1 = Math.max(e.y1, c.y);
+        });
+        return e;
+      }
+      var e0 = extent(), cur = map.getLevel(), level = 14;
+      for (var L = ${CARD_MIN_LEVEL}; L < 14; L++) {
+        var f = Math.pow(2, cur - L);
+        if ((e0.x1 - e0.x0) * f <= boxW && (e0.y1 - e0.y0) * f <= boxH) { level = L; break; }
+      }
+      map.setLevel(level);
+      var e = extent();
+      var dx = (e.x0 + e.x1) / 2 - (p[3] + boxW / 2), dy = (e.y0 + e.y1) / 2 - (p[0] + boxH / 2);
+      map.setCenter(map.getProjection().coordsFromContainerPoint(new kakao.maps.Point(w / 2 + dx, h / 2 + dy)));
     }
 
     function applyData(){
@@ -672,8 +715,11 @@ MARKERS.forEach(function(m){
 
     // === 2차: GPS 오차 원(8-12) · 경로선 여러 개(3-8·7-9) · 출발 위치(3-8) ===
     var circleOv = null;
+    var CIRCLE = null; // 카드 맞춤에 넣는다(COMPACT)
     window.__mfzSetCircle = function(c){
       if (circleOv) { circleOv.setMap(null); circleOv = null; }
+      CIRCLE = c || null;
+      if (COMPACT) fitBounds();
       if (!c) return;
       var opt = c.tone === 'brand' ? ${JSON.stringify(ACCURACY_CIRCLE_STYLE_BRAND)} : ${JSON.stringify(ACCURACY_CIRCLE_STYLE)};
       opt.center = new kakao.maps.LatLng(c.lat, c.lng);

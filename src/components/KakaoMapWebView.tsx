@@ -61,7 +61,7 @@ export interface KakaoMapMarker {
    * order 가 있으면 순번 핀, selected 면 1.19배 + 바닥 타원. color 는 무시된다(종류가 색을 정한다).
    */
   pin?: MapPinKind;
-  /** 선택된 핀 크기. sm 1.19배(기본·체크인 카드), lg 1.44배(현장 상세 카드), next 1.19배 타원 없음(6·7 다음 목적지). */
+  /** 선택된 핀 크기. sm 1.19배(기본), lg 1.44배, next 1.19배 타원 없음(6·7 다음 목적지). 정적 카드(compactPins)는 무시한다. */
   selectedSize?: PinSelectedSize;
   /** 핀 아래 이름표(6·7 다음 목적지). */
   nameTag?: string;
@@ -102,6 +102,9 @@ interface Props {
   fitPadding?: [number, number, number, number];
   // 카카오 축척 막대 숨김(정적 지도 카드 MapPreviewCard 전용). 로고는 남는다.
   hideScale?: boolean;
+  // 정적 지도 카드(3·5·8 MapPreviewCard, 9 보고서 위치도·9-7) 전용: 핀 0.75배·선택 확대 없음, fitToMarkers 는
+  // 점(+fitExtra·오차 원)이 여백 안에 들어가는 가장 가까운 레벨로 맞춘다(utils/cardMapFit). 전체 지도는 쓰지 않는다.
+  compactPins?: boolean;
   // false 면 드래그/줌 비활성 — BottomSheet 안 등 pan 충돌 회피용 정적 위치도.
   interactive?: boolean;
   onMarkerPress?: (fieldId: string) => void;
@@ -145,6 +148,7 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
       fitExtra,
       fitPadding,
       hideScale = false,
+      compactPins = false,
       interactive = true,
       onMarkerPress,
       onLongPress,
@@ -221,8 +225,9 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
         fitToMarkers,
         interactive,
         hideScale,
+        compactPins,
       }),
-    [kakaoJsKey, fitToMarkers, interactive, hideScale],
+    [kakaoJsKey, fitToMarkers, interactive, hideScale, compactPins],
   );
 
   // html 이 바뀌면(키/interactive/fitToMarkers) WebView 가 리로드되므로 ready 를 내려, 새 문서에 재주입.

@@ -37,6 +37,7 @@ import {
   type MapPinKind,
   type PinSelectedSize,
 } from '@/assets/mapPins';
+import { CARD_DOT_PAD, CARD_FIT_PADDING, CARD_PIN_SCALE, circleExtremes, closestFitLevel } from '@/utils/cardMapFit';
 
 export type { MapPath, MapPinKind, PinSelectedSize };
 
@@ -223,6 +224,9 @@ interface Props {
   fitPadding?: [number, number, number, number];
   // 카카오 축척 막대 숨김(정적 지도 카드 MapPreviewCard 전용). 로고는 남는다.
   hideScale?: boolean;
+  // 정적 지도 카드(3·5·8 MapPreviewCard, 9 보고서 위치도·9-7) 전용: 핀 0.75배·선택 확대 없음, fitToMarkers 는
+  // 점(+fitExtra·오차 원)이 여백 안에 들어가는 가장 가까운 레벨로 맞춘다(utils/cardMapFit). 전체 지도는 쓰지 않는다.
+  compactPins?: boolean;
   // false 면 드래그/줌 비활성 — BottomSheet 안 등 pan 충돌 회피용 정적 위치도.
   interactive?: boolean;
   onMarkerPress?: (fieldId: string) => void;
@@ -414,6 +418,7 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
       fitExtra,
       fitPadding,
       hideScale = false,
+      compactPins = false,
       interactive = true,
       onMarkerPress,
       onLongPress,
@@ -549,6 +554,10 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
     const k = getKakao();
     if (!k) return;
     const pts: { lat: number; lng: number }[] = [...markers, ...(fitExtra ?? [])];
+    if (compactPins) {
+      fitTight(mapRef.current, k, circle ? [...pts, ...circleExtremes(circle)] : pts);
+      return;
+    }
     if (pts.length === 1) {
       mapRef.current.setCenter(new k.maps.LatLng(pts[0].lat, pts[0].lng));
       mapRef.current.setLevel(5);
@@ -563,12 +572,40 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
     else if (h > 0 && h < 200) mapRef.current.setBounds(bounds, 48, 24, 12, 24);
     else mapRef.current.setBounds(bounds, 40, 40, 56, 40);
   };
+  // 정적 카드 맞춤: 가운데로 옮겨 지금 레벨에서 점들의 화면 폭을 재고, 여백 안에 들어가는 가장 가까운 레벨로 바꾼 뒤
+  // 점들의 화면 범위 가운데가 여백 안쪽 가운데에 오게 중심을 옮긴다.
+  const fitTight = (map: KakaoMap, k: KakaoGlobal, pts: { lat: number; lng: number }[]) => {
+    const el = containerRef.current;
+    const w = el?.clientWidth ?? 0;
+    const h = el?.clientHeight ?? 0;
+    const [pt, pr, pb0, pl] = fitPadding ?? CARD_FIT_PADDING;
+    const pb = fitExtra?.length ? Math.max(pb0, CARD_DOT_PAD) : pb0;
+    const boxW = w - pl - pr;
+    const boxH = h - pt - pb;
+    if (boxW <= 0 || boxH <= 0) return; // 아직 레이아웃 전 — 크기가 잡히면 ResizeObserver 가 다시 부른다
+    const lats = pts.map((p) => p.lat);
+    const lngs = pts.map((p) => p.lng);
+    map.setCenter(new k.maps.LatLng((Math.min(...lats) + Math.max(...lats)) / 2, (Math.min(...lngs) + Math.max(...lngs)) / 2));
+    const extent = () => {
+      const proj = map.getProjection();
+      const xy = pts.map((p) => proj.containerPointFromCoords(new k.maps.LatLng(p.lat, p.lng)));
+      const xs = xy.map((q) => q.x);
+      const ys = xy.map((q) => q.y);
+      return { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
+    };
+    const e0 = extent();
+    map.setLevel(closestFitLevel(e0.x1 - e0.x0, e0.y1 - e0.y0, map.getLevel(), boxW, boxH));
+    const e = extent();
+    const dx = (e.x0 + e.x1) / 2 - (pl + boxW / 2);
+    const dy = (e.y0 + e.y1) / 2 - (pt + boxH / 2);
+    map.setCenter(map.getProjection().coordsFromContainerPoint(new k.maps.Point(w / 2 + dx, h / 2 + dy)));
+  };
   useEffect(() => {
     if (!ready) return;
     fitRef.current();
     // eslint-disable-next-line react-hooks/exhaustive-deps
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, markers, fitToMarkers, fitPadding?.join(','), JSON.stringify(fitExtra ?? [])]);
+  }, [ready, markers, fitToMarkers, fitPadding?.join(','), JSON.stringify(fitExtra ?? []), compactPins && circle ? `${circle.lat},${circle.lng},${circle.radius}` : '']);
 
   // 컨테이너 크기가 바뀌면(첫 레이아웃이 지도 생성보다 늦은 작은 카드 등) 카카오 지도는 스스로 다시 재지
   // 않아 중심이 어긋난다(MapPreviewCard 에서 핀이 카드 아래로 밀려 실측). relayout 후 다시 맞춘다.
@@ -925,6 +962,8 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
       // 순번·선택 핀은 하나하나가 의미라 묶지 않고 그 위에 그린다(네이티브 renderMarkers 와 같은 규칙).
       const legacy: KakaoMapMarker[] = [];
       const loose: KakaoMapMarker[] = [];
+      // 카드 핀은 0.75배, 넓은 줌에서는 전체 지도처럼 더 줄인다(0.6).
+      const cardScale = Math.min(CARD_PIN_SCALE, pinScaleForLevel(map.getLevel()));
       const addPin = (m: KakaoMapMarker, html: string, zIndex: number, onClick: () => void) => {
         const content = document.createElement('div');
         content.innerHTML = html;
@@ -946,12 +985,14 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
         else
           addPin(
             m,
-            buildPinHtml(m.pin, m.order ?? null, m.selected ? m.selectedSize ?? 'sm' : null, m.nameTag ?? null),
+            compactPins && m.pin !== 'group'
+              ? wrapPinHtml(buildPinHtml(m.pin, m.order ?? null, null, m.nameTag ?? null), cardScale, 1)
+              : buildPinHtml(m.pin, m.order ?? null, m.selected ? m.selectedSize ?? 'sm' : null, m.nameTag ?? null),
             m.selected ? 5 : 4,
             () => onMarkerPress?.(m.id),
           );
       });
-      const scale = pinScaleForLevel(map.getLevel());
+      const scale = compactPins ? cardScale : pinScaleForLevel(map.getLevel());
       // 급한 상태가 앞에 오게 — 묶음의 대표(첫 핀)가 조치 전 > 조치 중 > 조치 완료 순.
       const byPriority = [...loose].sort(
         (a, b) => (CLUSTER_PIN_PRIORITY[a.pin!] ?? 9) - (CLUSTER_PIN_PRIORITY[b.pin!] ?? 9),
@@ -1008,7 +1049,7 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
     return () => {
       k.maps.event.removeListener(map, 'zoom_changed', render);
     };
-  }, [markers, ready, onMarkerPress, displayMode]);
+  }, [markers, ready, onMarkerPress, displayMode, compactPins]);
 
   // 히트맵 인스턴스 1회 생성 + pan/zoom redraw 리스너. redraw 클로저는 ref 로 최신 모드/점을 읽는다.
   useEffect(() => {
