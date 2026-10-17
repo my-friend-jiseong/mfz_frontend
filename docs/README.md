@@ -1,46 +1,43 @@
-# 일가요(mfz) 프런트엔드 문서 인덱스
+# 일가요(mfz) 프런트엔드 문서
 
-> **갱신일**: 2026-07-29
+> **갱신일**: 2026-10-17 — 4분류 체계로 재편. 분류 규칙은 [conventions/documentation.md](conventions/documentation.md).
 
-## 레퍼런스 — `reference/`
+| 폴더 | 담는 것 | 입구 |
+|---|---|---|
+| [`features/`](features/) | 앱을 바꾸는 일. 일 하나 = 폴더 하나 (기획·설계·인수인계·결과) | [기능 목록·작업 순서](features/README.md) · [IA 다이어그램](features/IAD.drawio) |
+| [`conventions/`](conventions/) | 모든 일에 공통으로 적용하는 규칙 | [디자인 시스템](conventions/design-system.md) · [기술 스택](conventions/tech-stack.md) · [문서 규칙](conventions/documentation.md) |
+| [`operations/`](operations/) | 앱 코드를 바꾸지 않는 일 — 백엔드 협업·출시·장애 | 아래 표 |
+| [`deliverables/`](deliverables/) | 외부 사람에게 보여주려고 만든 결과물 — 주간보고·발표·자산 | — |
 
-| 파일 | 내용 |
+## operations
+
+| 위치 | 내용 |
 |---|---|
-| [reference/tech_stack.md](conventions/tech-stack.md) | 기술 스택 정리 (프론트 RN/Expo · 백엔드 Node/Express/Prisma) |
-| [reference/design-system.md](conventions/design-system.md) | 디자인 시스템 단일 진실 출처 — 토큰(`src/theme/`)·공용 컴포넌트(`src/components/ui/`) |
-| [reference/ERD_REVOLUTION.md](operations/backend/archive/erd-v2-changelog-2026-05-20.md) | ERD v2 스키마 단순화 changelog (백엔드 변경 요약) |
-| [reference/in-app-route.md](features/in-app-route/README.md) | 인앱 경로 표시(차량) — 구현 완료 명세, 로드맵 01 에서 이관 |
+| [backend/backend-backlog.md](operations/backend/backend-backlog.md) | **백엔드 요청 활성 큐의 1차 소스.** 상단이 활성 항목, 하단에 종결 이력 |
+| [backend/handoff-2026-10-01-ui-v2.md](operations/backend/handoff-2026-10-01-ui-v2.md) | 현행 전달본 — UI v2 가 드러낸 방문 단위 API + 이월 항목 |
+| [backend/archive/](operations/backend/archive/) | 종결된 전달본·백엔드 결과보고서. [인덱스](operations/backend/archive/README.md) |
+| [backend/ERD.drawio](operations/backend/ERD.drawio) | ERD — **직접 편집 금지.** `node docs/operations/backend/gen-erd.mjs` 로 재생성 (진실 출처: 백엔드 `prisma/schema.prisma`) |
+| [release/store-readiness.md](operations/release/store-readiness.md) | 스토어 출시 준비도 (차단 항목·절차) |
+| [release/REQUIREMENTS_BEFORE_LAUNCHING.md](operations/release/REQUIREMENTS_BEFORE_LAUNCHING.md) | 약관·심사 통과용 추가 개발 권장 기능 |
+| [release/운영-현황-질문지.md](operations/release/운영-현황-질문지.md) | 약관·스토어 문구 ↔ 실제 운영 대조 질문지 (2026-07-29 작성) |
+| [incidents/](operations/incidents/) | 장애 기록 |
+| [admin-dashboard.md](operations/admin-dashboard.md) | 관리자 웹은 별도 프로젝트(mfz_admin)로 분리됨 |
 
-## 다이어그램 — `diagram/`
+> 스토어 심사·데모 계정과 시드 명령은 **`docs/tmp/README.md`** 에 있다. 이 저장소는 공개라
+> 비밀번호를 추적 문서에 옮기지 않는다 (`docs/tmp/` 는 `.gitignore` 대상).
 
-| 파일 | 내용 |
-|---|---|
-| [diagram/ERD.drawio](operations/backend/ERD.drawio) | ERD 다이어그램 (drawio) — 현 DB 상태. **직접 편집하지 말 것**, 아래 생성기로 재생성 |
-| [diagram/gen-erd.mjs](operations/backend/gen-erd.mjs) | ERD 재생성기 — `node docs/operations/backend/gen-erd.mjs`. 진실 출처는 백엔드 `prisma/schema.prisma`(dump: 백엔드 `docs/db-schema.md`). 겹침·앵커·관통 자가검증 포함 |
-| [diagram/IAD.drawio](features/IAD.drawio) | IA 다이어그램 (drawio) — 현 프론트 구조 |
+## git 밖 작업 폴더
 
-## 백엔드 협업 — `backend/`
+`docs/tmp/`(발표 준비 작업물)·`docs/presentation/`(데모 녹화 원본)은 `.gitignore` 대상이다.
+**결과물을 여기 두면 정리 때 사라진다** — 남길 것은 `deliverables/` 로 옮긴다.
 
-| 파일 | 내용 |
-|---|---|
-| [backend/backend-backlog.md](operations/backend/backend-backlog.md) | **활성 큐의 1차 소스** — 프런트 측 누적 백엔드 요청. 상단이 활성 항목, 하단에 종결 이력·아카이브 |
-| [backend/handoff-2026-10-01-ui-v2.md](operations/backend/handoff-2026-10-01-ui-v2.md) | **현행 전달본** — UI v2 개편이 드러낸 방문 단위 API(§35·§36·§40 등) + 이월 항목(§34 TLS·§30-B 약관·§31-B Word). 백로그에서 넘길 것만 뽑은 문서 |
-| [backend/archive/](operations/backend/archive/) | 종결 문서 — 이전 전달본 3건 + 백엔드 결과보고서 5건. [인덱스](operations/backend/archive/README.md) 참조 |
+## 이전 구조에서 사라진 것
 
-> 백엔드에 넘길 때는 백로그를 통째로 주지 않고 `handoff-*.md` 전달본을 뽑는다.
-> 전달이 끝나면 `archive/` 로 옮기고, 백로그 항목은 「완료 항목(아카이브)」에 한 줄로 압축한다.
+`reference/` · `roadmap/` · `backend/` · `diagram/` · `infra/` · `handoff/` 는 2026-10-17 재편으로 위 4분류에
+흡수됐다. 옛 경로는 `git log --follow -- <새 경로>` 로 추적된다.
 
-## 제거된 디렉터리 (2026-07-29)
+2026-07-29 에 제거한 `docs/qa/` · `docs/report/` · `docs/presentation/*.mjs` 는 git 이력에 남아 있다 —
+`git log --diff-filter=D -- docs/qa` 로 삭제 커밋을 찾고 `git show <commit>^:<경로>` 로 꺼낸다.
 
-`docs/presentation/` · `docs/qa/` · `docs/report/` 를 정리했다. **git 이력에 남아 있으므로
-필요하면 되살릴 수 있다** — `git log --diff-filter=D -- docs/qa` 로 삭제 커밋을 찾고
-`git show <commit>^:<경로>` 로 꺼낸다.
-
-| 있던 것 | 비고 |
-|---|---|
-| `qa/integration-scenario.md` · `qa/verify-report-wizard.mjs` | 통합 시나리오·보고서 마법사 회귀 검증(Playwright). 루트 [`qa-runner.mjs`](../qa-runner.mjs) 는 **남아 있다** |
-| `presentation/*.mjs` | 데모 시드·화면 캡처·녹화 스크립트 |
-| `report/*.md` | 주간·결과 보고서 초안 |
-
-> ⚠️ `presentation/screenshots/` (스토어 스크린샷 24장) 는 [`.gitignore:20`](../.gitignore) 대상이라
-> **git 이력에도 없다.** 로컬 백업이 없으면 재캡처해야 한다 — [roadmap/00](operations/release/store-readiness.md) 「절차·품질」 참조.
+> ⚠️ 스토어 스크린샷(`presentation/screenshots/`)은 `.gitignore` 대상이라 **git 이력에도 없다.**
+> 로컬 백업이 없으면 재캡처해야 한다 — [release/store-readiness.md](operations/release/store-readiness.md) 「절차·품질」 참조.
