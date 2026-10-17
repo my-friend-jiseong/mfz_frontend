@@ -4,6 +4,7 @@ import { normalizeVisitStatus } from '@/types/entities';
 import { visits as visitsApi, localizeError, ApiError, NetworkError } from '@/api';
 import type { UploadFile } from '@/utils/media';
 import type { VisitPhoto, VisitPhotoPhase } from '@/api';
+import { emitCheckedIn } from './checkInEvents';
 
 // ERD v2: visits 는 체크인 기록(trip·field·시각·status)만. 메모·사진·음성 첨부 제거됨
 // (memos/field_photos 는 현장 전용 — fieldStore.directAttachments 참조).
@@ -139,6 +140,8 @@ export const useVisitStore = create<VisitState>((set, get) => ({
         fieldId: res.fieldId,
         visitedAt: res.visitedAt,
       };
+      // 현장의 recentVisitedAt 갱신(fieldStore). 대기열 재전송도 이 경로를 탄다.
+      emitCheckedIn(res.fieldId ?? fieldId, res.visitedAt);
       // 백엔드 체크인은 멱등이 아니다 — 같은 외근·현장에 다시 보내면 방문이 새로 생긴다
       // (2026-10-17 실측: 두 번 → visitId 2건, visitCount 증가. 예전 '재진입 3회에도 1건' 실측과 다름).
       // 그래서 결과를 모르는 재전송(대기열·체크인 화면·사진 일괄 등록)은 다시 보내기 전에

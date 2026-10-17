@@ -145,11 +145,12 @@ export function MapSettingsSheet({ open, onClose, sections = 'all', ...p }: Prop
                     <FilterChip2 key={tag} label={tag} selected={p.selectedTags.includes(tag)} onPress={() => p.onToggleTag(tag)} />
                   ))}
                   {tagsOpen ? null : (
-                    <FilterChip2
-                      label={`+${p.availableTags.length - TAG_LIMIT}개 더 보기`}
-                      selected={false}
-                      onPress={() => setTagsExpanded(true)}
-                    />
+                    // 고르는 칩이 아니라 펼치는 버튼 — 선택 상태 없이 칩 모양만 맞춘다.
+                    <Touchable onPress={() => setTagsExpanded(true)} accessibilityRole="button" style={styles.moreChip}>
+                      <Text v2="bodyS.semibold" tone="body">
+                        {`+${p.availableTags.length - TAG_LIMIT}개 더 보기`}
+                      </Text>
+                    </Touchable>
                   )}
                 </View>
               </Section>
@@ -287,6 +288,16 @@ const styles = StyleSheet.create({
   modeOn: { backgroundColor: c2.bg.brandSubtle, borderWidth: 2, borderColor: c2.border.brand },
   modeOff: { borderWidth: 1.5, borderColor: c2.border.default },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space[8] },
+  // FilterChip2 L 의 꺼진 모양과 같게.
+  moreChip: {
+    height: 44,
+    paddingHorizontal: space[16],
+    borderRadius: radius2.full,
+    borderWidth: 1.5,
+    borderColor: c2.border.strong,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   // 최근 방문일 — 값을 보여 주고 누르면 고르기 시트(VisitRangeSheet).
   rangeRow: {
     minHeight: 48,

@@ -3,6 +3,7 @@ import type { Field, FieldStatus } from '@/types/entities';
 import { fields as fieldsApi, ApiError, localizeError } from '@/api';
 import { useVisitStore } from './visitStore';
 import { useAuthStore } from './authStore';
+import { clearCheckIns, laterIso, latestCheckIn, onCheckedIn } from './checkInEvents';
 import type {
   CreateFieldBody,
   UpdateFieldBody,
@@ -119,7 +120,13 @@ export const useFieldStore = create<FieldState>((set, get) => ({
       // listMineAll: 페이지 순회 — 기본 limit(1페이지)만 받으면 21번째+ 현장이
       // 목록·지도·현장 선택에서 통째로 사라진다 (2026-06-05 기기 검증 버그).
       const items = await fieldsApi.listMineAll({ visitDateScope: 'all', ...params });
-      set({ fields: items.map(listItemToField), listStatus: 'ready', listError: null });
+      // 목록이 방금 한 체크인보다 늦게 반영될 수 있어 이 세션의 체크인 시각과 늦은 쪽을 쓴다.
+      const fields = items.map((it) => {
+        const f = listItemToField(it);
+        const mine = latestCheckIn(f.id);
+        return mine ? { ...f, recentVisitedAt: laterIso(f.recentVisitedAt, mine) } : f;
+      });
+      set({ fields, listStatus: 'ready', listError: null });
     } catch (e) {
       // 삼키지 않는다 — __DEV__ 로그만 두면 릴리스에서 실패가 완전히 무음이 되고,
       // fields 가 [] 로 남아 화면은 EmptyState('담당 현장이 없습니다')를 띄운다.
@@ -148,6 +155,7 @@ export const useFieldStore = create<FieldState>((set, get) => ({
         latitude: res.field.lat,
         longitude: res.field.lng,
         categories: res.field.categories ?? res.field.tags ?? body.categories,
+        recentVisitedAt: latestCheckIn(res.field.fieldId),
       };
       set((s) => ({
         fields: [f, ...s.fields.filter((x) => x.id !== f.id)],
@@ -364,16 +372,30 @@ export const useFieldStore = create<FieldState>((set, get) => ({
   },
 
   // 로그아웃 시 호출 — 다음 사용자가 같은 디바이스에서 로그인 시 잔존 차단.
-  clearAll: () =>
+  clearAll: () => {
+    clearCheckIns();
     set({
       fields: [],
       listStatus: 'idle',
       listError: null,
       directAttachments: {},
       busy: false,
-    }),
+    });
+  },
 
   getById: (id) => get().fields.find((f) => f.id === id),
 
   byUser: (userId) => get().fields.filter((f) => f.userId === userId),
 }));
+
+// 체크인 성공 → 그 현장의 최근 방문 시각을 바로 고친다(1-3 '최근 방문일' 필터가 목록 새로 받기를 기다리지 않게).
+onCheckedIn((fieldId, visitedAt) => {
+  useFieldStore.setState((s) => {
+    if (!s.fields.some((f) => f.id === fieldId)) return s;
+    return {
+      fields: s.fields.map((f) =>
+        f.id === fieldId ? { ...f, recentVisitedAt: laterIso(f.recentVisitedAt, visitedAt) } : f,
+      ),
+    };
+  });
+});

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { AccessibilityInfo, StyleSheet, View } from 'react-native';
 import { AppSheet } from '@/components/ui/AppSheet';
 import { Button2 } from '@/components/ui/Button2';
 import { FilterChip2 } from '@/components/ui/FilterChip2';
@@ -7,6 +7,7 @@ import { Text } from '@/components/ui/Text';
 import { Touchable } from '@/components/ui/Touchable';
 import { Icon } from '@/components/icons';
 import { ALL_RANGE, RANGE_PRESETS, parseYmd, rangeBounds, toYmd, type VisitRange } from '@/utils/visitRange';
+import { useToday } from '@/utils/useToday';
 import { c2, radius2, space } from '@/theme/v2';
 
 interface Props {
@@ -28,28 +29,30 @@ export function VisitRangeSheet({ open, onClose, value, onApply }: Props) {
   const [draft, setDraft] = useState<VisitRange>(value);
   // 달력에서 시작일만 누른 상태. 다음 탭이 끝날이 된다.
   const [anchor, setAnchor] = useState<string | null>(null);
-  const today = toYmd(new Date());
-  const [month, setMonth] = useState(() => monthOf(today));
+  const today = useToday();
+  const now = parseYmd(today);
+  const [month, setMonth] = useState(() => monthOf(rangeBounds(value)?.to ?? today));
 
-  // 열 때마다 지금 값에서 시작한다.
+  // 닫혀 있는 동안 지금 값으로 맞춰 둔다 — 열 때 바꾸면 여는 애니메이션 도중 내용이 바뀐다(gorhom #2710).
   useEffect(() => {
-    if (!open) return;
+    if (open) return;
     setDraft(value);
     setAnchor(null);
-    setMonth(monthOf(rangeBounds(value)?.to ?? toYmd(new Date())));
-  }, [open, value]);
+    setMonth(monthOf(rangeBounds(value, parseYmd(today))?.to ?? today));
+  }, [open, value, today]);
 
-  const bounds = rangeBounds(draft);
+  const bounds = rangeBounds(draft, now);
   const pickChip = (next: VisitRange) => {
     setDraft(next);
     setAnchor(null);
-    const b = rangeBounds(next);
+    const b = rangeBounds(next, now);
     if (b) setMonth(monthOf(b.to));
   };
   const pickDay = (ymd: string) => {
     if (anchor == null) {
       setAnchor(ymd);
       setDraft({ kind: 'custom', from: ymd, to: ymd });
+      AccessibilityInfo.announceForAccessibility('끝날을 골라 주세요');
       return;
     }
     setDraft(anchor <= ymd ? { kind: 'custom', from: anchor, to: ymd } : { kind: 'custom', from: ymd, to: anchor });
@@ -118,7 +121,10 @@ export function VisitRangeSheet({ open, onClose, value, onApply }: Props) {
               const isTo = !!bounds && ymd === bounds.to;
               const inside = !!bounds && ymd >= bounds.from && ymd <= bounds.to;
               const end = isFrom || isTo;
-              const day = parseYmd(ymd).getDate();
+              const date = parseYmd(ymd);
+              const day = date.getDate();
+              const role = isFrom && isTo ? ', 시작일, 종료일' : isFrom ? ', 시작일' : isTo ? ', 종료일' : '';
+              const a11y = `${date.getFullYear()}년 ${date.getMonth() + 1}월 ${day}일 ${WEEKDAYS[date.getDay()]}요일${ymd === today ? ', 오늘' : ''}${role}`;
               return (
                 <Touchable
                   key={j}
@@ -126,7 +132,7 @@ export function VisitRangeSheet({ open, onClose, value, onApply }: Props) {
                   disabled={future}
                   noAutoHitSlop
                   accessibilityRole="button"
-                  accessibilityLabel={`${month.m + 1}월 ${day}일`}
+                  accessibilityLabel={a11y}
                   accessibilityState={{ disabled: future, selected: inside }}
                   style={styles.cell}
                 >
@@ -165,13 +171,13 @@ function monthOf(ymd: string) {
   return { y: d.getFullYear(), m: d.getMonth() };
 }
 
-/** 일요일 시작 주 단위 칸. 그 달이 아닌 칸은 null. */
+/** 일요일 시작 주 단위 칸. 그 달이 아닌 칸은 null. 늘 6주(42칸) — 달을 넘겨도 시트 높이가 그대로이게. */
 function monthGrid(y: number, m: number): (string | null)[][] {
   const first = new Date(y, m, 1).getDay();
   const days = new Date(y, m + 1, 0).getDate();
   const cells: (string | null)[] = Array.from({ length: first }, () => null);
   for (let d = 1; d <= days; d++) cells.push(toYmd(new Date(y, m, d)));
-  while (cells.length % 7) cells.push(null);
+  while (cells.length < 42) cells.push(null);
   const weeks: (string | null)[][] = [];
   for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
   return weeks;

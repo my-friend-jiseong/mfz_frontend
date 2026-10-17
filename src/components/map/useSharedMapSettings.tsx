@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { MapSettingsSheet } from './MapSettingsSheet';
 import { useMapSettingsStore } from '@/stores/mapSettingsStore';
 import { useCategoryStore } from '@/stores/categoryStore';
-import { filterMapFields, hasMapFilter } from '@/utils/visitRange';
+import { filterMapFields, hasMapFilter, parseYmd } from '@/utils/visitRange';
+import { useToday } from '@/utils/useToday';
 import { mergeCategoryNames } from '@/utils/fieldFacets';
 import type { Field } from '@/types/entities';
 
@@ -26,10 +27,12 @@ export function useSharedMapSettings(backgroundFields: readonly Field[], section
   }, [backgroundFields, masterCategories]);
 
   const { selectedStatuses, visitRange, selectedTags } = s;
+  // 자정이 지나면 '오늘'·'1주' 기준도 넘어가게 의존성에 넣는다.
+  const today = useToday();
   const filterFields = useCallback(
     (list: readonly Field[]): Field[] =>
-      filterMapFields(list, { statuses: selectedStatuses, range: visitRange, tags: selectedTags }),
-    [selectedStatuses, visitRange, selectedTags],
+      filterMapFields(list, { statuses: selectedStatuses, range: visitRange, tags: selectedTags }, parseYmd(today)),
+    [selectedStatuses, visitRange, selectedTags, today],
   );
 
   const visibleCount = useMemo(() => filterFields(backgroundFields).length, [filterFields, backgroundFields]);

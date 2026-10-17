@@ -91,3 +91,11 @@ test('기간·분류는 함께 걸린다', () => {
   assert.deepEqual(ids(filterMapFields(fields, { statuses: [], range: { kind: 'preset', days: 7 }, tags: [] }, NOW)), ['a']);
   assert.deepEqual(ids(filterMapFields(fields, { statuses: [], range: { kind: 'preset', days: 90 }, tags: ['공원'] }, NOW)), ['b']);
 });
+
+test('체크인 시각 합치기: 늦은 쪽, 못 읽는 값은 버린다', async () => {
+  const { laterIso } = await import('../../stores/checkInEvents');
+  assert.equal(laterIso('2026-10-01T00:00:00Z', '2026-10-17T00:00:00Z'), '2026-10-17T00:00:00Z');
+  assert.equal(laterIso('2026-10-17T00:00:00Z', '2026-10-01T00:00:00Z'), '2026-10-17T00:00:00Z');
+  assert.equal(laterIso(null, '2026-10-01T00:00:00Z'), '2026-10-01T00:00:00Z');
+  assert.equal(laterIso('2026-10-01T00:00:00Z', 'bad'), '2026-10-01T00:00:00Z');
+});
