@@ -175,6 +175,9 @@ export async function pickPhotos(limit: number): Promise<ImagePicker.ImagePicker
     mediaTypes: ImagePicker.MediaTypeOptions.Images,
     allowsMultipleSelection: true,
     selectionLimit: limit,
+    // 안드로이드 새 사진 선택기(Google 포토 통합)가 주는 URI 는 권한·원본 요청과 상관없이 GPS 를 지운다(실기기 확인).
+    // 기존 방식(ACTION_GET_CONTENT)은 미디어 URI 를 줘 원본을 읽을 수 있다. 추가 사진 권한(READ_MEDIA_IMAGES)은 필요 없다.
+    legacy: Platform.OS === 'android',
     orderedSelection: true,
     quality: 0.8,
     exif: true,
