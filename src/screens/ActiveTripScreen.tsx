@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AppState, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import Animated, { FadeIn, FadeOut, LinearTransition, useAnimatedStyle, withTiming } from 'react-native-reanimated';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { KakaoMapWebView, type KakaoMapHandle, type KakaoMapMarker, type MapPath } from '@/components/KakaoMapWebView';
 import { Icon } from '@/components/icons';
 import { STATUS_PIN_COLOR } from '@/components/shell/pinColors';
@@ -45,6 +46,11 @@ import { measureForOverlay } from '@/utils/measureForOverlay';
 
 // Figma 7(538:2149): 아래 패널 200(탭 바 위), 지도 버튼은 패널 위 16, 경고 줄(60)이 있으면 그 위로.
 const PANEL_H = 200;
+// 아래로 끌어 접었을 때: 손잡이 + '방문 N · 외근 종료' 줄만(지도를 넓게 본다).
+const PANEL_MIN_H = 72;
+// 패널 끌기 판정 — 이만큼 움직이거나 이 속도로 튕기면 한 단계 옮긴다.
+const SWIPE_PX = 24;
+const SWIPE_V = 500;
 const ROW_H = 60;
 // '도착'으로 보는 거리(7-6). 인수인계 v135·결정: 목적지 100m 안.
 const ARRIVE_M = 100;
@@ -81,7 +87,22 @@ export default function ActiveTrip() {
   const [liveLoc, setLiveLoc] = useState<LatLng | null>(null);
   const [startPoint, setStartPoint] = useState<LatLng | null>(null);
   const [now, setNow] = useState(() => Date.now());
-  const [expanded, setExpanded] = useState(false);
+  // 아래 패널 단계: min(접힘) · normal(기본, Figma 7) · list(목적지 목록 펼침). 손잡이 줄을 끌거나 눌러 옮긴다.
+  const [panelMode, setPanelMode] = useState<'min' | 'normal' | 'list'>('normal');
+  const expanded = panelMode === 'list';
+  const panelH = panelMode === 'min' ? PANEL_MIN_H : PANEL_H;
+  const panelSwipe = useMemo(
+    () =>
+      Gesture.Pan()
+        .runOnJS(true)
+        .activeOffsetY([-10, 10])
+        .failOffsetX([-24, 24])
+        .onEnd((e) => {
+          if (e.translationY < -SWIPE_PX || e.velocityY < -SWIPE_V) setPanelMode((m) => (m === 'min' ? 'normal' : 'list'));
+          else if (e.translationY > SWIPE_PX || e.velocityY > SWIPE_V) setPanelMode((m) => (m === 'list' ? 'normal' : 'min'));
+        }),
+    [],
+  );
   const [menuAnchor, setMenuAnchor] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   // 스낵바(7-6·7-9)가 떠 있는 동안 지도 버튼을 그 위로 올린다(Figma 7-9). 스낵바가 다 사라진 뒤(onHidden)에 내린다.
   const [snackUp, setSnackUp] = useState(false);
@@ -281,7 +302,7 @@ export default function ActiveTrip() {
   const showSnack = (message: string, action: { label: string; onPress: () => void }) => {
     // 탭 바 + 아래 패널 + 16 위(Figma 7-6·7-9 스낵바 484~544). bottomOffset 은 창 safe area 를 뺀 값이고
     // 탭 바 실측 높이(tabBarH)는 safe area 를 포함한다.
-    const bottomOffset = Math.max(0, tabBarH - realInsets.bottom) + PANEL_H + space[16];
+    const bottomOffset = Math.max(0, tabBarH - realInsets.bottom) + panelH + space[16];
     // 이어서 다른 스낵바를 띄우면 앞 스낵바의 onHidden 이 오지만 버튼은 그대로 둔다(순번으로 거른다).
     const seq = ++snackSeq.current;
     setSnackUp(true);
@@ -501,7 +522,7 @@ export default function ActiveTrip() {
       </SafeTop>
 
       {/* 지도 버튼: 내 위치 · + (8-6) */}
-      <MapFabs bottom={PANEL_H + space[16] + bottomStack}>
+      <MapFabs bottom={panelH + space[16] + bottomStack}>
         <MapButton icon="locate" accessibilityLabel="내 위치" onPress={() => mapRef.current?.recenter(myDot ?? undefined)} />
         <MapButton ref={plusRef} icon="plus" accessibilityLabel="기록 메뉴" onPress={openMenu} />
       </MapFabs>
@@ -514,7 +535,7 @@ export default function ActiveTrip() {
           exiting={FadeOut.duration(duration.fast)}
           accessibilityRole="alert"
           accessibilityLiveRegion="polite"
-          style={[styles.warn, warning === 'failed' ? styles.warnFailed : styles.warnOffline, { bottom: PANEL_H + space[16] }]}
+          style={[styles.warn, warning === 'failed' ? styles.warnFailed : styles.warnOffline, { bottom: panelH + space[16] }]}
         >
           <Icon name="info" size={20} color={warning === 'failed' ? c2.text.dangerDeep : c2.text.warningStrong} />
           <Text v2="bodyS.regular" tone={warning === 'failed' ? 'dangerDeep' : 'warningStrong'} style={styles.flex}>
@@ -535,11 +556,13 @@ export default function ActiveTrip() {
       ) : null}
 
       {/* 아래 패널 — 목록을 펼치고 접을 때 높이가 미끄러지게(LinearTransition), 목록은 페이드. */}
-      <Animated.View layout={PANEL_LAYOUT} style={styles.panel}>
+      <Animated.View layout={PANEL_LAYOUT} style={[styles.panel, { minHeight: panelH }]}>
+        <GestureDetector gesture={panelSwipe}>
+        <View>
         <Touchable
-          onPress={() => setExpanded((v) => !v)}
+          onPress={() => setPanelMode((m) => (m === 'normal' ? 'list' : 'normal'))}
           accessibilityRole="button"
-          accessibilityLabel={expanded ? '목적지 목록 접기' : '목적지 목록 펼치기'}
+          accessibilityLabel={expanded ? '목적지 목록 접기' : panelMode === 'min' ? '패널 펼치기' : '목적지 목록 펼치기'}
           noAutoHitSlop
           style={styles.handleTap}
         >
@@ -577,7 +600,7 @@ export default function ActiveTrip() {
             </Text>
           </Touchable>
         </View>
-        {!noDestination ? (
+        {!noDestination && panelMode !== 'min' ? (
           <View
             style={styles.progress}
             accessibilityRole="progressbar"
@@ -601,6 +624,7 @@ export default function ActiveTrip() {
             ))}
           </View>
         ) : null}
+        {panelMode !== 'min' ? (
         <View style={styles.actions}>
           {noDestination ? (
             <>
@@ -627,6 +651,9 @@ export default function ActiveTrip() {
             </>
           )}
         </View>
+        ) : null}
+        </View>
+        </GestureDetector>
         {expanded ? (
           <Animated.View entering={FadeIn.duration(duration.base)} exiting={LIST_OUT}>
           <ScrollView style={{ maxHeight: listMax }} contentContainerStyle={styles.list}>
@@ -819,7 +846,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    minHeight: PANEL_H,
     paddingBottom: space[12],
     borderTopLeftRadius: radius2['2xl'],
     borderTopRightRadius: radius2['2xl'],
