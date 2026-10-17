@@ -328,7 +328,9 @@ MARKERS.forEach(function(m){
     // 사용자가 직접 끌거나 줌한 뒤에만 현재 뷰(center+level)를 RN 으로 보고 — 지도 생성 시
     // 자동 발화하는 idle 로 보고하면, 안 보이는 탭의 지도가 초기 위치로 값을 덮어쓴다.
     // RN 은 이를 기억해 화면 재마운트(탭 전환·뒤로가기) 시 마지막으로 보던 위치로 복원한다.
+    var FITTING = false; // 카드 맞춤(fitTight) 중 — 중간 구도를 보고하지 않는다
     function reportView(){
+      if (FITTING) return;
       var c = map.getCenter();
       postMsg({ type: 'viewchanged', lat: c.getLat(), lng: c.getLng(), level: map.getLevel() });
     }
@@ -339,6 +341,8 @@ MARKERS.forEach(function(m){
     window.addEventListener('resize', function(){
       heat.configure({ width: heatEl.clientWidth, height: heatEl.clientHeight });
       heatSchedule();
+      // 카드 맞춤은 크기가 0 이면 건너뛴다 — 크기가 잡히면 다시 맞춘다(웹은 ResizeObserver). 9-7(조작 가능)은 손댄 구도를 덮지 않게 뺀다.
+      if (COMPACT && !INTERACTIVE) { map.relayout(); fitBounds(); }
     });
 
     // 라벨은 일정 줌 이상(레벨 ≤ 이 값)에서만 노출 — 밀집 시 라벨 박스가 서로 겹쳐
@@ -504,6 +508,11 @@ MARKERS.forEach(function(m){
           yAnchor: PIN_TIP,
           zIndex: zIndex,
         }));
+        // 줄이거나 배지를 단 핀은 빈 상자가 아래 핀을 가리지 않게 손가락을 통과시킨다(웹 addPin 과 같은 규칙).
+        if (content.firstChild.style.pointerEvents === 'none') {
+          content.style.pointerEvents = 'none';
+          if (content.parentElement) content.parentElement.style.pointerEvents = 'none';
+        }
       }
       for (var pi = 0; pi < MARKERS.length; pi++) {
         var pm = MARKERS[pi];
@@ -615,6 +624,7 @@ MARKERS.forEach(function(m){
         return e;
       }
       var e0 = extent(), cur = map.getLevel(), level = 14;
+      FITTING = true;
       for (var L = ${CARD_MIN_LEVEL}; L < 14; L++) {
         var f = Math.pow(2, cur - L);
         if ((e0.x1 - e0.x0) * f <= boxW && (e0.y1 - e0.y0) * f <= boxH) { level = L; break; }
@@ -623,6 +633,7 @@ MARKERS.forEach(function(m){
       var e = extent();
       var dx = (e.x0 + e.x1) / 2 - (p[3] + boxW / 2), dy = (e.y0 + e.y1) / 2 - (p[0] + boxH / 2);
       map.setCenter(map.getProjection().coordsFromContainerPoint(new kakao.maps.Point(w / 2 + dx, h / 2 + dy)));
+      FITTING = false;
     }
 
     function applyData(){

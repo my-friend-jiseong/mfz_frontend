@@ -45,11 +45,10 @@ export default function ReportOverviewScreen() {
     setMapKey((k) => k + 1);
   }, [saved]);
 
-  // 자동 맞춤(setBounds)이 줌을 바꾸며 보내는 첫 보고는 사용자의 구도가 아니다 — 손대기 전 첫 보고 하나만 버린다.
-  const fitPending = useRef(false);
+  // 손대기 전의 보고는 모두 버린다 — 자동 맞춤·크기 변화(첫 레이아웃 뒤 다시 맞춤)가 중간 구도를 여러 번 보낼 수 있어,
+  // 하나만 버리면 손대지 않고 저장해도 어긋난 구도가 고정된다(네이티브 실측 검토).
   const touched = useRef(false);
   useEffect(() => {
-    fitPending.current = mountView === null;
     touched.current = false;
   }, [mapKey, mountView]);
   // 웹은 휠·키보드로도 확대한다 — 손댄 것으로 본다(터치·포인터는 아래 View 가 받는다).
@@ -66,11 +65,7 @@ export default function ReportOverviewScreen() {
     };
   }, []);
   const onViewChange = (v: OverviewMapView) => {
-    if (fitPending.current && !touched.current) {
-      fitPending.current = false;
-      return;
-    }
-    fitPending.current = false;
+    if (!touched.current) return;
     setDraft(v);
   };
 

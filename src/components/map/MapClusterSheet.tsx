@@ -1,4 +1,4 @@
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { AppSheet } from '@/components/ui/AppSheet';
 import { Text } from '@/components/ui/Text';
@@ -40,6 +40,10 @@ export function MapClusterSheet({ items, onClose, onPick }: Props) {
     if (id) onPick(id);
   }, [onClose, onPick]);
   const open = items !== null;
+  // 새로 열 때 지난번 고른 값이 남아 있으면(닫힘 콜백이 안 온 경우) 엉뚱한 현장으로 가지 않게 비운다.
+  useEffect(() => {
+    if (open) picked.current = null;
+  }, [open]);
   // 닫히는 동안에도 목록을 그대로 보이게 마지막 목록을 붙잡아 둔다.
   const last = useRef<ClusterItem[]>([]);
   if (items) last.current = items;

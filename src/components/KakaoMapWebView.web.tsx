@@ -431,6 +431,8 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
   const mapRef = useRef<KakaoMap | null>(null);
   // 사용자가 지도를 한 번이라도 끌었는가 — 크기 변화 때 center 로 되돌릴지 정한다.
   const userMovedRef = useRef(false);
+  // 카드 맞춤(fitTight) 중 — 그 사이 zoom_changed 는 onViewChange 로 보내지 않는다.
+  const fittingRef = useRef(false);
   const overlaysRef = useRef<Overlay[]>([]);
   const myLocOverlayRef = useRef<Overlay | null>(null);
   const beaconOverlayRef = useRef<Overlay | null>(null);
@@ -513,6 +515,7 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
         // 보고하면 안 보이는 탭의 지도가 초기 위치로 값을 덮어쓴다. 상위가 기억해 재마운트 시 복원.
         if (onViewChange) {
           const report = () => {
+            if (fittingRef.current) return;
             const ctr = map.getCenter();
             onViewChange({ lat: ctr.getLat(), lng: ctr.getLng(), level: map.getLevel() });
           };
@@ -594,11 +597,13 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
       return { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
     };
     const e0 = extent();
+    fittingRef.current = true; // 맞추는 동안의 zoom_changed 는 사용자 구도가 아니다
     map.setLevel(closestFitLevel(e0.x1 - e0.x0, e0.y1 - e0.y0, map.getLevel(), boxW, boxH));
     const e = extent();
     const dx = (e.x0 + e.x1) / 2 - (pl + boxW / 2);
     const dy = (e.y0 + e.y1) / 2 - (pt + boxH / 2);
     map.setCenter(map.getProjection().coordsFromContainerPoint(new k.maps.Point(w / 2 + dx, h / 2 + dy)));
+    fittingRef.current = false;
   };
   useEffect(() => {
     if (!ready) return;
@@ -967,7 +972,8 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
       const addPin = (m: KakaoMapMarker, html: string, zIndex: number, onClick: () => void) => {
         const content = document.createElement('div');
         content.innerHTML = html;
-        (content.firstChild as HTMLElement | null)?.addEventListener('click', onClick);
+        const box = content.firstChild as HTMLElement | null;
+        box?.addEventListener('click', onClick);
         overlaysRef.current.push(
           new k.maps.CustomOverlay({
             position: new k.maps.LatLng(m.lat, m.lng),
@@ -978,6 +984,12 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
             zIndex,
           }),
         );
+        // 줄이거나 배지를 단 핀(wrapPinHtml)은 32×44 상자가 그대로라 빈 자리가 아래 핀을 가린다 — 상자·content·카카오
+        // 감싸개 모두 손가락을 통과시키고, 그려진 핀(pointer-events:auto)만 받는다(클릭은 상자 리스너까지 올라온다).
+        if (box?.style.pointerEvents === 'none') {
+          content.style.pointerEvents = 'none';
+          if (content.parentElement) content.parentElement.style.pointerEvents = 'none';
+        }
       };
       markers.forEach((m) => {
         if (!m.pin) legacy.push(m);
