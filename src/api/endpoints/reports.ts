@@ -155,6 +155,13 @@ export const reports = {
       body: {},
     }),
 
+  // 백로그 '2차 개편 요청' I — HWPX(한글). 응답 모양은 PDF 와 같다(url·downloadUrl, 서버 영속 없음). 2026-10-19 운영 실측.
+  exportHwpx: (reportId: string) =>
+    request<ExportPdfResponse>(`/api/reports/${reportId}/export/hwpx`, {
+      method: 'POST',
+      body: {},
+    }),
+
   // ----- field-reports CRUD -----
   listFieldReports: (reportId: string) =>
     request<{ items: FieldReport[] }>(`/api/reports/${reportId}/field-reports`),

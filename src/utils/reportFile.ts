@@ -6,13 +6,16 @@ import * as Sharing from 'expo-sharing';
 // 9-5 공유 · 9-15 내려받기 — 서버가 만든 보고서 파일을 폰 공유 창으로 보내거나 휴대폰에 저장한다.
 // 파일 주소는 인증 없이 열린다(기존 '다운로드'가 Linking.openURL 로 열던 것과 같다).
 
-export type ReportFileFormat = 'docx' | 'pdf';
+export type ReportFileFormat = 'hwpx' | 'docx' | 'pdf';
 
 const MIME: Record<ReportFileFormat, string> = {
+  hwpx: 'application/hwp+zip',
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   pdf: 'application/pdf',
 };
+// HWPX 는 시스템 UTI 가 없다 — 일반 데이터로 넘기면 공유 창이 한글 등 설치된 앱을 고르게 한다.
 const UTI: Record<ReportFileFormat, string> = {
+  hwpx: 'public.data',
   docx: 'org.openxmlformats.wordprocessingml.document',
   pdf: 'com.adobe.pdf',
 };

@@ -76,6 +76,10 @@ interface ReportState {
   exportPdf: (
     reportId: string,
   ) => Promise<{ ok: true; url: string } | { ok: false; error: string }>;
+  // HWPX 도 PDF 와 같이 서버에 영속되지 않는다 — 결과 URL 을 바로 돌려준다.
+  exportHwpx: (
+    reportId: string,
+  ) => Promise<{ ok: true; url: string } | { ok: false; error: string }>;
   // 위치도(개요 지도) 캡처 이미지 업로드 (backend-backlog §20). 서버가 압축·저장하고
   // 재업로드 시 outputFileUrl 을 null 로 초기화 → 곧이은 exportWord 가 새 위치도로 재생성.
   // 응답 비의존 — loadDetail 로 overviewMapUrl/outputFileUrl 재동기화.
@@ -346,6 +350,22 @@ export const useReportStore = create<ReportState>((set, get) => ({
       if (!url) {
         // 200 인데 URL 이 없으면 열 대상이 없다 — 조용히 성공 처리하면 아무 일도 안 일어난 것처럼 보인다.
         return { ok: false, error: 'PDF 주소를 받지 못했어요. 잠시 뒤에 다시 해 주세요.' };
+      }
+      return { ok: true, url };
+    } catch (e) {
+      set({ busy: false });
+      return { ok: false, error: describeError(e) };
+    }
+  },
+
+  exportHwpx: async (reportId) => {
+    set({ busy: true });
+    try {
+      const res = await reportsApi.exportHwpx(reportId);
+      set({ busy: false });
+      const url = (res?.downloadUrl ?? res?.url ?? '').trim();
+      if (!url) {
+        return { ok: false, error: '한글 문서 주소를 받지 못했어요. 잠시 뒤에 다시 해 주세요.' };
       }
       return { ok: true, url };
     } catch (e) {

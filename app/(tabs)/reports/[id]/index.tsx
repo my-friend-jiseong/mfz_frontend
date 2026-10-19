@@ -50,8 +50,9 @@ function tripLinkLabel(trip: Trip): string {
   return title === day ? day : `${title} · ${day}`;
 }
 
-// 9-5·9-15 형식 줄. HWPX 는 서버에 만드는 API 가 없어 숨긴다(백로그 '2차 개편 요청' I).
+// 9-5·9-15 형식 줄(HWPX·DOCX·PDF). HWPX 는 2026-10-19 서버 배포 확인 후 되살렸다(백로그 '2차 개편 요청' I).
 const FORMATS: { key: ReportFileFormat; badge: string; color: string; title: string; sub: string }[] = [
+  { key: 'hwpx', badge: 'HWPX', color: c2.file.hwpx, title: '한글 문서', sub: 'HWPX · 한글에서 편집' },
   { key: 'docx', badge: 'DOCX', color: c2.file.docx, title: '워드 문서', sub: 'DOCX · MS Word에서 편집' },
   { key: 'pdf', badge: 'PDF', color: c2.file.pdf, title: 'PDF', sub: '편집 없이 보기·인쇄' },
 ];
@@ -177,7 +178,8 @@ export default function ReportDetail() {
       }
       url = useReportStore.getState().detailCache[report.id]?.outputFileUrl?.trim() || undefined;
     } else {
-      const r = await useReportStore.getState().exportPdf(report.id);
+      const store = useReportStore.getState();
+      const r = format === 'hwpx' ? await store.exportHwpx(report.id) : await store.exportPdf(report.id);
       if (!r.ok) {
         await fail(r.error);
         return;
