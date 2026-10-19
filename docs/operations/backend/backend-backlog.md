@@ -1062,6 +1062,8 @@ PR7(2026-10-17): 대기열 항목에 체크인 화면에서 고른 조치 상태
 9-5·9-15 는 HWPX·DOCX·PDF 중 고르면 **지금 내용으로 새로 만들어** 폰 공유 창으로 보내거나 휴대폰에 저장한다('다시 만들기' 버튼 없음).
 
 - HWPX: 생성 API 가 없다(운영 OpenAPI `POST /api/reports/{id}/export` 의 format 은 `word|pdf`). 프론트는 HWPX 줄을 **숨겼다**(`app/(tabs)/reports/[id]/index.tsx` FORMATS). 요청: `POST /api/reports/{id}/export/hwpx`(또는 `/export` `{format:"hwpx"}`) → `{ url }`. 오면 줄 하나만 되살린다(배지 색 `c2.file.hwpx` 는 이미 있음).
+  - ⏸️ **2026-10-18 운영 실측 — 아직 없음.** "백엔드에 추가됐다"는 전달이 있었지만 운영 서버는 `POST /api/reports/{id}/export` `{format:"hwpx"}`(대문자·쿼리 `?format=hwpx` 포함)에 400 `export_format_invalid`("export format은 word 또는 pdf 여야 합니다"), `/export/hwpx` 는 404. OpenAPI 에도 hwpx 0회. **배포 여부와 실제 경로·파라미터 이름을 알려 주면 바로 켠다.**
+  - 같은 실측에서: 사진이 화면에 보이는 보고서(예: 팀 테스트 계정의 '10월 6일 외근 보고' — 현장 2곳에 전·중·후 사진이 보임)도 `report_no_photos`("업로드된 사진이 없어 보고서를 생성할 수 없습니다")로 거절되는 경우가 있다. 서버가 사진을 세는 기준(현장 보고 슬롯 vs 방문 사진)을 확인해 달라.
 - DOCX: 앱은 누를 때마다 `POST /export/word {regenerate:true}` 로 다시 만든 뒤 상세의 `outputFileUrl` 을 받는다(응답 본문 비의존). 서버가 현장 보고·위치도가 바뀔 때 `outputFileUrl` 을 비우거나 응답에 `url` 을 확실히 주면 상세 재요청 한 번을 줄일 수 있다(선택).
 - 파일 주소는 인증 없이 받는다(앱이 캐시로 내려받아 공유 창에 넘김). 파일 이름을 서버가 `Content-Disposition` 으로 주면 웹 내려받기 이름이 맞는다(지금은 앱이 '{보고서 제목}.docx' 로 붙임).
 

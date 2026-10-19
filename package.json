@@ -9,7 +9,8 @@
     "web": "expo start --web",
     "build:web": "expo export -p web",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/utils/__tests__/nearestField.test.ts src/utils/__tests__/contact.test.ts src/utils/__tests__/analytics.test.ts src/utils/__tests__/password.test.ts src/utils/__tests__/tripFormat.test.ts src/utils/__tests__/addressFormat.test.ts src/utils/__tests__/josa.test.ts src/utils/__tests__/exifGps.test.ts src/utils/__tests__/photoGroups.test.ts src/utils/__tests__/findRecentVisit.test.ts src/utils/__tests__/cardMapFit.test.ts src/utils/__tests__/visitRange.test.ts src/utils/__tests__/mapCamera.test.ts"
+    "test": "tsx --test src/utils/__tests__/nearestField.test.ts src/utils/__tests__/contact.test.ts src/utils/__tests__/analytics.test.ts src/utils/__tests__/password.test.ts src/utils/__tests__/tripFormat.test.ts src/utils/__tests__/addressFormat.test.ts src/utils/__tests__/josa.test.ts src/utils/__tests__/exifGps.test.ts src/utils/__tests__/photoGroups.test.ts src/utils/__tests__/findRecentVisit.test.ts src/utils/__tests__/cardMapFit.test.ts src/utils/__tests__/visitRange.test.ts src/utils/__tests__/mapCamera.test.ts",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
@@ -55,6 +56,7 @@
   "devDependencies": {
     "@babel/core": "^7.25.0",
     "@types/react": "~19.1.10",
+    "patch-package": "^8.0.0",
     "playwright": "^1.59.1",
     "tsx": "^4.22.4",
     "typescript": "~5.9.2"

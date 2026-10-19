@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { Alert, Linking, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
+import Constants from 'expo-constants';
 import { useAuthStore } from '@/stores/authStore';
 import { useCheckinQueueStore } from '@/stores/checkinQueueStore';
 import { confirm } from '@/components/ui/ConfirmDialog';
@@ -21,7 +22,8 @@ import {
   supportMailto,
 } from '@/utils/contact';
 
-const APP_VERSION = '0.1.0';
+// app.json 의 version 을 그대로 쓴다(빌드에 들어간 값). 손으로 적어 두면 출시 때마다 어긋난다(1.0.0 빌드가 v0.1.0 으로 보였다).
+const APP_VERSION = Constants.expoConfig?.version ?? '';
 
 function initialOf(name: string | undefined): string {
   const trimmed = name?.trim();

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Platform, StyleSheet, View, useWindowDimensions, type StyleProp, type ViewStyle } from 'react-native';
+import { BackHandler, Platform, StyleSheet, View, useWindowDimensions, type StyleProp, type ViewStyle } from 'react-native';
 import { useRealSafeAreaInsets } from '@/components/shell/realInsets';
 import {
   BottomSheetBackdrop,
@@ -126,6 +126,17 @@ export function AppSheet({
       dismissing.current = true;
       ref.current?.dismiss();
     }
+  }, [open]);
+
+  // 안드로이드 뒤로: gorhom BottomSheetModal 은 뒤로 버튼을 받지 않아 시트가 열린 채 화면 뒤로·앱 밖으로 나간다
+  // (실기기 확인 2026-10-18). 열려 있는 동안 가로채 시트만 닫는다. 나중에 등록한 것이 먼저 불려 위 시트부터 닫힌다.
+  useEffect(() => {
+    if (!open) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      ref.current?.dismiss();
+      return true;
+    });
+    return () => sub.remove();
   }, [open]);
 
   const handleDismiss = useCallback(() => {
