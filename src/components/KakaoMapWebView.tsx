@@ -108,6 +108,8 @@ interface Props {
   // 정적 지도 카드(3·5·8 MapPreviewCard, 9 보고서 위치도·9-7) 전용: 핀 0.75배·선택 확대 없음, fitToMarkers 는
   // 점(+fitExtra·오차 원)이 여백 안에 들어가는 가장 가까운 레벨로 맞춘다(utils/cardMapFit). 전체 지도는 쓰지 않는다.
   compactPins?: boolean;
+  // compactPins 핀 배율(기본 0.75). 보고서 위치도만 더 작게 쓴다(ReportParts OVERVIEW_PIN_SCALE).
+  pinScale?: number;
   // false 면 드래그/줌 비활성 — BottomSheet 안 등 pan 충돌 회피용 정적 위치도.
   interactive?: boolean;
   onMarkerPress?: (fieldId: string) => void;
@@ -156,6 +158,7 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
       fitKey,
       hideScale = false,
       compactPins = false,
+      pinScale,
       interactive = true,
       onMarkerPress,
       onLongPress,
@@ -236,9 +239,10 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
         interactive,
         hideScale,
         compactPins,
+        pinScale,
         mapPress: mapPressRef.current,
       }),
-    [kakaoJsKey, fitToMarkers, interactive, hideScale, compactPins],
+    [kakaoJsKey, fitToMarkers, interactive, hideScale, compactPins, pinScale],
   );
 
   // html 이 바뀌면(키/interactive/fitToMarkers) WebView 가 리로드되므로 ready 를 내려, 새 문서에 재주입.

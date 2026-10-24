@@ -77,6 +77,8 @@ interface MapHtmlOptions {
   hideScale?: boolean;
   // 정적 지도 카드 전용 — 핀 0.75배·선택 확대 없음, 가장 가까운 레벨로 맞춤(KakaoMapWebView compactPins, utils/cardMapFit).
   compactPins?: boolean;
+  // compactPins 핀 배율(기본 CARD_PIN_SCALE 0.75). 보고서 위치도는 문서에 들어가는 그림이라 더 작게 쓴다.
+  pinScale?: number;
   // 빈 곳 누르기(mapPress)를 받는 화면만 지도 click 리스너를 단다(KakaoMapWebView onMapPress).
   mapPress?: boolean;
 }
@@ -90,6 +92,7 @@ export function buildKakaoMapHtml({
   interactive = true,
   hideScale = false,
   compactPins = false,
+  pinScale = CARD_PIN_SCALE,
   mapPress = false,
 }: MapHtmlOptions): string {
   // RN WebView와 웹 iframe 양쪽에서 메시지 전송 가능한 브리지 스크립트
@@ -544,7 +547,7 @@ MARKERS.forEach(function(m){
       var legacy = [];
       var loose = [];
       // 카드 핀은 0.75배, 넓은 줌에서는 전체 지도처럼 더 줄인다(0.6).
-      var cardScale = Math.min(${CARD_PIN_SCALE}, pinScaleForLevel(map.getLevel()));
+      var cardScale = Math.min(${pinScale}, pinScaleForLevel(map.getLevel()));
       function addPin(m, html, zIndex, onClick){
         var content = document.createElement('div');
         content.innerHTML = html;

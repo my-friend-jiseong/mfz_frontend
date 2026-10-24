@@ -179,7 +179,9 @@ export function pinScaleForLevel(level: number): number {
   if (level >= 7) return 0.75;
   return 1;
 }
-export const PIN_SCALES = [1, 0.75, 0.6] as const;
+// 네이티브 HTML 은 여기 있는 배율만 감싸기 템플릿을 만든다(PIN_WRAP_TEMPLATES) — 없는 배율은 줄지 않는다.
+// 0.5 = 보고서 위치도 핀(ReportParts OVERVIEW_PIN_SCALE).
+export const PIN_SCALES = [1, 0.75, 0.6, 0.5] as const;
 
 /**
  * 이 화면 거리(px) 안의 상태 핀은 한 묶음 — 핀 폭(32)보다 조금 좁게 잡아 실제로 겹치는 것만.

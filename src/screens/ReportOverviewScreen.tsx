@@ -3,7 +3,7 @@ import { Platform, StyleSheet, View, type LayoutChangeEvent } from 'react-native
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KakaoMapWebView } from '@/components/KakaoMapWebView';
-import { OVERVIEW_FIT_PADDING, OVERVIEW_MAP_HEIGHT, OVERVIEW_MAP_SIDE, useReportRows } from '@/components/reports/ReportParts';
+import { OVERVIEW_FIT_PADDING, OVERVIEW_MAP_HEIGHT, OVERVIEW_MAP_SIDE, OVERVIEW_PIN_SCALE, useReportRows } from '@/components/reports/ReportParts';
 import { BottomActionBar } from '@/components/ui/BottomActionBar';
 import { Button2 } from '@/components/ui/Button2';
 import { MapButton } from '@/components/ui/MapButton';
@@ -111,6 +111,7 @@ export default function ReportOverviewScreen() {
             fitPadding={[frameTop + pt, OVERVIEW_MAP_SIDE + pr, frameBottom + pb, OVERVIEW_MAP_SIDE + pl]}
             // 틀 안이 카드 그대로 보이게 핀·맞춤도 카드 규칙(작은 핀, 가장 가까운 레벨).
             compactPins
+            pinScale={OVERVIEW_PIN_SCALE}
             center={mountView ? { lat: mountView.lat, lng: mountView.lng } : undefined}
             initialLevel={mountView?.level}
             holdCenterOnResize

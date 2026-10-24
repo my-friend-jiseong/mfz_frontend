@@ -32,12 +32,16 @@ export const SLOT_CAPTION = {
 } as const satisfies Record<Slot, keyof FieldReport>;
 
 /**
- * 보고서 위치도 카드(Figma 9-2·9-3 Map 350×152 = 화면 폭 − 좌우 20). 9-7 구도 틀도 이 크기로 그린다 — 캡처가 이 카드를 찍는다.
+ * 보고서 위치도 카드(화면 폭 − 좌우 20). 9-7 구도 틀도 이 크기로 그린다 — 캡처가 이 카드를 찍는다.
  * 자동 맞춤 여백·작은 핀도 9-7 과 같이 쓴다(정적 카드 규칙 utils/cardMapFit — 9-7 의 처음 구도가 카드 자동 구도와 같아야 한다).
+ * 높이는 Figma 의 152 보다 키웠다(2026-10-24 사용자 요청) — 남북으로 떨어진 현장도 더 가까이 맞추고, 문서 위치도가 띠처럼 납작하지 않게.
  */
-export const OVERVIEW_MAP_HEIGHT = 152;
+export const OVERVIEW_MAP_HEIGHT = 200;
 export const OVERVIEW_MAP_SIDE = 20;
-export const OVERVIEW_FIT_PADDING: [number, number, number, number] = CARD_FIT_PADDING;
+/** 위치도 핀 배율 — 다른 지도 카드(0.75)보다 작게. 문서에 들어가는 그림이라 핀이 주변 길·건물을 덜 가려야 한다(2026-10-24 사용자 요청). */
+export const OVERVIEW_PIN_SCALE = 0.5;
+/** 위치도 맞춤 여백 [위, 오른쪽, 아래, 왼쪽] — CARD_FIT_PADDING 과 같은 계산을 0.5배 핀(16×22)으로. 위 = 핀 높이 22+3, 옆 = 반폭 8+6. */
+export const OVERVIEW_FIT_PADDING: [number, number, number, number] = [25, 14, CARD_FIT_PADDING[2], 14];
 
 
 const hasCoord = (f: Field | undefined): f is Field => !!f && !(f.latitude === 0 && f.longitude === 0);
@@ -132,6 +136,7 @@ export function ReportOverviewMap({
           fitToMarkers={!view}
           fitPadding={OVERVIEW_FIT_PADDING}
           compactPins
+          pinScale={OVERVIEW_PIN_SCALE}
           holdCenterOnResize
           center={view ? { lat: view.lat, lng: view.lng } : undefined}
           initialLevel={view?.level}

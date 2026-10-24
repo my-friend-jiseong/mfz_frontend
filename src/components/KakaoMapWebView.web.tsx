@@ -232,6 +232,8 @@ interface Props {
   // 정적 지도 카드(3·5·8 MapPreviewCard, 9 보고서 위치도·9-7) 전용: 핀 0.75배·선택 확대 없음, fitToMarkers 는
   // 점(+fitExtra·오차 원)이 여백 안에 들어가는 가장 가까운 레벨로 맞춘다(utils/cardMapFit). 전체 지도는 쓰지 않는다.
   compactPins?: boolean;
+  // compactPins 핀 배율(기본 0.75). 보고서 위치도만 더 작게 쓴다(ReportParts OVERVIEW_PIN_SCALE).
+  pinScale?: number;
   // false 면 드래그/줌 비활성 — BottomSheet 안 등 pan 충돌 회피용 정적 위치도.
   interactive?: boolean;
   onMarkerPress?: (fieldId: string) => void;
@@ -435,6 +437,7 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
       fitKey,
       hideScale = false,
       compactPins = false,
+      pinScale = CARD_PIN_SCALE,
       interactive = true,
       onMarkerPress,
       onLongPress,
@@ -1083,7 +1086,7 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
       const legacy: KakaoMapMarker[] = [];
       const loose: KakaoMapMarker[] = [];
       // 카드 핀은 0.75배, 넓은 줌에서는 전체 지도처럼 더 줄인다(0.6).
-      const cardScale = Math.min(CARD_PIN_SCALE, pinScaleForLevel(map.getLevel()));
+      const cardScale = Math.min(pinScale, pinScaleForLevel(map.getLevel()));
       const addPin = (m: KakaoMapMarker, html: string, zIndex: number, onClick: () => void) => {
         const content = document.createElement('div');
         content.innerHTML = html;
@@ -1180,7 +1183,7 @@ export const KakaoMapWebView = forwardRef<KakaoMapHandle, Props>(
     return () => {
       k.maps.event.removeListener(map, 'zoom_changed', render);
     };
-  }, [markers, ready, onMarkerPress, displayMode, compactPins]);
+  }, [markers, ready, onMarkerPress, displayMode, compactPins, pinScale]);
 
   // 히트맵 인스턴스 1회 생성 + pan/zoom redraw 리스너. redraw 클로저는 ref 로 최신 모드/점을 읽는다.
   useEffect(() => {
