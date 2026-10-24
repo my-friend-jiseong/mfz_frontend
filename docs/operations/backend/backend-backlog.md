@@ -1065,6 +1065,10 @@ PR7(2026-10-17): 대기열 항목에 체크인 화면에서 고른 조치 상태
   - ⏸️ **2026-10-18 운영 실측 — 아직 없음.** "백엔드에 추가됐다"는 전달이 있었지만 운영 서버는 `POST /api/reports/{id}/export` `{format:"hwpx"}`(대문자·쿼리 `?format=hwpx` 포함)에 400 `export_format_invalid`("export format은 word 또는 pdf 여야 합니다"), `/export/hwpx` 는 404. OpenAPI 에도 hwpx 0회. **배포 여부와 실제 경로·파라미터 이름을 알려 주면 바로 켠다.**
   - ✅ **2026-10-19 운영 배포 확인 → 프론트 켬.** `POST /api/reports/{id}/export/hwpx` → 200 `{url, downloadUrl}`, 파일은 정상 HWPX(본문·사진 포함). 앱 9-5·9-15 형식 줄 맨 위에 HWPX 를 되살렸다.
   - 같은 실측에서: 사진이 화면에 보이는 보고서(예: 팀 테스트 계정의 '10월 6일 외근 보고' — 현장 2곳에 전·중·후 사진이 보임)도 `report_no_photos`("업로드된 사진이 없어 보고서를 생성할 수 없습니다")로 거절되는 경우가 있다. 서버가 사진을 세는 기준(현장 보고 슬롯 vs 방문 사진)을 확인해 달라.
+  - 🔴 **2026-10-24 — 서버가 만든 HWPX 가 한글에서 "손상된 파일"로 열리지 않는다.** 10-19 의 "정상"은 zip·XML 구조만 본 판정이었다. 한글 2022(COM 자동화)로 보고서 178 출력본을 열어 한 군데씩 바꿔 가며 원인 두 가지를 확인했다:
+    1. `Contents/header.xml` 루트 `<hh:head>` 에 **`secCnt` 속성이 없다** → 이것 하나로 열기 자체가 실패한다. `<hh:head version="1.4" secCnt="1" …>` 처럼 섹션 수를 넣어 달라(`secCnt` 만 넣어도 열리지만 `version` 도 한글 저장본과 맞추는 게 안전하다).
+    2. `Contents/content.hpf` 의 사진 항목(`<opf:item id="imageN" … media-type="image/jpeg"/>`)에 **`isEmbeded="1"` 이 없다** → 열리기는 해도 사진 자리가 빈칸이 된다.
+    - 두 곳을 고친 파일은 한글에서 4쪽·사진 4장 정상으로 열렸다. 그 밖의 차이(version.xml 네임스페이스, 디렉터리 엔트리, spine 구성, container.xml)는 바꿔 봐도 결과가 같아 원인이 아니다.
 - DOCX: 앱은 누를 때마다 `POST /export/word {regenerate:true}` 로 다시 만든 뒤 상세의 `outputFileUrl` 을 받는다(응답 본문 비의존). 서버가 현장 보고·위치도가 바뀔 때 `outputFileUrl` 을 비우거나 응답에 `url` 을 확실히 주면 상세 재요청 한 번을 줄일 수 있다(선택).
 - 파일 주소는 인증 없이 받는다(앱이 캐시로 내려받아 공유 창에 넘김). 파일 이름을 서버가 `Content-Disposition` 으로 주면 웹 내려받기 이름이 맞는다(지금은 앱이 '{보고서 제목}.docx' 로 붙임).
 
