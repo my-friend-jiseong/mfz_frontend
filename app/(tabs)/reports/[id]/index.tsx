@@ -468,7 +468,8 @@ const styles = StyleSheet.create({
   scroll: { paddingHorizontal: space[20], paddingTop: space[4], paddingBottom: space[24] },
   tripLink: { flexDirection: 'row', alignItems: 'center', gap: space[4], alignSelf: 'flex-start', minHeight: 24, marginTop: space[4] },
   written: { marginTop: space[2] },
-  map: { marginTop: space[16] },
+  // 배경을 칠해 둔다 — 없으면 Android 캡처가 지도 둥근 모서리 밖을 검게 채워 문서 위치도 모서리가 검어진다.
+  map: { marginTop: space[16], backgroundColor: c2.bg.canvas },
   mapCaption: { marginTop: space[6] },
   sections: { marginTop: space[16] },
   section: { borderTopWidth: 1, borderTopColor: c2.border.subtle, paddingTop: space[16], paddingBottom: space[16] },
