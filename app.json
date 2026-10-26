@@ -16,7 +16,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.mfz.ilgayo",
-      "buildNumber": "5",
+      "buildNumber": "6",
       "infoPlist": {
         "NSCameraUsageDescription": "방문 기록에 현장 사진을 찍어 붙이기 위해 카메라를 사용해요.",
         "NSPhotoLibraryUsageDescription": "방문 기록에 사진을 붙이고, '사진으로 여러 곳 등록'에서 사진의 촬영 위치와 시각을 읽어 현장을 만들기 위해 사진 보관함에 접근해요.",
@@ -33,14 +33,14 @@
         "backgroundColor": "#0153B7"
       },
       "package": "com.mfz.ilgayo",
-      "versionCode": 5,
+      "versionCode": 6,
       "permissions": [
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.ACCESS_MEDIA_LOCATION"
+        "android.permission.ACCESS_MEDIA_LOCATION",
+        "android.permission.RECORD_AUDIO"
       ],
       "blockedPermissions": [
-        "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS"
       ]
     },
@@ -70,7 +70,7 @@
         {
           "photosPermission": "방문 기록에 사진을 붙이고, '사진으로 여러 곳 등록'에서 사진의 촬영 위치와 시각을 읽어 현장을 만들기 위해 사진 보관함에 접근해요.",
           "cameraPermission": "방문 기록에 현장 사진을 찍어 붙이기 위해 카메라를 사용해요.",
-          "microphonePermission": false
+          "microphonePermission": "체크인 메모를 말로 입력할 때만 마이크를 사용해요. 녹음은 저장하지 않아요."
         }
       ],
       [
@@ -79,6 +79,13 @@
           "locationWhenInUsePermission": "현장 위치 등록, 체크인할 때 가까운 현장 찾기, 지도의 내 위치 표시를 위해 위치 정보를 사용해요. 백그라운드 위치는 수집하지 않아요.",
           "locationAlwaysAndWhenInUsePermission": false,
           "locationAlwaysPermission": false
+        }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "체크인 메모를 말로 입력할 때만 마이크를 사용해요. 녹음은 저장하지 않아요.",
+          "speechRecognitionPermission": "체크인 메모를 말로 입력할 때 말한 내용을 글자로 바꾸기 위해 음성 인식을 사용해요."
         }
       ],
       "@sentry/react-native",

@@ -11,14 +11,15 @@ import {
 } from 'react-native';
 import { Icon } from '@/components/icons';
 import { c2, radius2, space, type2 } from '@/theme/v2';
+import { Text } from './Text';
 import { Touchable } from './Touchable';
 
 interface Props extends Omit<TextInputProps, 'style'> {
   /**
-   * 음성 입력 버튼(오른쪽 44 검은 버튼). 이번 개편에선 음성 메모를 하지 않아 기본은 숨김 —
-   * 넘길 때만 보인다(결정 Q1, 인수인계 8-1·8-2).
+   * 음성 입력 버튼(오른쪽 44 검은 버튼). 넘길 때만 보인다 — 체크인 메모(8·8-2)만 쓴다.
+   * listening 이면 8-2 '메모 입력, 음성 받아쓰는 중': 테두리 2 brand, 입력 대신 지금 값 + 아직 확정 안 된 말(옅게) + 커서.
    */
-  voice?: { onPress: () => void; listening?: boolean };
+  voice?: { onPress: () => void; listening?: boolean; interim?: string };
   style?: StyleProp<ViewStyle>;
 }
 
@@ -31,6 +32,27 @@ export const MemoField = forwardRef<TextInput, Props>(function MemoField(
   ref,
 ) {
   const [focused, setFocused] = useState(false);
+  if (voice?.listening) {
+    const value = rest.value ?? '';
+    const interim = voice.interim ?? '';
+    return (
+      <View
+        style={[styles.box, styles.multi, styles.listening, style]}
+        accessibilityLabel="메모 입력, 음성 받아쓰는 중"
+        accessibilityLiveRegion="polite"
+      >
+        <Text v2="bodyM.regular" style={styles.listeningText}>
+          {value}
+          {value && interim && !/\s$/.test(value) ? ' ' : ''}
+          {interim ? <Text v2="bodyM.regular" tone="disabled">{interim}</Text> : null}
+          {/* 커서(Figma 2×18 brand) — 중첩 Text 는 테두리를 못 그려 글자 막대로 그린다. */}
+          <Text v2="bodyM.regular" tone="link">
+            |
+          </Text>
+        </Text>
+      </View>
+    );
+  }
   return (
     <View style={[styles.box, focused && styles.focused, multiline && styles.multi, style]}>
       <TextInput
@@ -83,6 +105,9 @@ const styles = StyleSheet.create({
   multi: { alignItems: 'flex-start' },
   input: { flex: 1, ...inputText, color: c2.text.primary, minHeight: 44, paddingVertical: 0, paddingRight: space[10] },
   inputMulti: { lineHeight: type2['bodyM.regular'].lineHeight, minHeight: 0, paddingVertical: space[14], textAlignVertical: 'top' },
+  // Figma 8-2: 테두리 2 brand, 첫 줄 위 13, 높이 76(두 줄 남짓)에서 시작.
+  listening: { minHeight: 76, borderWidth: 2, borderColor: c2.border.brand, paddingLeft: space[14] - 0.5 },
+  listeningText: { flex: 1, paddingTop: 13, paddingBottom: space[14], paddingRight: space[10], color: c2.text.primary },
   mic: {
     width: 44,
     height: 44,

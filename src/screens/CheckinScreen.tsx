@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { Keyboard, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MapPreviewCard } from '@/components/MapPreviewCard';
 import { CheckinPhotos } from '@/components/checkin/CheckinPhotos';
 import { NearbyFieldSheet } from '@/components/checkin/NearbyFieldSheet';
+import { VoiceIntroSheet } from '@/components/checkin/VoiceIntroSheet';
+import { VoiceListeningPanel } from '@/components/checkin/VoiceListeningPanel';
 import { ProjectSheet } from '@/components/fields/ProjectSheet';
 import { CategorySheet } from '@/components/fields/CategorySheet';
 import { useKakaoPlaceSearch } from '@/components/fields/useKakaoPlaceSearch';
@@ -54,6 +56,7 @@ import { reconcileCategories, waitForCategoryCascade } from '@/utils/categoryCas
 import { fmtMonthDay, fmtTime } from '@/utils/datetime';
 import { tripTitle } from '@/utils/tripFormat';
 import { safeBack } from '@/utils/backNavigation';
+import { markVoiceIntroSeen, requestVoicePermission, useVoiceInput, voiceInputSupported, voiceIntroSeen } from '@/utils/useVoiceInput';
 import { c2, radius2, space } from '@/theme/v2';
 
 /**
@@ -64,6 +67,13 @@ import { c2, radius2, space } from '@/theme/v2';
 export const WEAK_GPS_ACCURACY_M = 30;
 // Figma 8: 영역 사이 22, 제목(22) 아래 내용까지 10. 2차 Spacing 변수에 22 가 없어 프레임 값 그대로.
 const SECTION_GAP = 22;
+const MEMO_MAX = 2000;
+
+/** 받아쓴 한 마디를 메모 끝에 붙인다(앞 글과 한 칸 띄움). 최대 길이를 넘는 뒤쪽은 버린다. */
+function appendSpoken(memo: string, spoken: string): string {
+  const sep = memo && !/\s$/.test(memo) ? ' ' : '';
+  return (memo + sep + spoken).slice(0, MEMO_MAX);
+}
 
 type Mode = 'destination' | 'resolving' | 'nearby' | 'new' | 'edit';
 
@@ -113,6 +123,11 @@ export default function CheckinScreen() {
   const [projectOpen, setProjectOpen] = useState(false);
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [nearbyOpen, setNearbyOpen] = useState(false);
+  // 8-1·8-2 음성 메모. 받아쓴 말은 메모 끝에 붙는다 — 저장 전에 직접 고칠 수 있다.
+  const [voiceIntroOpen, setVoiceIntroOpen] = useState(false);
+  const [voiceSupported] = useState(voiceInputSupported);
+  const voice = useVoiceInput(useCallback((t: string) => setMemo((m) => appendSpoken(m, t)), []));
+  const scrollRef = useRef<ScrollView>(null);
   // 수정 모드: 사진·메모 로드가 끝났는지(실패 포함). 실패해도 폼은 연다 — 빈 칸으로라도 고칠 수 있게.
   const [photosLoaded, setPhotosLoaded] = useState(!isEdit);
   const [memoLoaded, setMemoLoaded] = useState(!isEdit);
@@ -638,6 +653,26 @@ export default function CheckinScreen() {
     if (pos && !progressRef.current) startNewField(pos);
   };
 
+  // === 음성 메모(8-1·8-2) ===
+  function startVoice() {
+    Keyboard.dismiss();
+    if (!voiceIntroSeen()) setVoiceIntroOpen(true);
+    else void voice.start();
+  }
+  // 8-1 은 어떤 길로 닫아도 OS 권한 팝업으로 잇는다(App Store 5.1.1(iv)). 듣기는 [시작하기]일 때만.
+  function closeVoiceIntro(start: boolean) {
+    setVoiceIntroOpen(false);
+    markVoiceIntroSeen();
+    if (start) void voice.start();
+    else void requestVoicePermission();
+  }
+  // 8-2: 듣기 시작하면 메모 칸이 하단 패널 위로 보이게(Figma 는 본문을 올려 메모를 보인다).
+  useEffect(() => {
+    if (!voice.listening) return;
+    const t = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
+    return () => clearTimeout(t);
+  }, [voice.listening]);
+
   const linked = mode === 'nearby' ? nearby.find((n) => n.field.id === linkedId) : undefined;
   const ready = mode === 'new' ? !!draft : mode === 'edit' ? !!visit && !!field && filled.current : !!field;
   const visitMissing = mode === 'edit' && visitTried && !visit;
@@ -665,7 +700,7 @@ export default function CheckinScreen() {
         </View>
       ) : (
         <KeyboardAvoid style={styles.flex}>
-          <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
             {linked ? (
               <View style={styles.linkRow}>
                 <Text v2="bodyS.regular" tone="info" style={styles.flex}>
@@ -767,10 +802,15 @@ export default function CheckinScreen() {
             <MemoField
               value={memo}
               onChangeText={setMemo}
-              maxLength={2000}
+              maxLength={MEMO_MAX}
               multiline
               editable={!saving && memoEditable}
               accessibilityLabel="메모"
+              voice={
+                voiceSupported && memoEditable && !saving
+                  ? { onPress: startVoice, listening: voice.listening, interim: voice.interim }
+                  : undefined
+              }
             />
             {!memoEditable ? (
               <Text v2="caption.regular" tone="tertiary" style={styles.helper}>
@@ -778,14 +818,19 @@ export default function CheckinScreen() {
               </Text>
             ) : null}
           </ScrollView>
-          <BottomActionBar style={styles.footer}>
-            <Button2 onPress={() => void save()} loading={saving} disabled={!ready} fullWidth>
-              {saveLabel}
-            </Button2>
-          </BottomActionBar>
+          {voice.listening ? (
+            <VoiceListeningPanel level={voice.level} onStop={voice.stop} onCancel={voice.cancel} />
+          ) : (
+            <BottomActionBar style={styles.footer}>
+              <Button2 onPress={() => void save()} loading={saving} disabled={!ready} fullWidth>
+                {saveLabel}
+              </Button2>
+            </BottomActionBar>
+          )}
         </KeyboardAvoid>
       )}
       {placeBridge}
+      <VoiceIntroSheet open={voiceIntroOpen} onClose={closeVoiceIntro} />
       {field ? (
         <ProjectSheet open={projectOpen} onClose={() => setProjectOpen(false)} field={field} placeName={fieldTitle(field)} />
       ) : draft ? (
