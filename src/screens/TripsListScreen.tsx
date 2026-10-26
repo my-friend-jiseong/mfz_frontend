@@ -194,6 +194,9 @@ export default function TripsListScreen() {
               <Text v2="heading" style={styles.flex} accessibilityRole="header">
                 외근 내역
               </Text>
+              <Touchable onPress={() => router.push('/trip-plans' as never)} accessibilityRole="button" accessibilityLabel="예정 외근 보기" style={styles.all}>
+                <Text v2="bodyS.semibold" tone="link">예정 외근</Text>
+              </Touchable>
               {!expanded && !empty && trips.length > 0 ? (
                 <Touchable onPress={() => sheetRef.current?.snapToIndex(1, SHEET_SNAP)} accessibilityRole="button" style={styles.all}>
                   <Text v2="bodyS.semibold" tone="link">
