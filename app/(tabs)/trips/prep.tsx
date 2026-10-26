@@ -17,7 +17,7 @@ import { Button2 } from '@/components/ui/Button2';
 import { notice } from '@/components/ui/ConfirmDialog';
 import { MapButton } from '@/components/ui/MapButton';
 import { SearchBar } from '@/components/ui/SearchBar';
-import { SheetHandle, useSheetMountConfigs } from '@/components/ui/AppSheet';
+import { SheetHandle, useSheetMountConfigs, SHEET_SNAP } from '@/components/ui/AppSheet';
 import { SortableList, useSortableScroll } from '@/components/ui/SortableList';
 import { STATUS_LABEL } from '@/components/ui/StatusMark';
 import { Text } from '@/components/ui/Text';
@@ -106,6 +106,8 @@ export default function TripPrepScreen() {
   const busy = useTripStore((s) => s.busy);
   const mapRef = useRef<KakaoMapHandle>(null);
   const sheetRef = useRef<BottomSheet>(null);
+  // 시트가 접혔는지(0) — 최근 방문한 현장의 '+' 가 접힌 시트에서 담을 때 펼친다.
+  const sheetIndexRef = useRef(0);
   const [containerH, setContainerH] = useState<number | null>(null);
   const [myLoc, setMyLoc] = useState<LatLng | null>(null);
   const [starting, setStarting] = useState(false);
@@ -370,6 +372,7 @@ export default function TripPrepScreen() {
           style={styles.sheetShadow}
           // 시트를 올리면 카드가 시트 뒤로 가려지니 닫는다.
           onChange={(i) => {
+            sheetIndexRef.current = i;
             if (i > 0) closeCard();
           }}
         >
@@ -498,7 +501,12 @@ export default function TripPrepScreen() {
                         meta={meta}
                         added={false}
                         onPress={() => router.push({ pathname: '/(tabs)/trips/fields/[id]', params: { id: f.id } } as never)}
-                        onToggle={() => prep().add([f.id])}
+                        onToggle={() => {
+                          prep().add([f.id]);
+                          // 접힌 시트(보이는 높이 약 260)에서는 담을 때마다 위에 목적지 줄이 늘어 다음 '+' 가 [출발] 줄 뒤로 밀린다.
+                          // 접힌 시트는 목록 스크롤도 잠겨 있어(gorhom — 웹 터치는 손을 떼면 맨 위로 되돌린다) 꺼낼 수 없으니 펼친다.
+                          if (sheetIndexRef.current === 0) sheetRef.current?.snapToIndex(1, SHEET_SNAP);
+                        }}
                         divider={i > 0}
                       />
                     );
