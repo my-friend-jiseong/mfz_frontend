@@ -32,6 +32,10 @@ export const MemoField = forwardRef<TextInput, Props>(function MemoField(
   ref,
 ) {
   const [focused, setFocused] = useState(false);
+  // 웹 textarea 는 rows 로 높이가 굳는다 — 내용 높이(onContentSizeChange: 마운트·입력 때)를 칸 높이로 쓴다.
+  // 받아쓴 말이 붙으면 듣는 중 표시에서 입력칸으로 돌아오며 다시 마운트되므로 그때도 맞는다.
+  const [webHeight, setWebHeight] = useState<number | null>(null);
+  const autoGrow = multiline && Platform.OS === 'web';
   if (voice?.listening) {
     const value = rest.value ?? '';
     const interim = voice.interim ?? '';
@@ -71,13 +75,17 @@ export const MemoField = forwardRef<TextInput, Props>(function MemoField(
           setFocused(false);
           onBlur?.(e);
         }}
-        style={[styles.input, multiline && styles.inputMulti, WEB_NO_OUTLINE]}
+        onContentSizeChange={(e) => {
+          if (autoGrow) setWebHeight(e.nativeEvent.contentSize.height);
+          rest.onContentSizeChange?.(e);
+        }}
+        style={[styles.input, multiline && styles.inputMulti, autoGrow && webHeight != null && { height: webHeight }, WEB_NO_OUTLINE]}
       />
       {voice ? (
         <Touchable
           onPress={voice.onPress}
           accessibilityRole="button"
-          accessibilityLabel={voice.listening ? '음성 입력 멈추기' : '음성으로 입력'}
+          accessibilityLabel="음성으로 입력"
           style={styles.mic}
         >
           <Icon name="mic" size={20} color={c2.text.inverse} />
