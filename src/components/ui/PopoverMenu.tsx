@@ -112,7 +112,8 @@ export function PopoverMenuHost() {
   if (!pending) return null;
   const { anchor, items, width } = pending;
   const menuH = items.length * ITEM_H + space[8] + 2;
-  const right = Math.max(EDGE, winW - (anchor.x + anchor.w));
+  // 버튼 오른쪽 끝에 맞추되, 왼쪽 끝 버튼(9-8 방문 사진 첫 칸)이면 메뉴가 화면 왼쪽 밖으로 나가지 않게 민다.
+  const right = Math.min(Math.max(EDGE, winW - (anchor.x + anchor.w)), Math.max(EDGE, winW - width - EDGE));
   const below = anchor.y + anchor.h + GAP;
   const top = below + menuH > winH - EDGE ? Math.max(EDGE, anchor.y - GAP - menuH) : below;
 

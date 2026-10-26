@@ -145,18 +145,29 @@ export default function FieldReportScreen() {
     return p ? fmtTime(p.createdAt) : null;
   };
 
+  // 방문 사진을 누르면 빈 칸에 넣는다. 빈 칸이 둘 이상이면 어느 칸인지 고른다 —
+  // 첫 빈 칸에만 넣으면 '조치 후'만 있는 현장(전·중을 못 찍음)을 만들 수 없었다(2026-10-27, Figma 9-8 예시도 중이 빈 칸).
+  const thumbRefs = useRef<Record<string, View | null>>({});
   const onPhotoPress = (p: VisitPhoto) => {
     const used = slotOfPhoto(p.fileUrl);
     if (used) {
       setSlot(used, { url: null, file: undefined });
       return;
     }
-    const empty = SLOTS.find((s) => !filled(slots[s.key]));
-    if (!empty) {
+    const empties = SLOTS.filter((s) => !filled(slots[s.key]));
+    if (empties.length === 0) {
       void notice('빈 칸이 없어요', '칸의 사진을 뺀 뒤 다시 넣어 주세요.');
       return;
     }
-    setSlot(empty.key, { url: p.fileUrl, file: undefined });
+    const put = (k: Slot) => setSlot(k, { url: p.fileUrl, file: undefined });
+    if (empties.length === 1) {
+      put(empties[0].key);
+      return;
+    }
+    showPopoverMenu(
+      thumbRefs.current[p.attachmentId] ?? null,
+      empties.map((s) => ({ label: `${s.label}에 넣기`, onPress: () => put(s.key) })),
+    );
   };
 
   const slotRefs = useRef<Partial<Record<Slot, View | null>>>({});
@@ -348,6 +359,9 @@ export default function FieldReportScreen() {
                     return (
                       <Touchable
                         key={p.attachmentId}
+                        ref={(r) => {
+                          thumbRefs.current[p.attachmentId] = r;
+                        }}
                         onPress={() => onPhotoPress(p)}
                         accessibilityRole="button"
                         accessibilityLabel={`${fmtTime(p.createdAt)} 사진${short ? `, ${short} 칸에 넣음` : ''}`}
