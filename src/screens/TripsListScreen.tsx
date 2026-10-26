@@ -103,7 +103,7 @@ export default function TripsListScreen() {
   const writeReport = useCallback((id: string) => void openReportForTrip(router, id), [router]);
 
   // 외근 시작 — 위치 권한이 꺼져 있으면 1-2 를 한 번 보인다. 위치는 외근의 필수 조건이 아니라(결정)
-  // 허용하든 [나중에]·닫기든 이어서 시작한다.
+  // 허용하든 거절하든 이어서 시작한다(꺼져 있으면 곧장 OS 팝업, 막혀 있으면 설정 안내 시트).
   const pendingStartRef = useRef(false);
   // 6 외근 준비.
   const goStart = useCallback(() => router.push('/(tabs)/trips/prep' as never), [router]);

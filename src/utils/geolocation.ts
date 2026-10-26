@@ -31,19 +31,16 @@ const toUserLocation = (c: { latitude: number; longitude: number; accuracy?: num
 const RATIONALE_TITLE = '위치 권한이 필요해요';
 const RATIONALE_BODY = '지금 위치는 지도에 내 위치 표시, 현장 위치 입력, 주변 현장 확인에만 써요. 백그라운드 위치는 수집하지 않아요.';
 
-// 한 세션 안에서 '나중에' 를 누른 뒤 화면을 옮길 때마다 다시 묻지 않도록 기억한다.
-// 영속시키지 않는 건 의도다 — 앱을 다시 켜면 물어볼 기회가 한 번 더 생긴다.
-let rationaleDeclined = false;
-
 // single-flight — 두 화면이 같은 틱에 위치를 요청하면 안내가 두 겹으로 쌓인다.
 // OS 팝업은 시스템이 알아서 합쳐 줬지만 우리 확인 창은 그렇지 않다.
 // authStore 의 refresh single-flight 와 같은 패턴.
 let rationaleInflight: Promise<boolean> | null = null;
 
+// App Store 5.1.1(iv) 반려(2026-10-20): 안내 뒤에는 반드시 OS 팝업으로 이어져야 한다 — [나중에]로 미루기 금지.
+// 버튼은 [계속] 하나이고, 바깥을 눌러 닫아도 호출부는 결과와 상관없이 OS 팝업으로 간다.
 function confirmRationale(): Promise<boolean> {
   if (rationaleInflight) return rationaleInflight;
-  // 2차 확인 창(ConfirmDialog) — 바깥을 눌러 닫아도 false 로 끝나 호출한 화면이 멈추지 않는다.
-  const pending = confirm({ title: RATIONALE_TITLE, message: RATIONALE_BODY, cancelLabel: '나중에', confirmLabel: '계속' });
+  const pending = confirm({ title: RATIONALE_TITLE, message: RATIONALE_BODY, alertOnly: true, cancelLabel: '계속' });
   rationaleInflight = pending;
   void pending.then(() => {
     rationaleInflight = null;
@@ -86,13 +83,8 @@ export async function requestUserLocation(opts?: {
       // 이미 영구 거부(‘다시 묻지 않음’) 라면 요청해봐야 팝업이 안 뜬다.
       // 그 상태에서 안내만 반복하면 화면 진입마다 방해가 되므로 조용히 포기한다.
       if (!current.canAskAgain) return null;
-      if (rationaleDeclined) return null;
 
-      const proceed = await confirmRationale();
-      if (!proceed) {
-        rationaleDeclined = true;
-        return null;
-      }
+      await confirmRationale();
 
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') return null;

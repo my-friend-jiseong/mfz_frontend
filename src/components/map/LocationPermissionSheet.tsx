@@ -1,4 +1,4 @@
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { AppSheet } from '@/components/ui/AppSheet';
 import { Button2 } from '@/components/ui/Button2';
@@ -22,6 +22,10 @@ interface Props {
 /**
  * 1-2 위치 권한 안내 시트(Figma 635:3192). 권한이 꺼진 상태에서 내 위치·외근 시작을 누르면 뜬다.
  * 두 번 거절했으면(또는 OS 가 더 묻지 않으면) 버튼이 '설정에서 켜기'로 바뀐다. 웹에서 막혀 있으면 브라우저 안내.
+ *
+ * App Store 5.1.1(iv) 반려(2026-10-20): OS 팝업 전 안내에서 [나중에]로 요청을 미룰 수 있으면 안 된다.
+ * 그래서 아직 물을 수 있으면(off) 시트를 그리지 않고 곧장 OS 팝업을 띄운다 — 이유는 Info.plist 문구가 맡는다.
+ * 시트는 OS 가 더 묻지 않는 blocked(설정 앱 안내)에서만 보인다.
  */
 export function LocationPermissionSheet({ onDone }: Props) {
   const open = useLocationPermissionStore((s) => s.sheetOpen);
@@ -30,6 +34,23 @@ export function LocationPermissionSheet({ onDone }: Props) {
   const webBlocked = blocked && IS_WEB;
   const grantedRef = useRef(false);
   const busyRef = useRef(false);
+
+  // off 로 열리면 시트 없이 OS 팝업 → 닫힘. AppSheet 가 열리지 않아 onClose 가 없으니 onDone 을 직접 부른다.
+  const direct = open && !blocked;
+  useEffect(() => {
+    if (!direct || busyRef.current) return;
+    busyRef.current = true;
+    void (async () => {
+      let granted = false;
+      try {
+        granted = (await useLocationPermissionStore.getState().request()) === 'granted';
+      } finally {
+        busyRef.current = false;
+        useLocationPermissionStore.getState().closeSheet();
+        onDone?.(granted);
+      }
+    })();
+  }, [direct, onDone]);
 
   const close = () => useLocationPermissionStore.getState().closeSheet();
   // AppSheet 는 버튼·스크림·끌어내리기 어떤 길로 닫혀도 onClose 를 한 번 부른다.
@@ -57,7 +78,7 @@ export function LocationPermissionSheet({ onDone }: Props) {
   };
 
   return (
-    <AppSheet open={open} onClose={handleClose} closeButton={false}>
+    <AppSheet open={open && blocked} onClose={handleClose} closeButton={false}>
       <View style={styles.body}>
         <View style={styles.iconBox}>
           <Icon name="location-off" size={28} color={c2.text.link} />
