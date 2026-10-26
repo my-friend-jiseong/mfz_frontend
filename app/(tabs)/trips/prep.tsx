@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import Animated, { LinearTransition } from 'react-native-reanimated';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KakaoMapWebView, type KakaoMapHandle, type KakaoMapMarker } from '@/components/KakaoMapWebView';
 import { FieldSearchRow } from '@/components/fields/SearchRows';
@@ -48,6 +48,10 @@ const HEADER_H = 52;
 const FOOTER_H = 79;
 const SHEET_HANDLE_H = 20;
 const MAX_RECENT = 20;
+// 들어온 뒤 '최근 방문한 현장' 이 가려졌는지 판단하는 시간(ms) — 돌아온 뒤 새 레이아웃이 오기까지.
+const REVEAL_WINDOW_MS = 800;
+const EXPAND_RETRIES = 6;
+const EXPAND_RETRY_MS = 150;
 // 목적지 줄 높이(Figma 60). 끌어서 옮기는 목록은 줄 높이가 같아야 한다 — 글자를 키우면 두 줄 글자(약 40)만큼 늘린다.
 const DEST_ROW_H = 60;
 const destRowHeight = (fontScale: number) => Math.max(DEST_ROW_H, Math.ceil(40 * fontScale + 20));
@@ -292,6 +296,64 @@ export default function TripPrepScreen() {
       ? Math.max(SHEET_COLLAPSED + 1, containerH - (insets.top + space[8] + HEADER_H + space[8]))
       : null;
   const sheetMountConfigs = useSheetMountConfigs(!!maxSheet);
+  // 시트가 내려가면(웹에서 위에 화면이 덮일 때) 다시 생길 때 접힌 채(index 0)로 생긴다.
+  useEffect(() => {
+    if (!maxSheet) sheetIndexRef.current = 0;
+  }, [maxSheet]);
+
+  // === 접힌 시트에서 '최근 방문한 현장' 이 가려질 때 펼치기 ===
+  // 접힌 시트는 목록이 보이는 높이가 약 260 이고 목록 스크롤도 잠겨 있다(gorhom — 웹 터치는 손을 떼면 맨 위로 되돌린다).
+  // 담은 목적지가 많아 첫 '+' 줄이 [출발] 줄 뒤로 밀려 있으면 담을 길이 없으니, 들어올 때(돌아올 때 포함) 펼친다.
+  // 개수 대신 실제 레이아웃으로 정한다 — 글자 크기·순서 안내 줄에 따라 몇 곳부터 가려지는지가 달라진다.
+  const headHRef = useRef(0);
+  const recentSectionYRef = useRef<number | null>(null);
+  const recentFirstBottomRef = useRef<number | null>(null);
+  const recentSectionHRef = useRef(0);
+  const recentTitleBottomRef = useRef<number | null>(null);
+  // 들어온 직후 이 시각까지만 판단한다. 가려져 있던 동안(검색 4 에서 담는 중)의 레이아웃은 낡았고, 돌아온 뒤
+  // 새 레이아웃이 조금 늦게 온다 — 그래서 포커스 순간 한 번이 아니라 그 뒤 잠깐 동안 오는 레이아웃마다 본다.
+  // 창이 닫힌 뒤(지도 카드로 담기 등)에는 판단하지 않는다 — 보고 있는 지도 위로 시트가 불쑥 올라오지 않게.
+  const revealUntilRef = useRef(0);
+  // 웹은 위에 화면(4 검색)이 덮이면 이 화면 높이를 0 으로 재 시트가 내려갔다(언마운트) 돌아올 때 새로 생긴다.
+  // 그 사이에 부른 snapToIndex 는 gorhom 이 무시하니(레이아웃 계산 전) 펼쳐질 때까지 몇 번 다시 부른다.
+  // 같은 자리로 가는 중이면 gorhom 이 알아서 무시한다.
+  const expandSheet = useCallback(() => {
+    let tries = 0;
+    const go = () => {
+      if (sheetIndexRef.current > 0) return;
+      sheetRef.current?.snapToIndex(1, SHEET_SNAP);
+      if (++tries < EXPAND_RETRIES) setTimeout(go, EXPAND_RETRY_MS);
+    };
+    go();
+  }, []);
+  // 개수는 ref 로 읽는다 — 의존성에 넣으면 담을 때마다 창이 다시 열린다.
+  const recentLenRef = useRef(recent.length);
+  recentLenRef.current = recent.length;
+  const revealRecentIfHidden = useCallback(() => {
+    if (Date.now() > revealUntilRef.current || !ready || recentLenRef.current === 0) return;
+    const sectionY = recentSectionYRef.current;
+    const rowBottom = recentFirstBottomRef.current;
+    if (sectionY == null || rowBottom == null || headHRef.current === 0) return;
+    const visibleH = SHEET_COLLAPSED - SHEET_HANDLE_H - headHRef.current - FOOTER_H;
+    if (sheetIndexRef.current === 0 && sectionY + rowBottom > visibleH) {
+      revealUntilRef.current = 0;
+      expandSheet();
+    }
+  }, [ready, expandSheet]);
+  // 첫 줄 바닥(섹션 안) = 제목 바닥 + 줄 하나 높이. 줄은 모두 같은 높이라 섹션 높이를 줄 수로 나눈다.
+  const measureRecentFirstRow = () => {
+    const titleBottom = recentTitleBottomRef.current;
+    const n = recentLenRef.current;
+    if (titleBottom == null || recentSectionHRef.current === 0 || n === 0) return;
+    recentFirstBottomRef.current = titleBottom + (recentSectionHRef.current - titleBottom) / n;
+    revealRecentIfHidden();
+  };
+  useFocusEffect(
+    useCallback(() => {
+      revealUntilRef.current = Date.now() + REVEAL_WINDOW_MS;
+      revealRecentIfHidden();
+    }, [revealRecentIfHidden]),
+  );
   const snapPoints = useMemo(() => (maxSheet ? [SHEET_COLLAPSED, maxSheet] : [SHEET_COLLAPSED]), [maxSheet]);
   // === 지도 핀 → 선택 카드(4-3 과 같은 카드·문구) ===
   const onMarkerPress = useCallback((id: string) => setPickedId(id), []);
@@ -378,7 +440,13 @@ export default function TripPrepScreen() {
         >
           {/* 명시적 height — gorhom 콘텐츠 높이 미적용(Fabric+reanimated 4) 우회(MapSheetLayout 주석). */}
           <View style={{ height: maxSheet - SHEET_HANDLE_H }}>
-            <View style={styles.head}>
+            <View
+              style={styles.head}
+              onLayout={(e) => {
+                headHRef.current = e.nativeEvent.layout.height;
+                revealRecentIfHidden();
+              }}
+            >
               <Text v2="heading" style={styles.flex} accessibilityRole="header">
                 외근 목적지{' '}
                 <Text v2="heading" tone={count > 0 ? 'link' : 'tertiary'}>
@@ -484,8 +552,24 @@ export default function TripPrepScreen() {
                 </View>
               )}
               {recent.length > 0 ? (
-                <View style={styles.section}>
-                  <Text v2="bodyS.bold" tone="secondary" style={styles.sectionTitle}>
+                <View
+                  style={styles.section}
+                  onLayout={(e) => {
+                    const { y, height } = e.nativeEvent.layout;
+                    recentSectionYRef.current = y;
+                    recentSectionHRef.current = height;
+                    measureRecentFirstRow();
+                  }}
+                >
+                  <Text
+                    v2="bodyS.bold"
+                    tone="secondary"
+                    style={styles.sectionTitle}
+                    onLayout={(e) => {
+                      recentTitleBottomRef.current = e.nativeEvent.layout.y + e.nativeEvent.layout.height;
+                      measureRecentFirstRow();
+                    }}
+                  >
                     최근 방문한 현장
                   </Text>
                   {recent.map((f, i) => {
@@ -505,7 +589,7 @@ export default function TripPrepScreen() {
                           prep().add([f.id]);
                           // 접힌 시트(보이는 높이 약 260)에서는 담을 때마다 위에 목적지 줄이 늘어 다음 '+' 가 [출발] 줄 뒤로 밀린다.
                           // 접힌 시트는 목록 스크롤도 잠겨 있어(gorhom — 웹 터치는 손을 떼면 맨 위로 되돌린다) 꺼낼 수 없으니 펼친다.
-                          if (sheetIndexRef.current === 0) sheetRef.current?.snapToIndex(1, SHEET_SNAP);
+                          if (sheetIndexRef.current === 0) expandSheet();
                         }}
                         divider={i > 0}
                       />
