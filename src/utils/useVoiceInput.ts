@@ -108,6 +108,18 @@ async function preferOnDevice(m: Speech): Promise<boolean> {
   }
 }
 
+/**
+ * 인식기에 미리 알려 주는 현장 용어(Android 13+ EXTRA_BIASING_STRINGS, iOS contextualStrings).
+ * 실기기에서 '점등 불량'이 '전등 물량'으로, '한전에'가 '한전의'로 들렸다(2026-10-27) — 온디바이스 모델이 현장 말을 모른다.
+ */
+const FIELD_TERMS = [
+  '보안등', '가로등', '신호등', '점등', '소등', '점멸', '불량', '고장', '파손', '누수', '누전', '단선',
+  '한전', '한전에', '신고', '접수', '민원', '교체', '수리', '보수', '정비', '조치', '점검', '철거', '설치',
+  '전신주', '전봇대', '분전함', '맨홀', '배수구', '빗물받이', '보도블록', '표지판', '가로수', '도로', '포트홀',
+];
+// iOS contextualStrings 는 100개 이하를 권한다.
+const MAX_HINTS = 100;
+
 const NO_SPEECH = new Set(['no-speech', 'speech-timeout']);
 const STOP_GRACE_MS = 3000;
 const ON_DEVICE_FAIL = new Set(['language-not-supported', 'service-not-allowed']);
@@ -126,13 +138,18 @@ export interface VoiceInput {
   cancel: () => void;
 }
 
-/** onText: 확정된 한 마디(앞뒤 공백 없음). 메모에 붙이는 일은 화면이 한다. */
-export function useVoiceInput(onText: (text: string) => void): VoiceInput {
+/**
+ * onText: 확정된 한 마디(앞뒤 공백 없음). 메모에 붙이는 일은 화면이 한다.
+ * hints: 이 화면에서 나올 법한 말(현장 분류 이름 등) — 현장 용어에 더해 인식기에 알려 준다.
+ */
+export function useVoiceInput(onText: (text: string) => void, hints?: readonly string[]): VoiceInput {
   const [listening, setListening] = useState(false);
   const [interim, setInterim] = useState('');
   const [level, setLevel] = useState<number | null>(null);
   const onTextRef = useRef(onText);
   onTextRef.current = onText;
+  const hintsRef = useRef(hints);
+  hintsRef.current = hints;
   // 이번 세션 상태 — 이벤트 순서(result → end, error → end)에 맞춰 ref 로 들고 있는다.
   const session = useRef({ active: false, cancelled: false, gotFinal: false, interim: '', onDevice: false, retry: false, heard: false });
 
@@ -150,6 +167,7 @@ export function useVoiceInput(onText: (text: string) => void): VoiceInput {
         continuous: false,
         requiresOnDeviceRecognition: onDevice,
         addsPunctuation: true,
+        contextualStrings: [...new Set([...(hintsRef.current ?? []).map((h) => h.trim()).filter(Boolean), ...FIELD_TERMS])].slice(0, MAX_HINTS),
         volumeChangeEventOptions: { enabled: true, intervalMillis: 100 },
       });
     } catch {

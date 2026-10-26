@@ -126,7 +126,12 @@ export default function CheckinScreen() {
   // 8-1·8-2 음성 메모. 받아쓴 말은 메모 끝에 붙는다 — 저장 전에 직접 고칠 수 있다.
   const [voiceIntroOpen, setVoiceIntroOpen] = useState(false);
   const [voiceSupported] = useState(voiceInputSupported);
-  const voice = useVoiceInput(useCallback((t: string) => setMemo((m) => appendSpoken(m, t)), []));
+  // 이 현장의 분류 이름(보안등·도로…)도 인식기에 알려 준다 — 현장 용어 목록에 없는 사용자 분류가 있다.
+  const voiceHints = field?.categories ?? draft?.categories;
+  const voice = useVoiceInput(
+    useCallback((t: string) => setMemo((m) => appendSpoken(m, t)), []),
+    voiceHints,
+  );
   const scrollRef = useRef<ScrollView>(null);
   // 수정 모드: 사진·메모 로드가 끝났는지(실패 포함). 실패해도 폼은 연다 — 빈 칸으로라도 고칠 수 있게.
   const [photosLoaded, setPhotosLoaded] = useState(!isEdit);
