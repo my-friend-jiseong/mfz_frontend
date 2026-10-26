@@ -12,6 +12,20 @@
 
 ## 개정 이력
 
+**v2.2 (2026-10-27)** — 다른 지도사(TMAP 등)로 바꾸면 인앱 길안내가 쉬워지는지 조사. **결론: 바꿔도 안 쉬워진다.**
+
+- **TMAP**: Navi SDK(TmapUISDK)가 Android·iOS·**Flutter** 를 공식 지원(`github.com/TmapSDK/TmapUI_FlutterSDK`, API 키만 필수).
+  RN 래퍼는 공식·커뮤니티 모두 없다(npm 의 `react-native-launch-tmap-navi`·`react-native-invoke-tmap` 은 티맵 **앱 실행**).
+  무료는 **내비게이션 일 1건**이고 확장은 별도 계약(정액 Lite 월 220만 원에도 미포함) — 카카오 내비 SDK(일 10만 건)보다 훨씬 나쁘다.
+  보행자 경로 REST 는 있다(경로안내 일 1,000건 무료). 받은 데이터 24시간 넘게 저장 금지
+- **네이버**: Directions 5 는 경로 데이터(REST)뿐, 공개 내비 SDK 없음 — 지금 카카오 `/route` 와 같은 수준
+- **구글**: Navigation SDK·RN 플러그인(`@googlemaps/react-native-navigation-sdk`)은 있으나 한국은 턴바이턴 미제공(2026-08 기준)
+- **카카오**: `@react-native-kakao/navi`(2026-10 갱신)도 카카오내비 **앱 실행**(`navigateOrShareTo`) — 인앱 아님
+- **쉽게 쓰는 팀은 아마** ① Flutter 로 TMAP 플러그인을 쓰거나(무료 일 1건이라 시연 수준) ② 경로 선만 그리는 것(우리도 이미 함)
+  ③ 외부 앱 딥링크다. 막힌 원인은 지도사가 아니라 **RN 스택**(Expo 관리형·EAS 빌드, `android/`·`ios/` 없음)
+- **그래도 하려면** 지도사를 바꾸지 말고 카카오 KNSDK 를 Expo Modules API + config plugin 으로 직접 감싸는 편이 낫다
+  (무료 쿼터 큼, 지도·키 재사용). 대가: Expo Go 테스트 불가(dev client 필요), 웹 미지원, 양 OS 네이티브 코드 유지
+
 **v2.1 (2026-10-27)** — 재확인·결정 추가.
 
 - **요금 재확인**: developers.kakaomobility.com/price 기준 §4 수치 그대로(자동차 1만/8원, 다중 경유지 5천/16원,
